@@ -3338,7 +3338,7 @@ export function resolveAppPath(distDir: string, requestUrl: string): string | nu
 export function isBlockedRequest(url: string): boolean;   // true unless the URL is app-origin, an app-origin blob, or DevTools
 // window.ts
 export function registerAppScheme(): void;   // protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true } }]); call before ready
-export function serveApp(distDir: string): void;   // protocol.handle("app", ...): fetch regular files whose real paths stay inside distDir, add CSP and nosniff headers, or return a plain 404 Response
+export function serveApp(distDir: string): void;   // protocol.handle("app", ...): read regular files whose real paths stay inside distDir directly from disk, respond with an allowed Content-Type, CSP and nosniff headers, or return a plain 404 with CSP and nosniff headers
 export function lockDownSession(): void;   // webRequest.onBeforeRequest cancels isBlockedRequest URLs; permission request and check handlers allow only app-origin sanitized clipboard writes
 export function createMainWindow(options: { preloadPath: string; show: boolean; theme?: "light" | "dark"; scenario?: string; hash?: string }): BrowserWindow;   // scenario is a string because screens.json is imported as JSON; the renderer ignores unknown values
   // 1280x800, minWidth/minHeight from MIN_WINDOW, title "FlowDriven", backgroundColor "#F3F4F2" (light) or "#161918" (dark, or the OS theme when no theme is given),
@@ -3349,8 +3349,8 @@ export function createMainWindow(options: { preloadPath: string; show: boolean; 
 // preload.ts: contextBridge.exposeInMainWorld("flowdrivenShell", Object.freeze({ kind: "electron" }))
 // capture.ts: registerAppScheme() before ready; keep the app alive between capture windows; on ready lockDownSession() and serveApp(<dist>); then for theme of ["light", "dark"], for each entry of screens.json: createMainWindow({ show: process.env.FLOWDRIVEN_CAPTURE_SHOW === "1", theme, scenario: entry.scenario, hash: entry.hash });
 //   poll executeJavaScript(`document.querySelector('[data-screen-ready="true"]') !== null`) every 100 ms for up to 10 s
-//   (else print "screen <name> never became ready" and exit 1); capturePage(); write toPNG() to
-//   <repo>/.workflow/scratch/screens/<name>-<theme>.png (mkdir -p); close; finally print "captured 16 screens to .workflow/scratch/screens" and exit 0
+//   (else print the screen name, page URL and first 300 characters of body text on one line and exit 1); collect renderer console errors per screen; capturePage(); write toPNG() to
+//   <repo>/.workflow/scratch/screens/<name>-<theme>.png (mkdir -p); close; after all captures print each renderer console error with its screen name and exit 1 if any occurred; otherwise print "captured 16 screens to .workflow/scratch/screens" and exit 0
 ```
 
 `screens.json` (exact; `scenario` is optional, default `story`):

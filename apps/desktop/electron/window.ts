@@ -1,11 +1,11 @@
-import { realpath, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { app, BrowserWindow, nativeTheme, net, protocol, session, type WebContents } from "electron";
+import { app, BrowserWindow, nativeTheme, protocol, session, type WebContents } from "electron";
 import { CONTENT_SECURITY_POLICY } from "./csp";
 import {
   APP_ORIGIN,
   APP_SCHEME,
+  contentTypeFor,
   isAllowedNavigation,
   isBlockedRequest,
   MIN_WINDOW,
@@ -20,22 +20,21 @@ export function registerAppScheme(): void {
 }
 export function serveApp(distDir: string): void {
   protocol.handle(APP_SCHEME, async (request) => {
-    const notFound = () => new Response("Not found", { status: 404 });
+    const headers = {
+      "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+      "X-Content-Type-Options": "nosniff",
+    };
+    const notFound = () => new Response("Not found", { status: 404, headers });
     try {
       const file = resolveAppPath(distDir, request.url);
       if (!file) return notFound();
+      const type = contentTypeFor(file);
+      if (!type) return notFound();
       const root = await realpath(distDir);
       const target = await realpath(file);
       if (!target.startsWith(root + path.sep) || !(await stat(target)).isFile()) return notFound();
-      const response = await net.fetch(pathToFileURL(target).toString());
-      const headers = new Headers(response.headers);
-      headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
-      headers.set("X-Content-Type-Options", "nosniff");
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      });
+      const bytes = await readFile(target);
+      return new Response(bytes, { headers: { ...headers, "Content-Type": type } });
     } catch {
       return notFound();
     }

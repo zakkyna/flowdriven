@@ -2,6 +2,7 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 import {
   APP_ORIGIN,
+  contentTypeFor,
   isAllowedNavigation,
   isBlockedRequest,
   MIN_WINDOW,
@@ -69,4 +70,27 @@ describe("Electron security helpers", () => {
     expect(isBlockedRequest("app://flowdriven/assets/a.js")).toBe(false);
     expect(isBlockedRequest("devtools://devtools/bundled/x.html")).toBe(false);
   });
+});
+
+test("allows only known content types, regardless of extension case", () => {
+  const types: Record<string, string> = {
+    html: "text/html; charset=utf-8",
+    js: "text/javascript; charset=utf-8",
+    mjs: "text/javascript; charset=utf-8",
+    css: "text/css; charset=utf-8",
+    json: "application/json; charset=utf-8",
+    map: "application/json; charset=utf-8",
+    txt: "text/plain; charset=utf-8",
+    svg: "image/svg+xml",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    ico: "image/x-icon",
+    woff2: "font/woff2",
+  };
+  for (const [ext, type] of Object.entries(types))
+    expect(contentTypeFor(`file.${ext.toUpperCase()}`)).toBe(type);
+  expect(contentTypeFor("file.bin")).toBeNull();
+  expect(contentTypeFor("file")).toBeNull();
 });

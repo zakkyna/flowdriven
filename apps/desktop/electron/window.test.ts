@@ -6,14 +6,12 @@ import { CONTENT_SECURITY_POLICY } from "../src/csp.mjs";
 const mocks = vi.hoisted(() => ({
   register: vi.fn(),
   handle: vi.fn(),
-  fetch: vi.fn(),
   request: vi.fn(),
   permission: vi.fn(),
   check: vi.fn(),
 }));
 vi.mock("electron", () => ({
   protocol: { registerSchemesAsPrivileged: mocks.register, handle: mocks.handle },
-  net: { fetch: mocks.fetch },
   session: {
     defaultSession: {
       webRequest: { onBeforeRequest: mocks.request },
@@ -68,28 +66,38 @@ test("locks each web contents against windows, webviews and external navigations
     expect(preventDefault, name).toHaveBeenCalled();
   }
 });
-test("serves only real files inside the build with CSP, otherwise plain 404", async () => {
+test("serves build files without network access and rejects invalid paths", async () => {
   await mkdir(path.resolve(".workflow/scratch"), { recursive: true });
   const root = await mkdtemp(path.resolve(".workflow/scratch/flowdriven-"));
   try {
     const dist = path.join(root, "dist");
-    await mkdir(dist);
-    await writeFile(path.join(dist, "index.html"), "ok");
-    await writeFile(path.join(root, "secret"), "secret");
-    await symlink(path.join(root, "secret"), path.join(dist, "link"));
-    mocks.fetch.mockResolvedValue(new Response("ok"));
+    await mkdir(path.join(dist, "assets"), { recursive: true });
+    const files = [
+      ["index.html", "<html>ok</html>", "text/html; charset=utf-8"],
+      ["assets/app.js", "const x = 1;", "text/javascript; charset=utf-8"],
+      ["assets/app.css", "body {}", "text/css; charset=utf-8"],
+    ];
+    for (const [file, bytes] of files) await writeFile(path.join(dist, file), bytes);
+    await writeFile(path.join(dist, "unknown.bin"), "unknown");
+    await writeFile(path.join(root, "secret.html"), "secret");
+    await symlink(path.join(root, "secret.html"), path.join(dist, "link.html"));
     serveApp(dist);
     const handler = mocks.handle.mock.calls[0][1];
-    const response = await handler({ url: "app://flowdriven/index.html" });
-    expect(response.headers.get("content-security-policy")).toBe(CONTENT_SECURITY_POLICY);
-    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
-    for (const suffix of ["missing", "link", ""]) {
-      const result = await handler({ url: `app://flowdriven/${suffix || "."}` });
+    for (const [file, bytes, type] of files) {
+      const response = await handler({ url: `app://flowdriven/${file}?theme=light#/builder` });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe(type);
+      expect(response.headers.get("content-security-policy")).toBe(CONTENT_SECURITY_POLICY);
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(new TextEncoder().encode(bytes));
+    }
+    for (const suffix of ["assets", "missing.html", "unknown.bin", "link.html", "a%00b.html"]) {
+      const result = await handler({ url: `app://flowdriven/${suffix}` });
       expect(result.status).toBe(404);
       expect(await result.text()).toBe("Not found");
+      expect(result.headers.get("content-security-policy")).toBe(CONTENT_SECURITY_POLICY);
+      expect(result.headers.get("x-content-type-options")).toBe("nosniff");
     }
-    mocks.fetch.mockRejectedValue(new Error("failed"));
-    expect((await handler({ url: "app://flowdriven/index.html" })).status).toBe(404);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
