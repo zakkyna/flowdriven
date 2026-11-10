@@ -9,12 +9,25 @@ import styles from "./Runs.module.css";
 import { RunsTable } from "./RunsTable";
 
 const description = "Every run of every flow, newest first.";
+const filters = { flow: "", project: "", state: "" };
 export function RunsScreen(): ReactElement {
   const runs = useRunnerQuery("runs.list", {});
   const flows = useRunnerQuery("flows.list", {});
-  const [flow, setFlow] = useState("");
-  const [project, setProject] = useState("");
-  const [state, setState] = useState("");
+  const [flow, setFlowValue] = useState(filters.flow);
+  const [project, setProjectValue] = useState(filters.project);
+  const [state, setStateValue] = useState(filters.state);
+  const setFlow = (value: string) => {
+    filters.flow = value;
+    setFlowValue(value);
+  };
+  const setProject = (value: string) => {
+    filters.project = value;
+    setProjectValue(value);
+  };
+  const setState = (value: string) => {
+    filters.state = value;
+    setStateValue(value);
+  };
   const loading = runs.loading || flows.loading;
   const error = runs.error ?? flows.error;
   if (loading || error)
@@ -31,7 +44,7 @@ export function RunsScreen(): ReactElement {
         }}
       />
     );
-  const all = [...(runs.data ?? [])].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  const all = [...(runs.data ?? [])].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
   const oneTime = all.filter(
     (run, index) =>
       run.oneTime &&

@@ -78,7 +78,8 @@ export function HarnessCardView({
         <dd>{quota}</dd>
         <dt>Usage</dt>
         <dd>
-          Today: {card.quota.today.calls} calls. This week: {card.quota.week.calls} calls.
+          Today: {card.quota.today.calls} {card.quota.today.calls === 1 ? "call" : "calls"}. This week:{" "}
+          {card.quota.week.calls} {card.quota.week.calls === 1 ? "call" : "calls"}.
         </dd>
         <dt>Consent</dt>
         <dd>{consent}</dd>

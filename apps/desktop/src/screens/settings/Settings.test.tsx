@@ -1,6 +1,6 @@
 // apps/desktop/src/screens/settings/Settings.test.tsx
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
 
 describe("Settings", () => {
@@ -90,4 +90,83 @@ describe("Settings", () => {
     expect(await screen.findByText("No brain found. Install a harness or add an API key.")).toBeTruthy();
     expect(screen.getByText("API keys are off")).toBeTruthy();
   });
+});
+test("does not round a warning up to the stopped percentage", async () => {
+  const { client } = renderApp("#/settings");
+  client.state.settings.budget.capUsd = 1000;
+  client.state.settings.budget.spentUsd = 996;
+  expect(await screen.findByText("99% used")).toBeTruthy();
+  expect(screen.queryByText("100% used")).toBeNull();
+});
+test("turns API keys off at the cap and explains why", async () => {
+  const { client } = renderApp("#/settings");
+  client.state.settings.budget.spentUsd = client.state.settings.budget.capUsd;
+  expect(await screen.findByText("Cap reached. API-key calls are stopped.")).toBeTruthy();
+  expect(await screen.findByText("Cap reached", { exact: true })).toBeTruthy();
+  expect(screen.getByRole("radio", { name: "Anthropic API key" })).toHaveProperty("disabled", true);
+});
+test("updates untouched budget fields when stored values change", async () => {
+  const { client } = renderApp("#/settings");
+  const input = await screen.findByLabelText("Monthly cap (USD)");
+  await client.call("settings.update", { patch: { budget: { capUsd: 50 } } });
+  await waitFor(() => expect(input).toHaveProperty("value", "50"));
+});
+test("asks before removing a per-run cap", async () => {
+  const { client } = renderApp("#/settings");
+  client.state.settings.budget.perRunCapUsd = 5;
+  const input = await screen.findByLabelText("Per-run cap (USD, optional)");
+  fireEvent.change(input, { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+});
+test("marks a selected and fallback harness when consent is missing", async () => {
+  const { client } = renderApp("#/settings");
+  client.state.settings.brain.main = "claude-cli";
+  const claude = client.state.settings.backends.find((item) => item.id === "claude-cli");
+  if (!claude) throw new Error("Missing Claude fixture");
+  claude.consent = "revoked";
+  expect(
+    await screen.findByText("Needs consent. This brain is not used until you give consent."),
+  ).toBeTruthy();
+  expect(screen.getByText("Needs consent before use.")).toBeTruthy();
+});
+test("disables movement after the last visible fallback", async () => {
+  const { client } = renderApp("#/settings");
+  client.state.settings.brain.subscriptionOrder.push("unknown-backend");
+  expect(await screen.findByRole("button", { name: "Move Claude Code CLI down" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+});
+test("shows a settings update failure", async () => {
+  const { client } = renderApp("#/settings");
+  const option = await screen.findByRole("radio", { name: "Anthropic API key" });
+  vi.spyOn(client, "call").mockRejectedValueOnce(new Error("Save failed"));
+  fireEvent.click(option);
+  expect((await screen.findByRole("alert")).textContent).toBe("Save failed");
+});
+test("exposes both login and quota states through the brain description", async () => {
+  const { client } = renderApp("#/settings");
+  const claude = client.state.settings.backends.find((item) => item.id === "claude-cli");
+  if (!claude) throw new Error("Missing Claude fixture");
+  claude.login = "logged_out";
+  claude.quota = "exhausted";
+  const radio = await screen.findByRole("radio", { name: "Claude Code CLI" });
+  const description = document.getElementById(radio.getAttribute("aria-describedby") ?? "");
+  expect(description?.textContent).toContain("Logged out");
+  expect(description?.textContent).toContain("Quota exhausted");
+});
+test("shows an off budget on a populated setup", async () => {
+  const { client } = renderApp("#/settings");
+  client.state.settings.budget.capUsd = 0;
+  expect(await screen.findByText("API keys are off. Set a monthly cap to turn them on.")).toBeTruthy();
+  expect(screen.getByRole("radio", { name: "Anthropic API key" })).toHaveProperty("disabled", true);
+});
+test("can reorder visible fallbacks when an unknown id is present", async () => {
+  const { client } = renderApp("#/settings");
+  client.state.settings.brain.subscriptionOrder.unshift("unknown-backend");
+  fireEvent.click(await screen.findByRole("button", { name: "Move Claude Code CLI up" }));
+  await waitFor(() =>
+    expect(client.state.settings.brain.subscriptionOrder).toEqual(["claude-cli", "codex-cli"]),
+  );
 });

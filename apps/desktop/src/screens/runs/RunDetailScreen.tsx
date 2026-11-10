@@ -1,5 +1,5 @@
-import { firstUnpassedStep, isResumable } from "@flowdriven/contracts";
-import { type ReactElement, useState } from "react";
+import { firstUnpassedStep, isJudgedOnly, isResumable } from "@flowdriven/contracts";
+import { type ReactElement, useRef, useState } from "react";
 import { AppLink } from "../../nav/AppLink";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
@@ -18,6 +18,8 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
   const action = useRunnerAction();
   const [save, setSave] = useState(false);
   const [actionError, setActionError] = useState<string>();
+  const [resuming, setResuming] = useState(false);
+  const resumeInFlight = useRef(false);
   const loading = query.loading || approvals.loading;
   const error = query.error ?? approvals.error;
   if (!loading && query.error?.code === "not_found")
@@ -51,10 +53,16 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
       {isResumable(run.state) && next && (
         <Button
           variant="primary"
+          disabled={resuming}
           onClick={() => {
-            void action("runs.resume", { runId }).then((result) =>
-              setActionError(result.ok ? undefined : result.error.message),
-            );
+            if (resumeInFlight.current) return;
+            resumeInFlight.current = true;
+            setResuming(true);
+            void action("runs.resume", { runId }).then((result) => {
+              setActionError(result.ok ? undefined : result.error.message);
+              resumeInFlight.current = false;
+              setResuming(false);
+            });
           }}
         >
           Resume from step {next.index}
@@ -90,6 +98,9 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
           </p>
         )}
         {actionError && <p role="alert">{actionError}</p>}
+        {isResumable(run.state) && next?.step.state === "interrupted" && (
+          <p className={styles.muted}>This step was stopped part-way. Resuming runs it again.</p>
+        )}
         {run.blockedReason && (
           <div className={styles.reason}>
             <Icon name="stop" />
@@ -108,6 +119,9 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
           ) : (
             <p className={styles.muted}>The report appears when the run ends.</p>
           )}
+          {run.steps.some((step) => isJudgedOnly(step.checks)) && (
+            <p className={styles.muted}>Some steps were judged, not verified.</p>
+          )}
         </section>
         <section>
           <h2>Steps</h2>
@@ -117,6 +131,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
         </section>
         <section>
           <h2>Inputs</h2>
+          {run.inputs.length === 0 && <p className={styles.muted}>No inputs.</p>}
           <dl className={styles.definitions}>
             {run.inputs.map((input) => (
               <div key={input.id}>
@@ -162,8 +177,17 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
         </section>
         <section>
           <h2>Usage</h2>
-          <UsageTable usage={run.usage} />
-          <p>Estimated cost: {formatUsd(run.estimatedCostUsd)}. This is an estimate.</p>
+          {run.usage.length ? (
+            <>
+              <UsageTable usage={run.usage} />
+              <p>Estimated cost: {formatUsd(run.estimatedCostUsd)}. This is an estimate.</p>
+            </>
+          ) : (
+            <>
+              <p className={styles.muted}>No usage reported yet.</p>
+              <p>Estimated cost: Not reported.</p>
+            </>
+          )}
         </section>
       </Page>
     </>

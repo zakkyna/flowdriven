@@ -1,4 +1,10 @@
-import { attentionCount, isReady, type ReadinessItem, type RunnerError } from "@flowdriven/contracts";
+import {
+  attentionCount,
+  isReady,
+  type OperationOutput,
+  type ReadinessItem,
+  type RunnerError,
+} from "@flowdriven/contracts";
 import { type ReactElement, useEffect, useState } from "react";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";
@@ -18,19 +24,27 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
   const action = useRunnerAction();
   const [, navigate] = useRoute();
   const [selected, setSelected] = useState<string>();
+  const [selectedReport, setSelectedReport] = useState<OperationOutput<"readiness.check">>();
+  const [checking, setChecking] = useState(false);
   const [selectionError, setSelectionError] = useState<RunnerError>();
   const [installing, setInstalling] = useState<ReadinessItem>();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [actionError, setActionError] = useState("");
   const effectiveId = flowId ?? selected;
-  const report = useRunnerQuery("readiness.check", { flowId: effectiveId ?? "" }, { skip: !effectiveId });
+  const report = useRunnerQuery(
+    "readiness.check",
+    { flowId: effectiveId ?? "" },
+    { skip: !effectiveId || (!flowId && !!selectedReport) },
+  );
   useEffect(() => {
     if (flowId || !flows.data || flows.data.length === 0) return;
     let active = true;
     setSelected(undefined);
+    setSelectedReport(undefined);
     setSelectionError(undefined);
     const choose = async () => {
+      let firstReport: OperationOutput<"readiness.check"> | undefined;
       for (const flow of flows.data ?? []) {
         const result = await action("readiness.check", { flowId: flow.id });
         if (!active) return;
@@ -38,12 +52,17 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
           setSelectionError(result.error);
           return;
         }
+        firstReport ??= result.data;
         if (!isReady(result.data.items)) {
+          setSelectedReport(result.data);
           setSelected(flow.id);
           return;
         }
       }
-      if (active) setSelected(flows.data?.[0]?.id);
+      if (active) {
+        setSelectedReport(firstReport);
+        setSelected(flows.data?.[0]?.id);
+      }
     };
     void choose();
     return () => {
@@ -54,6 +73,7 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
     flows.loading || report.loading || (!flowId && !!flows.data?.length && !selected && !selectionError);
   const error = flows.error ?? selectionError ?? report.error;
   const reload = () => {
+    setSelectionError(undefined);
     flows.reload();
     report.reload();
   };
@@ -78,7 +98,19 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
         reload={reload}
       />
     );
-  const data = report.data;
+  const data = (!flowId ? selectedReport : undefined) ?? report.data;
+  const checkAgain = async () => {
+    if (!effectiveId || checking) return;
+    setChecking(true);
+    const result = await action("readiness.check", { flowId: effectiveId });
+    setChecking(false);
+    if (!result.ok) {
+      setSelectionError(result.error);
+      return;
+    }
+    if (!flowId) setSelectedReport(result.data);
+    else report.reload();
+  };
   const count = data ? attentionCount(data.items) : 0;
   const install = async () => {
     if (!installing || !effectiveId) return;
@@ -92,7 +124,7 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
       setStatus(`Marked ${installing.name} as OK. Sample data: nothing was installed.`);
       setActionError("");
       setInstalling(undefined);
-      report.reload();
+      void checkAgain();
     } else {
       setActionError(result.error.message);
       setInstalling(undefined);
@@ -125,7 +157,9 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
                 ))}
               </select>
             </label>
-            <Button onClick={report.reload}>Check again</Button>
+            <Button disabled={checking} onClick={() => void checkAgain()}>
+              {checking ? "Checking..." : "Check again"}
+            </Button>
             <span className={styles.small}>Last checked {formatDateTime(data.checkedAt)}</span>
           </div>
           <div className={`${styles.banner} ${isReady(data.items) ? styles.ready : styles.attention}`}>
@@ -146,7 +180,7 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
                 key={`${data.flowId}-${item.requirementId}`}
                 item={item}
                 onInstall={() => setInstalling(item)}
-                onCheck={report.reload}
+                onCheck={() => void checkAgain()}
               />
             ))}
           </ul>

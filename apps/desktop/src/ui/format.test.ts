@@ -9,3 +9,7 @@ test("formats dates, money and durations", () => {
   expect(formatDuration(252)).toBe("4 min 12 s");
   expect(formatDuration(3900)).toBe("1 h 5 min");
 });
+test("rounds fractional duration to whole seconds", () => {
+  expect(formatDuration(12.345678)).toBe("12 s");
+  expect(formatDuration(59.9)).toBe("1 min");
+});

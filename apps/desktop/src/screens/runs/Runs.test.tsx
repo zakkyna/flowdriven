@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
 
 const bodyRows = () =>
@@ -95,4 +95,79 @@ test("run detail joins worker and attempt with a comma", async () => {
   renderApp("#/runs/run-0006");
   const step = await screen.findByRole("region", { name: "Build the screens" });
   expect(step.textContent).toContain("Worker: Codex, attempt 4 of 4");
+});
+test("flags passed steps with missing or unsuccessful required checks and empty sections", async () => {
+  const { client } = renderApp("#/runs/run-0005");
+  const run = client.state.runs.find((item) => item.id === "run-0005");
+  if (!run || !run.steps[0] || !run.steps[1]) throw new Error("Missing fixture steps");
+  run.steps[0].state = "passed";
+  run.steps[0].checks = [];
+  run.steps[1].state = "passed";
+  run.steps[1].checks = [{ type: "command", required: true, summary: "Failed check", verdict: "failed" }];
+  run.inputs = [];
+  run.usage = [];
+  expect(await screen.findAllByText("Marked passed without a passing check")).toHaveLength(2);
+  expect(screen.getByText("No inputs.")).toBeTruthy();
+  expect(screen.getByText("No usage reported yet.")).toBeTruthy();
+});
+test("warns before resuming an interrupted step and ignores duplicate clicks", async () => {
+  const { client } = renderApp("#/runs/run-0003");
+  await screen.findByText("This step was stopped part-way. Resuming runs it again.");
+  const original = client.call.bind(client);
+  let resolve: (() => void) | undefined;
+  let calls = 0;
+  client.call = ((name, input) => {
+    if (name === "runs.resume") {
+      calls++;
+      return new Promise((done) => {
+        resolve = () => {
+          void original(name, input).then(done);
+        };
+      });
+    }
+    return original(name, input);
+  }) as typeof client.call;
+  const button = screen.getByRole("button", { name: /Resume from step/ });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(calls).toBe(1);
+  resolve?.();
+});
+test("keeps filters when returning from a run", async () => {
+  renderApp("#/runs");
+  await waitFor(() => expect(bodyRows()).toHaveLength(7));
+  fireEvent.change(screen.getByLabelText("State"), { target: { value: "blocked" } });
+  fireEvent.click(within(bodyRow(0)).getByRole("link"));
+  fireEvent.click(await screen.findByRole("link", { name: "All runs" }));
+  await waitFor(() => expect(screen.getByLabelText("State")).toHaveProperty("value", "blocked"));
+  fireEvent.change(screen.getByLabelText("State"), { target: { value: "" } });
+});
+test("sorts timestamps by instant when fractional precision differs", async () => {
+  const { client } = renderApp("#/runs");
+  const first = client.state.runs.find((run) => run.id === "run-0001");
+  const second = client.state.runs.find((run) => run.id === "run-0002");
+  if (!first || !second) throw new Error("Missing runs");
+  first.startedAt = "2026-11-11T00:00:00Z";
+  second.startedAt = "2026-11-11T00:00:00.100Z";
+  await waitFor(() => expect(bodyRow(0).textContent).toContain("run-0002"));
+});
+test("shows a failed resume", async () => {
+  const { client } = renderApp("#/runs/run-0006");
+  const button = await screen.findByRole("button", { name: /Resume from step/ });
+  vi.spyOn(client, "call").mockRejectedValueOnce(new Error("Resume failed"));
+  fireEvent.click(button);
+  expect((await screen.findByRole("alert")).textContent).toBe("Resume failed");
+});
+test("groups reported usage calls", async () => {
+  const { client } = renderApp("#/runs/run-0006");
+  const run = client.state.runs.find((item) => item.id === "run-0006");
+  if (!run) throw new Error("Missing run fixture");
+  run.usage = [{ harnessId: "codex", name: "Codex", calls: 1234, wallSeconds: 1 }];
+  expect(await screen.findByText("1,234")).toBeTruthy();
+});
+test("links a waiting run's approvals to the inbox", async () => {
+  renderApp("#/runs/run-0007");
+  const links = await screen.findAllByRole("link", { name: "Open in Inbox" });
+  expect(links.length).toBeGreaterThan(0);
+  expect(links.every((link) => link.getAttribute("href")?.startsWith("#/inbox/"))).toBe(true);
 });

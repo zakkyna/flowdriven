@@ -88,3 +88,82 @@ describe("Readiness", () => {
     expect(await screen.findByText("No flows to check yet.")).toBeTruthy();
   });
 });
+test("reports clipboard failures with an accessible command name", async () => {
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: vi.fn().mockRejectedValue(new Error("Denied")) },
+    configurable: true,
+  });
+  renderApp("#/readiness/dev.example.social-posts");
+  const ffmpeg = await screen.findByRole("listitem", { name: "FFmpeg" });
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Show me how" }));
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Copy" }));
+  expect((await within(ffmpeg).findByRole("status")).textContent).toBe(
+    "Could not copy. Select the command and copy it by hand.",
+  );
+});
+test("does not probe the selected default flow twice", async () => {
+  const { client } = renderApp("#/readiness");
+  const spy = vi.spyOn(client, "call");
+  await screen.findByText("Not ready. 1 required item needs attention.");
+  expect(
+    spy.mock.calls.filter(
+      ([name, input]) =>
+        name === "readiness.check" && "flowId" in input && input.flowId === "dev.example.figma-to-flutter",
+    ),
+  ).toHaveLength(1);
+});
+test("shows an install failure", async () => {
+  const { client } = renderApp("#/readiness/dev.example.social-posts");
+  const ffmpeg = await screen.findByRole("listitem", { name: "FFmpeg" });
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Install for me" }));
+  vi.spyOn(client, "call").mockRejectedValueOnce(new Error("Install failed"));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Install" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("Install failed");
+});
+test("can retry after a failed check again", async () => {
+  const { client } = renderApp("#/readiness/dev.example.social-posts");
+  await screen.findByText("Not ready. 4 required items need attention.");
+  vi.spyOn(client, "call").mockRejectedValueOnce(new Error("Check failed"));
+  fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("Check failed");
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  expect(await screen.findByText("Not ready. 4 required items need attention.")).toBeTruthy();
+});
+test("reports when the clipboard is unavailable", async () => {
+  Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+  renderApp("#/readiness/dev.example.social-posts");
+  const ffmpeg = await screen.findByRole("listitem", { name: "FFmpeg" });
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Show me how" }));
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Copy" }));
+  expect((await within(ffmpeg).findByRole("status")).textContent).toBe(
+    "Could not copy. Select the command and copy it by hand.",
+  );
+});
+test("checks again from a guide", async () => {
+  const { client } = renderApp("#/readiness/dev.example.social-posts");
+  const ffmpeg = await screen.findByRole("listitem", { name: "FFmpeg" });
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Show me how" }));
+  const spy = vi.spyOn(client, "call");
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Check again" }));
+  await waitFor(() =>
+    expect(spy).toHaveBeenCalledWith("readiness.check", { flowId: "dev.example.social-posts" }),
+  );
+});
+test("shows when a readiness recheck is in progress", async () => {
+  const { client } = renderApp("#/readiness/dev.example.social-posts");
+  await screen.findByText("Not ready. 4 required items need attention.");
+  vi.spyOn(client, "call").mockImplementationOnce(() => new Promise(() => {}));
+  fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+  expect(screen.getByRole("button", { name: "Checking..." })).toHaveProperty("disabled", true);
+});
+test("confirms a successful copy", async () => {
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    configurable: true,
+  });
+  renderApp("#/readiness/dev.example.social-posts");
+  const ffmpeg = await screen.findByRole("listitem", { name: "FFmpeg" });
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Show me how" }));
+  fireEvent.click(within(ffmpeg).getByRole("button", { name: "Copy" }));
+  expect((await within(ffmpeg).findByRole("status")).textContent).toBe("Copied");
+});

@@ -52,3 +52,17 @@ test("evidence expands and collapses with its state announced", () => {
   fireEvent.click(collapse);
   expect(screen.queryByText(/line 13/)).toBeNull();
 });
+test("counts evidence lines without a trailing newline and reports missing proof", () => {
+  const evidence = `${Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join("\n")}\n`;
+  const { container } = render(
+    <CheckList
+      checks={[
+        { type: "command", required: true, summary: "Twelve lines", verdict: "passed", evidence },
+        { type: "command", required: true, summary: "No proof", verdict: "passed", evidence: "" },
+      ]}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+  expect(screen.getByText("No evidence recorded")).toBeTruthy();
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
+});

@@ -7,7 +7,7 @@ import { Badge, StatusBadge } from "./StatusBadge";
 function CheckRow({ check }: { check: Check | CheckResult }): ReactElement {
   const [expanded, setExpanded] = useState(false);
   const evidence = "evidence" in check ? check.evidence : undefined;
-  const lines = evidence?.split("\n") ?? [];
+  const lines = evidence ? evidence.replace(/\r?\n$/, "").split("\n") : [];
   return (
     <div className={styles.row}>
       <div className={styles.content}>
@@ -16,9 +16,10 @@ function CheckRow({ check }: { check: Check | CheckResult }): ReactElement {
         <span className={styles.type}>{check.type}</span>
         {!check.required && <span className={styles.optional}>(optional)</span>}
       </div>
-      {evidence !== undefined && (
+      {evidence && (
         <pre className={styles.evidence}>{(expanded ? lines : lines.slice(0, 12)).join("\n")}</pre>
       )}
+      {"verdict" in check && check.verdict === "passed" && !evidence && <p>No evidence recorded</p>}
       {lines.length > 12 && (
         <Button variant="quiet" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
           {expanded ? "Show fewer lines" : `Show all ${lines.length} lines`}

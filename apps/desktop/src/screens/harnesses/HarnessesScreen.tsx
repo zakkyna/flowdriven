@@ -35,7 +35,8 @@ export function HarnessesScreen(): ReactElement {
     const result = await action("harnesses.rescan", {});
     setBusy(false);
     if (result.ok) {
-      setStatus(`Scan finished. Found ${result.data.filter((card) => card.detected).length} harnesses.`);
+      const count = result.data.filter((card) => card.detected).length;
+      setStatus(`Scan finished. Found ${count} ${count === 1 ? "harness" : "harnesses"}.`);
       setError("");
     } else {
       setError(result.error.message);

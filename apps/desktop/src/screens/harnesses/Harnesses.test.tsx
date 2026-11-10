@@ -1,6 +1,6 @@
 // apps/desktop/src/screens/harnesses/Harnesses.test.tsx
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
 
 const card = (name: string) => screen.getByRole("article", { name });
@@ -61,4 +61,30 @@ describe("Harnesses", () => {
     renderApp("#/harnesses", { scenario: "empty" });
     expect(await screen.findByText("No harnesses found.")).toBeTruthy();
   });
+});
+test("uses singular words for one detected harness and one call", async () => {
+  const { client } = renderApp("#/harnesses");
+  client.state.harnesses.forEach((h, index) => {
+    h.detected = index === 0;
+    h.quota.today.calls = 1;
+    h.quota.week.calls = 1;
+  });
+  expect(await screen.findByText("Today: 1 call. This week: 1 call.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Re-scan" }));
+  expect(await screen.findByText("Scan finished. Found 1 harness.")).toBeTruthy();
+});
+test("shows a rescan failure", async () => {
+  const { client } = renderApp("#/harnesses");
+  const button = await screen.findByRole("button", { name: "Re-scan" });
+  await screen.findByRole("article", { name: "Codex" });
+  vi.spyOn(client, "call").mockRejectedValueOnce(new Error("Scan failed"));
+  fireEvent.click(button);
+  expect((await screen.findByRole("alert")).textContent).toBe("Scan failed");
+});
+test("shows a consent failure", async () => {
+  const { client } = renderApp("#/harnesses");
+  const claude = await screen.findByRole("article", { name: "Claude Code" });
+  vi.spyOn(client, "call").mockRejectedValueOnce(new Error("Consent failed"));
+  fireEvent.click(within(claude).getByRole("button", { name: "Revoke consent" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("Consent failed");
 });
