@@ -1384,7 +1384,7 @@ APPROVAL_EXPIRY_HOURS = 24
 approvalExpiresAt(createdAt: string): string   // createdAt plus 24 hours, as toISOString()
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // packages/contracts/src/flow.test.ts
@@ -1476,31 +1476,33 @@ test("an email payload needs a recipient", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/contracts`
 Expected: FAIL with `does not provide an export named 'CheckType'` (or similar missing-export errors)
 
-- [ ] **Step 3: Implement `common.ts`, `flow.ts`, `run.ts`, `approval.ts` with the schemas and functions above; re-export all from `index.ts`**
+- [x] **Step 3: Implement `common.ts`, `flow.ts`, `run.ts`, `approval.ts` with the schemas and functions above; re-export all from `index.ts`**
 
 Use `z.enum([...])` so `.options` lists the values in the order given. `FlowEdit` and `Payload` are `z.discriminatedUnion("kind", [...])`. `Approval` uses `.superRefine` for the `riskyAction` rule. Imports run one way only (common, then run, then flow and approval), so there is no import cycle.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run packages/contracts`
 Expected: PASS (15 tests: 13 new plus the two in `version.test.ts`)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts
 git commit -m "Add contract schemas for flows, runs and approvals" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 
