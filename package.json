@@ -1,0 +1,21 @@
+{
+  "name": "flowdriven-workspace",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@10.9.0",
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "scripts": {
+    "test:tools": "node --test \"tools/checks/test/*.test.mjs\"",
+    "check": "pnpm test:tools && pnpm check:hidden && pnpm check:deps",
+    "check:hidden": "node tools/checks/hidden-chars.mjs",
+    "check:deps": "node tools/checks/dependency-gate.mjs"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "registry": "https://registry.npmjs.org/",
+  "packageManager": "pnpm@10.9.0",
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "installScripts": [
+    "electron"
+  ],
+  "npmrc": [
+    "registry=https://registry.npmjs.org/",
+    "engine-strict=true",
+    "save-exact=true"
+  ],
+  "workspaceGlobs": [
+    "apps/*",
+    "packages/*"
+  ],
+  "workspaces": {
+    "flowdriven-workspace": ".",
+    "@flowdriven/contracts": "packages/contracts",
+    "@flowdriven/fixtures": "packages/fixtures",
+    "@flowdriven/desktop": "apps/desktop"
+  },
+  "rootScripts": {
+    "test:tools": "node --test \"tools/checks/test/*.test.mjs\"",
+    "check": "pnpm test:tools && pnpm check:hidden && pnpm check:deps",
+    "check:hidden": "node tools/checks/hidden-chars.mjs",
+    "check:deps": "node tools/checks/dependency-gate.mjs"
+  },
+  "guardTests": [
+    "agent-rules.test.mjs",
+    "cli.test.mjs",
+    "dependency-gate.test.mjs",
+    "hidden-chars.test.mjs",
+    "repo-files.test.mjs"
+  ],
+  "packages": [
+    {
+      "name": "electron",
+      "range": "^45.1.0",
+      "packages": [
+        "@flowdriven/desktop"
+      ],
+      "why": "The desktop shell (spec 8.1)."
+    },
+    {
+      "name": "react",
+      "range": "^19.3.1",
+      "packages": [
+        "@flowdriven/desktop"
+      ],
+      "why": "UI library (spec 8.1)."
+    },
+    {
+      "name": "react-dom",
+      "range": "^19.3.1",
+      "packages": [
+        "@flowdriven/desktop"
+      ],
+      "why": "Renders React into the window."
+    },
+    {
+      "name": "zod",
+      "range": "^4.6.7",
+      "packages": [
+        "@flowdriven/contracts"
+      ],
+      "why": "Runtime-validated schemas with inferred types for the contract."
+    },
+    {
+      "name": "typescript",
+      "range": "^7.0.2",
+      "packages": [
+        "flowdriven-workspace"
+      ],
+      "why": "Strict type checking; emits the Electron main process."
+    },
+    {
+      "name": "@biomejs/biome",
+      "range": "^2.6.3",
+      "packages": [
+        "flowdriven-workspace"
+      ],
+      "why": "The one lint-and-format tool; a single binary, no plugin stack."
+    },
+    {
+      "name": "vite",
+      "range": "^8.3.5",
+      "packages": [
+        "flowdriven-workspace"
+      ],
+      "why": "Renderer dev server and web build; required peer of Vitest."
+    },
+    {
+      "name": "@vitejs/plugin-react",
+      "range": "^6.1.2",
+      "packages": [
+        "flowdriven-workspace"
+      ],
+      "why": "JSX transform and fast refresh for Vite and Vitest."
+    },
+    {
+      "name": "vitest",
+      "range": "^5.0.5",
+      "packages": [
+        "flowdriven-workspace"
+      ],
+      "why": "The one test runner for TypeScript code."
+    },
+    {
+      "name": "happy-dom",
+      "range": "^21.0.4",
+      "packages": [
+        "flowdriven-workspace"
+      ],
+      "why": "DOM test environment. Chosen over jsdom 31, which requires Node `^24.15.0`."
+    },
+    {
+      "name": "@testing-library/react",
+      "range": "^16.3.3",
+      "packages": [
+        "@flowdriven/desktop"
+      ],
+      "why": "Renders screens in tests and queries them by role and text."
+    },
+    {
+      "name": "@testing-library/dom",
+      "range": "^10.4.2",
+      "packages": [
+        "@flowdriven/desktop"
+      ],
+      "why": "Required peer of `@testing-library/react` 16."
+    },
+    {
+      "name": "@types/react",
+      "range": "^19.3.0",
+      "packages": [
+        "@flowdriven/desktop"
+      ],
+      "why": "React types for TypeScript."
+    },
+    {
+      "name": "@types/react-dom",
+      "range": "^19.3.0",
+      "packages": [
+        "@flowdriven/desktop"
+      ],
+      "why": "React DOM types."
+    },
+    {
+      "name": "@types/node",
+      "range": "^24.19.2",
+      "packages": [
+        "flowdriven-workspace"
+      ],
+      "why": "Node types for the Electron main process, matching the Node 24 floor."
+    }
+  ]
+}
