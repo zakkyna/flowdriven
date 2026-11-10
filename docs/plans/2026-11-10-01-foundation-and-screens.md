@@ -3196,7 +3196,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 - Consumes: `useRunnerQuery("settings.get")`, `useRunnerAction()` with `settings.update`; `budgetStatus`, `sortByRisk`; Task 7 parts.
 - Produces: `SettingsScreen(): ReactElement` (data-screen `settings`). Layout, regions and copy: "UI design: Settings".
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```tsx
 // apps/desktop/src/screens/settings/Settings.test.tsx
@@ -3274,35 +3274,37 @@ describe("Settings", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/settings`
 Expected: FAIL (`Unable to find role="radiogroup"`)
 
-- [ ] **Step 3: Implement the Settings screen per "UI design: Settings"**
+- [x] **Step 3: Implement the Settings screen per "UI design: Settings"**
 
 Ready, loading and error states follow "UI design: Shared parts".
 
 The brain group is a `fieldset` with `role="radiogroup"` and `aria-labelledby` pointing at its `legend`. Each radio has `aria-label` equal to the backend name. Budget inputs are view state until "Save budget". A rejected `settings.update` (`RunnerError`) shows its message in a `role="alert"` line in the section that sent it, rendered only while an error exists. `Settings.module.css` sets `overflow-wrap: anywhere` on boxes with user text and `min-width: 0` (exactly, not `0px`) on grid and flex children; Task 14's `layout-guards.test.ts` checks both.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src/screens/settings`
 Expected: PASS (9 tests)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: preview `#/settings`; show the owner.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/settings
 git commit -m "Build the Settings screen" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 
