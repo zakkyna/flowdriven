@@ -1709,7 +1709,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.banner` (with `[data-state]`), `.row`, `.list` and `.guide` in `Readiness.module.css`.
 
-- [ ] **Step 1: Write the failing tests** (add to `Readiness.test.tsx`; add `import { readFileSync } from "node:fs";` at the top of the file)
+- [x] **Step 1: Write the failing tests** (add to `Readiness.test.tsx`; add `import { readFileSync } from "node:fs";` at the top of the file)
 
 ```tsx
 test("the banner says ready or not ready with an icon, and marks its state", async () => {
@@ -1739,33 +1739,33 @@ test("readiness styles: tinted banner, flat rows, a sunken fix guide", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/readiness`
 Expected: FAIL in `the banner says ready or not ready ...` (`TypeError: Cannot read properties of null (reading 'getAttribute')`: no element has `data-state` yet) and in the CSS test. `each requirement shows its state as icon plus word ...` passes at once and is kept as a pin.
 
-- [ ] **Step 3: Implement** per "UI design: Readiness". Keep `overflow-wrap: anywhere` and `min-width: 0` in the CSS module (`layout-guards.test.ts`).
+- [x] **Step 3: Implement** per "UI design: Readiness". Keep `overflow-wrap: anywhere` and `min-width: 0` in the CSS module (`layout-guards.test.ts`).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: preview `#/readiness/dev.example.social-posts` in light and dark.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/readiness
 git commit -m "Restyle the Readiness screen" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

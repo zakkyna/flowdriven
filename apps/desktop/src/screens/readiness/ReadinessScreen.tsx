@@ -131,7 +131,7 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
     }
   };
   return (
-    <Page screen="readiness" ready title="Readiness" description={description}>
+    <Page screen="readiness" ready title="Readiness" description={description} size="medium">
       {!data ? (
         <div>
           <h2>No flows to check yet.</h2>
@@ -162,7 +162,7 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
             </Button>
             <span className={styles.small}>Last checked {formatDateTime(data.checkedAt)}</span>
           </div>
-          <div className={`${styles.banner} ${isReady(data.items) ? styles.ready : styles.attention}`}>
+          <div className={styles.banner} data-state={isReady(data.items) ? "ready" : "attention"}>
             <Icon name={isReady(data.items) ? "check" : "hand"} />
             {isReady(data.items)
               ? "Ready to run. Every required item is OK."

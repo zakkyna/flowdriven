@@ -30,37 +30,44 @@
   font: var(--text-mono) / 18px var(--font-mono);
   overflow-wrap: anywhere;
 }
-.banner,
-.list {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-l);
-}
 .banner {
-  padding: 16px 20px;
+  padding: 12px 16px;
   margin-bottom: 16px;
+  border-radius: var(--radius-l);
+  font-size: 13.5px;
 }
-.ready {
+.banner[data-state="ready"] {
   background: var(--ok-soft);
 }
-.attention {
-  background: var(--accent-soft);
+.banner[data-state="attention"] {
+  background: var(--wait-soft);
+}
+.banner[data-state="ready"] svg {
+  color: var(--ok);
+}
+.banner[data-state="attention"] svg {
+  color: var(--wait);
 }
 .list {
   list-style: none;
   padding: 0;
   margin: 0;
-  background: var(--surface-panel);
 }
 .row {
-  padding: 16px 20px;
-}
-.row + .row {
-  border-top: 1px solid var(--border);
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
 }
 .rowHeader {
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: nowrap;
+}
+.content {
+  flex: 1;
+}
+.labels strong {
+  font-size: 14px;
+  font-weight: 500;
 }
 .content,
 .rowHeader > *,

@@ -1,8 +1,41 @@
+import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
 
 const row = (name: string) => screen.getByRole("listitem", { name });
+
+test("the banner says ready or not ready with an icon, and marks its state", async () => {
+  const ready = renderApp("#/readiness/dev.example.documents-and-reports");
+  const readyBanner = (await screen.findByText("Ready to run. Every required item is OK.")).closest(
+    "[data-state]",
+  ) as HTMLElement;
+  expect(readyBanner.getAttribute("data-state")).toBe("ready");
+  expect(readyBanner.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  ready.unmount();
+  renderApp("#/readiness/dev.example.social-posts");
+  const banner = (await screen.findByText("Not ready. 4 required items need attention.")).closest(
+    "[data-state]",
+  ) as HTMLElement;
+  expect(banner.getAttribute("data-state")).toBe("attention");
+});
+test("each requirement shows its state as icon plus word at the end of its row", async () => {
+  renderApp("#/readiness/dev.example.social-posts");
+  const ffmpeg = await screen.findByRole("listitem", { name: "FFmpeg" });
+  expect(within(ffmpeg).getByText("Missing")).toBeTruthy();
+  expect(ffmpeg.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+});
+test("readiness styles: tinted banner, flat rows, a sunken fix guide", () => {
+  const css = readFileSync("apps/desktop/src/screens/readiness/Readiness.module.css", "utf8");
+  expect(css).toMatch(/\.banner\[data-state="ready"\]\s*\{[^}]*background:\s*var\(--ok-soft\)/s);
+  expect(css).toMatch(/\.banner\[data-state="attention"\]\s*\{[^}]*background:\s*var\(--wait-soft\)/s);
+  expect(css).toMatch(/\.row\s*\{[^}]*border-bottom:\s*1px solid var\(--border\)/s);
+  expect(css).not.toMatch(/\.list\s*\{[^}]*border-radius/s);
+  expect(css).toMatch(
+    /\.guide\s*\{[^}]*background:\s*var\(--surface-sunken\)[^}]*border-radius:\s*var\(--radius-m\)/s,
+  );
+  expect(css).not.toMatch(/accent-soft/);
+});
 
 describe("Readiness", () => {
   test("opens the first flow that is not ready", async () => {
