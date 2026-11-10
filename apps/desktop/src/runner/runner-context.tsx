@@ -14,6 +14,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -50,6 +51,8 @@ export function useRunnerQuery<N extends OperationName>(
   const client = useRunnerClient();
   const key = JSON.stringify(input);
   const skip = options?.skip ?? false;
+  const wasSkipped = useRef(skip);
+  const justEnabled = wasSkipped.current && !skip;
   const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<{
     key: string;
@@ -68,10 +71,17 @@ export function useRunnerQuery<N extends OperationName>(
     [client, name, reload],
   );
   useEffect(() => {
-    if (skip) return;
+    if (skip) {
+      wasSkipped.current = true;
+      return;
+    }
+    const starting = wasSkipped.current;
+    wasSkipped.current = false;
     let active = true;
     const queryKey = `${name}:${key}`;
-    setResult((old) => (old.key === queryKey && !old.error ? old : { key: queryKey, loading: true }));
+    setResult((old) =>
+      old.key === queryKey && !old.error && !starting ? old : { key: queryKey, loading: true },
+    );
     Promise.resolve()
       .then(() => client.call(name, JSON.parse(key) as OperationInput<N>))
       .then(
@@ -87,7 +97,8 @@ export function useRunnerQuery<N extends OperationName>(
     };
   }, [client, name, key, skip, revision]);
   if (skip) return { data: undefined, error: undefined, loading: false, reload };
-  if (result.key !== `${name}:${key}`) return { data: undefined, error: undefined, loading: true, reload };
+  if (justEnabled || result.key !== `${name}:${key}`)
+    return { data: undefined, error: undefined, loading: true, reload };
   return { data: result.data, error: result.error, loading: result.loading, reload };
 }
 export function useRunnerAction(): <N extends OperationName>(

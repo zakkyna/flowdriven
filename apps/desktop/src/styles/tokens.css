@@ -42,8 +42,12 @@
   --overlay: rgba(15, 18, 17, 0.45);
   --shadow-dialog: 0 8px 24px rgba(15, 18, 17, 0.18);
 }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --surface-app: #161918;
     --surface-panel: #1e2221;
     --surface-sunken: #121514;
@@ -68,6 +72,7 @@
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --surface-app: #161918;
   --surface-panel: #1e2221;
   --surface-sunken: #121514;

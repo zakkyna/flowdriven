@@ -110,3 +110,9 @@ describe("sample story", () => {
     expect(Settings.parse(empty.settings).budget.capUsd).toBe(0);
   });
 });
+test("passed sample steps record their first attempt", () => {
+  for (const run of story.runs)
+    for (const step of run.steps) {
+      if (step.state === "passed") expect(step.attempts[0]?.number).toBe(1);
+    }
+});

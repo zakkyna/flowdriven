@@ -19,7 +19,7 @@ export function runs(flows: FlowRecord[]): RunDetail[] {
         title: s.title,
         do: s.do,
         state: stepState,
-        attempts: [],
+        attempts: stepState === "passed" ? [{ number: 1, startedAt, endedAt: startedAt, exit: "ok" }] : [],
         maxAttempts: s.retry + 1,
         checks: s.checks.map((c) => ({
           ...c,

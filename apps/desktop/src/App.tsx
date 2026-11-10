@@ -70,7 +70,18 @@ export function App(): ReactElement {
   const count = data?.length ?? 0;
   return (
     <div className={styles.frame}>
-      <aside className={styles.rail}>
+      {/* biome-ignore lint/a11y/useValidAnchor: keep the hash route intact while focusing main. */}
+      <a
+        className={styles.skip}
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          mainRef.current?.focus();
+        }}
+      >
+        Skip to content
+      </a>
+      <div className={styles.rail}>
         <div className={styles.brand}>{APP_NAME}</div>
         <nav aria-label="Main" aria-busy={loading}>
           <div className={styles.links}>
@@ -101,8 +112,8 @@ export function App(): ReactElement {
           <div>{SAMPLE_DATA_NOTE}</div>
           <div>{shellKind() === "electron" ? "Desktop app" : "Browser preview"}</div>
         </footer>
-      </aside>
-      <main ref={mainRef} className={styles.main}>
+      </div>
+      <main id="main-content" tabIndex={-1} ref={mainRef} className={styles.main}>
         <Screen route={route} />
       </main>
     </div>

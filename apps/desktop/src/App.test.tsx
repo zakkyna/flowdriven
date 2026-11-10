@@ -57,3 +57,11 @@ test("route changes reset scroll, title and focus", async () => {
     expect(heading.getAttribute("tabindex")).toBe("-1");
   });
 });
+test("skip link is first and targets the main content without an extra landmark", () => {
+  renderApp("#/runs");
+  const link = screen.getByRole("link", { name: "Skip to content" });
+  expect(document.querySelector("a")).toBe(link);
+  expect(link.getAttribute("href")).toBe("#main-content");
+  expect(screen.getByRole("main").id).toBe("main-content");
+  expect(screen.queryByRole("complementary")).toBeNull();
+});

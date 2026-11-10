@@ -103,7 +103,9 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
             </div>
             <header className={styles.flowHeader}>
               <h1>{detail.manifest.name}</h1>
-              <p className={styles.muted}>{detail.manifest.summary}</p>
+              {detail.manifest.summary !== detail.manifest.name && (
+                <p className={styles.muted}>{detail.manifest.summary}</p>
+              )}
               <div className={styles.meta}>
                 <span>{detail.manifest.kind === "build" ? "Build flow" : "Light flow"}</span>
                 <span>Version {detail.manifest.version}</span>

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { CONTENT_SECURITY_POLICY } from "./csp";
+import { CONTENT_SECURITY_POLICY } from "./csp.mjs";
 
 test("the policy allows only the app's own files", () => {
   expect(CONTENT_SECURITY_POLICY).toContain("script-src 'self'");

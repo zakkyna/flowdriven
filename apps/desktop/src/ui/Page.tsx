@@ -6,6 +6,7 @@ export function Page({
   title,
   description,
   actions,
+  before,
   children,
 }: {
   screen: string;
@@ -13,6 +14,7 @@ export function Page({
   title: string;
   description?: string;
   actions?: ReactNode;
+  before?: ReactNode;
   children?: ReactNode;
 }): ReactElement {
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -21,7 +23,8 @@ export function Page({
     headingRef.current?.focus({ preventScroll: true });
   }, [title]);
   return (
-    <section data-screen={screen} data-screen-ready={String(ready)}>
+    <section className={styles.page} data-screen={screen} data-screen-ready={String(ready)}>
+      {before}
       <header className={styles.header}>
         <div className={styles.heading}>
           <h1 ref={headingRef} tabIndex={-1}>

@@ -64,6 +64,18 @@
 .main {
   flex: 1;
   min-width: 0;
-  overflow: auto;
-  padding: 28px 32px 48px;
+  overflow: hidden;
+}
+
+.skip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateY(-150%);
+  z-index: 10;
+  background: var(--surface-panel);
+  padding: 8px;
+}
+.skip:focus {
+  transform: translateY(0);
 }

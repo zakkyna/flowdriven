@@ -25,7 +25,7 @@ void app
         let ready = false;
         while (Date.now() < deadline) {
           ready = (await window.webContents.executeJavaScript(
-            `document.querySelector('[data-screen-ready="true"]') !== null`,
+            `document.querySelector('[data-screen-ready="true"]') !== null && !Array.from(document.querySelectorAll('[role="status"]')).some((node) => node.textContent?.trim() === "Loading")`,
           )) as boolean;
           if (ready) break;
           await new Promise((resolve) => setTimeout(resolve, 100));

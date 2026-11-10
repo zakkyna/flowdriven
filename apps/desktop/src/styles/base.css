@@ -17,9 +17,24 @@ pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+select,
+textarea,
+input {
+  background: var(--surface-panel);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+}
+a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 @media (prefers-reduced-motion: reduce) {
-  button,
-  a {
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
   }
 }

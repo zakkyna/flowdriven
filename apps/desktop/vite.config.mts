@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { CONTENT_SECURITY_POLICY } from "./src/csp";
+import { CONTENT_SECURITY_POLICY } from "./src/csp.mts";
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   base: "./",

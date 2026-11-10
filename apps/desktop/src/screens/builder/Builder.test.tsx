@@ -1,6 +1,8 @@
-import { PREVIEW_AGENT_REPLY } from "@flowdriven/fixtures";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "@flowdriven/fixtures";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, test, vi } from "vitest";
+import { App } from "../../App";
+import { RunnerProvider } from "../../runner/runner-context";
 import { readyState, renderApp } from "../../test/render";
 
 const FIGMA = "#/builder/dev.example.figma-to-flutter";
@@ -122,4 +124,62 @@ describe("Builder", () => {
     renderApp("#/builder", { scenario: "empty" });
     expect(await screen.findByText("No flows yet.")).toBeTruthy();
   });
+});
+test("does not repeat a summary equal to the flow name", async () => {
+  renderApp("#/builder/dev.example.figma-to-flutter");
+  await screen.findByRole("heading", { name: "Figma to Flutter" });
+  expect(screen.getAllByText("Figma to Flutter")).toHaveLength(2);
+});
+
+test("late dependent queries never mark the loading Builder ready", async () => {
+  window.location.hash = "#/builder";
+  const client = createFixtureRunnerClient();
+  const original = client.call.bind(client);
+  const releases: (() => void)[] = [];
+  vi.spyOn(client, "call").mockImplementation((name, input) =>
+    new Promise<void>((resolve) => releases.push(resolve)).then(() => original(name, input)),
+  );
+  const { container } = render(
+    <RunnerProvider client={client}>
+      <App />
+    </RunnerProvider>,
+  );
+  const check = () => {
+    if (screen.queryByText("Loading")) expect(readyState(container, "builder")).toBe("false");
+  };
+  check();
+  for (let i = 0; i < 5; i++) {
+    await act(async () => {
+      for (const release of releases.splice(0)) release();
+    });
+    check();
+  }
+  await waitFor(() => expect(readyState(container, "builder")).toBe("true"));
+});
+test("revisiting a flow waits for its re-enabled run query", async () => {
+  const { client, container } = renderApp(FIGMA);
+  await screen.findByRole("heading", { name: "Figma to Flutter" });
+  const original = client.call.bind(client);
+  let release: (() => void) | undefined;
+  vi.spyOn(client, "call").mockImplementation((name, input) => {
+    if (name === "runs.status")
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      }).then(() => original("runs.status", input as { runId: string }));
+    return original(name, input);
+  });
+  act(() => {
+    window.location.hash = "#/builder/dev.example.nope";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await screen.findByRole("heading", { name: "Flow not found" });
+  act(() => {
+    window.location.hash = FIGMA;
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await waitFor(() => expect(release).toBeDefined());
+  expect(readyState(container, "builder")).toBe("false");
+  expect(screen.getByText("Loading")).toBeTruthy();
+  await act(async () => release?.());
+  await waitFor(() => expect(readyState(container, "builder")).toBe("true"));
 });

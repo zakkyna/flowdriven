@@ -13,9 +13,9 @@ export function StepBlock({ step, index }: { step: StepRun; index: number }): Re
         <StatusBadge domain="step" value={step.state} />
       </div>
       <div className={styles.muted}>
-        {step.worker && <span>Worker: {step.worker.name} </span>}
+        {step.worker && <span>Worker: {step.worker.name}, </span>}
         <span>
-          Attempt {step.attempts.length} of {step.maxAttempts}
+          {step.worker ? "attempt" : "Attempt"} {step.attempts.length} of {step.maxAttempts}
         </span>
       </div>
       {step.note && <p>{step.note}</p>}

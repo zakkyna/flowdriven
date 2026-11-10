@@ -43,7 +43,7 @@ describe("Runs", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Figma to Flutter" })).toBeTruthy();
     expect(screen.getByText(/flutter analyze still fails after 4 attempts/)).toBeTruthy();
     const step = screen.getByRole("region", { name: "Build the screens" });
-    expect(within(step).getByText("Attempt 4 of 4")).toBeTruthy();
+    expect(within(step).getByText("attempt 4 of 4")).toBeTruthy();
     expect(within(step).getByText(/^flutter analyze: 3 errors/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Resume from step 3" }));
     expect(await screen.findAllByText("Running")).not.toHaveLength(0);
@@ -90,4 +90,9 @@ describe("Runs", () => {
     renderApp("#/runs", { scenario: "empty" });
     expect(await screen.findByText("No runs yet.")).toBeTruthy();
   });
+});
+test("run detail joins worker and attempt with a comma", async () => {
+  renderApp("#/runs/run-0006");
+  const step = await screen.findByRole("region", { name: "Build the screens" });
+  expect(step.textContent).toContain("Worker: Codex, attempt 4 of 4");
 });

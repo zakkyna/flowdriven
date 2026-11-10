@@ -174,7 +174,7 @@ apps/desktop/                     @flowdriven/desktop
   electron/capture.ts             screenshot script (Task 14)
   electron/screens.json           the screens to capture, 8 entries (Task 14)
   src/main.tsx, App.tsx           renderer entry and frame (Task 8)
-  src/csp.ts, theme.ts, shell.ts  CSP string, theme override, shell kind (Task 8)
+  src/csp.mts, theme.ts, shell.ts  CSP string, theme override, shell kind (Task 8)
   src/nav/route.ts                hash routes (Task 8)
   src/nav/AppLink.tsx, NotFoundPage.tsx   in-app link and shared not-found page (Task 8)
   src/runner/                     RunnerProvider, useRunnerQuery, createRunnerClient, scenario query (Task 8)
@@ -199,7 +199,7 @@ Direction: a quiet control room. Calm neutral surfaces with a slight green-grey 
 
 ### Tokens (`apps/desktop/src/styles/tokens.css`)
 
-Light values sit on `:root`. Dark values apply under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ... } }` and again under `:root[data-theme="dark"] { ... }`. `:root` also sets `color-scheme: light dark`.
+Light values sit on `:root`. Dark values apply under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ... } }` and again under `:root[data-theme="dark"] { ... }`. `:root` also sets `color-scheme: light dark`; explicit theme overrides and the dark media block set the matching `color-scheme`.
 
 | Token | Light | Dark | Used for |
 |---|---|---|---|
@@ -242,7 +242,7 @@ Theme-independent tokens:
 | `--rail-width` | `208px` |
 | `--chat-width` | `380px` |
 
-`base.css`: box-sizing border-box; `body` margin 0, `font: var(--text-m)/22px var(--font-ui)`, colour `--text`, background `--surface-app`; `:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }`; `@media (prefers-reduced-motion: reduce)` removes transitions; the only transition in the app is `background-color 120ms` on buttons and nav items. Text never goes all caps. No middle-dot separators and no arrow glyphs in copy. It also holds `pre { white-space: pre-wrap; overflow-wrap: anywhere; }` (Task 14's `layout-guards.test.ts` checks `pre-wrap` here).
+`base.css`: box-sizing border-box; `body` margin 0, `font: var(--text-m)/22px var(--font-ui)`, colour `--text`, background `--surface-app`; `:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }`; `@media (prefers-reduced-motion: reduce)` removes transitions and animations; the only transition in the app is `background-color 120ms` on buttons and nav items. Text never goes all caps. No middle-dot separators and no arrow glyphs in copy. It also holds `pre { white-space: pre-wrap; overflow-wrap: anywhere; }` (Task 14's `layout-guards.test.ts` checks `pre-wrap` here).
 
 ### Shared parts (Task 7)
 
@@ -263,10 +263,10 @@ Theme-independent tokens:
 - **Icons**: authored in `ui/icons.tsx`; `viewBox="0 0 24 24"`, `fill="none"`, `stroke="currentColor"`, `stroke-width="1.75"`, round caps and joins, `aria-hidden="true"`, `focusable="false"`, default size 18. Names: `builder`, `inbox`, `runs`, `readiness`, `harnesses`, `settings`, `check`, `cross`, `clock`, `hand`, `ring`, `retry`, `pause`, `dash`, `stop`, `key`, `circle-slash`, `alert`, `shield`, `half`, `arrow-up`, `arrow-down`, `arrow-left`, `plus`, `copy`, `duplicate`, `trash`, `undo`, `send`, `post`, `coin`, `lock`.
 - **Button** variants: `primary` (fill `--accent`, text `--on-accent`, hover `--accent-hover`), `secondary` (fill `--surface-panel`, 1px `--border-strong`, text `--text`), `quiet` (transparent, text `--text-muted`, hover fill `--surface-sunken`), `danger` (transparent, 1px `--bad`, text `--bad`). Height 32px, padding `0 14px`, radius `--radius-m`, `--text-s` weight 600. Icon-only quiet buttons are 28 by 28 with an `aria-label`. Disabled: opacity 0.5. At most one primary button per screen region.
 - **Dialog**: `role="dialog"`, `aria-modal="true"`, labelled by its title; backdrop `--overlay`; panel 480px wide, radius `--radius-l`, padding 24px, `--shadow-dialog`; title `--text-l`; actions right-aligned, cancel first, then the confirming button; Escape cancels; focus starts on the enabled confirming button, otherwise the first focusable element or the panel, stays inside, and returns to the opener on close; the panel has max-height `calc(100vh - 48px)` and a scrolling body so the title and actions remain visible.
-- **Page**: `<section data-screen={name} data-screen-ready={"true" | "false"}>` (names: `builder`, `inbox`, `runs`, `run` for run detail, `readiness`, `harnesses`, `settings`, `not_found`); header with `h1` (`--text-xl`), description (`--text-m`, `--text-muted`, max width 640px) and an actions slot on the right; 24px below the header.
-- **Ready, loading and error** (one rule for every screen): `data-screen-ready` is `"true"` only when every non-skipped `useRunnerQuery` of the screen has `loading === false` and no error. While any query loads, the screen renders `ScreenState` (a `Page` with `ready={false}`, its fixed title, and `<p role="status">Loading</p>`). When a query fails with anything other than `not_found`, `ScreenState` renders `<p role="alert">` with the `RunnerError` message and a quiet button "Try again" that calls `reload`. A `not_found` error shows the screen's own not-found page (a `Page` with `ready`, title, text and a link back). The screenshot script waits for `data-screen-ready="true"`, so a screen must never set it earlier.
+- **Page**: `<section data-screen={name} data-screen-ready={"true" | "false"}>` (names: `builder`, `inbox`, `runs`, `run` for run detail, `readiness`, `harnesses`, `settings`, `not_found`); scrolls with padding `28px 32px 48px`; header with `h1` (`--text-xl`), description (`--text-m`, `--text-muted`, max width 640px) and an actions slot on the right; 24px below the header.
+- **Ready, loading and error** (one rule for every screen): `data-screen-ready` is `"true"` only when every needed `useRunnerQuery`, including dependent queries, has answered without error. While any query loads, the screen renders `ScreenState` (a `Page` with `ready={false}`, its fixed title, and `<p role="status">Loading</p>`). When a query fails with anything other than `not_found`, `ScreenState` renders `<p role="alert">` with the `RunnerError` message and a quiet button "Try again" that calls `reload`. A `not_found` error shows the screen's own not-found page (a `Page` with `ready`, title, text and a link back). The screenshot script waits for `data-screen-ready="true"` and no loading state, so a screen must never set it earlier.
 - **Long text**: every grid or flex child that holds user text sets `min-width: 0`; every box that holds user text (payloads, `pre`, definition values, table cells, chat messages, step titles, flow names) sets `overflow-wrap: anywhere`; `pre` also sets `white-space: pre-wrap`.
-- **CheckList**: a `div` with `role="group"` and `aria-label="Checks"` (no list roles, because it sits inside list items); one row per check: verdict badge (when a verdict exists), the check summary (`--text-m`), the type in mono (`command`, `files` ...), "(optional)" after non-required checks; evidence below in a `pre` (`--text-mono`, `--surface-sunken`, radius `--radius-s`, padding `8px 10px`). Evidence longer than 12 lines shows its first 12 lines and a quiet button "Show all N lines". When every required check is `judge`, the list ends with a neutral badge (icon `half`) "Judged, not verified".
+- **CheckList**: a `div` with `role="group"` and `aria-label="Checks"` (no list roles, because it sits inside list items); one row per check: verdict badge (when a verdict exists), the check summary (`--text-m`), the type in mono (`command`, `files` ...), "(optional)" after non-required checks; evidence below in a `pre` (`--text-mono`, `--surface-sunken`, radius `--radius-s`, padding `8px 10px`). Rows have an 8px gap and optional labels are muted. Evidence longer than 12 lines shows its first 12 lines and a quiet button "Show all N lines" that announces its expanded state and can collapse the evidence again. When every required check is `judge`, the list ends with a neutral badge (icon `half`) "Judged, not verified".
 - **Panel**: `--surface-panel`, 1px `--border`, radius `--radius-l`, padding `16px 20px`.
 - **Dates**: `formatDateTime` gives "10 Nov, 09:12"; `formatTime` gives "13:00"; `formatUsd` gives "$16.40"; `formatDuration` gives "38 s", "4 min 12 s", "1 h 5 min". Every `Intl` call names its locale (`en-GB` for dates and times, `en-US` for money), never `undefined`.
 
@@ -275,8 +275,8 @@ Theme-independent tokens:
 ```
 +----------------+------------------------------------------------------+
 | FlowDriven     |                                                      |
-|                |   main area (scrolls on its own)                     |
-| [] Builder     |   padding 28px 32px 48px                             |
+|                |   main area (no padding or scrolling)                |
+| [] Builder     |   Page scrolls, padding 28px 32px 48px               |
 | [] Inbox    5  |                                                      |
 | [] Runs        |                                                      |
 | [] Readiness   |                                                      |
@@ -325,7 +325,7 @@ Theme-independent tokens:
 
 Regions in order (left column):
 1. Toolbar: select labelled "Flow" (options: flow names in `flows.list` order; changing it sets `#/builder/<flowId>`); on the right quiet button "Undo" (icon `undo`, disabled when `canUndo` is false) and primary button "Run now".
-2. Flow header: `h1` flow name; summary (`--text-m`, muted); meta row with gap 16px: "Build flow" or "Light flow", "Version 1.0.0", sign-off badge (domain `signOff`); under it `--text-s` muted: "Approved for version 1.0.0" when approved, "Approved version 1.2.0. This version needs your approval before it runs." when stale, nothing when none.
+2. Flow header: `h1` flow name; summary (`--text-m`, muted) when different from the name; meta row with gap 16px: "Build flow" or "Light flow", "Version 1.0.0", sign-off badge (domain `signOff`); under it `--text-s` muted: "Approved for version 1.0.0" when approved, "Approved version 1.2.0. This version needs your approval before it runs." when stale, nothing when none.
 3. `h2` "What this flow does", then a definition list: "Goal" (playback goal), "It will touch" (bulleted `playback.touches`), "It asks before" (bulleted `playback.asksApprovalFor`, or "Nothing risky." when empty).
 4. `h2` "Steps" with `--text-s` muted "5 steps" beside it, secondary button "Add step" (icon `plus`) on the right. A one-line error area (`role="alert"`, tone bad, icon `alert`) under the heading exists only while an error exists: it shows the message of the last failed `flows.update`, `flows.build` or `flows.run` call and is removed after the next successful call.
 5. Ordered list of steps (`ol`, each `li` is a step row): number (`--text-m`, weight 600, muted, 28px column); title button (`--text-m` weight 600, `aria-expanded`, toggles details); `do` label (neutral badge without icon: "Worker", "Agent" or "FlowDriven"); right side: last-run status badge (domain `step`; "Not started" when the flow has no run) and quiet icon buttons "Move up", "Move down", "Duplicate", "Delete" (Move up disabled on the first row, Move down on the last). Second line (`--text-s` muted): worker steps "Prefers Codex, Claude Code. Effort: medium." (only the parts present; "Any worker." when there are none); agent steps "Done by the brain, no tools."; builtin steps "Done by FlowDriven.". Third line when `uses` is not empty: "Uses" then each requirement id as a mono chip. Then the step's `CheckList`, each check showing the last run's verdict. Expanded details: "Instructions" (pre-wrap text) and "Outputs" (mono paths or ids), or "No declared outputs.".
@@ -377,7 +377,7 @@ In order:
 2. Header: `h1` flow name; meta row (gap 16px): run id (mono), "Version 1.0.0", "Started 10 Nov, 08:40", "Ended 10 Nov, 08:52" when ended, badge "One-time" when one-time; state badge (domain `run`); actions on the right: primary "Resume from step 3" when the state is `blocked`, `failed` or `interrupted` (3 = position of the first step that is neither `passed` nor `skipped`); secondary "Save as flow" on one-time runs. Pressing "Save as flow" shows `--text-s` muted "Saving one-time flows arrives with the agent. Until then this run stays in history."
 3. Blocked or failed reason (when present): panel with `--bad-soft` fill, icon `stop`, the reason text.
 4. `h2` "Report": the three lines as three paragraphs; then "Save this as a flow?" when `saveOffer` is true. Without a report: muted "The report appears when the run ends."
-5. `h2` "Steps": one block per step (a `section` labelled by an `h3` that holds only the step title; the number sits in a separate element): number, title, state badge, `--text-s` muted "Worker: Codex" (omitted when no worker), "Attempt 4 of 4" (attempts made of `maxAttempts`), the step note when present, then the `CheckList` with verdicts and evidence.
+5. `h2` "Steps": one block per step (a `section` labelled by an `h3` that holds only the step title; the number sits in a separate element): number, title, state badge, `--text-s` muted "Worker: Codex, attempt 4 of 4" (worker omitted when absent; attempts made of `maxAttempts`), the step note when present, then the `CheckList` with verdicts and evidence.
 6. `h2` "Inputs": definition list of label and value (values mono when they are paths or URLs).
 7. `h2` "Outputs": rows of output id (mono), type, value (mono); or muted "No outputs yet.".
 8. `h2` "Approvals": rows of summary, state badge and link "Open in Inbox" (`#/inbox/<id>`); or muted "No approvals in this run.".
@@ -2293,7 +2293,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 **Files:**
 - Create: `apps/desktop/index.html`, `apps/desktop/vite.config.mts`, `apps/desktop/src/main.tsx`, `apps/desktop/src/App.tsx`, `apps/desktop/src/App.module.css`
-- Create: `apps/desktop/src/csp.ts`, `theme.ts`, `shell.ts`, `nav/route.ts`, `nav/AppLink.tsx`, `nav/NotFoundPage.tsx`, `runner/runner-context.tsx`, `runner/create-client.ts`, `test/render.tsx`
+- Create: `apps/desktop/src/csp.mts`, `theme.ts`, `shell.ts`, `nav/route.ts`, `nav/AppLink.tsx`, `nav/NotFoundPage.tsx`, `runner/runner-context.tsx`, `runner/create-client.ts`, `test/render.tsx`
 - Create: one screen component per screen with its `Page` header only: `screens/builder/BuilderScreen.tsx`, `screens/inbox/InboxScreen.tsx`, `screens/runs/RunsScreen.tsx`, `screens/runs/RunDetailScreen.tsx`, `screens/readiness/ReadinessScreen.tsx`, `screens/harnesses/HarnessesScreen.tsx`, `screens/settings/SettingsScreen.tsx`
 - Test: `apps/desktop/src/nav/route.test.ts`, `runner/runner-context.test.tsx`, `runner/create-client.test.ts`, `App.test.tsx`, `theme.test.ts`, `csp.test.ts`
 - Modify: root `package.json` scripts

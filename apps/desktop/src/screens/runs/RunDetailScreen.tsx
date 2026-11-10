@@ -65,10 +65,17 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
   );
   return (
     <>
-      <AppLink className={styles.back} to={{ screen: "runs" }}>
-        <Icon name="arrow-left" /> All runs
-      </AppLink>
-      <Page screen="run" ready title={run.flowName} actions={actions}>
+      <Page
+        screen="run"
+        ready
+        title={run.flowName}
+        actions={actions}
+        before={
+          <AppLink className={styles.back} to={{ screen: "runs" }}>
+            <Icon name="arrow-left" /> All runs
+          </AppLink>
+        }
+      >
         <div className={styles.meta}>
           <span className={styles.mono}>{run.id}</span>
           <span>Version {run.flowVersion}</span>

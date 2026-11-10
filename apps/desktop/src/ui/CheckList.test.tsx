@@ -37,3 +37,18 @@ test("collapses evidence longer than 12 lines", () => {
   fireEvent.click(screen.getByRole("button", { name: "Show all 20 lines" }));
   expect(screen.getByText(/line 20/)).toBeTruthy();
 });
+test("evidence expands and collapses with its state announced", () => {
+  const evidence = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n");
+  render(
+    <CheckList
+      checks={[{ type: "files", required: false, summary: "Extra", evidence, verdict: "passed" }]}
+    />,
+  );
+  const button = screen.getByRole("button", { name: "Show all 20 lines" });
+  expect(button.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(button);
+  const collapse = screen.getByRole("button", { name: "Show fewer lines" });
+  expect(collapse.getAttribute("aria-expanded")).toBe("true");
+  fireEvent.click(collapse);
+  expect(screen.queryByText(/line 13/)).toBeNull();
+});
