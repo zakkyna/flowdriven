@@ -1843,7 +1843,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.panel` (and `.panel + .panel`), `.track`, `.fill`, `.warn` and `.stopped` in `Settings.module.css`.
 
-- [ ] **Step 1: Write the failing tests** (add to `Settings.test.tsx`; add `import { readFileSync } from "node:fs";` at the top of the file)
+- [x] **Step 1: Write the failing tests** (add to `Settings.test.tsx`; add `import { readFileSync } from "node:fs";` at the top of the file)
 
 ```tsx
 test("Settings is one narrow column of four plain sections", async () => {
@@ -1867,33 +1867,33 @@ test("settings styles: sections have a hairline, no card, and the meter uses sta
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/settings`
 Expected: FAIL (`expected null not to be null`: the page has no narrow column yet)
 
-- [ ] **Step 3: Implement** per "UI design: Settings". The moving-up and moving-down icon buttons in the fallback list stay `quiet` icon buttons with their aria-labels.
+- [x] **Step 3: Implement** per "UI design: Settings". The moving-up and moving-down icon buttons in the fallback list stay `quiet` icon buttons with their aria-labels.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: preview `#/settings` in light and dark.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/settings
 git commit -m "Restyle the Settings screen" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

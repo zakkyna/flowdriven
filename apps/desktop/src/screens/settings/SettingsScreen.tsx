@@ -29,14 +29,14 @@ export function SettingsScreen(): ReactElement {
     setError(result.ok ? "" : result.error.message);
   };
   return (
-    <Page screen="settings" ready title="Settings" description={description}>
+    <Page screen="settings" ready title="Settings" description={description} size="narrow">
       <div className={styles.sections}>
         <BrainSection settings={settings} />
         <FallbackSection settings={settings} />
         <BudgetSection budget={settings.budget} />
         <section className={styles.panel}>
           <h2>One-time flows</h2>
-          <label>
+          <label className={styles.checkbox}>
             <input
               type="checkbox"
               checked={settings.offerSaveOneTime}

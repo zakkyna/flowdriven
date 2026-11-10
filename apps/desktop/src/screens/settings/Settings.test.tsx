@@ -1,7 +1,31 @@
 // apps/desktop/src/screens/settings/Settings.test.tsx
+import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
+
+test("Settings is one narrow column of four plain sections", async () => {
+  const { container } = renderApp("#/settings");
+  await screen.findByRole("radiogroup", { name: "Main brain" });
+  expect(container.querySelector("[data-screen='settings'] [data-size='narrow']")).not.toBeNull();
+  expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+    "Brain",
+    "Fallback order",
+    "Monthly API-key budget",
+    "One-time flows",
+  ]);
+});
+test("settings styles: sections have a hairline, no card, and the meter uses state colours", () => {
+  const css = readFileSync("apps/desktop/src/screens/settings/Settings.module.css", "utf8");
+  expect(css).toMatch(/\.panel\s*\+\s*\.panel\s*\{[^}]*border-top:\s*1px solid var\(--border\)/s);
+  expect(css).not.toMatch(/\.panel\s*\{[^}]*(border-radius|background)/s);
+  expect(css).toMatch(/\.track\s*\{[^}]*background:\s*var\(--surface-sunken\)/s);
+  expect(css).toMatch(/\.fill\s*\{[^}]*background:\s*var\(--text-muted\)/s);
+  expect(css).toMatch(/\.warn\s*\{[^}]*background:\s*var\(--wait\)/s);
+  expect(css).toMatch(/\.stopped\s*\{[^}]*background:\s*var\(--bad\)/s);
+  expect(css).toMatch(/overflow-wrap:\s*anywhere/);
+  expect(css).toMatch(/min-width:\s*0\b/);
+});
 
 describe("Settings", () => {
   test("lists brains official first, with reasons for disabled ones", async () => {

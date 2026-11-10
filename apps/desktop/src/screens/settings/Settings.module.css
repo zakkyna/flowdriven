@@ -1,17 +1,19 @@
 .sections {
   display: grid;
-  gap: 16px;
 }
 .panel {
   min-width: 0;
   overflow-wrap: anywhere;
-  background: var(--surface-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-l);
-  padding: 16px 20px;
+}
+.panel + .panel {
+  border-top: 1px solid var(--border);
+  margin-top: 24px;
+  padding-top: 24px;
 }
 .panel h2 {
   margin-top: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
 }
 .group {
   border: 0;
@@ -24,7 +26,13 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 6px 0;
+  min-height: 32px;
+}
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
 }
 .brain > * {
   min-width: 0;
@@ -65,7 +73,7 @@
   background: var(--text-muted);
 }
 .warn {
-  background: var(--accent);
+  background: var(--wait);
 }
 .stopped {
   background: var(--bad);
