@@ -57,7 +57,7 @@ export function ReadinessRow({
         <>
           <div className={styles.actions}>
             {item.autoInstall === "yes" && <Button onClick={onInstall}>Install for me</Button>}
-            <Button variant="quiet" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+            <Button variant="text" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
               Show me how
             </Button>
           </div>

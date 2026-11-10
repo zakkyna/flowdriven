@@ -98,22 +98,26 @@ export function PayloadView({
       {payload.kind === "email" && (
         <>
           <dl className={styles.payloadRows}>
-            <dt>To</dt>
-            <dd>
-              <Recipients values={payload.to} />
-            </dd>
+            <div>
+              <dt>To</dt>
+              <dd>
+                <Recipients values={payload.to} />
+              </dd>
+            </div>
             {payload.cc && payload.cc.length > 0 && (
-              <>
+              <div>
                 <dt>Cc</dt>
                 <dd>
                   <Recipients values={payload.cc} />
                 </dd>
-              </>
+              </div>
             )}
-            <dt>Subject</dt>
-            <dd>
-              <Revealed text={payload.subject} singleLine />
-            </dd>
+            <div>
+              <dt>Subject</dt>
+              <dd>
+                <Revealed text={payload.subject} singleLine />
+              </dd>
+            </div>
           </dl>
           {editing ? (
             editor
@@ -127,20 +131,26 @@ export function PayloadView({
       {payload.kind === "post" && (
         <>
           <dl className={styles.payloadRows}>
-            <dt>Platform</dt>
-            <dd>
-              <Revealed text={payload.platform} singleLine />
-            </dd>
-            <dt>Text</dt>
-            <dd>{editing ? editor : <Revealed text={payload.text} />}</dd>
-            <dt>Media</dt>
-            <dd className={styles.mono}>
-              {keyed(payload.media, (path) => path).map(({ value: path, key }) => (
-                <div key={key}>
-                  <Revealed text={path} singleLine />
-                </div>
-              ))}
-            </dd>
+            <div>
+              <dt>Platform</dt>
+              <dd>
+                <Revealed text={payload.platform} singleLine />
+              </dd>
+            </div>
+            <div>
+              <dt>Text</dt>
+              <dd>{editing ? editor : <Revealed text={payload.text} />}</dd>
+            </div>
+            <div>
+              <dt>Media</dt>
+              <dd className={styles.mono}>
+                {keyed(payload.media, (path) => path).map(({ value: path, key }) => (
+                  <div key={key}>
+                    <Revealed text={path} singleLine />
+                  </div>
+                ))}
+              </dd>
+            </div>
           </dl>
         </>
       )}

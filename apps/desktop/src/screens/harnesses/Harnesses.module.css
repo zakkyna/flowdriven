@@ -58,6 +58,22 @@
 .inventory details {
   margin-top: 8px;
 }
+.inventory summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  color: var(--text);
+}
+.inventory summary::-webkit-details-marker {
+  display: none;
+}
+.inventory summary svg {
+  transform: rotate(-90deg);
+}
+.inventory details[open] summary svg {
+  transform: rotate(0deg);
+}
 .inventory li {
   overflow-wrap: anywhere;
 }

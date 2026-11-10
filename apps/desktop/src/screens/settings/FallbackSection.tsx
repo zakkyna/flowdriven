@@ -27,24 +27,26 @@ export function FallbackSection({ settings }: { settings: Settings }): ReactElem
             if (!backend) return null;
             return (
               <li key={id}>
-                <span>{backend.name}</span> <RiskBadge risk={backend.risk} />{" "}
-                {backend.kind === "harness" &&
-                  backend.consent !== "given" &&
-                  backend.consent !== "not_needed" && <span>Needs consent before use.</span>}
-                <Button
-                  variant="quiet"
-                  icon="arrow-up"
-                  aria-label={`Move ${backend.name} up`}
-                  disabled={index === 0}
-                  onClick={() => void move(key, index, -1)}
-                />
-                <Button
-                  variant="quiet"
-                  icon="arrow-down"
-                  aria-label={`Move ${backend.name} down`}
-                  disabled={index === order.length - 1}
-                  onClick={() => void move(key, index, 1)}
-                />
+                <span className={styles.orderLine}>
+                  <span>{backend.name}</span> <RiskBadge risk={backend.risk} />{" "}
+                  {backend.kind === "harness" &&
+                    backend.consent !== "given" &&
+                    backend.consent !== "not_needed" && <span>Needs consent before use.</span>}
+                  <Button
+                    variant="quiet"
+                    icon="arrow-up"
+                    aria-label={`Move ${backend.name} up`}
+                    disabled={index === 0}
+                    onClick={() => void move(key, index, -1)}
+                  />
+                  <Button
+                    variant="quiet"
+                    icon="arrow-down"
+                    aria-label={`Move ${backend.name} down`}
+                    disabled={index === order.length - 1}
+                    onClick={() => void move(key, index, 1)}
+                  />
+                </span>
               </li>
             );
           })}

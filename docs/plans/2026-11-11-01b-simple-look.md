@@ -305,7 +305,7 @@ const paths = {
 
 ### Readiness (Task 13), routes `#/readiness`, `#/readiness/<flowId>`
 
-`Page` medium. A toolbar row (flow select, "Check again" secondary, "Last checked ..." 12 muted). The banner is a row (radius 10, padding 12 16, icon plus text, 13.5): ready on `--ok-soft`, attention on `--wait-soft`; `data-state="ready" | "attention"`. The requirement list has no card: rows with a bottom hairline, padding 16 0; the name 14/500 and the type muted, the reason muted, the route line with its risk mark, enforcement, detail and the install command (Menlo); the state mark at the right; the actions (Install for me secondary, Show me how quiet) below. The fix guide is a `--surface-sunken` block (radius 8, padding 12).
+`Page` medium. A toolbar row (flow select, "Check again" secondary, "Last checked ..." 12 muted). The banner is a row (radius 10, padding 12 16, icon plus text, 13.5): ready on `--ok-soft`, attention on `--wait-soft`; `data-state="ready" | "attention"`. The requirement list has no card: rows with a bottom hairline, padding 16 0; the name 14/500 and the type muted, the reason muted, the route line with its risk mark, enforcement, detail and the install command (Menlo); the state mark at the right; the actions (Install for me secondary, Show me how text) below. The fix guide is a `--surface-sunken` block (radius 8, padding 12).
 
 ### Harnesses (Task 14), route `#/harnesses`
 

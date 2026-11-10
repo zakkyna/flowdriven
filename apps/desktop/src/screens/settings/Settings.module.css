@@ -15,6 +15,10 @@
   font-size: var(--text-title);
   font-weight: 600;
 }
+.panel h3 {
+  font-size: var(--text-title);
+  font-weight: 600;
+}
 .group {
   border: 0;
   padding: 0;
@@ -27,6 +31,12 @@
   flex-wrap: wrap;
   gap: 8px;
   min-height: 32px;
+}
+.brainDetails {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .checkbox {
   display: flex;
@@ -48,6 +58,12 @@
 .order li {
   padding: 4px 0;
   overflow-wrap: anywhere;
+}
+.orderLine {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .fields {
   display: flex;

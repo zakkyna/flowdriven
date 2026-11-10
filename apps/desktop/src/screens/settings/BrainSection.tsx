@@ -55,7 +55,7 @@ export function BrainSection({ settings }: { settings: Settings }): ReactElement
                 disabled={Boolean(disabledReason)}
                 onChange={() => void choose(backend)}
               />
-              <span id={`${id}-${backend.id}`}>
+              <span id={`${id}-${backend.id}`} className={styles.brainDetails}>
                 <span>{backend.name}</span> <RiskBadge risk={backend.risk} />
                 {state && <span className={styles.small}>{state}</span>}
                 {backend.kind === "harness" && (

@@ -110,7 +110,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
         {run.blockedReason && (
           <div className={styles.reason}>
             <Icon name="stop" />
-            {run.blockedReason}
+            <span>{run.blockedReason}</span>
           </div>
         )}
         <section className={styles.section}>

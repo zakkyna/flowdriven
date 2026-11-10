@@ -27,8 +27,12 @@ export function RunsTable({ runs }: { runs: RunSummary[] }): ReactElement {
               <StatusBadge domain="run" value={run.state} />
             </td>
             <td>{formatDateTime(run.startedAt)}</td>
-            <td className={styles.mono}>{run.project}</td>
-            <td>{run.reportFirstLine ?? <span className={styles.muted}>No report yet</span>}</td>
+            <td className={`${styles.mono} ${styles.truncate}`} title={run.project}>
+              {run.project}
+            </td>
+            <td className={styles.truncate} title={run.reportFirstLine ?? "No report yet"}>
+              {run.reportFirstLine ?? <span className={styles.muted}>No report yet</span>}
+            </td>
           </tr>
         ))}
       </tbody>
