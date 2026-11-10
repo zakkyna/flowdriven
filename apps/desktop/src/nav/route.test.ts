@@ -1,6 +1,17 @@
 import { expect, test } from "vitest";
 import { parseRoute, type Route, routeToHash } from "./route";
 
+test("#/builder/new is the new-flow state and round-trips", () => {
+  expect(parseRoute("#/builder/new")).toEqual({ screen: "builder", isNew: true });
+  expect(routeToHash({ screen: "builder", isNew: true })).toBe("#/builder/new");
+  expect(parseRoute(routeToHash({ screen: "builder", isNew: true }))).toEqual({
+    screen: "builder",
+    isNew: true,
+  });
+  expect(parseRoute("#/builder/new/extra")).toEqual({ screen: "not_found", hash: "#/builder/new/extra" });
+  expect(parseRoute("#/readiness/new")).toEqual({ screen: "readiness", flowId: "new" });
+});
+
 test("parses every screen", () => {
   expect(parseRoute("")).toEqual({ screen: "builder" });
   expect(parseRoute("#/")).toEqual({ screen: "builder" });

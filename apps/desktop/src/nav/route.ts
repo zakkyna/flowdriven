@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export type Route =
-  | { screen: "builder"; flowId?: string }
+  | { screen: "builder"; flowId?: string; isNew?: true }
   | { screen: "inbox"; approvalId?: string }
   | { screen: "runs" }
   | { screen: "run"; runId: string }
@@ -27,6 +27,7 @@ export function parseRoute(hash: string): Route {
         return { screen };
     }
     if (parts.length === 2 && id) {
+      if (screen === "builder" && id === "new") return { screen: "builder", isNew: true };
       if (screen === "builder" || screen === "readiness") return { screen, flowId: id };
       if (screen === "inbox") return { screen, approvalId: id };
       if (screen === "runs") return { screen: "run", runId: id };
@@ -43,6 +44,8 @@ export function routeToHash(route: Route): string {
     case "run":
       return `#/runs/${encodeURIComponent(route.runId)}`;
     case "builder":
+      if (route.isNew) return "#/builder/new";
+      return `#/builder${route.flowId ? `/${encodeURIComponent(route.flowId)}` : ""}`;
     case "readiness":
       return `#/${route.screen}${route.flowId ? `/${encodeURIComponent(route.flowId)}` : ""}`;
     case "inbox":

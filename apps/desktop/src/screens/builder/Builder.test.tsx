@@ -10,6 +10,42 @@ const rows = () => within(screen.getByRole("list", { name: "Steps" })).getAllByR
 const row = (i: number) => rows()[i] as HTMLElement;
 const titles = () => rows().map((r) => within(r).getAllByRole("button")[0]?.textContent);
 
+test("New flow opens an empty conversation even when flows exist, and sends without a flow", async () => {
+  const { client } = renderApp("#/builder/new");
+  const heading = await screen.findByRole("heading", { level: 1, name: "New flow" });
+  expect(heading.tabIndex).toBe(-1);
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+  expect(document.title).toBe("New flow - FlowDriven");
+  expect(screen.getByText("Nothing drafted yet.")).toBeTruthy();
+  expect(screen.queryByRole("list", { name: "Steps" })).toBeNull();
+  const spy = vi.spyOn(client, "call");
+  fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Weekly report from my notes" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  expect(await screen.findByText(PREVIEW_AGENT_REPLY)).toBeTruthy();
+  expect(spy).toHaveBeenCalledWith("flows.build", {
+    flowId: undefined,
+    message: "Weekly report from my notes",
+  });
+  expect(window.location.hash).toBe("#/builder/new");
+  expect(client.state.flows).toHaveLength(5);
+});
+test("leaving New flow drops the draft conversation", async () => {
+  renderApp("#/builder/new");
+  fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "Draft" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await screen.findByText(PREVIEW_AGENT_REPLY);
+  const go = (hash: string) =>
+    act(() => {
+      window.location.hash = hash;
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+  go(FIGMA);
+  await screen.findByRole("heading", { level: 1, name: "Figma to Flutter" });
+  go("#/builder/new");
+  await screen.findByRole("heading", { level: 1, name: "New flow" });
+  expect(screen.queryByText(PREVIEW_AGENT_REPLY)).toBeNull();
+});
+
 describe("Builder", () => {
   test("shows the flow, its playback and every step with its checks", async () => {
     renderApp(FIGMA);

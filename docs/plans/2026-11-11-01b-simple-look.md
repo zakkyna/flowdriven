@@ -812,7 +812,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 - Consumes: `flows.build` (unchanged), the existing empty-install state of `BuilderScreen` (`emptyMessages`).
 - Produces: `Route` builder variant becomes `{ screen: "builder"; flowId?: string; isNew?: true }`. `parseRoute("#/builder/new")` returns `{ screen: "builder", isNew: true }`; `routeToHash` of that returns `"#/builder/new"`. `BuilderScreen({ flowId?: string; isNew?: boolean })`. With `isNew`, the screen asks for no flow: it shows the `h1` "New flow", the `h2` "Nothing drafted yet." and the sentence "Describe work you repeat, and the agent turns it into a flow.", with the chat and its composer. `App` renders `<BuilderScreen key={route.isNew ? "new" : "flow"} .../>` so a draft conversation is dropped when the user leaves. The empty install keeps its `h1` "Builder" and `h2` "No flows yet.".
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `route.test.ts`:
 
@@ -863,31 +863,31 @@ test("leaving New flow drops the draft conversation", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/nav apps/desktop/src/screens/builder`
 Expected: FAIL (`expected { screen: 'builder', flowId: 'new' } to equal { screen: 'builder', isNew: true }`)
 
-- [ ] **Step 3: Implement** the route change in `route.ts` (check `id === "new"` for the builder before the general two-part rule), the `isNew` branch in `BuilderScreen` (`const id = isNew ? undefined : (flowId ?? list.data?.[0]?.id)`, the two texts above) and the `App` case. The "New flow" `h1` is `<h1 ref={headingRef} tabIndex={-1}>`, the same `headingRef` that the flow and "Builder" headings use, so the existing `useLayoutEffect` on `[id, loading, queryError]` gives it focus and the title. Leave the `previousId` guard and the `useLayoutEffect` as they are. Do not change what the empty install shows.
+- [x] **Step 3: Implement** the route change in `route.ts` (check `id === "new"` for the builder before the general two-part rule), the `isNew` branch in `BuilderScreen` (`const id = isNew ? undefined : (flowId ?? list.data?.[0]?.id)`, the two texts above) and the `App` case. The "New flow" `h1` is `<h1 ref={headingRef} tabIndex={-1}>`, the same `headingRef` that the flow and "Builder" headings use, so the existing `useLayoutEffect` on `[id, loading, queryError]` gives it focus and the title. Leave the `previousId` guard and the `useLayoutEffect` as they are. Do not change what the empty install shows.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/nav apps/desktop/src/App.tsx apps/desktop/src/screens/builder
 git commit -m "Add the New flow route that opens an empty Builder conversation" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

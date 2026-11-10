@@ -13,7 +13,7 @@ import { ChatPanel } from "./ChatPanel";
 import { Playback } from "./Playback";
 import { StepList } from "./StepList";
 
-export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
+export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: boolean }): ReactElement {
   const [, navigate] = useRoute();
   const action = useRunnerAction();
   const [errorState, setError] = useState<{ id?: string; message: string }>();
@@ -25,7 +25,7 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
   const inFlight = useRef(false);
   const [emptyMessages, setEmptyMessages] = useState<ChatMessage[]>([]);
   const list = useRunnerQuery("flows.list", {});
-  const id = flowId ?? list.data?.[0]?.id;
+  const id = isNew ? undefined : (flowId ?? list.data?.[0]?.id);
   const previousId = useRef(id);
   if (previousId.current !== id) {
     previousId.current = id;
@@ -194,10 +194,10 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
         ) : (
           <>
             <h1 ref={headingRef} tabIndex={-1}>
-              Builder
+              {isNew ? "New flow" : "Builder"}
             </h1>
             <div className={styles.panel}>
-              <h2>No flows yet.</h2>
+              <h2>{isNew ? "Nothing drafted yet." : "No flows yet."}</h2>
               <p>Describe work you repeat, and the agent turns it into a flow.</p>
               {error && (
                 <p role="alert" className={styles.error}>

@@ -26,7 +26,7 @@ const links: { label: string; icon: IconName; to: Route }[] = [
 function Screen({ route }: { route: Route }): ReactElement {
   switch (route.screen) {
     case "builder":
-      return <BuilderScreen flowId={route.flowId} />;
+      return <BuilderScreen key={route.isNew ? "new" : "flow"} flowId={route.flowId} isNew={route.isNew} />;
     case "inbox":
       return <InboxScreen approvalId={route.approvalId} />;
     case "runs":
