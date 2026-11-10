@@ -2848,7 +2848,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 - Consumes: `useRunnerQuery("runs.list" | "runs.status" | "flows.list" | "approvals.list")`, `useRunnerAction()` with `runs.resume`; `useRoute`, `AppLink`, `NotFoundPage`; `firstUnpassedStep`, `isResumable`; Task 7 parts.
 - Produces: `RunsScreen(): ReactElement`, `RunDetailScreen(props: { runId: string }): ReactElement`. Layout, regions and copy: "UI design: Runs" and "UI design: Run detail".
 
-- [ ] **Step 1: Write the failing tests** `Runs.test.tsx`
+- [x] **Step 1: Write the failing tests** `Runs.test.tsx`
 
 ```tsx
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -2927,35 +2927,37 @@ describe("Runs", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/runs`
 Expected: FAIL (`Unable to find role="table" and name "Runs"`)
 
-- [ ] **Step 3: Implement both screens per "UI design: Runs" and "UI design: Run detail"**
+- [x] **Step 3: Implement both screens per "UI design: Runs" and "UI design: Run detail"**
 
 Ready, loading and error states follow "UI design: Shared parts".
 
 The table has `aria-label="Runs"`; every body cell is a `td`. The two screens use the data-screen names `runs` and `run`. Each step block is a `section` labelled by its title (`aria-labelledby`), so it has the role `region`. "Save as flow" toggles view state only. An unknown run id shows a `NotFoundPage`; every in-app link is an `AppLink`. `Runs.module.css` sets `overflow-wrap: anywhere` on boxes with user text and `min-width: 0` (exactly, not `0px`) on grid and flex children; Task 14's `layout-guards.test.ts` checks both.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src/screens/runs`
 Expected: PASS (9 tests)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: preview `#/runs`, `#/runs/run-0006`, `#/runs/run-0005`; show the owner.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/runs
 git commit -m "Build the runs list and run detail with checks and evidence" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 

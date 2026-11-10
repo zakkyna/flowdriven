@@ -1,0 +1,111 @@
+.filters,
+.meta,
+.actions,
+.stepHeader,
+.rows li,
+.reason {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.filters {
+  margin-bottom: var(--space-5);
+}
+.filters label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-s);
+  min-width: 0;
+}
+.filters select {
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  background: var(--surface-panel);
+  color: var(--text);
+  max-width: 100%;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.table th {
+  color: var(--text-muted);
+  font-size: var(--text-s);
+  font-weight: 500;
+}
+.table td {
+  height: 44px;
+}
+.mono {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.muted {
+  color: var(--text-muted);
+  font-size: var(--text-s);
+}
+.meta {
+  margin: var(--space-4) 0;
+}
+.meta > *,
+.actions > *,
+.stepHeader > *,
+.rows li > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+}
+.reason {
+  padding: var(--space-4);
+  background: var(--bad-soft);
+  border-radius: var(--radius-l);
+  overflow-wrap: anywhere;
+}
+.step {
+  padding: var(--space-4);
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface-panel);
+  overflow-wrap: anywhere;
+}
+.stepHeader h3 {
+  margin: 0;
+}
+.definitions div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: var(--space-2);
+}
+.definitions dt {
+  color: var(--text-muted);
+}
+.definitions dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rows {
+  list-style: none;
+  padding: 0;
+}
+.rows li {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
