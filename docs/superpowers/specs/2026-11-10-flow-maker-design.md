@@ -106,7 +106,7 @@ Each one is a failure even if the feature technically works. Anti-goals 1 to 4: 
 - Manual human review of published flows. **Owner decision (2026-11-10)**.
 - Verified publisher badge (later). **Owner decision (2026-11-10)**.
 - Project management or goal boards as the centre of the product. These belonged to an earlier concept that the 2026-11-10 direction replaced.
-- Event triggers such as "when an email arrives". v1 has manual and scheduled runs only. **Chair's call (owner may override)**: scheduled runs cover daily email triage, and event plumbing would need always-on connectors.
+- Event triggers such as "when an email arrives". v1 has manual and scheduled runs only. **Chair's call (owner may override)**: scheduled runs cover daily email triage, and event plumbing would need always-on connectors. Reversed by the owner's direction of 2026-11-11: section 20.3 adds event triggers that the runner polls for.
 
 ### 4.3 Anti-goals
 See 3.3.
@@ -165,6 +165,10 @@ Decisions from 2026-11-08 and 2026-11-09 belong to an earlier concept ("one assi
 | 2026-11-10 | The owner approved this design and set the priority: design and build the app first, before anything else. |
 | 2026-11-10 | Platforms: the desktop app stays on Electron, for Mac first and then Windows and Linux from the same code. A small phone app comes later as a remote, for seeing progress and approving from afar; it may be built with Flutter. Not chosen: desktop only, and moving the app's interface to Flutter now. |
 | 2026-11-10 | Look: simple, like the Claude and Codex desktop apps, with a light and a dark theme. Working features come before visual flourish. The owner first asked for a striking look, was shown bold mockups and chose none, then approved a simple mockup for the whole app. |
+| 2026-11-11 | FlowDriven can trigger flows, access the web and access the computer, through an agent harness such as Claude Code or through the app itself. It must cover many use cases and be as flexible and as easy as possible (section 20). |
+| 2026-11-11 | Build the engine that runs flows now, and make it comprehensive. It is the next priority after the screens (20.8). |
+| 2026-11-11 | A job-alert review flow is the first sample flow: on Claude Code first, then in FlowDriven. It reads job pages through a signed-in browser; the flow's screen warns that a site's terms may not allow automated access. It drafts only and never sends. |
+| 2026-11-11 | Working rule for the build: keep token use low and keep reviews simple. |
 
 ---
 
@@ -440,7 +444,7 @@ MCP-server mode (the "inverted" mode):
 
 ## 9. Flow package format
 
-The format and its SDK (parser, validator, hasher, packer) are open and MIT-licensed. **Owner decision (2026-11-09)** for the licence; the shape below is a **Chair's call (owner may override)**: it reuses the Agent Skills standard so flows work across harnesses.
+The format and its SDK (parser, validator, hasher, packer) are open and MIT-licensed. **Owner decision (2026-11-09)** for the licence; the shape below is a **Chair's call (owner may override)**: it reuses the Agent Skills standard so flows work across harnesses. Format 1.1 (section 20.4) adds triggers, a step done for each item of a list, conditions, a step that waits for the user's choice, calls to an installed skill or another flow, parameters and limits; section 20.2 adds requirement types for web access, computer access and triggers.
 
 ### 9.1 Folder layout
 
@@ -1071,7 +1075,7 @@ Each run shows inputs, the worker per step, attempts, check results with evidenc
 - After a runner crash, interrupted steps are not retried automatically unless the step is marked `idempotent: true`. **Chair's call (owner may override)**: a half-done send or post must never repeat silently.
 
 ### 13.6 Triggers
-Manual runs and schedules (daily, weekdays, every N hours) in v1. A scheduled run only fires while the Mac is awake; missed runs run once at wake if the flow allows "catch up". **Chair's call (owner may override)**.
+Manual runs and schedules (daily, weekdays, every N hours) in v1. A scheduled run only fires while the Mac is awake; missed runs run once at wake if the flow allows "catch up". **Chair's call (owner may override)**. Section 20.3 extends this with more kinds of trigger, rules for duplicates and missed fires, and caps.
 
 ### 13.7 One-time runs
 A one-time flow (10.7) runs through the same lifecycle (13.1), checks, retries, approvals, risky-action list, budget and resume as a saved flow. **Owner decision (2026-11-10)** that it uses the same engine. Differences (**Chair's call (owner may override)**):
@@ -1265,6 +1269,8 @@ These limits go into the docs and into the install preview's short text:
 | Later | Paid flows (only once the 14.8 preconditions are met): checkout, license keys, payouts, private sharing of paid flows; verified badge; Windows and Linux; a phone app as a remote for seeing progress and approving (after its own design, 18.3); chat channels. Each item ships when the owner calls it. | Per item, for example: first external publisher paid out (or paid flows deferred again by the owner); every phase-1 flow passes on Windows and Linux. |
 
 Build order inside phase 1, so each stage can be verified on its own before the next: (0) repository groundwork, meaning the rule files, GitHub settings and CI checks of 17.2 to 17.6, with its local half done before any product code is written and its GitHub half before the first push; (a) core engine with Documents and reports, which needs no outside account; (b) Figma to Flutter; (c) Gmail and spreadsheet readiness, then Email triage and Lead follow-up; (d) social draft routes, then One source into many social posts; (e) release, meaning the protected release path of 17.5 and a signed, notarized pre-release build made from a tag. One-time flows arrive with stage (a), because they use only the core engine. **Chair's call (owner may override)**: the order follows the research's difficulty ranking (section 16) and adds one outside dependency per stage. Stage (0) comes first because the build agents need their rules and guard rails before they write product code.
+
+**Changed on 2026-11-11**: the engine comes first. The order of the plans after the first one is in section 20.8, and the job-alert review flow joins the exit test as a sixth flow (three runs, nothing sent). **Chair's call (owner may override)** for the order and the sixth flow; the priority itself is the owner's (section 5).
 
 **Owner decision (2026-11-10)**: the app comes first. **Chair's call (owner may override)**: so stage (0) is split in two, and only its cheap half stands in front of the app. The local half (the instruction files, the local checks and the dependency allowlist) is done at once, because the build agents need it from their first task. The GitHub half (settings, rulesets, accounts and the release path of 17.5 and 17.6) is applied before the repository is first pushed to GitHub, and it waits on the owner's tasks in 18.2 items 6 and 7. Until that push the code lives in the local repository only, on work branches: the build agents never commit to the default branch, each task passes the local checks and a different agent's review, and nothing counts as merged. The owner's gate for all of it is the first push (17.5). Stages (a) to (d) go ahead meanwhile, and the session rules of 17.4 and 17.6 (the boundary lists, the rule of two, the pre-push check) apply from the first session. Stage (a) opens with the app's screens built on sample data, so the owner can see and correct the design before the engine behind it is finished.
 
@@ -1645,3 +1651,227 @@ Resolved on 2026-11-10 and no longer open: one-off work (one-time flows), build 
 | Unofficial | Risk label: vendor text forbids it, or it uses an unpublished interface. |
 | Worker | A harness doing a step. |
 | Worktree | A separate git working folder on its own branch, so a code flow doesn't touch the user's checkout. |
+
+---
+
+## 20. The flow engine: triggers, web, computer and flexible steps (addendum, 2026-11-11)
+
+**Owner decision (2026-11-11)**: FlowDriven can trigger flows, access the web and access the computer, through an agent harness such as Claude Code or through the app itself; it must cover many use cases and be as flexible and as easy as possible; and the engine that runs flows is built now, comprehensively. This section says what that adds to the design above. Where it differs from an earlier section, this section wins. Everything in it beyond that direction is a **Chair's call (owner may override)**.
+
+Driving example: a flow that reviews job alerts. A schedule starts it; it reads job-alert emails; it scores each job; it reads a few job pages through the user's own logged-in browser; it waits for the user's pick; it runs an installed skill that builds and publishes a prototype; it drafts a proposal; it never sends. **Owner decision (2026-11-11)**: this flow is built on Claude Code first and must then be buildable in FlowDriven itself.
+
+Status of the three decisions in 20.9: D1 and D3 follow the owner's words of 2026-11-11 (running from a harness counts as much as running from the app, and the user's own browser may be used), so option (a) is taken for both. D2 is open; option (a) is the working assumption until the owner decides.
+
+### 20.1 What the design covers and where it falls short
+
+| Area | Covered today | Short of the new direction |
+|---|---|---|
+| Triggers | Manual and schedules, catch-up at wake (13.6). Event triggers are a v1 non-goal (4.2, chair's call). | No new-item, file, link or flow-finished triggers. **The new direction overrides the 4.2 non-goal.** Nothing on duplicates, overlap or per-day caps. |
+| Web | `browser_session` requirement with `domains` (9.4); managed profile by default (12.6, 15.2 item 7); own browser only as a labelled unofficial route (12.6). `worker.needs: [browser]` (9.3). | No way to say "read only" vs "act", no URL patterns, no rate caps, no stop on robot checks. Harness browser tools (Claude in Chrome) are not a named provider. The own browser is the Upwork flow's chosen route, so it moves from footnote to phase 1. |
+| PC: apps | GUI app detection and probes only (12.6). | No acting on apps (computer use, local automation). |
+| PC: files | Project folder plus granted folders (9.4 `path`, 15.2 item 2). | Enough for files; "access the PC" collides with 15.2 item 2 (owner decision D2). |
+| Harness tools | Inventory (11.2), native connectors and scoped config (11.7), hooks (11.7). | Harness-provided web, computer and schedulers are not modelled as providers of a capability. |
+| Step logic | Ordered list, `do: worker|agent|builtin` (9.3). | No loop over items, no condition, no mid-run choice that is not a risky approval, no call to a skill or another flow, no flow-level parameters or limits. |
+| Waiting for the owner | Risky approvals and `user` checks (13.3), 24 h expiry. | No "pick from this list" step whose answer drives the rest of the run. |
+| State across runs | Memory (10.5), resume (13.5). | No seen-items store or cursor; every hourly run would re-score the same jobs. |
+| Limits | Retries (13.3), 30 min per attempt (11.3), budget (10.4). | No item, page, run-per-day or duration caps per step. The prototype skill of the driving example takes 27 to 48 minutes, sometimes over 130, so 30 minutes fails it. |
+| Run from a harness | MCP-server mode in phase 2 (8.7); export without gates (9.7). | No phase-1 path; the Upwork flow is being built on Claude Code first. |
+
+### 20.2 Capability model
+
+A flow says what it needs; the router says who provides it. Three new requirement types in 9.4, next to the existing ones. They stay the permission boundary (15.2 item 1).
+
+| Type | Fields (new) | Meaning |
+|---|---|---|
+| `web` | `mode: read|act`, `domains`, `url_patterns` (templates with typed captures), `session: none|managed|own`, `rate: {per_run, per_day}`, `on_challenge: stop` (fixed) | Open web pages, logged in or not |
+| `desktop` | `apps` (bundle ids), `mode: open|read|act`, `actions` (named, e.g. `open_url`, `run_shortcut:<name>`) | Use this Mac's apps |
+| `trigger` | see 3 | Start the flow without the owner |
+
+Files keep the `path` type. `browser_session` and `gui_app` remain as readiness items that the router creates when it picks a provider that needs them (12.2 states unchanged).
+
+Providers:
+
+| Capability | Provider | Enforced by | Default label |
+|---|---|---|---|
+| web, `session: none` | Harness fetch/search tool (Claude Code WebFetch) | Harness allow-list plus FlowDriven hook on the URL | official |
+| web, `session: managed` | FlowDriven managed browser behind the gateway (12.6) | FlowDriven: domains, patterns, read/act, rates, held submits | per site (12.6) |
+| web, `session: own` | Harness browser extension on the owner's Chrome (Claude in Chrome) | FlowDriven pre-tool hook in the harness: read-only tool set, URL patterns, rates | unofficial: shares your personal browser (12.6) |
+| web, any | Official API connector, when the user has one (an Upwork API key, for example) | Gateway or native rules (11.7) | official |
+| desktop | Harness computer use (Claude Code's per-app grants) | Harness app grants plus hook on the app named in each call | gray |
+| desktop | FlowDriven builtin actions (open an app, URL or file; run a named Shortcut) | FlowDriven: only declared actions; a Shortcut's contents are not inspected | official; "contents not checked" for Shortcuts |
+| trigger | FlowDriven runner (launch agent, 8.1) | FlowDriven | official |
+| trigger | Harness scheduler (Claude Code scheduled tasks or routines) | The harness; FlowDriven gates apply only if the task calls the runner (20.6) | "FlowDriven checks apply" or "no FlowDriven checks" |
+
+Router (extends 11.6), per requirement per step: drop providers the user has not consented to or that cannot meet `mode`, patterns and rates; then prefer (1) an official API, (2) a FlowDriven-provided route, (3) a harness route with a pre-tool hook, (4) a harness route without hooks, read-only and non-sensitive only. A user pin overrides the order but not the drops.
+
+Install preview (14.6, and the plan shown for one-time flows, 10.7): one row per capability with the plain sentence ("Reads Upwork job pages in your own Chrome, at most 3 per run and 10 a day"), the provider, who enforces it (**FlowDriven** / **FlowDriven hook in Claude Code** / **Claude Code's settings** / **not enforced**), the risk label with the vendor's sentence, and "Can run while you're away: yes/no".
+
+Cannot be enforced, labelled **not enforced**, and allowed only in runs the owner starts and watches: a harness without pre-tool hooks using the own browser or computer use; full-screen computer control; a Shortcut's internals; a harness-held schedule that does not call the runner; what the own browser's other tabs and cookies expose (the label says "every site you're logged into is reachable from this tab"). A provider labelled not enforced is never used by an unattended run or for a `sensitive` requirement (20.7 R4).
+
+### 20.3 Triggers
+
+New manifest field `triggers` (a list) replaces the single `schedule` (9.2); each entry is off until the owner enables it. Every trigger hands the run a `trigger` payload, which is outside text when it carries outside content.
+
+| Kind | Fields | Watcher | Missed | Duplicates | Unattended? |
+|---|---|---|---|---|---|
+| `manual` | none | app or chat | n/a | n/a | n/a |
+| `schedule` | `every` or `at`, `days`, `catch_up: none|once`, `overlap: skip|queue` | runner | once at wake if `catch_up: once` (13.6) | `overlap: skip` (default) drops a fire while a run is open | yes, up to the first `ask` |
+| `new_item` | `source` (requirement id), `query`, `every` (min 5m), `key` | runner; the read is a low-effort harness step, or a gateway call when a model-free route exists | a stored cursor; the next poll picks them up; `max_items` per run, the rest roll over | `key` checked against the flow's seen store (kept 30 days) | yes, read-only part |
+| `file_change` | `path` (a granted folder), `glob`, `debounce` (10 s) | runner (FSEvents) | snapshot compared at runner start | key = path + size + mtime | yes, if writes stay in the run folder |
+| `link` | `flowdriven://run/<flow-id>?…`, typed `inputs` | runner | none (the sender retries) | same payload within 10 min dropped | **no**: always a confirm prompt in the app, since any web page can fire a link |
+| `webhook` | loopback only, per-flow token, `schema` | runner | none | `Idempotency-Key` or payload hash within 24 h | yes, if token and schema pass |
+| `flow_done` | `flow`, `status: done|any` | runner (event in SQLite) | never missed | upstream run id | inherits the upstream run's attendance |
+
+Every flow with a non-manual trigger gets `limits.max_runs_per_day` (default 24) and `limits.max_items` (default 20). A harness-held schedule (Claude Code) is not a trigger kind in the manifest; it is a way to run the flow from a harness (20.6).
+For the Upwork milestone: `schedule` hourly plus a seen store keyed on the job id. `new_item` on Gmail costs one small model call per poll until a model-free Gmail route exists (18.3 research), and the install preview says so.
+
+### 20.4 Steps: the smallest additions to section 9
+
+All are additions; `format` becomes `flowdriven-flow/1.1`. Still one ordered list, at most one level of nesting, no canvas (owner decision of 2026-11-10, section 5).
+
+| Field | Where | Rule |
+|---|---|---|
+| `for_each`, `as`, `key`, `max`, `parallel` (default 1), `on_item_fail: skip|stop`, `steps` | step | Runs its nested steps once per item. `key` makes items idempotent across runs (seen store). Output `${steps.<id>.items}`: per item `{key, item, status, steps}`. No nesting inside nesting. |
+| `when` | step | A runner-evaluated expression: comparisons, `and`, `or`, `not`, `in`, `where` filters on lists, step status (`passed`). No function calls, no model. False → the step shows "skipped: condition false". |
+| `do: ask` with `ask: {question, choose_from, max_pick, approves, expires, on_expiry}` | step | Puts a choice in the inbox. Run state `waiting_approval` (no new state, 13.1). `approves` names risky tools that the choice approves for the picked items in this run only (like the batch approval of 13.3). `on_expiry: end` (default) ends the run as done with nothing picked. |
+| `do: skill`, `skill: <requirement id>` | step | A worker step that loads an installed or bundled skill (9.7) and gives it the `instructions`. |
+| `do: flow`, `flow: <id>@<range>`, `with: {…}` | step | Starts a child run. Its requirements must be declared by the parent too; limits and attendance are inherited. |
+| `params` | flow | Typed values set once in the flow's settings, not asked per run (`min_score`). `inputs` (9.5) stay per run. |
+| `limits: {max_duration, max_items, max_runs_per_day, max_attempts}` | flow and step | Step limit overrides the 30 min of 11.3. Runner-enforced. |
+| `rate` on `web` | requirement | Counted by the runner from hook-observed calls. |
+
+The Upwork flow:
+
+```yaml
+format: flowdriven-flow/1.1
+id: local.upwork-job-review
+name: Upwork job review
+kind: light
+params:
+  min_score: {type: number, default: 7}
+  daily_builds: {type: number, default: 2}
+triggers:
+  - {kind: schedule, every: 1h, catch_up: once, overlap: skip}
+limits: {max_runs_per_day: 24, max_items: 20}
+requirements:
+  - {id: gmail, type: mcp_server, ref: connector:gmail, connect: native, sensitive: true,
+     tools: [search_threads, get_thread, label_thread]}
+  - {id: jobs_web, type: web, mode: read, session: own, sensitive: true,
+     url_patterns: ["https://www.upwork.com/jobs/~{id:[0-9a-z]{18,24}}"],
+     rate: {per_run: 3, per_day: 10}, on_challenge: stop}
+  - {id: builder, type: skill, ref: claude-code:prototype-builder}
+  - {id: host, type: mcp_server, ref: connector:prototype-host, connect: native,
+     tools: [project_create, prototype_upload, prototype_publish]}
+  - {id: data, type: path, ref: ~/job-review, access: read_write}
+steps:
+  - id: alerts
+    do: worker
+    uses: [gmail]
+    instructions: List Upwork job alerts from donotreply@upwork.com since the last run as JSON.
+    outputs: [{id: jobs, type: json}]
+    checks: [{type: schema, file: checks/alerts.schema.json}]
+  - id: review
+    for_each: ${steps.alerts.outputs.jobs}
+    as: job
+    key: ${job.id}
+    max: 20
+    steps:
+      - {id: rough, do: agent, instructions: "Score ${job} 0-10 against profile.md, with reasons.",
+         outputs: [{id: score, type: json}], checks: [{type: schema, file: checks/score.schema.json}]}
+      - {id: page, do: worker, uses: [jobs_web], when: "rough.score.value >= params.min_score",
+         instructions: "Open the jobs_web URL for id ${job.id}; return the full post text.",
+         checks: [{type: contains, pattern: "${job.title_start}"}]}
+      - {id: full, do: agent, when: page.passed, instructions: "Score the full post; fit yes or no.",
+         outputs: [{id: verdict, type: json}], checks: [{type: schema, file: checks/verdict.schema.json}]}
+  - id: pick
+    do: ask
+    ask: {question: "Which jobs get a prototype?", max_pick: ${params.daily_builds}, expires: 24h,
+          choose_from: "${steps.review.items where steps.full.outputs.verdict.fit}",
+          approves: [host.prototype_publish]}
+  - id: build
+    for_each: ${steps.pick.outputs.choice}
+    as: job
+    steps:
+      - {id: proto, do: skill, skill: builder, uses: [builder, host, data], limits: {max_duration: 150m},
+         instructions: "Build and publish the prototype for ${job}.", checks: [{type: contains, pattern: "/p/"}]}
+      - {id: proposal, do: worker, uses: [data], instructions: "Draft the proposal in voice.md, max 150 words.",
+         checks: [{type: not_contains, patterns: ["@", "whatsapp", "telegram"]}, {type: judge, rubric: checks/human.md}, {type: user}]}
+```
+
+No send tool is declared anywhere, so "never sends" holds by the boundary, not by the prompt.
+
+### 20.5 "Easy"
+
+- The person types one sentence ("every hour, check my Upwork alerts, score them, show me the good ones, then build a prototype and a proposal for the ones I pick").
+- They see a trigger card ("Every hour, off until your test run passes"), the step list with "For each job" as an indented group, conditions as sentences ("Only if the score is 7 or more"), and "Wait for your pick" as a step with a hand icon.
+- Numbers they said become `params` with a slider in the flow's settings; numbers they didn't say get defaults.
+- The app decides: providers (router, 20.2), `key` = the item's own id, `overlap: skip`, `catch_up: once`, limits (20 items, 24 runs a day, 3 pages a run, `ask` expires in 24 h), drafts instead of sends, notifications only at `ask` or when blocked (10.6).
+- First run is always a dry run on the newest 3 items, attended, before any trigger can be switched on.
+- Providers, hooks and YAML stay behind a "Details" link; the install preview rows (20.2) are the only enforcement detail shown by default.
+- At most 3 clarifying questions (10.1); the agent asks only about what it can't default (here: which skill builds the prototype).
+
+### 20.6 Engine shape
+
+Runner modules (one process, 8.3):
+- **Flow loader**: parse and validate format 1.1 with the SDK, pin the content hash (9.6), check installed-skill hashes (20.7 R9).
+- **Trigger service**: schedules, `new_item` pollers, FSEvents watcher, link and loopback-webhook listener, `flow_done` bus; turns fires into run requests with a dedup key.
+- **Run queue and limit keeper**: overlap, per-day caps, budget (10.4), concurrency per harness.
+- **Interpreter**: walks steps, evaluates `when`, expands `for_each`, binds `${}` references, freezes requirements at run start (10.7 rule, now for every run), writes step state for resume (13.5).
+- **Capability router**: picks a provider per requirement per step (20.2), writes the enforcement plan and labels into the run.
+- **Readiness re-check**: only for the providers chosen (extension connected, skill present, Gmail connector enabled).
+- **Worker dispatcher**: Claude Code adapter (11.3) with scoped config, per-step skill copy, limits.
+- **Hook server**: the endpoint Claude Code's pre-tool hook calls; checks tool against allow-list, URL against patterns, counts rates, holds risky calls, detects challenges, fails closed (11.7).
+- **Builtins**: `ask`, file copy, open app or URL, run a named Shortcut, wait.
+- **Check runner**: 9.3 checks; `judge` in a fresh session.
+- **Inbox and notifier**: choices and approvals, macOS notifications.
+- **Stores** (SQLite): runs, steps, items and seen keys, cursors, counters, audit log (15.2 item 9), taint marks.
+- **Runner API**: 8.7 contract over the socket; the same operations for harness mode below.
+
+Where work runs: the runner does triggers, ordering, conditions, loops, state, limits, rate counting, non-`judge` checks, approvals and the audit. The harness does model work and tool use: reading Gmail through its connector, reading the job page through Claude in Chrome, scoring (`agent` steps use the brain, here Claude Code, 10.3), running the prototype skill, writing the proposal, `judge` checks.
+
+One flow file, three ways to run:
+1. **From the app** (milestone): the runner starts `claude -p` per step with scoped config and hook.
+2. **From a harness, engine-backed**: a Claude Code session (or its scheduled task) calls `flows.run` on the runner's MCP server (8.7) and loops on two new operations, `runs.next_task` and `runs.submit_step`, doing worker steps itself. Ordering, loops, conditions, checks, limits and approvals stay in the runner. Tool enforcement inside that session exists only if the owner installed the FlowDriven Claude Code plugin (skill, MCP entry, pre-tool hook pointing at the runner); otherwise the preview says "Claude Code's settings". `ask` answers and risky approvals still need a click in the app (8.7, 15.2 item 10).
+3. **Export** (9.7): plain skill, no gates, labelled. The Claude Code version of the driving example is this; it is kept in format 1.1 so that it imports unchanged.
+
+### 20.7 Security: new risks and testable guards
+
+The dangerous mix is an unattended trigger, outside text (emails, job posts) and a logged-in browser in one run. It is the rule of two (AGENTS.md) applied to flows. Each rule below gets a test against fake harnesses and fake pages.
+
+- **R1 Taint.** Every step output built from outside text is marked `outside`. Outside values may fill typed captures and pick among declared items; they never add requirements, domains, URL patterns, tools, params or limits. Test: an alert whose snippet says "open evil.example" → navigate denied by the hook, audit entry, run continues.
+- **R2 URLs from templates only.** A `web` call is allowed only if its URL matches a `url_patterns` template with every capture passing its type. Links found in outside text are never followed. Redirects off the pattern stop the step. Test: capture `~abc/../x` rejected; a 302 to another host stops.
+- **R3 Read means read.** For `mode: read` the hook allows only navigate, read-page and page-text tools and its own tab's open and close; clicks, typing, form input, scripts and uploads are denied. Test per denied tool.
+- **R4 Unattended prefix.** For a flow with a non-manual trigger, the validator finds the steps before the first `ask` and refuses there: risky tools, `web` or `desktop` with `mode: act`, `do: flow` children that act, and any provider labelled not enforced. Checked at save, install and run start. Test: a manifest with a publish before `ask` fails validation.
+- **R5 Challenge stop.** A robot check, captcha or login page (declared markers plus a built-in list) blocks the run (`needs_login`), no retry, one notification. FlowDriven never tries to pass it. Test with fake challenge pages.
+- **R6 Counted by the runner.** Rates, item caps and per-day caps are counted from hook-observed calls and stored counters, never from worker reports. Test: a worker claiming 1 page while the hook saw 4 → the 4th is denied.
+- **R7 Trigger floods.** Over `max_runs_per_day` or `max_items`, fires and items are dropped, one notification is sent, the audit records the count. Test: 500 fake alerts → 20 processed.
+- **R8 Links and webhooks.** A `link` fire never runs without a click in the app; a webhook accepts only loopback, a valid token and a schema-valid payload, which is tainted. Test each refusal.
+- **R9 Installed skills pinned.** An installed skill used by `do: skill` is hashed at consent; a changed hash blocks the run until re-consent. Test: edit SKILL.md → blocked.
+- **R10 Approvals by choice are narrow.** `ask.approves` releases only the named tools, for the picked items, in this run; it expires with the run and is logged. Test: a publish for an unpicked job is held.
+- **R11 No hook, no own browser.** The router drops `session: own` and harness computer use on a harness without a pre-tool hook. Test with a fake hookless harness.
+- **R12 Hook fails closed.** Runner down or slow (5 s) → the tool call is denied (15.2 item 11). Test by killing the hook server mid-step.
+- **R13 Published flows.** Marketplace flows may not declare `session: own` in phase 2's first release; local flows may. Test in the publish validator.
+
+### 20.8 Build order
+
+First engine milestone **M1**: the Upwork flow runs end to end from the app, with Claude Code as the only harness, on the owner's Mac: hourly schedule, real Gmail alerts, at most 3 real job pages in the owner's Chrome, the pick in the Inbox, the prototype skill publishes after the pick, a proposal draft passes its checks. Nothing is sent.
+
+| Step | Content | Shows working |
+|---|---|---|
+| 02 (changed) | SDK with format 1.1 (20.4), runner process, SQLite stores, interpreter with `for_each`, `when`, `ask`, limits, seen store, against the fake harness | A sample looped flow with a condition runs; the pick appears in the Inbox; a re-run skips seen items |
+| 03 (new: was part of 04 and 05) | Claude Code adapter only: detection, inventory of its skills and connectors, scoped config, pre-tool hook to the runner, fake `claude` | A real Claude Code step runs; an undeclared tool is denied; killing the runner blocks the call (R12) |
+| 04 (new) | Trigger service (`schedule`, `flow_done`, `file_change`), limit keeper, notifications, R4 and R7 | The hourly trigger fires while the window is closed; a flood is capped |
+| 05 (new) | Capability router, `web` with `session: own` via Claude in Chrome, `skill` calls, the native Gmail and prototype-host connectors, readiness for these, install-preview rows, R1 to R3, R5, R6, R9 to R11 | **M1** on real data, attended first, then on the schedule |
+| 06 | Agent core and chat builder (old 03), one-time flows | The Upwork flow rebuilt by chat matches the hand-written one |
+| 07 onward | Codex and Antigravity adapters (rest of old 04), gateway and managed browser (old 05), Documents and reports (old 06), then old 07 to 11 | as in ROADMAP.md |
+
+Moves earlier: Claude Code adapter and hooks, triggers, the own-browser provider, `ask`, installed-skill calls. Moves later: the chat agent (old 03), Codex and Antigravity, the gateway's proxying, the managed browser, catalog auto-install. Out of phase 1: push triggers from connectors (need a public endpoint, contradicts no cloud, 4.2), harness computer use in unattended runs, FlowDriven automation beyond open and named Shortcuts, marketplace flows with `session: own` (R13). Engine-backed harness mode (20.6, way 2) follows decision D1.
+
+### 20.9 Owner decisions and architect calls
+
+Owner decisions:
+- **D1. Running a flow from inside Claude Code with the engine's checks: when?** (a) Right after M1, in phase 1: the two new operations plus the FlowDriven Claude Code plugin. (b) Phase 2, with the rest of MCP-server mode (4.2, 8.7). (c) Never; export only. **Recommend (a)**: the owner named "from a harness" as equal to "from the app".
+- **D2. "Access the PC" vs "workers are limited to the project folder" (15.2 item 2, your own non-negotiable).** (a) Files stay folder-limited plus granted folders (9.4); PC access means named apps and named actions, each shown in the preview. (b) Allow a flow to ask for read access to the whole home folder, with a strong label. (c) No app control in phase 1. **Recommend (a)**.
+- **D3. May an unattended run use your own logged-in Chrome?** (a) Yes, read-only, under R1 to R6 and R11 (what the Upwork flow needs). (b) Only after a click: the run pauses before the first page read. (c) Never; managed browser only. **Recommend (a)**, with the risk under Upwork's terms shown on the flow (those terms are not yet confirmed from Upwork's own pages).
+
+Architect calls (owner may override): 4.2's event-trigger non-goal is reversed by the 2026-11-11 direction; `ask` reuses `waiting_approval` (no new state); `ask.approves` extends the 13.3 batch rule; the 10.7 freeze of requirements at run start applies to every run; `new_item` polls rather than pushes; one level of nesting only; M1 uses Claude Code as brain and worker under the 11.5 consent; Codex, Antigravity, the managed browser and the gateway's proxying wait until after M1; the Upwork flow joins the phase-1 exit test as a sixth flow (three runs, nothing sent).

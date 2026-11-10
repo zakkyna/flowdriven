@@ -3,6 +3,21 @@
 Spec: `docs/superpowers/specs/2026-11-10-flow-maker-design.md` (section 17 sets the phases and the build order).
 Rule for every plan: it ends in something the owner can see or run. Plan 01 is detailed; every later plan is an **outline, detailed just in time**, written after the plan before it is done, so it can use what that plan taught.
 
+## Order changed on 2026-11-11: the engine first
+
+The owner set a new priority: build the engine that runs flows, with triggers, web access and computer access, through a harness or through the app itself (spec section 20). The first engine milestone, M1: the job-alert review flow runs end to end from the app on the owner's Mac, with Claude Code as the only harness, and nothing is sent. The order of the plans after 01 becomes:
+
+| Plan | Content | Shows working |
+|---|---|---|
+| 02 | The SDK with format 1.1 (spec 20.4), the runner process, the SQLite stores, and the interpreter with `for_each`, `when`, `ask`, limits and the seen store, against the fake harness | A sample looped flow with a condition runs; the pick appears in the Inbox; a second run skips the items it has seen |
+| 03 | The Claude Code adapter only: detection, the inventory of its skills and connectors, the scoped config, the pre-tool hook to the runner, and a fake `claude` | A real Claude Code step runs; an undeclared tool is denied; stopping the runner blocks the call |
+| 04 | The trigger service (`schedule`, `flow_done`, `file_change`), the limit keeper and notifications | The hourly trigger fires while the window is closed; a flood is capped |
+| 05 | The capability router, web access through the user's own browser, skill calls, native connectors, readiness for these, and the install-preview rows | M1 on real data: attended first, then on the schedule |
+| 06 | The agent core and the chat builder (was 03), one-time flows | The job-alert flow rebuilt by chat matches the hand-written one |
+| 07 onward | The Codex and Antigravity adapters (the rest of the old 04), the gateway and the managed browser (the old 05), Documents and reports (the old 06), then the old 07 to 11 | As outlined below |
+
+The outlines below were written before this change. Until each is re-outlined just in time, this section wins where they differ. Plan 01b (the simple look, spec section 5) is applied alongside and does not change this order.
+
 ## Plans
 
 ### 01 Foundation and screens on sample data (detailed: `2026-11-10-01-foundation-and-screens.md`)
