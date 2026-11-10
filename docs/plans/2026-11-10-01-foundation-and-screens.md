@@ -2348,7 +2348,7 @@ Values:
 - Each screen stub renders `<Page screen="<name>" ready title=... description=...>` with the title and description from "UI design" (`RunDetailScreen` uses title "Run" until Task 11). Each stub takes the props of its screen task's Produces line (`BuilderScreen({ flowId? })`, `InboxScreen({ approvalId? })`, `RunsScreen()`, `RunDetailScreen({ runId })`, `ReadinessScreen({ flowId? })`, `HarnessesScreen()`, `SettingsScreen()`) and ignores them. Stubs have no queries, so they are ready at once; the screen tasks replace this with the ready rule of "UI design: Shared parts".
 - Root scripts: `"build:web": "vite build --config apps/desktop/vite.config.mts"`, `"dev:web": "vite --config apps/desktop/vite.config.mts"`, `"preview:web": "vite preview --config apps/desktop/vite.config.mts"`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // apps/desktop/src/nav/route.test.ts
@@ -2497,26 +2497,26 @@ test("the policy allows only the app's own files", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/nav apps/desktop/src/runner apps/desktop/src/App.test.tsx apps/desktop/src/theme.test.ts apps/desktop/src/csp.test.ts`
 Expected: FAIL with `Failed to resolve import "./route"`
 
-- [ ] **Step 3: Implement the files in this task with the signatures and values above**
+- [x] **Step 3: Implement the files in this task with the signatures and values above**
 
 `renderApp` sets `window.location.hash` before rendering `<RunnerProvider client={createFixtureRunnerClient({ scenario })}><App /></RunnerProvider>` and returns the client; `readyState` reads the attribute with `container.querySelector`. Every in-app link (the rail items included) is an `AppLink`, which keeps its `href` and handles the click itself, and every not-found page is a `NotFoundPage` (the frame's "Page not found" too). Tasks 9 to 12 use both.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Build for the web**
+- [x] **Step 5: Build for the web**
 
 Run: `pnpm build:web && grep -c "Content-Security-Policy" apps/desktop/dist/index.html`
 Expected: build succeeds; `1`
 
-- [ ] **Step 6: Run the gate**
+- [x] **Step 6: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
@@ -2525,12 +2525,14 @@ Expected: PASS
 
 Run: `pnpm build:web && pnpm preview:web`, open `http://127.0.0.1:4173/` and `http://127.0.0.1:4173/?theme=dark`. Expected: the rail with six items, Inbox count 5, every link shows its page title.
 
-- [ ] **Step 8: Chair step (commit)**
+- [x] **Step 8: Chair step (commit)**
 
 ```bash
 git add apps/desktop package.json
 git commit -m "Add the app frame, hash routes, runner hook and web build" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 

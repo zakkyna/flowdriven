@@ -15,7 +15,10 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "typecheck": "tsc -p packages/contracts && tsc -p packages/fixtures && tsc -p apps/desktop",
-    "test": "TZ=UTC vitest run && pnpm test:tools"
+    "test": "TZ=UTC vitest run && pnpm test:tools",
+    "build:web": "vite build --config apps/desktop/vite.config.mts",
+    "dev:web": "vite --config apps/desktop/vite.config.mts",
+    "preview:web": "vite preview --config apps/desktop/vite.config.mts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
