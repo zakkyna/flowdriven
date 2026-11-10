@@ -1,0 +1,27 @@
+.list,
+.row,
+.content,
+.summary,
+.type {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.summary {
+  font-size: var(--text-m);
+  line-height: 22px;
+}
+.type {
+  font: var(--text-mono) / 18px var(--font-mono);
+}
+.evidence {
+  font: var(--text-mono) / 18px var(--font-mono);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-s);
+  padding: 8px 10px;
+}

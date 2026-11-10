@@ -1,0 +1,92 @@
+:root {
+  color-scheme: light dark;
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --text-xs: 12px;
+  --text-s: 13px;
+  --text-m: 14px;
+  --text-l: 16px;
+  --text-xl: 20px;
+  --text-mono: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-s: 4px;
+  --radius-m: 6px;
+  --radius-l: 10px;
+  --rail-width: 208px;
+  --chat-width: 380px;
+  --surface-app: #f3f4f2;
+  --surface-panel: #ffffff;
+  --surface-sunken: #e9ebe8;
+  --surface-rail: #e6e8e5;
+  --border: #d5d8d4;
+  --border-strong: #858b87;
+  --text: #1c1f1e;
+  --text-muted: #5b615e;
+  --accent: #a65300;
+  --accent-hover: #8c4500;
+  --accent-text: #8a4300;
+  --accent-soft: #fbebd9;
+  --on-accent: #ffffff;
+  --ok: #2f6b45;
+  --ok-soft: #e3efe6;
+  --bad: #a3302a;
+  --bad-soft: #f6e3e1;
+  --info: #3d5a75;
+  --info-soft: #e3eaf1;
+  --overlay: rgba(15, 18, 17, 0.45);
+  --shadow-dialog: 0 8px 24px rgba(15, 18, 17, 0.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface-app: #161918;
+    --surface-panel: #1e2221;
+    --surface-sunken: #121514;
+    --surface-rail: #1a1d1c;
+    --border: #2f3533;
+    --border-strong: #6f7773;
+    --text: #e7eae8;
+    --text-muted: #a3aaa6;
+    --accent: #e39a4b;
+    --accent-hover: #f0ac62;
+    --accent-text: #f0ac62;
+    --accent-soft: #3a2a17;
+    --on-accent: #1a1206;
+    --ok: #7cc496;
+    --ok-soft: #1e3326;
+    --bad: #f08a80;
+    --bad-soft: #3a1f1d;
+    --info: #8fb1d1;
+    --info-soft: #1d2a36;
+    --overlay: rgba(0, 0, 0, 0.6);
+    --shadow-dialog: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+:root[data-theme="dark"] {
+  --surface-app: #161918;
+  --surface-panel: #1e2221;
+  --surface-sunken: #121514;
+  --surface-rail: #1a1d1c;
+  --border: #2f3533;
+  --border-strong: #6f7773;
+  --text: #e7eae8;
+  --text-muted: #a3aaa6;
+  --accent: #e39a4b;
+  --accent-hover: #f0ac62;
+  --accent-text: #f0ac62;
+  --accent-soft: #3a2a17;
+  --on-accent: #1a1206;
+  --ok: #7cc496;
+  --ok-soft: #1e3326;
+  --bad: #f08a80;
+  --bad-soft: #3a1f1d;
+  --info: #8fb1d1;
+  --info-soft: #1d2a36;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --shadow-dialog: 0 8px 24px rgba(0, 0, 0, 0.5);
+}

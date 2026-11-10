@@ -1,0 +1,23 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.heading {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.heading h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  line-height: 28px;
+  font-weight: 600;
+}
+.heading p {
+  max-width: 640px;
+  margin: 4px 0 0;
+  font-size: var(--text-m);
+  line-height: 22px;
+  color: var(--text-muted);
+}

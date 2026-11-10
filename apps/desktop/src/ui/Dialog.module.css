@@ -1,0 +1,28 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay);
+}
+.panel {
+  width: 480px;
+  max-width: calc(100% - 48px);
+  padding: 24px;
+  border-radius: var(--radius-l);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-dialog);
+}
+.panel h2 {
+  margin: 0 0 16px;
+  font-size: var(--text-l);
+  line-height: 24px;
+  font-weight: 600;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
