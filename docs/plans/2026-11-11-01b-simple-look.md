@@ -1295,7 +1295,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.pane`, `.paneBody` and `.step` (with `[data-state="running"]`) in `Builder.module.css`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace `the flow picker and the default flow` with:
 
@@ -1369,33 +1369,33 @@ test("the running step is tinted, and check words stay in their own column", asy
 
 The New flow pane test moved to Task 8, where the pane is made; it must keep passing here with the `h1` in the new bar.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/builder`
 Expected: FAIL. In `the pane bar holds the name, Undo and Run now, ...` the first failing line is `expect(heading.getAttribute("title"))` (`expected null to be 'Figma to Flutter'`: the old pane already has a header with the `h1`, but no `title`). `a step row shows its number, ...` fails with `expected null to be 'failed'` (rows have no `data-state`); `choosing a flow in the sidebar opens it, ...` fails on `queryByLabelText("Flow")` (the picker is still there). `a flow with no run shows no Latest run link` passes at once and is kept as a pin.
 
-- [ ] **Step 3: Implement** the pane per "UI design: Builder" and the Interfaces above. Delete the old toolbar (select), `flowHeader`, `panel` and `sectionHeading` rules that no longer apply. Run now shows "Running" while `running` is true (the existing guard test expects the text to contain "Running").
+- [x] **Step 3: Implement** the pane per "UI design: Builder" and the Interfaces above. Delete the old toolbar (select), `flowHeader`, `panel` and `sectionHeading` rules that no longer apply. Run now shows "Running" while `running` is true (the existing guard test expects the text to contain "Running").
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: `pnpm build:web && pnpm preview:web`, open `http://127.0.0.1:4173/#/builder/dev.example.figma-to-flutter` in light and dark (`?theme=...`) and `#/builder/new`; show the owner.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/builder
 git commit -m "Restyle the Builder flow pane and its step rows" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

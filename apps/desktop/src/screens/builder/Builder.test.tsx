@@ -8,6 +8,8 @@ import { readyState, renderApp } from "../../test/render";
 
 const FIGMA = "#/builder/dev.example.figma-to-flutter";
 const rows = () => within(screen.getByRole("list", { name: "Steps" })).getAllByRole("listitem");
+const openFlow = (name: RegExp) =>
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Flows" })).getByRole("link", { name }));
 const row = (i: number) => rows()[i] as HTMLElement;
 const titles = () => rows().map((r) => within(r).getAllByRole("button")[0]?.textContent);
 
@@ -119,11 +121,21 @@ describe("Builder", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Run now" }));
     await waitFor(() => expect(window.location.hash).toBe("#/runs/run-0008"));
   });
-  test("the flow picker and the default flow", async () => {
+  test("choosing a flow in the sidebar opens it, and the first flow is the default", async () => {
     renderApp("#/builder");
     expect(await screen.findByRole("heading", { level: 1, name: "Documents and reports" })).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.email-triage" } });
+    expect(screen.queryByLabelText("Flow")).toBeNull();
+    const nav = screen.getByRole("navigation", { name: "Flows" });
+    fireEvent.click(await within(nav).findByRole("link", { name: /Email triage and draft replies/ }));
     await waitFor(() => expect(window.location.hash).toBe("#/builder/dev.example.email-triage"));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Email triage and draft replies" }),
+    ).toBeTruthy();
+    expect(
+      within(nav)
+        .getByRole("link", { name: /Email triage and draft replies/ })
+        .getAttribute("aria-current"),
+    ).toBe("page");
   });
   test("a stale version cannot run", async () => {
     renderApp(FIGMA);
@@ -165,7 +177,7 @@ describe("Builder", () => {
 test("does not repeat a summary equal to the flow name", async () => {
   renderApp("#/builder/dev.example.figma-to-flutter");
   await screen.findByRole("heading", { name: "Figma to Flutter" });
-  expect(within(screen.getByRole("main")).getAllByText("Figma to Flutter")).toHaveLength(2);
+  expect(within(screen.getByRole("main")).getAllByText("Figma to Flutter")).toHaveLength(1);
 });
 
 function Probe({ skip, commits }: { skip: boolean; commits: boolean[] }) {
@@ -308,7 +320,7 @@ test("shows harness names, singular count, and clears errors on flow switch", as
   );
   fireEvent.click(screen.getByRole("button", { name: "Run now" }));
   await screen.findByText("Run failed");
-  fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.email-triage" } });
+  openFlow(/Email triage and draft replies/);
   await screen.findByRole("heading", { name: "Email triage and draft replies" });
   expect(screen.queryByText("Run failed")).toBeNull();
 });
@@ -322,9 +334,9 @@ test("clears a failed update when leaving and returning to the flow", async () =
   );
   fireEvent.click(within(row(1)).getByRole("button", { name: "Move up" }));
   await screen.findByRole("alert");
-  fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.email-triage" } });
+  openFlow(/Email triage and draft replies/);
   await screen.findByRole("heading", { name: "Email triage and draft replies" });
-  fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.figma-to-flutter" } });
+  openFlow(/Figma to Flutter/);
   await screen.findByRole("heading", { name: "Figma to Flutter" });
   expect(screen.queryByRole("alert")).toBeNull();
 });
@@ -361,7 +373,7 @@ test("focuses the flow heading after loading and changing flows", async () => {
   const first = await screen.findByRole("heading", { level: 1, name: "Figma to Flutter" });
   await waitFor(() => expect(document.activeElement).toBe(first));
   expect(first.tabIndex).toBe(-1);
-  fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.social-posts" } });
+  openFlow(/One source into many social posts/);
   const second = await screen.findByRole("heading", { level: 1, name: "One source into many social posts" });
   await waitFor(() => expect(document.activeElement).toBe(second));
 });
@@ -433,4 +445,50 @@ test("conversation styles follow the approved layout", () => {
   expect(css).toMatch(/\.composer:focus-within\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s);
   expect(css).toMatch(/\.chip\s*\{[^}]*height:\s*30px[^}]*border-radius:\s*15px/s);
   expect(css).toMatch(/\.send\s*\{[^}]*background:\s*var\(--ink\)/s);
+});
+
+test("the pane bar holds the name, Undo and Run now, then the kind, version, sign-off and latest run", async () => {
+  renderApp(FIGMA);
+  const pane = await screen.findByRole("region", { name: "Flow details" });
+  const bar = pane.querySelector("header") as HTMLElement;
+  const heading = within(bar).getByRole("heading", { level: 1, name: "Figma to Flutter" });
+  expect(heading.getAttribute("title")).toBe("Figma to Flutter");
+  expect(pane.querySelectorAll('[data-scroll="top"]')).toHaveLength(1);
+  expect(within(bar).getByRole("button", { name: "Undo" })).toBeTruthy();
+  expect(within(bar).getByRole("button", { name: "Run now" })).toBeTruthy();
+  expect(within(pane).getByText("Build flow")).toBeTruthy();
+  expect(within(pane).getByText("Version 1.0.0")).toBeTruthy();
+  expect(within(pane).getByText("Approved for version 1.0.0")).toBeTruthy();
+  expect(within(pane).getByText("Latest run")).toBeTruthy();
+  expect(within(pane).getByRole("link", { name: "run-0006" }).getAttribute("href")).toBe("#/runs/run-0006");
+});
+test("a flow with no run shows no Latest run link", async () => {
+  renderApp("#/builder/dev.example.quarterly-compliance-review", { scenario: "long" });
+  const pane = await screen.findByRole("region", { name: "Flow details" });
+  await within(pane).findByText("Version 1.0.0");
+  expect(within(pane).queryByText("Latest run")).toBeNull();
+});
+test("a step row shows its number, state icon, title, state word and actions", async () => {
+  renderApp(FIGMA);
+  await waitFor(() => expect(rows()).toHaveLength(5));
+  const third = row(2);
+  expect(third.getAttribute("data-state")).toBe("failed");
+  expect(within(third).getByText("3")).toBeTruthy();
+  expect(third.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  expect(within(third).getAllByRole("button")[0]?.textContent).toBe("Build the screens");
+  expect(within(third).getAllByText("Failed").length).toBeGreaterThan(0);
+  for (const name of ["Move up", "Move down", "Duplicate", "Delete"])
+    expect(within(third).getByRole("button", { name })).toBeTruthy();
+});
+test("the running step is tinted, and check words stay in their own column", async () => {
+  const { client } = renderApp(FIGMA);
+  const step = client.state.runs.find((r) => r.id === "run-0006")?.steps[2];
+  if (!step) throw new Error("Fixture step missing");
+  step.state = "running";
+  await waitFor(() => expect(row(2).getAttribute("data-state")).toBe("running"));
+  expect(within(row(2)).getAllByText("Running").length).toBeGreaterThan(0);
+  const css = readFileSync("apps/desktop/src/screens/builder/Builder.module.css", "utf8");
+  expect(css).toMatch(/\.step\[data-state="running"\]\s*\{[^}]*background:\s*var\(--info-soft\)/s);
+  expect(css).toMatch(/\.pane\s*\{[^}]*border-left:\s*1px solid var\(--border\)/s);
+  expect(css).toMatch(/\.paneBody\s*\{[^}]*overflow-y:\s*auto/s);
 });

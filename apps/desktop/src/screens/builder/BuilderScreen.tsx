@@ -1,5 +1,6 @@
 import type { ChatMessage, FlowEdit, Step } from "@flowdriven/contracts";
 import { type ReactElement, useLayoutEffect, useRef, useState } from "react";
+import { AppLink } from "../../nav/AppLink";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";
 import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
@@ -7,7 +8,7 @@ import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { Icon } from "../../ui/icons";
 import { ScreenState } from "../../ui/ScreenState";
-import { StatusBadge } from "../../ui/StatusBadge";
+import { StatusBadge, ToneIcon } from "../../ui/StatusBadge";
 import styles from "./Builder.module.css";
 import { ChatPanel } from "./ChatPanel";
 import { Playback } from "./Playback";
@@ -108,96 +109,97 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
   return (
     <section data-screen="builder" data-screen-ready="true" className={styles.layout}>
       <ChatPanel messages={detail?.conversation ?? emptyMessages} send={send} />
-      <section aria-label="Flow details" className={styles.main}>
-        {detail ? (
-          <>
-            <div className={styles.toolbar}>
-              <label>
-                Flow{" "}
-                <select
-                  value={id}
-                  onChange={(event) => navigate({ screen: "builder", flowId: event.target.value })}
-                >
-                  {list.data?.map((item) => (
-                    <option value={item.id} key={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div>
-                <Button
-                  variant="quiet"
-                  icon="undo"
-                  disabled={busy || !detail.canUndo}
-                  onClick={() => void edit({ kind: "undo" })}
-                >
-                  Undo
-                </Button>
-                <Button variant="primary" disabled={busy} onClick={() => void runNow()}>
-                  {running ? "Running..." : "Run now"}
-                </Button>
-              </div>
+      <section aria-label="Flow details" className={styles.pane}>
+        <header className={`${styles.bar} ${styles.paneBar}`}>
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            title={detail?.manifest.name ?? (isNew ? "New flow" : "Builder")}
+          >
+            {detail?.manifest.name ?? (isNew ? "New flow" : "Builder")}
+          </h1>
+          {detail && (
+            <div className={styles.barActions}>
+              <Button
+                variant="quiet"
+                size="small"
+                icon="undo"
+                disabled={busy || !detail.canUndo}
+                onClick={() => void edit({ kind: "undo" })}
+              >
+                Undo
+              </Button>
+              <Button variant="primary" size="small" disabled={busy} onClick={() => void runNow()}>
+                {running && <Icon name="ring" spin />}
+                {running ? "Running" : "Run now"}
+              </Button>
             </div>
-            <header className={styles.flowHeader}>
-              <h1 ref={headingRef} tabIndex={-1}>
-                {detail.manifest.name}
-              </h1>
-              {detail.manifest.summary !== detail.manifest.name && (
-                <p className={styles.muted}>{detail.manifest.summary}</p>
-              )}
+          )}
+        </header>
+        <div className={styles.paneBody} data-scroll="top">
+          {detail ? (
+            <>
               <div className={styles.meta}>
                 <span>{detail.manifest.kind === "build" ? "Build flow" : "Light flow"}</span>
                 <span>Version {detail.manifest.version}</span>
-                <StatusBadge domain="signOff" value={detail.signOff.state} />
+                {detail.signOff.state === "approved" ? (
+                  <span className={styles.approved}>
+                    <ToneIcon icon="check" tone="ok" />
+                    Approved for version {detail.signOff.version}
+                  </span>
+                ) : (
+                  <StatusBadge domain="signOff" value={detail.signOff.state} />
+                )}
+                {runId && (
+                  <span className={styles.latest}>
+                    Latest run <AppLink to={{ screen: "run", runId }}>{runId}</AppLink>
+                  </span>
+                )}
               </div>
-              {detail.signOff.state === "approved" && (
-                <p className={styles.muted}>Approved for version {detail.signOff.version}</p>
+              {detail.manifest.summary !== detail.manifest.name && (
+                <p className={styles.muted}>{detail.manifest.summary}</p>
               )}
               {detail.signOff.state === "stale" && (
                 <p className={styles.muted}>
                   Approved version {detail.signOff.version}. This version needs your approval before it runs.
                 </p>
               )}
-            </header>
-            <Playback playback={detail.playback} />
-            <div className={styles.sectionHeading}>
-              <h2>Steps</h2>
-              <span className={styles.muted}>
-                {detail.manifest.steps.length} {detail.manifest.steps.length === 1 ? "step" : "steps"}
-              </span>
-              <Button
-                icon="plus"
-                disabled={busy}
-                onClick={() => {
-                  setTitle("");
-                  setAdding(true);
-                }}
-              >
-                Add step
-              </Button>
-            </div>
-            {error && (
-              <p role="alert" className={styles.error}>
-                <Icon name="alert" />
-                {error}
-              </p>
-            )}
-            <StepList
-              flow={detail}
-              busy={busy}
-              harnesses={harnesses.data ?? []}
-              run={run.data}
-              edit={(change) => void edit(change)}
-              onDelete={setDeleted}
-            />
-          </>
-        ) : (
-          <>
-            <h1 ref={headingRef} tabIndex={-1}>
-              {isNew ? "New flow" : "Builder"}
-            </h1>
-            <div className={styles.panel}>
+              <Playback playback={detail.playback} />
+              <div className={styles.divider} />
+              <div className={styles.titleRow}>
+                <h2>Steps</h2>
+                <span className={styles.muted}>
+                  {detail.manifest.steps.length} {detail.manifest.steps.length === 1 ? "step" : "steps"}
+                </span>
+                <Button
+                  size="small"
+                  icon="plus"
+                  disabled={busy}
+                  onClick={() => {
+                    setTitle("");
+                    setAdding(true);
+                  }}
+                >
+                  Add step
+                </Button>
+              </div>
+              {error && (
+                <p role="alert" className={styles.error}>
+                  <Icon name="alert" />
+                  {error}
+                </p>
+              )}
+              <StepList
+                flow={detail}
+                busy={busy}
+                harnesses={harnesses.data ?? []}
+                run={run.data}
+                edit={(change) => void edit(change)}
+                onDelete={setDeleted}
+              />
+            </>
+          ) : (
+            <div className={styles.empty}>
               <h2>{isNew ? "Nothing drafted yet." : "No flows yet."}</h2>
               <p>Describe work you repeat, and the agent turns it into a flow.</p>
               {error && (
@@ -207,8 +209,8 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
                 </p>
               )}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </section>
       {deleted && (
         <Dialog

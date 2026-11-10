@@ -2,7 +2,8 @@ import type { FlowEdit, HarnessCard, Step, StepRun, StepRunState } from "@flowdr
 import { type ReactElement, useState } from "react";
 import { Button } from "../../ui/Button";
 import { CheckList } from "../../ui/CheckList";
-import { Badge, StatusBadge } from "../../ui/StatusBadge";
+import { Badge, StateIcon } from "../../ui/StatusBadge";
+import { statusOf } from "../../ui/status";
 import styles from "./Builder.module.css";
 
 export function StepRow({
@@ -40,10 +41,11 @@ export function StepRow({
     return result && result.type === check.type && result.summary === check.summary ? result : check;
   });
   return (
-    <li className={styles.step}>
+    <li className={styles.step} data-state={status}>
       <div className={styles.stepNumber}>{index + 1}</div>
       <div className={styles.stepBody}>
         <div className={styles.stepHeader}>
+          <StateIcon domain="step" value={status} />
           <button
             type="button"
             className={styles.titleButton}
@@ -52,11 +54,22 @@ export function StepRow({
           >
             {step.title}
           </button>
+          <span className={styles.stepState} data-muted={status === "pending" || status === "skipped"}>
+            {statusOf("step", status).label}
+          </span>
+        </div>
+        <div className={styles.workerLine}>
+          <span>
+            {step.do === "worker"
+              ? preferences || "Any worker."
+              : step.do === "agent"
+                ? "Done by the brain, no tools."
+                : "Done by FlowDriven."}
+          </span>
           <Badge tone="neutral">
             {step.do === "worker" ? "Worker" : step.do === "agent" ? "Agent" : "FlowDriven"}
           </Badge>
           <div className={styles.stepActions}>
-            <StatusBadge domain="step" value={status} />
             <Button
               variant="quiet"
               icon="arrow-up"
@@ -87,13 +100,6 @@ export function StepRow({
             />
           </div>
         </div>
-        <p className={styles.muted}>
-          {step.do === "worker"
-            ? preferences || "Any worker."
-            : step.do === "agent"
-              ? "Done by the brain, no tools."
-              : "Done by FlowDriven."}
-        </p>
         {step.uses.length > 0 && (
           <div className={styles.uses}>
             Uses{" "}
@@ -102,7 +108,9 @@ export function StepRow({
             ))}
           </div>
         )}
-        <CheckList checks={checks} />
+        <div className={styles.checks}>
+          <CheckList checks={checks} />
+        </div>
         {expanded && (
           <div className={styles.details}>
             <h3>Instructions</h3>

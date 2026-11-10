@@ -1,21 +1,26 @@
 import type { Playback as PlaybackData } from "@flowdriven/contracts";
 import type { ReactElement } from "react";
+import { Badge } from "../../ui/StatusBadge";
 import styles from "./Builder.module.css";
 
 export function Playback({ playback }: { playback: PlaybackData }): ReactElement {
   return (
-    <section className={styles.panel}>
-      <h2>What this flow does</h2>
+    <section>
+      <div className={styles.titleRow}>
+        <h2>What this flow does</h2>
+      </div>
       <dl className={styles.playback}>
         <dt>Goal</dt>
         <dd>{playback.goal}</dd>
         <dt>It will touch</dt>
         <dd>
-          <ul>
+          <div className={styles.touches}>
             {playback.touches.map((item) => (
-              <li key={item}>{item}</li>
+              <Badge key={item} tone="neutral">
+                {item}
+              </Badge>
             ))}
-          </ul>
+          </div>
         </dd>
         <dt>It asks before</dt>
         <dd>
