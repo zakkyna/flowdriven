@@ -1,68 +1,9 @@
 .frame {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
   height: 100vh;
 }
-.rail {
-  width: var(--rail-width);
-  flex: 0 0 var(--rail-width);
-  background: var(--surface-rail);
-  border-right: 1px solid var(--border);
-  padding: 20px 12px;
-  display: flex;
-  flex-direction: column;
-}
-.brand {
-  font-size: 15px;
-  font-weight: 600;
-  padding: 0 8px;
-  margin-bottom: 20px;
-}
-.links {
-  display: flex;
-  flex-direction: column;
-}
-.link {
-  height: 36px;
-  padding: 0 10px;
-  gap: 10px;
-  display: flex;
-  align-items: center;
-  color: var(--text-muted);
-  border-radius: var(--radius-m);
-  font-size: var(--text-m);
-  font-weight: 500;
-  text-decoration: none;
-  transition: background-color 120ms;
-}
-.link:hover {
-  background: var(--surface-sunken);
-}
-.link[aria-current="page"] {
-  background: var(--surface-panel);
-  color: var(--text);
-  box-shadow: inset 2px 0 0 var(--text);
-}
-.count {
-  margin-left: auto;
-  min-width: 20px;
-  height: 20px;
-  border-radius: 10px;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  display: grid;
-  place-items: center;
-}
-.footer {
-  margin-top: auto;
-  padding: 0 8px;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 16px;
-}
 .main {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
 }

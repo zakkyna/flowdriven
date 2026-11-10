@@ -164,7 +164,7 @@ describe("Builder", () => {
 test("does not repeat a summary equal to the flow name", async () => {
   renderApp("#/builder/dev.example.figma-to-flutter");
   await screen.findByRole("heading", { name: "Figma to Flutter" });
-  expect(screen.getAllByText("Figma to Flutter")).toHaveLength(2);
+  expect(within(screen.getByRole("main")).getAllByText("Figma to Flutter")).toHaveLength(2);
 });
 
 function Probe({ skip, commits }: { skip: boolean; commits: boolean[] }) {

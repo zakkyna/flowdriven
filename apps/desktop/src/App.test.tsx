@@ -1,24 +1,98 @@
+import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { renderApp } from "./test/render";
 
-test("the rail lists the six screens in order with the inbox count", async () => {
+const flowIds = [
+  "documents-and-reports",
+  "figma-to-flutter",
+  "email-triage",
+  "lead-follow-up",
+  "social-posts",
+];
+const flowsNav = () => screen.getByRole("navigation", { name: "Flows" });
+
+test("the rail lists five destinations, New flow and the inbox count", async () => {
   renderApp("#/runs");
   const nav = screen.getByRole("navigation", { name: "Main" });
-  const links = within(nav).getAllByRole("link");
-  expect(links.map((l) => l.getAttribute("href"))).toEqual([
-    "#/builder",
-    "#/inbox",
-    "#/runs",
-    "#/readiness",
-    "#/harnesses",
-    "#/settings",
-  ]);
+  expect(
+    within(nav)
+      .getAllByRole("link")
+      .map((l) => l.getAttribute("href")),
+  ).toEqual(["#/inbox", "#/runs", "#/readiness", "#/harnesses", "#/settings"]);
+  expect(within(nav).queryByRole("link", { name: "Builder" })).toBeNull();
   expect(await within(nav).findByRole("link", { name: "Inbox, 5 waiting" })).toBeTruthy();
   expect(within(nav).getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("link", { name: "New flow" }).getAttribute("href")).toBe("#/builder/new");
+  const stops = Array.from(document.querySelectorAll("a[href], button")).slice(0, 3);
+  expect(stops.map((el) => el.getAttribute("href"))).toEqual(["#main-content", "#/builder/new", "#/inbox"]);
   expect(screen.getByText("Sample data. Nothing here runs yet.")).toBeTruthy();
   expect(screen.getByText("Browser preview")).toBeTruthy();
 });
+test("every flow in the sidebar has an icon and a state word", async () => {
+  renderApp("#/builder/dev.example.figma-to-flutter");
+  const links = await within(flowsNav()).findAllByRole("link");
+  expect(links.map((l) => l.getAttribute("href"))).toEqual(
+    flowIds.map((id) => `#/builder/dev.example.${id}`),
+  );
+  const words = ["Done", "Blocked", "Waiting for you", "Interrupted", "Waiting for you"];
+  links.forEach((link, i) => {
+    expect(link.textContent, flowIds[i]).toContain(words[i]);
+    expect(link.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+    expect(link.getAttribute("aria-current")).toBe(i === 1 ? "page" : null);
+  });
+});
+test("the first flow is current at #/builder, and nothing is current on other screens", async () => {
+  const first = renderApp("#/builder");
+  const links = await within(flowsNav()).findAllByRole("link");
+  expect(links[0]?.getAttribute("aria-current")).toBe("page");
+  first.unmount();
+  renderApp("#/settings");
+  const others = await within(flowsNav()).findAllByRole("link");
+  expect(others.every((l) => !l.hasAttribute("aria-current"))).toBe(true);
+});
+test("New flow is current at #/builder/new and no flow is", async () => {
+  renderApp("#/builder/new");
+  expect(screen.getByRole("link", { name: "New flow" }).getAttribute("aria-current")).toBe("page");
+  const links = await within(flowsNav()).findAllByRole("link");
+  expect(links.every((l) => !l.hasAttribute("aria-current"))).toBe(true);
+});
+test("choosing a flow opens it in the Builder", async () => {
+  renderApp("#/settings");
+  fireEvent.click(await within(flowsNav()).findByRole("link", { name: /Email triage and draft replies/ }));
+  await waitFor(() => expect(window.location.hash).toBe("#/builder/dev.example.email-triage"));
+  expect(
+    await screen.findByRole("heading", { level: 1, name: "Email triage and draft replies" }),
+  ).toBeTruthy();
+});
+test("a long flow name wraps in the sidebar and is never cut off", async () => {
+  renderApp("#/builder", { scenario: "long" });
+  const links = await within(flowsNav()).findAllByRole("link");
+  const last = links.at(-1) as HTMLElement;
+  expect(last.textContent).toMatch(/^Quarterly supplier compliance .* northern distribution network/);
+  expect(last.textContent).toContain("No runs yet");
+  const css = readFileSync("apps/desktop/src/nav/Sidebar.module.css", "utf8");
+  expect(css).toMatch(/overflow-wrap:\s*anywhere/);
+  expect(css).toMatch(/min-width:\s*0\b/);
+  expect(css).not.toMatch(/text-overflow:\s*ellipsis/);
+});
+test("with no flows the list says where they will appear", async () => {
+  renderApp("#/inbox", { scenario: "empty" });
+  expect(await screen.findByText("Flows you make appear here.")).toBeTruthy();
+});
+test("the frame styles follow the approved layout", () => {
+  const app = readFileSync("apps/desktop/src/App.module.css", "utf8");
+  const sidebar = readFileSync("apps/desktop/src/nav/Sidebar.module.css", "utf8");
+  expect(app).toMatch(/\.frame\s*\{[^}]*grid-template-columns:\s*var\(--rail-width\) minmax\(0, 1fr\)/s);
+  expect(sidebar).toMatch(/background:\s*var\(--surface-rail\)/);
+  expect(sidebar).toMatch(/\[aria-current="page"\][^{]*\{[^}]*background:\s*var\(--surface-selected\)/s);
+  expect(sidebar).toMatch(/\[aria-current="page"\]::before[^{]*\{[^}]*background:\s*var\(--accent\)/s);
+  expect(sidebar).toMatch(
+    /\.newFlow\[aria-current="page"\]\s*\{[^}]*background:\s*var\(--surface-selected\)/s,
+  );
+  expect(`${app}${sidebar}`).not.toMatch(/box-shadow/);
+});
+
 test("navigating changes the screen", async () => {
   renderApp("#/builder");
   fireEvent.click(screen.getByRole("link", { name: "Settings" }));

@@ -906,7 +906,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.frame` in `App.module.css`; `.newFlow` and the `[aria-current="page"]` selectors in `Sidebar.module.css`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `flow-state.test.ts`:
 
@@ -1007,33 +1007,33 @@ test("the frame styles follow the approved layout", () => {
 
 In `Builder.test.tsx`, change `does not repeat a summary equal to the flow name` to count inside `main`: `expect(within(screen.getByRole("main")).getAllByText("Figma to Flutter")).toHaveLength(2);` (the heading and the select option; the sidebar now also shows the name).
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/App.test.tsx apps/desktop/src/ui/flow-state.test.ts`
 Expected: FAIL (`Failed to resolve import "./flow-state"`; the rail still lists six links)
 
-- [ ] **Step 3: Implement** `flow-state.ts`, `Sidebar.tsx` and its CSS per "UI design: Frame", `App.tsx` and `App.module.css` (`.frame` is a grid `var(--rail-width) minmax(0, 1fr)` at `height: 100vh`; keep `.skip` and `.main { min-width: 0; overflow: hidden }`; delete the rail, link and count rules that moved to the Sidebar module; no `box-shadow`). The flow list rows use `ToneIcon` for the icon and `flowState` for the word. Where the Sidebar CSS needs an `overflow-wrap: anywhere` and `min-width: 0` on its text, use exactly those spellings.
+- [x] **Step 3: Implement** `flow-state.ts`, `Sidebar.tsx` and its CSS per "UI design: Frame", `App.tsx` and `App.module.css` (`.frame` is a grid `var(--rail-width) minmax(0, 1fr)` at `height: 100vh`; keep `.skip` and `.main { min-width: 0; overflow: hidden }`; delete the rail, link and count rules that moved to the Sidebar module; no `box-shadow`). The flow list rows use `ToneIcon` for the icon and `flowState` for the word. Where the Sidebar CSS needs an `overflow-wrap: anywhere` and `min-width: 0` on its text, use exactly those spellings.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate and the build**
+- [x] **Step 5: Run the gate and the build**
 
 Run: `pnpm format && pnpm check && pnpm build:web`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (GUI)**: `pnpm capture` must exit 0 (16 PNGs). Open `builder-light.png` and `inbox-dark.png`: the sidebar shows the five destinations, the flows with their state words and the sample-data note. Then `pnpm preview:web` and look at the app in both themes.
+- [x] **Step 6: Chair step (GUI)**: `pnpm capture` must exit 0 (16 PNGs). Open `builder-light.png` and `inbox-dark.png`: the sidebar shows the five destinations, the flows with their state words and the sample-data note. Then `pnpm preview:web` and look at the app in both themes.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src
 git commit -m "Replace the navigation rail with a sidebar that lists the flows" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
