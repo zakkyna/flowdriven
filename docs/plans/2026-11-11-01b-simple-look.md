@@ -1523,7 +1523,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.col`, `.strip`, `.body`, `.similar`, `.hidden` and `.patch` in `Inbox.module.css`.
 
-- [ ] **Step 1: Write the failing tests** (add to `Inbox.test.tsx`; existing tests stay unchanged)
+- [x] **Step 1: Write the failing tests** (add to `Inbox.test.tsx`; existing tests stay unchanged)
 
 ```tsx
 test("everything that would be sent is above the buttons, under a strip that says what it is", async () => {
@@ -1583,33 +1583,33 @@ test("the decision styles follow the approved layout", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/inbox`
 Expected: FAIL (`Unable to find role="heading" and name "This is the email that would be sent"`)
 
-- [ ] **Step 3: Implement** per the Interfaces and "UI design: Inbox". Edit and Reject are `Button variant="secondary" size="large"`. The Edit-mode buttons ("Approve with edits" primary large, "Cancel" secondary large) keep their behaviour. Hidden-character marks keep `role="img"` and their `aria-label` and `title`.
+- [x] **Step 3: Implement** per the Interfaces and "UI design: Inbox". Edit and Reject are `Button variant="secondary" size="large"`. The Edit-mode buttons ("Approve with edits" primary large, "Cancel" secondary large) keep their behaviour. Hidden-character marks keep `role="img"` and their `aria-label` and `title`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: `pnpm build:web && pnpm preview:web`, open `#/inbox/ap-0011` and `#/inbox/ap-0016?scenario=long` (the query goes before the hash: `http://127.0.0.1:4173/?scenario=long#/inbox/ap-0016`) in light and dark; check the long email, the hidden-character marks and the recipient cap.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/inbox
 git commit -m "Restyle the Inbox decision so everything sent shows above the buttons" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

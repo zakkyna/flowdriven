@@ -394,3 +394,76 @@ test("the list column and rows follow the approved layout", () => {
   expect(css).toMatch(/\.detailScroll\s*\{[^}]*overflow-y:\s*auto/s);
   expect(css).toMatch(/\.count\s*\{[^}]*font-family:\s*var\(--font-mono\)/s);
 });
+
+test("everything that would be sent is above the buttons, under a strip that says what it is", async () => {
+  renderApp("#/inbox/ap-0011");
+  const strip = await screen.findByRole("heading", {
+    level: 3,
+    name: "This is the email that would be sent",
+  });
+  const card = strip.parentElement as HTMLElement;
+  expect(within(card).getByText("Priya Shah <priya@example.com>")).toBeTruthy();
+  expect(within(card).getByText("Re: Invoice 1042")).toBeTruthy();
+  expect(within(card).getByText(/^Hi Priya,/)).toBeTruthy();
+  const note = screen.getByText("Nothing is sent until you choose.");
+  const approve = screen.getByRole("button", { name: "Approve" });
+  expect(card.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(note.compareDocumentPosition(approve) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+test("Approve is the only filled button, Edit and Reject match, Approve all is a text button with its explanation", async () => {
+  renderApp("#/inbox/ap-0011");
+  const approve = await screen.findByRole("button", { name: "Approve" });
+  const edit = screen.getByRole("button", { name: "Edit" });
+  const reject = screen.getByRole("button", { name: "Reject" });
+  const all = screen.getByRole("button", { name: "Approve all 3 similar for this run" });
+  expect(approve.getAttribute("data-variant")).toBe("primary");
+  for (const button of [approve, edit, reject]) expect(button.getAttribute("data-size")).toBe("large");
+  expect([edit, reject].map((b) => b.getAttribute("data-variant"))).toEqual(["secondary", "secondary"]);
+  expect(all.getAttribute("data-variant")).toBe("text");
+  const filled = within(screen.getByRole("main"))
+    .getAllByRole("button")
+    .filter((b) => b.getAttribute("data-variant") === "primary");
+  expect(filled).toEqual([approve]);
+  const explanation = screen.getByText(
+    "You see all 3 sends before anything is approved. This covers this run only.",
+  );
+  expect(all.compareDocumentPosition(explanation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(reject.compareDocumentPosition(all) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+test("the bar shows the decision state and its expiry, then when it was resolved", async () => {
+  renderApp("#/inbox/ap-0014");
+  const bar = await screen.findByRole("group", { name: "Decision state" });
+  expect(within(bar).getByText("Waiting for you")).toBeTruthy();
+  expect(within(bar).getByText(/^Expires \d+ \w+, \d\d:\d\d$/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+  await screen.findByText("Approved.");
+  expect(within(screen.getByRole("group", { name: "Decision state" })).getByText("Approved")).toBeTruthy();
+  expect(
+    within(screen.getByRole("group", { name: "Decision state" })).getByText(/^Resolved \d+ \w+, \d\d:\d\d$/),
+  ).toBeTruthy();
+});
+test("a post and a change are labelled for what they are", async () => {
+  const post = renderApp("#/inbox/ap-0014");
+  expect(
+    await screen.findByRole("heading", { level: 3, name: "This is the post that would be published" }),
+  ).toBeTruthy();
+  expect(screen.getByText("Nothing is posted until you choose.")).toBeTruthy();
+  post.unmount();
+  renderApp("#/inbox");
+  expect(
+    await screen.findByRole("heading", { level: 3, name: "These are the changes you are approving" }),
+  ).toBeTruthy();
+  expect(screen.getByText("Nothing changes until you choose.")).toBeTruthy();
+});
+test("the decision styles follow the approved layout", () => {
+  expect(css).toMatch(/\.col\s*\{[^}]*max-width:\s*var\(--decision-width\)/s);
+  expect(css).toMatch(
+    /\.strip\s*\{[^}]*background:\s*var\(--surface-sunken\)[^}]*border-bottom:\s*1px solid var\(--border\)/s,
+  );
+  expect(css).toMatch(
+    /\.body\s*\{[^}]*font-size:\s*var\(--text-read\)[^}]*line-height:\s*1\.65[^}]*white-space:\s*pre-wrap/s,
+  );
+  expect(css).toMatch(/\.similar\s*\{[^}]*border-top:\s*1px solid var\(--border\)/s);
+  expect(css).toMatch(/\.hidden\s*\{[^}]*background:\s*var\(--bad-soft\)[^}]*color:\s*var\(--bad\)/s);
+  expect(css).toMatch(/\.patch\s*\{[^}]*white-space:\s*pre-wrap/s);
+});

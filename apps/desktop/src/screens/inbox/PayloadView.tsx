@@ -1,6 +1,7 @@
 import type { Payload } from "@flowdriven/contracts";
 import { type ReactElement, useState } from "react";
 import { formatUsd } from "../../ui/format";
+import { Icon } from "../../ui/icons";
 import styles from "./Inbox.module.css";
 import { splitHidden } from "./reveal";
 
@@ -43,7 +44,7 @@ function Recipients({ values }: { values: string[] }): ReactElement {
         </div>
       ))}
       {values.length > 5 && !expanded && (
-        <button type="button" onClick={() => setExpanded(true)}>
+        <button className={styles.more} type="button" onClick={() => setExpanded(true)}>
           and {values.length - 5} more
         </button>
       )}
@@ -61,12 +62,16 @@ export function PayloadView({
   text: string;
   setText: (value: string) => void;
 }): ReactElement {
-  const title = { email: "Email", post: "Post", diff: "Changes", amount: "Amount", text: "Text" }[
-    payload.kind
-  ];
+  const title = {
+    email: "This is the email that would be sent",
+    post: "This is the post that would be published",
+    diff: "These are the changes you are approving",
+    amount: "This is the amount you are approving",
+    text: "This is the text you are approving",
+  }[payload.kind];
   const editor = (
     <>
-      <pre>
+      <pre className={styles.body}>
         <Revealed text={text} />
       </pre>
       <label className={styles.editor}>
@@ -77,10 +82,22 @@ export function PayloadView({
   );
   return (
     <section className={styles.payload}>
-      <h3>{title}</h3>
+      <h3 className={styles.strip}>
+        <Icon
+          name={
+            { email: "send", post: "post", diff: "builder", amount: "coin", text: "list" }[payload.kind] as
+              | "send"
+              | "post"
+              | "builder"
+              | "coin"
+              | "list"
+          }
+        />
+        {title}
+      </h3>
       {payload.kind === "email" && (
         <>
-          <dl className={styles.definitions}>
+          <dl className={styles.payloadRows}>
             <dt>To</dt>
             <dd>
               <Recipients values={payload.to} />
@@ -101,7 +118,7 @@ export function PayloadView({
           {editing ? (
             editor
           ) : (
-            <pre>
+            <pre className={styles.body}>
               <Revealed text={payload.body} />
             </pre>
           )}
@@ -109,7 +126,7 @@ export function PayloadView({
       )}
       {payload.kind === "post" && (
         <>
-          <dl className={styles.definitions}>
+          <dl className={styles.payloadRows}>
             <dt>Platform</dt>
             <dd>
               <Revealed text={payload.platform} singleLine />
@@ -129,7 +146,7 @@ export function PayloadView({
       )}
       {payload.kind === "diff" &&
         keyed(payload.files, (file) => file.path).map(({ value: file, key }) => (
-          <div key={key}>
+          <div key={key} className={styles.body}>
             <div className={styles.mono}>
               <Revealed text={file.path} singleLine />
             </div>
@@ -148,18 +165,18 @@ export function PayloadView({
           </div>
         ))}
       {payload.kind === "amount" && (
-        <>
+        <div className={styles.body}>
           <p>{formatUsd(payload.amountUsd)}</p>
           <p>
             <Revealed text={payload.description} />
           </p>
-        </>
+        </div>
       )}
       {payload.kind === "text" &&
         (editing ? (
           editor
         ) : (
-          <pre>
+          <pre className={styles.body}>
             <Revealed text={payload.text} />
           </pre>
         ))}

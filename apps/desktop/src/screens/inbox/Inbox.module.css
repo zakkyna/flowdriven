@@ -7,7 +7,7 @@
 .layout > *,
 .itemText,
 .definitions dd,
-.panel,
+.payloadRows dd,
 .payload {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -168,34 +168,121 @@
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
-.panel {
-  background: var(--surface-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-l);
-  padding: 16px 20px;
+.decisionBar {
+  flex: none;
+  height: var(--bar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 13px;
 }
-.panel h2 {
-  margin-top: 0;
+.col h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 .definitions {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 14px 0 22px;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
-.definitions dt {
+.definitions dt,
+.payloadRows dt {
   color: var(--text-muted);
+  font-size: 13px;
 }
-.definitions dd {
+.definitions dd,
+.payloadRows dd {
   margin: 0;
 }
-.payload {
-  margin: 24px 0;
+.definitions a {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  margin: -6px 0;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
-.payload pre,
-.patch {
+.payload {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface-panel);
+  overflow: hidden;
+}
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 16px;
   background: var(--surface-sunken);
-  padding: 8px 10px;
-  border-radius: var(--radius-s);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+.payloadRows {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.payloadRows dt,
+.payloadRows dd {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.payloadRows dt {
+  padding-left: 16px;
+}
+.payloadRows dd {
+  padding-right: 16px;
+}
+.body {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-ui);
+  font-size: var(--text-read);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.note {
+  margin: 20px 0 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.similar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.similar p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.more {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .mono,
 .patch,
