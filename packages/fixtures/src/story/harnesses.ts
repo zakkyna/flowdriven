@@ -12,7 +12,7 @@ export function harnesses(): HarnessCard[] {
       name,
       binary,
       detected,
-      login: detected ? "logged_in" : "unknown",
+      login: "unknown",
       risk,
       vendorProhibited: false,
       consent: risk === "official" ? "not_needed" : "not_given",
@@ -28,6 +28,7 @@ export function harnesses(): HarnessCard[] {
     version: "0.71.0",
     sandbox: "os",
     adapter: "full",
+    login: "logged_in",
     quota: {
       state: "available",
       today: { calls: 14 },
@@ -53,6 +54,7 @@ export function harnesses(): HarnessCard[] {
     consent: "given",
     sandbox: "os",
     adapter: "full",
+    login: "logged_in",
     quota: {
       state: "exhausted",
       until: "2026-11-10T13:00:00.000Z",

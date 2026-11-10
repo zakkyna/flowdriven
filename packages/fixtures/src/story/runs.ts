@@ -61,7 +61,9 @@ export function runs(flows: FlowRecord[]): RunDetail[] {
         title: s.title,
         do: s.do,
         state: stepState,
-        worker: { harnessId: "codex", name: "Codex" },
+        ...(stepState === "pending" || stepState === "skipped"
+          ? {}
+          : { worker: { harnessId: "codex", name: "Codex" } }),
         attempts:
           stepState === "passed"
             ? [

@@ -45,6 +45,13 @@ export function createFixtureRunnerClient(
   );
   const now = () => (options.now?.() ?? new Date(FIXTURE_NOW)).toISOString();
   const listeners = new Set<(event: RunnerEvent) => void>();
+  const baselines = new Map(state.flows.map((f) => [f.manifest.id, structuredClone(f.manifest)]));
+  const leadBaseline = baselines.get("dev.example.lead-follow-up");
+  if (leadBaseline) {
+    leadBaseline.version = "1.2.0";
+    const send = leadBaseline.steps.find((step) => step.id === "send-approved");
+    if (send) send.checks = send.checks.filter((check) => check.type !== "user");
+  }
   const find = <T>(items: T[], predicate: (item: T) => boolean, noun: string, id: string): T => {
     const item = items.find(predicate);
     if (!item) throw new RunnerError("not_found", `There is no ${noun} ${id}.`);
@@ -106,17 +113,31 @@ export function createFixtureRunnerClient(
     const pending = state.approvals.filter(
       (a) => a.flowId === f.manifest.id && a.kind === "flow_sign_off" && a.state === "pending",
     );
-    const previousPatch =
-      pending[0]?.payload.kind === "diff" ? pending[0].payload.files[0]?.patch : undefined;
     for (const a of pending) state.approvals.splice(state.approvals.indexOf(a), 1);
     if (f.signOff.state !== "stale") return;
     const at = now();
-    const baseline = f.history.find(
-      (h) => h.signOff.state === "approved" && h.signOff.version === f.signOff.version,
-    )?.manifest;
-    const patch = baseline
-      ? `-${JSON.stringify(baseline)}\n+${JSON.stringify(f.manifest)}`
-      : `${previousPatch ? `${previousPatch}\n` : `-${JSON.stringify(before)}\n`}+${JSON.stringify(f.manifest)}`;
+    const baseline = baselines.get(f.manifest.id) ?? before;
+    const lines = [`-version: ${baseline.version}`, `+version: ${f.manifest.version}`];
+    for (const step of baseline.steps) {
+      const current = f.manifest.steps.find((s) => s.id === step.id);
+      if (!current) lines.push(`-step: ${step.title}`);
+      else {
+        if (
+          baseline.steps.findIndex((s) => s.id === step.id) !==
+          f.manifest.steps.findIndex((s) => s.id === step.id)
+        )
+          lines.push(`~step: ${step.title}`);
+        for (const check of step.checks)
+          if (!current.checks.some((c) => JSON.stringify(c) === JSON.stringify(check)))
+            lines.push(`-check: ${step.title}: ${check.summary}`);
+        for (const check of current.checks)
+          if (!step.checks.some((c) => JSON.stringify(c) === JSON.stringify(check)))
+            lines.push(`+check: ${step.title}: ${check.summary}`);
+      }
+    }
+    for (const step of f.manifest.steps)
+      if (!baseline.steps.some((s) => s.id === step.id)) lines.push(`+step: ${step.title}`);
+    const patch = lines.join("\n");
     const number = Math.max(0, ...state.approvals.map((a) => Number(a.id.match(/^ap-(\d+)$/)?.[1] ?? 0))) + 1;
     state.approvals.push({
       id: pending[0]?.id ?? `ap-${String(number).padStart(4, "0")}`,
@@ -134,14 +155,17 @@ export function createFixtureRunnerClient(
   const expireApprovals = () => {
     const at = now();
     let changed = false;
-    for (const a of state.approvals) {
+    for (const a of [...state.approvals].sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))) {
       if (a.state !== "pending" || a.expiresAt > at) continue;
       changed = true;
       a.state = "expired";
       a.resolvedAt = a.expiresAt;
       if (a.runId) {
         const r = run(a.runId);
-        r.state = "failed";
+        if (r.state === "waiting_approval") {
+          r.state = "failed";
+          r.endedAt = a.expiresAt;
+        }
         const step = r.steps.find((s) => s.stepId === a.stepId);
         if (step) {
           step.state = "failed";
@@ -347,6 +371,8 @@ export function createFixtureRunnerClient(
         throw new RunnerError("invalid_input", "Edited text cannot be empty.");
       if (approval.state !== "pending")
         throw new RunnerError("not_allowed", "This decision was already made.");
+      if (approval.runId && run(approval.runId).state !== "waiting_approval")
+        throw new RunnerError("not_allowed", "This run is no longer waiting for approval.");
       const resolved =
         applyToSimilar && approval.similarGroup
           ? state.approvals.filter((a) => a.state === "pending" && a.similarGroup === approval.similarGroup)
@@ -368,6 +394,7 @@ export function createFixtureRunnerClient(
         if (a.kind === "flow_sign_off" && decision !== "reject") {
           const f = flow(a.flowId);
           f.signOff = { state: "approved", version: f.manifest.version };
+          baselines.set(f.manifest.id, structuredClone(f.manifest));
         }
       }
       for (const a of resolved) {
@@ -376,6 +403,13 @@ export function createFixtureRunnerClient(
         const step = r.steps.find((s) => s.stepId === a.stepId);
         if (decision === "reject") {
           r.state = "failed";
+          r.endedAt = at;
+          for (const other of state.approvals) {
+            if (other.runId === r.id && other.state === "pending") {
+              other.state = "expired";
+              other.resolvedAt = at;
+            }
+          }
           if (step) step.state = "failed";
         } else if (
           r.state === "waiting_approval" &&
@@ -455,6 +489,8 @@ export function createFixtureRunnerClient(
       const parsed = definition.input.safeParse(input);
       if (!parsed.success)
         throw new RunnerError("invalid_input", parsed.error.issues[0]?.message ?? "Invalid input.");
+      if (["flows.list", "flows.get", "runs.list", "runs.status", "runs.report"].includes(name))
+        expireApprovals();
       const handler = handlers[name] as (value: OperationInput<N>) => OperationOutput<N>;
       const output = definition.output.parse(handler(parsed.data as OperationInput<N>)) as OperationOutput<N>;
       if (definition.writes.length)

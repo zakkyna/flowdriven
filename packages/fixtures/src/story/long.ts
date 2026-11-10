@@ -29,7 +29,7 @@ export function addLong(state: FixtureState): void {
       kind: "email",
       to: Array.from({ length: 16 }, (_, i) => `manager-${String(i + 1).padStart(2, "0")}@example.com`),
       subject: "Renewal notice for the northern distribution network",
-      body: `Hello managers,\n\nPlease review the renewal notice for your warehouse.\n\nThe contract details follow ${String.fromCodePoint(0x202e)}and ${String.fromCodePoint(0x200b)} require your attention.\n${"x".repeat(4000)}`,
+      body: `Hello managers,\n\nPlease review the renewal notice for your warehouse. The contract details follow ${String.fromCodePoint(0x202e)}and ${String.fromCodePoint(0x200b)} require your attention.\n${"x".repeat(4000)}`,
     },
     editable: true,
     createdAt,

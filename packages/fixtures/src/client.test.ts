@@ -217,7 +217,10 @@ describe("FixtureRunnerClient", () => {
   test("approving remaining decisions cannot restart a failed run", async () => {
     const c = createFixtureRunnerClient();
     await c.call("approvals.resolve", { approvalId: "ap-0013", decision: "reject" });
-    await c.call("approvals.resolve", { approvalId: "ap-0011", decision: "approve", applyToSimilar: true });
+    await fails(c.call("approvals.resolve", { approvalId: "ap-0011", decision: "approve" }), "not_allowed");
+    expect((await c.call("approvals.list", { state: "pending" })).some((a) => a.id === "ap-0012")).toBe(
+      false,
+    );
     expect((await c.call("runs.status", { runId: "run-0007" })).state).toBe("failed");
   });
   test("equal timestamps put newer runs and approvals first", async () => {
@@ -317,4 +320,42 @@ describe("FixtureRunnerClient", () => {
       )?.id,
     ).toBe("ap-0015");
   });
+});
+
+test("refreshed sign-off patches show readable version and step changes", async () => {
+  for (const flowId of [FIGMA, "dev.example.lead-follow-up"]) {
+    const c = createFixtureRunnerClient();
+    const updated = await c.call("flows.update", { flowId, edit: { kind: "add", title: "Review changes" } });
+    const a = (await c.call("approvals.list", { state: "pending" })).find((item) => item.flowId === flowId);
+    if (a?.payload.kind !== "diff") throw new Error("Missing diff");
+    const lines = a.payload.files[0]?.patch.split("\n") ?? [];
+    expect(a.summary).toContain(`version ${updated.manifest.version}`);
+    expect(lines).toContain(`+version: ${updated.manifest.version}`);
+    expect(lines.some((line) => line.includes("Review changes"))).toBe(true);
+    expect(lines.every((line) => line.length <= 200 && !line.includes('{"'))).toBe(true);
+    if (flowId.endsWith("lead-follow-up")) expect(lines).not.toContain("+version: 1.3.0");
+  }
+});
+test("every run and flow read applies expiry before returning", async () => {
+  for (const name of ["runs.list", "runs.status", "flows.list", "flows.get"] as const) {
+    const c = createFixtureRunnerClient({ now: () => new Date("2026-11-11T20:00:00Z") });
+    if (name === "runs.list") await c.call(name, {});
+    else if (name === "runs.status") await c.call(name, { runId: "run-0004" });
+    else if (name === "flows.list") await c.call(name, {});
+    else await c.call(name, { flowId: "dev.example.social-posts" });
+    const run = c.state.runs.find((r) => r.id === "run-0004");
+    expect(run?.state).toBe("failed");
+    expect(run?.endedAt).toBe(c.state.approvals.find((a) => a.id === "ap-0014")?.expiresAt);
+  }
+});
+test("pending approval of a run that is no longer waiting is refused", async () => {
+  const c = createFixtureRunnerClient();
+  const r = c.state.runs.find((run) => run.id === "run-0007");
+  if (!r) throw new Error("Missing run");
+  r.state = "failed";
+  await fails(
+    c.call("approvals.resolve", { approvalId: "ap-0011", decision: "approve" }),
+    "not_allowed",
+    "This run is no longer waiting for approval.",
+  );
 });

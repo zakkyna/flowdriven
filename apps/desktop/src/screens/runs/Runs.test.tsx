@@ -171,3 +171,9 @@ test("links a waiting run's approvals to the inbox", async () => {
   expect(links.length).toBeGreaterThan(0);
   expect(links.every((link) => link.getAttribute("href")?.startsWith("#/inbox/"))).toBe(true);
 });
+
+test("unstarted and skipped steps show no worker", async () => {
+  renderApp("#/runs/run-0006");
+  const step = await screen.findByRole("region", { name: "Compare with the design" });
+  expect(step.textContent).not.toContain("Worker:");
+});

@@ -146,7 +146,7 @@ test("sample runs have evidence, workers, complete timing and relevant artifacts
   for (const run of story.runs) {
     if (run.state === "done" || run.state === "failed") expect(run.endedAt).toBeTruthy();
     for (const step of run.steps) {
-      if (step.do === "worker") expect(step.worker?.name).toBeTruthy();
+      if (step.do === "worker" && step.attempts.length) expect(step.worker?.name).toBeTruthy();
       for (const attempt of step.attempts) {
         expect(attempt.number).toBeGreaterThan(0);
         expect(attempt.endedAt).not.toBe(attempt.startedAt);
@@ -163,4 +163,24 @@ test("sample runs have evidence, workers, complete timing and relevant artifacts
   );
   const once = story.runs.find((run) => run.id === "run-0002");
   expect(once?.steps[0]?.checks[0]?.summary).toMatch(/screenshot/i);
+});
+
+test("detection-only harnesses have unknown login", () => {
+  expect(story.harnesses.find((h) => h.id === "opencode")?.login).toBe("unknown");
+});
+test("hidden characters belong to the second paragraph", () => {
+  const approval = buildLong().approvals.find((a) => a.id === "ap-0016");
+  if (approval?.payload.kind !== "email") throw new Error("Missing email");
+  const paragraphs = approval.payload.body.split("\n\n");
+  for (const cp of [0x202e, 0x200b]) expect(paragraphs[1]).toContain(String.fromCodePoint(cp));
+});
+test("unstarted and skipped steps do not have workers", () => {
+  for (const [id, stepId] of [
+    ["run-0006", "visual-review"],
+    ["run-0004", "make-media"],
+  ]) {
+    const step = story.runs.find((r) => r.id === id)?.steps.find((s) => s.stepId === stepId);
+    expect(step?.attempts).toHaveLength(0);
+    expect(step?.worker).toBeUndefined();
+  }
 });
