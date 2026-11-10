@@ -31,6 +31,15 @@ a {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+[data-spin="true"] {
+  animation: fd-spin 1.1s linear infinite;
+  transform-origin: 50% 50%;
+}
+@keyframes fd-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -528,7 +528,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
   - In `StatusBadge.tsx`: `ToneIcon({ icon: IconName; tone: Tone; size?: number }): ReactElement` (a span that colours the icon; spins when `icon === "ring"`), `StateIcon({ domain: StatusDomain; value: string; size?: number }): ReactElement` (the icon of `statusOf(domain, value)`), `StatusBadge({ domain, value })` (icon plus word, no pill) and `Badge({ tone, icon?, children })` (a tag). Signatures of `StatusBadge` and `Badge` are unchanged.
   - `base.css` gains `[data-spin="true"] { animation: fd-spin 1.1s linear infinite; transform-origin: 50% 50%; }` and `@keyframes fd-spin { to { transform: rotate(360deg); } }`.
 
-- [ ] **Step 1: Write the failing tests** (add to `status.test.tsx`, merging the imports with the existing ones; also change `tone: "accent"` to `tone: "wait"` in `uses the agreed words`)
+- [x] **Step 1: Write the failing tests** (add to `status.test.tsx`, merging the imports with the existing ones; also change `tone: "accent"` to `tone: "wait"` in `uses the agreed words`)
 
 ```tsx
 import { readFileSync } from "node:fs";
@@ -581,33 +581,33 @@ test("the spin rule exists once and the reduced-motion rule still removes it", (
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/ui/status.test.tsx`
 Expected: FAIL (`ToneIcon` is not exported; `expected "accent" to be "wait"`)
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `icons.tsx`: replace `paths` with the table of "UI design: Icons" and rewrite `Icon` as described there (default size 16, `viewBox="0 0 16 16"`, `strokeWidth={1.5}`, `spin` sets `data-spin="true"`, `dash` sets `strokeDasharray="2.2 2.4"` on the path). `status.ts`: rename the tone. `StatusBadge.tsx` and its CSS module: `ToneIcon` wraps `Icon` in a span whose colour is the tone colour (`ok` `--ok`, `bad` `--bad`, `info` `--info`, `wait` `--wait`, `neutral` `--text-muted`) and passes `spin={icon === "ring"}`; `StatusBadge` renders the `ToneIcon` and the label in a span (13px, 500, `--text`; `--text-muted` when the tone is `neutral` and the value is one of `pending`, `skipped`, `queued`, `none`); `Badge` renders the tag of "UI design: Shared parts". `base.css`: add the spin rule.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src/ui`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/ui apps/desktop/src/styles/base.css
 git commit -m "Redraw the icons and turn status badges into plain state marks" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

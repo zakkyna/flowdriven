@@ -9,7 +9,7 @@ import type {
   StepRunState,
 } from "@flowdriven/contracts";
 import type { IconName } from "./icons";
-export type Tone = "ok" | "bad" | "info" | "neutral" | "accent";
+export type Tone = "ok" | "bad" | "info" | "neutral" | "wait";
 export type StatusDomain =
   | "run"
   | "step"
@@ -40,7 +40,7 @@ export const statuses = {
     checking: { icon: "ring", label: "Checking readiness", tone: "info" },
     blocked: { icon: "stop", label: "Blocked", tone: "bad" },
     running: { icon: "ring", label: "Running", tone: "info" },
-    waiting_approval: { icon: "hand", label: "Waiting for you", tone: "accent" },
+    waiting_approval: { icon: "hand", label: "Waiting for you", tone: "wait" },
     retrying: { icon: "retry", label: "Retrying", tone: "info" },
     interrupted: { icon: "pause", label: "Interrupted", tone: "neutral" },
     done: { icon: "check", label: "Done", tone: "ok" },
@@ -50,7 +50,7 @@ export const statuses = {
     pending: { icon: "dash", label: "Not started", tone: "neutral" },
     running: { icon: "ring", label: "Running", tone: "info" },
     retrying: { icon: "retry", label: "Retrying", tone: "info" },
-    waiting_approval: { icon: "hand", label: "Waiting for you", tone: "accent" },
+    waiting_approval: { icon: "hand", label: "Waiting for you", tone: "wait" },
     passed: { icon: "check", label: "Passed", tone: "ok" },
     failed: { icon: "cross", label: "Failed", tone: "bad" },
     skipped: { icon: "dash", label: "Skipped", tone: "neutral" },
@@ -64,23 +64,23 @@ export const statuses = {
   requirement: {
     ok: { icon: "check", label: "OK", tone: "ok" },
     missing: { icon: "circle-slash", label: "Missing", tone: "bad" },
-    needs_login: { icon: "key", label: "Needs login", tone: "accent" },
+    needs_login: { icon: "key", label: "Needs login", tone: "wait" },
     failed: { icon: "alert", label: "Failed", tone: "bad" },
   },
   approval: {
-    pending: { icon: "hand", label: "Waiting for you", tone: "accent" },
+    pending: { icon: "hand", label: "Waiting for you", tone: "wait" },
     approved: { icon: "check", label: "Approved", tone: "ok" },
     rejected: { icon: "cross", label: "Rejected", tone: "bad" },
     expired: { icon: "clock", label: "Expired", tone: "neutral" },
   },
   signOff: {
     approved: { icon: "check", label: "Approved", tone: "ok" },
-    stale: { icon: "alert", label: "Changed since approval", tone: "accent" },
+    stale: { icon: "alert", label: "Changed since approval", tone: "wait" },
     none: { icon: "dash", label: "Not approved yet", tone: "neutral" },
   },
   connection: {
     connected: { icon: "check", label: "Connected", tone: "ok" },
-    needs_login: { icon: "key", label: "Needs login", tone: "accent" },
+    needs_login: { icon: "key", label: "Needs login", tone: "wait" },
     failed: { icon: "alert", label: "Failed", tone: "bad" },
   },
   risk: {
