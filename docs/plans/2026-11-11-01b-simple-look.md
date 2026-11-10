@@ -735,7 +735,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.row`, `.result` and the attribute selector `[data-verdict="pending"]` in `CheckList.module.css`.
 
-- [ ] **Step 1: Write the failing tests** (add to `CheckList.test.tsx`; the six existing tests, including `whitespace-only evidence has no evidence block`, stay unchanged; add `import { readFileSync } from "node:fs";` at the top of the file)
+- [x] **Step 1: Write the failing tests** (add to `CheckList.test.tsx`; the six existing tests, including `whitespace-only evidence has no evidence block`, stay unchanged; add `import { readFileSync } from "node:fs";` at the top of the file)
 
 ```tsx
 
@@ -775,31 +775,31 @@ test("check line styles: three columns, word right-aligned to the first line, pe
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/ui/CheckList.test.tsx`
 Expected: FAIL (`TypeError: Cannot read properties of null (reading 'getAttribute')` in the first new test: there is no `[data-verdict]` row yet; the CSS test fails on its first `toMatch`)
 
-- [ ] **Step 3: Implement** the structure in Interfaces and the "Check line" rule of "UI design: Shared parts". Keep the type word, "(optional)", the evidence block (12 lines then a button), the "No evidence recorded" line and the `rawEvidence?.trim()` rule that treats whitespace-only evidence as none (commit 26b70b7).
+- [x] **Step 3: Implement** the structure in Interfaces and the "Check line" rule of "UI design: Shared parts". Keep the type word, "(optional)", the evidence block (12 lines then a button), the "No evidence recorded" line and the `rawEvidence?.trim()` rule that treats whitespace-only evidence as none (commit 26b70b7).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS (the Builder and Runs tests that look at check words still pass: "Passed" and "Failed" are unchanged)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/ui
 git commit -m "Show checks as lines with an icon and a result column" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
