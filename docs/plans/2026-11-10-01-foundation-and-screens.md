@@ -3369,7 +3369,7 @@ export function createMainWindow(options: { preloadPath: string; show: boolean; 
 
 `tsconfig.electron.json`: extends `../../tsconfig.base.json`; `module: "nodenext"`, `moduleResolution: "nodenext"`, `verbatimModuleSyntax: false` (CommonJS output), `noEmit: false`, `outDir: "dist-electron"`, `rootDir: "electron"`, `types: ["node"]`, `lib: ["ES2023", "DOM"]`; `include: ["electron/**/*.ts", "electron/screens.json"]`. The test file is included so it is typechecked; its emitted copy in `dist-electron/` is never run. Root scripts: `typecheck` gains `&& tsc -p apps/desktop/tsconfig.electron.json --noEmit`; `"build:electron": "tsc -p apps/desktop/tsconfig.electron.json"`; `"build": "pnpm build:web && pnpm build:electron"`; `"start": "pnpm build && pnpm --filter @flowdriven/desktop exec electron ."`; `"capture": "pnpm build && TZ=UTC pnpm --filter @flowdriven/desktop exec electron dist-electron/capture.js"` (UTC, so the screenshots show the times the plan quotes).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // apps/desktop/electron/security.test.ts
@@ -3444,26 +3444,26 @@ test("long text wraps instead of pushing the layout sideways", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/electron apps/desktop/src/screens.test.ts apps/desktop/src/layout-guards.test.ts`
 Expected: FAIL with `Failed to resolve import "./security"`
 
-- [ ] **Step 3: Implement `security.ts`, `window.ts`, `main.ts`, `preload.ts`, `capture.ts`, `screens.json`, `tsconfig.electron.json` and the scripts above**
+- [x] **Step 3: Implement `security.ts`, `window.ts`, `main.ts`, `preload.ts`, `capture.ts`, `screens.json`, `tsconfig.electron.json` and the scripts above**
 
 `resolveAppPath` must not use `new URL` for the path: the URL parser already resolves `%2e%2e` dot segments, so `app://flowdriven/%2e%2e/%2e%2e/etc/passwd` would become `/etc/passwd` before any check. Instead: require the string to start with `app://flowdriven` and the remainder to be empty or start with `/`, `?` or `#` (else null); cut the remainder at the first `?` or `#`; an empty path means `/`, and `/` means `/index.html`; call `decodeURIComponent` once (a malformed escape gives null); then `path.resolve(distDir, "." + decoded)`, and return null unless the result starts with `distDir + path.sep`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/electron apps/desktop/src/screens.test.ts apps/desktop/src/layout-guards.test.ts`
 Expected: PASS (6 tests)
 
-- [ ] **Step 5: Build headless**
+- [x] **Step 5: Build headless**
 
 Run: `pnpm build && ls apps/desktop/dist-electron`
 Expected: build succeeds; the listing shows `capture.js`, `main.js`, `preload.js`, `screens.json`, `security.js`, `security.test.js`, `window.js`
 
-- [ ] **Step 6: Run the gate**
+- [x] **Step 6: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS; last line starts with `dependency-gate: OK`
@@ -3476,7 +3476,7 @@ Run: `pnpm start`. Expected: one window titled "FlowDriven" on the Builder; it c
 
 Run: `pnpm capture`. Expected: `captured 16 screens to .workflow/scratch/screens`; 16 non-empty PNGs (`builder-light.png` ... `inbox-long-dark.png`). If a PNG is empty, re-run with `FLOWDRIVEN_CAPTURE_SHOW=1 pnpm capture`. Send the PNGs to the owner for design corrections.
 
-- [ ] **Step 9: Chair step (commit)**
+- [x] **Step 9: Chair step (commit)**
 
 ```bash
 git add apps/desktop/electron apps/desktop/tsconfig.electron.json apps/desktop/src/screens.test.ts apps/desktop/src/layout-guards.test.ts package.json
@@ -3484,3 +3484,5 @@ git commit -m "Add the Electron shell with secure defaults and the screenshot sc
 ```
 
 Add any module CSS file the guard made the executor edit to the `git add` line.
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.

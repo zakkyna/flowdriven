@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "verbatimModuleSyntax": false,
+    "noEmit": false,
+    "outDir": "dist-electron",
+    "rootDir": "electron",
+    "types": ["node"],
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["electron/**/*.ts", "electron/screens.json"]
+}

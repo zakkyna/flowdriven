@@ -14,11 +14,15 @@
     "check:deps": "node tools/checks/dependency-gate.mjs",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "typecheck": "tsc -p packages/contracts && tsc -p packages/fixtures && tsc -p apps/desktop",
+    "typecheck": "tsc -p packages/contracts && tsc -p packages/fixtures && tsc -p apps/desktop && tsc -p apps/desktop/tsconfig.electron.json --noEmit",
     "test": "TZ=UTC vitest run && pnpm test:tools",
     "build:web": "vite build --config apps/desktop/vite.config.mts",
     "dev:web": "vite --config apps/desktop/vite.config.mts",
-    "preview:web": "vite preview --config apps/desktop/vite.config.mts"
+    "preview:web": "vite preview --config apps/desktop/vite.config.mts",
+    "build:electron": "tsc -p apps/desktop/tsconfig.electron.json",
+    "build": "pnpm build:web && pnpm build:electron",
+    "start": "pnpm build && pnpm --filter @flowdriven/desktop exec electron .",
+    "capture": "pnpm build && TZ=UTC pnpm --filter @flowdriven/desktop exec electron dist-electron/capture.js"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

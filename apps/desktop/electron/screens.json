@@ -1,0 +1,10 @@
+[
+  { "name": "builder", "hash": "/builder/dev.example.figma-to-flutter" },
+  { "name": "inbox", "hash": "/inbox/ap-0011" },
+  { "name": "runs", "hash": "/runs" },
+  { "name": "run-detail", "hash": "/runs/run-0006" },
+  { "name": "readiness", "hash": "/readiness/dev.example.social-posts" },
+  { "name": "harnesses", "hash": "/harnesses" },
+  { "name": "settings", "hash": "/settings" },
+  { "name": "inbox-long", "hash": "/inbox/ap-0016", "scenario": "long" }
+]
