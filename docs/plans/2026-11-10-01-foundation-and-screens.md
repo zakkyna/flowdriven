@@ -2703,7 +2703,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 - Consumes: `useRunnerQuery("approvals.list")`, `useRunnerAction()` with `approvals.resolve`; `useRoute`, `AppLink`, `NotFoundPage`; Task 7 parts.
 - Produces: `InboxScreen(props: { approvalId?: string }): ReactElement`. Layout, regions and copy: "UI design: Inbox". `reveal.ts`: `export function splitHidden(text: string): { text: string; hidden: boolean }[]`; hidden segments are single characters in the four classes of the Task 2 table, and `PayloadView` renders each as `<mark>&lt;U+202E&gt;</mark>` (code point in upper-case hex, at least 4 digits) and all other text as plain text nodes.
 
-- [ ] **Step 1: Write the failing tests** `Inbox.test.tsx`
+- [x] **Step 1: Write the failing tests** `Inbox.test.tsx`
 
 ```tsx
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -2803,35 +2803,37 @@ describe("Inbox", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/inbox`
 Expected: FAIL (`Unable to find role="tab"`)
 
-- [ ] **Step 3: Implement the Inbox screen per "UI design: Inbox"**
+- [x] **Step 3: Implement the Inbox screen per "UI design: Inbox"**
 
 Ready, loading and error states follow "UI design: Shared parts".
 
 The decision list is a `ul` with `aria-label="Decisions"`. The screen queries `approvals.list` once, without a state filter, and splits the tabs itself; an id found in no tab shows a `NotFoundPage`; every in-app link (the run link included) is an `AppLink`. A ref flag set synchronously on the first click (and the disabled state) stops a second `approvals.resolve` while one is in flight. `Inbox.module.css` sets `overflow-wrap: anywhere` on boxes with user text and `min-width: 0` (exactly, not `0px`) on grid and flex children; Task 14's `layout-guards.test.ts` checks both.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src/screens/inbox`
 Expected: PASS (11 tests)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: preview `#/inbox/ap-0011`, `#/inbox/ap-0015` and `http://127.0.0.1:4173/?scenario=long#/inbox/ap-0016` (the query goes before the hash), light and dark; show the owner.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/inbox
 git commit -m "Build the approval inbox with full payloads" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 
