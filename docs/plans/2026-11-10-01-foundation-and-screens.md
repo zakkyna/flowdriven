@@ -1953,7 +1953,7 @@ Client behaviour (every call parses its input with the operation's input schema,
 | `settings.get` | The settings. |
 | `settings.update` | Merges the patch. `invalid_input` "Unknown brain <id>." for an id not in `backends`; `subscriptionOrder` may hold only `harness` backends and `apiKeyOrder` only `api_key` backends (`invalid_input` "<name> can't be in this list."); `main` must be an available backend whose consent is `not_needed` or `given` (`not_allowed` "<name> can't be the brain yet."). |
 
-- [ ] **Step 1: Write the failing client test** `packages/fixtures/src/client.test.ts`
+- [x] **Step 1: Write the failing client test** `packages/fixtures/src/client.test.ts`
 
 ```ts
 import { describe, expect, test, vi } from "vitest";
@@ -2060,29 +2060,31 @@ describe("FixtureRunnerClient", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm vitest run packages/fixtures/src/client.test.ts`
 Expected: FAIL with a missing export (`createFixtureRunnerClient`)
 
-- [ ] **Step 3: Write `client.ts` with the behaviour table; export the Interfaces from `index.ts`**
+- [x] **Step 3: Write `client.ts` with the behaviour table; export the Interfaces from `index.ts`**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run packages/fixtures`
 Expected: PASS (21 tests: 9 story, 12 client)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/fixtures
 git commit -m "Add FixtureRunnerClient" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 
