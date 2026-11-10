@@ -7,6 +7,7 @@ export function Page({
   description,
   actions,
   before,
+  size = "medium",
   children,
 }: {
   screen: string;
@@ -15,6 +16,7 @@ export function Page({
   description?: string;
   actions?: ReactNode;
   before?: ReactNode;
+  size?: "narrow" | "medium" | "wide";
   children?: ReactNode;
 }): ReactElement {
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -24,17 +26,19 @@ export function Page({
   }, [title]);
   return (
     <section className={styles.page} data-screen={screen} data-screen-ready={String(ready)}>
-      {before}
-      <header className={styles.header}>
-        <div className={styles.heading}>
-          <h1 ref={headingRef} tabIndex={-1}>
-            {title}
-          </h1>
-          {description && <p>{description}</p>}
-        </div>
+      <header className={styles.bar}>
+        {before}
+        <h1 ref={headingRef} tabIndex={-1}>
+          {title}
+        </h1>
         {actions}
       </header>
-      {children}
+      <div className={styles.body} data-scroll="top">
+        <div className={styles.column} data-size={size}>
+          {description && <p className={styles.description}>{description}</p>}
+          {children}
+        </div>
+      </div>
     </section>
   );
 }

@@ -1050,7 +1050,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.bar` and `.body` and the `[data-size]` selectors in `Page.module.css`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `Page.test.tsx`:
 
@@ -1136,31 +1136,31 @@ The `Page` body persists while the Inbox selection changes, so `zone` is the sam
 
 In `tokens.test.ts` add `["wide-width", "960px"]` to the `px` list of `the size tokens have the approved values`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/ui/Page.test.tsx apps/desktop/src/review-b.test.ts apps/desktop/src/App.test.tsx apps/desktop/src/styles`
 Expected: FAIL (`expected null to be 'medium'`; `Missing inbox scroller`)
 
-- [ ] **Step 3: Implement** `Page` and its CSS per "UI design: Page bar", and the `App` effect change of Interfaces. The `h1` focus and `document.title` effect of `Page` stay as they are. Add `--wide-width` to `tokens.css`. `InboxScreen` and `RunsScreen` get `size="wide"`; nothing else changes in them in this task.
+- [x] **Step 3: Implement** `Page` and its CSS per "UI design: Page bar", and the `App` effect change of Interfaces. The `h1` focus and `document.title` effect of `Page` stay as they are. Add `--wide-width` to `tokens.css`. `InboxScreen` and `RunsScreen` get `size="wide"`; nothing else changes in them in this task.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src
 git commit -m "Give single-column screens a 52 px bar and a reading column, and reset each scrolling zone" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

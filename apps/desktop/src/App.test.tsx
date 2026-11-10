@@ -121,18 +121,21 @@ test("route changes reset scroll, title and focus", async () => {
   renderApp("#/inbox");
   await screen.findByText("Decisions waiting for you. Nothing risky happens until you approve it.");
   const page = document.querySelector<HTMLElement>('section[data-screen="inbox"]');
-  expect(page).toBeTruthy();
   if (!page) throw new Error("Missing inbox page");
-  page.scrollTop = 200;
+  const zone = page.querySelector<HTMLElement>('[data-scroll="top"]');
+  if (!zone) throw new Error("Missing inbox scroller");
+  zone.scrollTop = 200;
   const item = within(page).getAllByRole("button", { name: /expires/i })[1];
   if (!item) throw new Error("Missing inbox item");
   fireEvent.click(item);
-  await waitFor(() => expect(page.scrollTop).toBe(0));
+  await waitFor(() => expect(zone.scrollTop).toBe(0));
   fireEvent.click(screen.getByRole("link", { name: "Settings" }));
   await screen.findByRole("heading", { level: 1, name: "Settings" });
   await waitFor(() => {
     const heading = screen.getByRole("heading", { level: 1, name: "Settings" });
-    expect(document.querySelector<HTMLElement>('section[data-screen="settings"]')?.scrollTop).toBe(0);
+    expect(
+      document.querySelector<HTMLElement>('section[data-screen="settings"] [data-scroll="top"]')?.scrollTop,
+    ).toBe(0);
     expect(document.title).toBe("Settings - FlowDriven");
     expect(document.activeElement).toBe(heading);
     expect(heading.getAttribute("tabindex")).toBe("-1");

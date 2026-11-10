@@ -23,7 +23,7 @@ test("theme, controls, links and reduced motion use the design rules", () => {
 });
 test("frame and screens own their scroll regions", () => {
   expect(read("./App.module.css")).toMatch(/\.main\s*\{[^}]*overflow:\s*hidden;/);
-  expect(read("./ui/Page.module.css")).toMatch(/overflow:\s*auto;[\s\S]*padding:\s*28px 32px 48px/);
+  expect(read("./ui/Page.module.css")).toMatch(/overflow-y:\s*auto;[\s\S]*padding:\s*24px 32px 32px/);
   expect(read("./screens/builder/Builder.module.css")).not.toMatch(/margin:\s*-28px/);
 });
 test("capture waits for loading to disappear and config uses explicit extension", () => {

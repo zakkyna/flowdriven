@@ -125,7 +125,7 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
     setBusy(false);
   };
   return (
-    <Page screen="inbox" ready title="Inbox" description={description}>
+    <Page screen="inbox" ready size="wide" title="Inbox" description={description}>
       <div className={styles.layout}>
         <div>
           <div role="tablist" aria-label="Decisions" className={styles.tabs}>

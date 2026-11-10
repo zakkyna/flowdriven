@@ -47,8 +47,7 @@ export function App(): ReactElement {
   useLayoutEffect(() => {
     const main = mainRef.current;
     if (!main) return;
-    const page = main.querySelector<HTMLElement>("section[data-screen]");
-    if (page) page.scrollTop = 0;
+    for (const zone of main.querySelectorAll<HTMLElement>('[data-scroll="top"]')) zone.scrollTop = 0;
     const heading = main.querySelector("h1");
     if (heading) {
       document.title = `${heading.textContent} - FlowDriven`;

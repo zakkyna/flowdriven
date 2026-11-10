@@ -58,7 +58,7 @@ export function RunsScreen(): ReactElement {
       (!state || run.state === state),
   );
   return (
-    <Page screen="runs" ready title="Runs" description={description}>
+    <Page screen="runs" ready size="wide" title="Runs" description={description}>
       <div className={styles.filters}>
         <label>
           Flow

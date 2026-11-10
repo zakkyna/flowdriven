@@ -58,6 +58,7 @@ test("the size tokens have the approved values", () => {
     ["reading-width", "720px"],
     ["dock-width", "768px"],
     ["decision-width", "640px"],
+    ["wide-width", "960px"],
     ["text-read", "14.5px"],
     ["text-title", "15px"],
     ["text-xl", "18px"],
