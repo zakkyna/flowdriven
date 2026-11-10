@@ -60,20 +60,17 @@ function getFileInfo(path) {
 
 function addNameFindings(path, lines) {
   const display = showText(path);
+  const kinds = new Set();
   for (const char of path) {
     const point = char.codePointAt(0);
-    if (HIDDEN_RANGES.some((range) => point >= range.from && point <= range.to)) {
-      lines.push(`${display}: hidden character in file name`);
-      break;
-    }
+    const cls = point < 0x20 || point === 0x7f ? "control" : charClass(point);
+    if (!cls) continue;
+    if (cls === "control") kinds.add("control character");
+    else if (cls === "format" || HIDDEN_RANGES.some((range) => range.cls === cls))
+      kinds.add("hidden character");
+    else kinds.add("character not allowed");
   }
-  for (const char of path) {
-    const point = char.codePointAt(0);
-    if (point < 0x20 || point === 0x7f) {
-      lines.push(`${display}: control character in file name`);
-      break;
-    }
-  }
+  for (const kind of kinds) lines.push(`${display}: ${kind} in file name`);
 }
 
 function scanFile(path, fullPath, info, lines) {

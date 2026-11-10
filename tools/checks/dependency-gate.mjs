@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -237,6 +238,11 @@ function isValidEntry(entry) {
 
 export function checkAllowlist(allowlist) {
   const errors = [];
+  if (
+    allowlist?.lockfileSha256 !== undefined &&
+    (typeof allowlist.lockfileSha256 !== "string" || !/^[0-9a-f]{64}$/.test(allowlist.lockfileSha256))
+  )
+    errors.push("allowlist.json: invalid lockfileSha256");
   if (allowlist?.registry !== registry) errors.push(`allowlist.json: registry must be ${registry}`);
   const entries = Array.isArray(allowlist?.packages) ? allowlist.packages : [];
   const names = new Set(entries.map((entry) => entry?.name));
@@ -476,7 +482,9 @@ export function run(root, argv) {
     const errors = checkAllowlist(allow.value);
     if (errors.length) return finish(errors.map(showText), [], "");
     const deleted = deletedPaths(root);
-    const entries = listRepoEntries(root).filter((entry) => !deleted.has(entry.path));
+    const entries = listRepoEntries(root).filter(
+      (entry) => entry.mode === "160000" || !deleted.has(entry.path),
+    );
     errors.push(...checkFiles(entries, allow.value));
     const paths = [];
     for (const entry of entries) {
@@ -520,6 +528,14 @@ export function run(root, argv) {
     );
     let lock = "lockfile checked";
     if (paths.includes("pnpm-lock.yaml")) {
+      if (allow.value.lockfileSha256 === undefined) errors.push("allowlist.json: lockfileSha256 is missing");
+      else {
+        const hash = createHash("sha256")
+          .update(readFileSync(join(root, "pnpm-lock.yaml")))
+          .digest("hex");
+        if (hash !== allow.value.lockfileSha256)
+          errors.push(`pnpm-lock.yaml: content does not match allowlist lockfileSha256 (found ${hash})`);
+      }
       checkTextFile(root, "pnpm-lock.yaml", (text) => checkLockfile(text, allow.value), errors, true);
     } else if (argv.includes("--manifests-only")) {
       lock = "lockfile skipped (--manifests-only)";

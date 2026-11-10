@@ -36,6 +36,7 @@ export function charClass(codePoint, next) {
     (codePoint >= 0x20 && codePoint <= 0x7e)
   )
     return null;
+  if (codePoint === 0xfffc) return "format";
   const char = String.fromCodePoint(codePoint);
   const hidden = HIDDEN_RANGES.find((range) => codePoint >= range.from && codePoint <= range.to);
   if (hidden) return hidden.cls;

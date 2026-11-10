@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -68,6 +69,22 @@ test("a hidden character in a file name fails and is shown", () => {
     const result = run(root, []);
     assert.equal(result.code, 1);
     assert.ok(result.lines.includes("cl<U+202E>ean.md: hidden character in file name"));
+  });
+});
+
+test("a C1 control in a file name is refused", () => {
+  withRepo({ [`a${cp(0x9b)}b.md`]: "ok" }, (root) => {
+    const result = run(root, []);
+    assert.equal(result.code, 1);
+    assert.ok(result.lines.includes("a<U+009B>b.md: control character in file name"));
+  });
+});
+
+test("a no-break space in a file name is refused", () => {
+  withRepo({ [`a${cp(0xa0)}b.md`]: "ok" }, (root) => {
+    const result = run(root, []);
+    assert.equal(result.code, 1);
+    assert.ok(result.lines.includes("a<U+00A0>b.md: character not allowed in file name"));
   });
 });
 
@@ -270,6 +287,12 @@ function baseRepo(extra, check) {
     "tools/checks/test/repo-files.test.mjs": "",
     ...extra,
   };
+  if (files["pnpm-lock.yaml"] && !("tools/checks/allowlist.json" in extra)) {
+    files["tools/checks/allowlist.json"] = JSON.stringify({
+      ...allowlist,
+      lockfileSha256: createHash("sha256").update(files["pnpm-lock.yaml"]).digest("hex"),
+    });
+  }
   for (const [path, value] of Object.entries(files)) {
     if (value === null) delete files[path];
   }
@@ -287,6 +310,45 @@ function rootWith(changes) {
 function desktop(changes = {}) {
   return JSON.stringify({ name: "@flowdriven/desktop", ...changes });
 }
+
+test("a submodule link is refused by the gate even when its folder is absent", () => {
+  baseRepo({}, (root) => {
+    execFileSync(
+      "git",
+      ["update-index", "--add", "--cacheinfo", "160000,1111111111111111111111111111111111111111,apps/evil"],
+      { cwd: root },
+    );
+    assert.ok(runGate(root, ["--manifests-only"]).lines.includes("apps/evil: submodules are not allowed"));
+  });
+});
+
+test("the lockfile must match the pinned hash", () => {
+  const lock = "lockfileVersion: '9.0'\n";
+  const hash = createHash("sha256").update(lock).digest("hex");
+  const pinned = JSON.stringify({ ...allowlist, lockfileSha256: hash });
+  baseRepo({ "pnpm-lock.yaml": lock, "tools/checks/allowlist.json": pinned }, (root) => {
+    const good = runGate(root, []);
+    assert.equal(good.code, 0);
+    assert.ok(good.lines.at(-1).endsWith("lockfile checked"));
+    writeFileSync(join(root, "pnpm-lock.yaml"), `${lock}\n`);
+    const found = createHash("sha256").update(`${lock}\n`).digest("hex");
+    assert.ok(
+      runGate(root, []).lines.includes(
+        `pnpm-lock.yaml: content does not match allowlist lockfileSha256 (found ${found})`,
+      ),
+    );
+    const { lockfileSha256: _hash, ...unpinned } = allowlist;
+    writeFileSync(join(root, "tools/checks/allowlist.json"), JSON.stringify(unpinned));
+    assert.ok(runGate(root, []).lines.includes("allowlist.json: lockfileSha256 is missing"));
+    for (const invalid of ["ABC", "A".repeat(64), 42]) {
+      writeFileSync(
+        join(root, "tools/checks/allowlist.json"),
+        JSON.stringify({ ...allowlist, lockfileSha256: invalid }),
+      );
+      assert.ok(runGate(root, []).lines.includes("allowlist.json: invalid lockfileSha256"));
+    }
+  });
+});
 
 test("the base repository passes", () => {
   gate({}, (r) => {

@@ -79,7 +79,7 @@ test("every range edge is flagged with its class", () => {
 test("neighbours of the ranges are not flagged", () => {
   const points = [
     0x0020, 0x000a, 0x00ac, 0x00ae, 0x034e, 0x0350, 0x061b, 0x061d, 0x115e, 0x1161, 0x17b3, 0x17b6, 0x180a,
-    0x1810, 0x2010, 0x2027, 0x2070, 0x27ff, 0x2801, 0x3163, 0x3165, 0xfdff, 0xfe10, 0xff9f, 0xffa1, 0xfffc,
+    0x1810, 0x2010, 0x2027, 0x2070, 0x27ff, 0x2801, 0x3163, 0x3165, 0xfdff, 0xfe10, 0xff9f, 0xffa1,
   ];
   for (const point of points) {
     assert.deepEqual(scanText(`a${String.fromCodePoint(point)}b`, "x"), []);
@@ -112,7 +112,7 @@ test("charClass refuses by class", () => {
     space: [0xa0, 0x3000],
     "private-use": [0xe000],
     unassigned: [0x0378],
-    format: [0x0600, 0x1bca0, 0x1d173, 0xfff8, 0xe0080],
+    format: [0xfffc, 0x0600, 0x1bca0, 0x1d173, 0xfff8, 0xe0080],
     "zero-width": [0x200b],
     "bidi-control": [0x202e],
     "variation-selector": [0xfe0f],
@@ -133,6 +133,7 @@ test("the whole code space follows the rule", () => {
     const range = HIDDEN_RANGES.find((item) => point >= item.from && point <= item.to);
     const allowed =
       !range &&
+      point !== 0xfffc &&
       (point === 0x09 ||
         point === 0x0a ||
         (point >= 0x20 && point <= 0x7e) ||

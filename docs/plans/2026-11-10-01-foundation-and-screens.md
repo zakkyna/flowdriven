@@ -1108,6 +1108,8 @@ A second independent review of Task 2b still passed both guards: through symboli
 
 The lifecycle-script, check-script and workspace-name rules of Task 2b are replaced by the exact `scripts` map, the key lists and the `workspaces` map; their Task 2b tests change to the messages above. From this task on, a task that changes the root scripts, the workspace folders or the package manager changes the matching allowlist key in the same task.
 
+Follow-up after the final re-test: file names are judged with `charClass`; a submodule link is refused even when its folder is absent; U+FFFC is refused; and the lockfile is pinned by `lockfileSha256` in the allowlist, so a change that touches `pnpm-lock.yaml` changes that key in the same change and needs the owner's yes.
+
 **Tests.** As in Task 2b: one test per row, hidden characters built with `cp(n)` at test time, repositories built with `makeRepo`. `baseRepo` now also writes the new allowlist shape, the pinned root manifest (`packageManager`, `engines`, the four scripts) and five empty guard test files. Task 2b tests that this task contradicts are changed to the new rule and named in the report; the table says which.
 
 `tools/checks/test/repo-files.test.mjs` (the `isBinaryPath` test is replaced):
@@ -2283,7 +2285,6 @@ git commit -m "Add design tokens, icons, status badges and shared parts" -m "Ass
 
 Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
-Blocked: Gate failed twice; TypeScript rejects Button ref and statusOf return type.
 
 ---
 
