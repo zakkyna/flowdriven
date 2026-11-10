@@ -1176,7 +1176,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.layout`, `.threadScroll`, `.thread`, `.dock`, `.bubble`, `.composer`, `.chip` and `.send` in `Builder.module.css`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `Builder.test.tsx`, add `import { readFileSync } from "node:fs";` at the top (the file does not import it today; `act`, `vi`, `waitFor`, `within` and `PREVIEW_AGENT_REPLY` are already imported). Change `findByRole("complementary", { name: "Chat" })` to `findByRole("region", { name: "Chat" })` in `chat shows the conversation and the preview reply`, `chat suggestions send as messages, and Cmd+Enter sends`, `chat guards submissions and preserves a draft when choosing a suggestion` and `chat scrolls to the newest message after an update`. In the last one, also replace `const box = message.parentElement?.parentElement;` with:
 
@@ -1255,31 +1255,31 @@ test("rail, pane and the smallest chat fit the minimum window", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/builder apps/desktop/src/styles`
 Expected: FAIL (`Unable to find role="region" and name "Chat"`; `Unable to find role="region" and name "Flow details"`; `--chat-width` still defined)
 
-- [ ] **Step 3: Implement** `ChatPanel`, the `BuilderScreen` shell and the CSS (`.layout`, `.chat`, `.bar`, `.threadScroll`, `.thread`, `.message`, `.user`, `.bubble`, `.agent`, `.questions`, `.chips`, `.chip`, `.dock`, `.composer`, `.composerRow`, `.send`, plus a visually hidden class for the author prefix), with the values of "UI design: Builder". `ChatPanel`'s scroll-to-newest effect keeps writing `scrollTop = scrollHeight` on the `data-scroll="bottom"` element. Keep every pane class still used by the old content; Task 9 removes them. Every box with user text keeps `overflow-wrap: anywhere` and every grid or flex child `min-width: 0`. The composer text area sets `outline: 0` and the composer carries the focus ring through `:focus-within`.
+- [x] **Step 3: Implement** `ChatPanel`, the `BuilderScreen` shell and the CSS (`.layout`, `.chat`, `.bar`, `.threadScroll`, `.thread`, `.message`, `.user`, `.bubble`, `.agent`, `.questions`, `.chips`, `.chip`, `.dock`, `.composer`, `.composerRow`, `.send`, plus a visually hidden class for the author prefix), with the values of "UI design: Builder". `ChatPanel`'s scroll-to-newest effect keeps writing `scrollTop = scrollHeight` on the `data-scroll="bottom"` element. Keep every pane class still used by the old content; Task 9 removes them. Every box with user text keeps `overflow-wrap: anywhere` and every grid or flex child `min-width: 0`. The composer text area sets `outline: 0` and the composer carries the focus ring through `:focus-within`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src
 git commit -m "Move the Builder chat to the centre and restyle the composer" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

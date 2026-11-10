@@ -107,7 +107,8 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
   };
   return (
     <section data-screen="builder" data-screen-ready="true" className={styles.layout}>
-      <div className={styles.main}>
+      <ChatPanel messages={detail?.conversation ?? emptyMessages} send={send} />
+      <section aria-label="Flow details" className={styles.main}>
         {detail ? (
           <>
             <div className={styles.toolbar}>
@@ -208,8 +209,7 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
             </div>
           </>
         )}
-      </div>
-      <ChatPanel messages={detail?.conversation ?? emptyMessages} send={send} />
+      </section>
       {deleted && (
         <Dialog
           title={`Delete “${deleted.title}”?`}

@@ -143,3 +143,12 @@ test("the body uses the UI font at 14px with a 1.5 line height", () => {
 test("the transitional tokens of Task 1 are gone once Button and Dialog stop using them", () => {
   expect(tokens).not.toMatch(/--accent-hover|--shadow-dialog|--text-l\b/);
 });
+
+test("rail, pane and the smallest chat fit the minimum window", () => {
+  const security = readFileSync("apps/desktop/electron/security.ts", "utf8");
+  const minimum = Number(/MIN_WINDOW = \{ width: (\d+)/.exec(security)?.[1]);
+  const px = (name: string) => Number(new RegExp(`--${name}:\\s*(\\d+)px`).exec(tokens)?.[1]);
+  expect(minimum).toBe(1100);
+  expect(px("rail-width") + px("pane-width") + 360).toBeLessThanOrEqual(minimum);
+  expect(tokens).not.toMatch(/--chat-width/);
+});

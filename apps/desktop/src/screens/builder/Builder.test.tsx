@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "@flowdriven/fixtures";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
@@ -101,7 +102,7 @@ describe("Builder", () => {
   });
   test("chat shows the conversation and the preview reply", async () => {
     renderApp(FIGMA);
-    const chat = await screen.findByRole("complementary", { name: "Chat" });
+    const chat = await screen.findByRole("region", { name: "Chat" });
     expect(
       await within(chat).findByText(
         "Turn the frames in our Figma file into Flutter screens and push a branch. Never merge.",
@@ -137,7 +138,7 @@ describe("Builder", () => {
   });
   test("chat suggestions send as messages, and Cmd+Enter sends", async () => {
     renderApp(FIGMA);
-    const chat = await screen.findByRole("complementary", { name: "Chat" });
+    const chat = await screen.findByRole("region", { name: "Chat" });
     fireEvent.click(await within(chat).findByRole("button", { name: "Use the last folder" }));
     await waitFor(() => expect(within(chat).getAllByText(PREVIEW_AGENT_REPLY)).toHaveLength(1));
     fireEvent.change(within(chat).getByLabelText("Message"), { target: { value: "Also notify the team" } });
@@ -246,7 +247,7 @@ test("guards run and step edits while pending", async () => {
 
 test("chat guards submissions and preserves a draft when choosing a suggestion", async () => {
   const { client } = renderApp(FIGMA);
-  const chat = await screen.findByRole("complementary", { name: "Chat" });
+  const chat = await screen.findByRole("region", { name: "Chat" });
   const suggestion = await within(chat).findByRole("button", { name: "Use the last folder" });
   const original = client.call.bind(client);
   let release: (() => void) | undefined;
@@ -340,11 +341,12 @@ test("step boundaries, undo and duplicate", async () => {
 
 test("chat scrolls to the newest message after an update", async () => {
   renderApp(FIGMA);
-  const chat = await screen.findByRole("complementary", { name: "Chat" });
+  const chat = await screen.findByRole("region", { name: "Chat" });
   const message = await within(chat).findByText(
     "Turn the frames in our Figma file into Flutter screens and push a branch. Never merge.",
   );
-  const box = message.parentElement?.parentElement;
+  const box = message.closest<HTMLElement>('[data-scroll="bottom"]');
+  expect(box).not.toBeNull();
   if (!box) throw new Error("Message box missing");
   Object.defineProperty(box, "scrollHeight", { configurable: true, value: 700 });
   box.scrollTop = 0;
@@ -362,4 +364,73 @@ test("focuses the flow heading after loading and changing flows", async () => {
   fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.social-posts" } });
   const second = await screen.findByRole("heading", { level: 1, name: "One source into many social posts" });
   await waitFor(() => expect(document.activeElement).toBe(second));
+});
+
+test("each message is announced with its author and time, and shows neither", async () => {
+  renderApp(FIGMA);
+  const chat = await screen.findByRole("region", { name: "Chat" });
+  expect(within(chat).getByRole("heading", { level: 2, name: "Chat" })).toBeTruthy();
+  expect(await within(chat).findByText("You, 10 Nov, 08:30:")).toBeTruthy();
+  expect(within(chat).getByText("FlowDriven, 10 Nov, 08:31:")).toBeTruthy();
+});
+test("a question shows its suggestions directly under it", async () => {
+  renderApp(FIGMA);
+  const chat = await screen.findByRole("region", { name: "Chat" });
+  const items = await within(chat).findAllByRole("listitem");
+  expect(items).toHaveLength(2);
+  const first = items[0] as HTMLElement;
+  const second = items[1] as HTMLElement;
+  expect(within(first).getByText("Which project folder holds the Flutter app?")).toBeTruthy();
+  expect(
+    within(first).getByRole("group", { name: "Answers to Which project folder holds the Flutter app?" }),
+  ).toBeTruthy();
+  expect(
+    within(first)
+      .getAllByRole("button")
+      .map((b) => b.textContent),
+  ).toEqual(["Use the last folder", "Choose another folder"]);
+  expect(
+    within(second)
+      .getAllByRole("button")
+      .map((b) => b.textContent),
+  ).toEqual(["Yes, list every mismatch", "No, skip visual review"]);
+  expect(within(chat).queryByRole("button", { pressed: true })).toBeNull();
+});
+test("the composer is a text area and an icon-only Send button that waits for text", async () => {
+  renderApp(FIGMA);
+  const chat = await screen.findByRole("region", { name: "Chat" });
+  const send = within(chat).getByRole("button", { name: "Send" });
+  expect(send.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  expect(send.textContent).toBe("");
+  expect(send).toHaveProperty("disabled", true);
+  fireEvent.change(within(chat).getByLabelText("Message"), { target: { value: "Hello" } });
+  expect(send).toHaveProperty("disabled", false);
+});
+test("an empty conversation says how to start", async () => {
+  renderApp("#/builder/new");
+  expect(await screen.findByText("Describe changes in your own words.")).toBeTruthy();
+});
+test("a new flow's pane says nothing has been drafted", async () => {
+  renderApp("#/builder/new");
+  const pane = await screen.findByRole("region", { name: "Flow details" });
+  expect(within(pane).getByRole("heading", { level: 1, name: "New flow" })).toBeTruthy();
+  expect(
+    within(pane).getByText("Describe work you repeat, and the agent turns it into a flow."),
+  ).toBeTruthy();
+});
+test("conversation styles follow the approved layout", () => {
+  const css = readFileSync("apps/desktop/src/screens/builder/Builder.module.css", "utf8");
+  expect(css).toMatch(/\.layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) var\(--pane-width\)/s);
+  expect(css).toMatch(
+    /\.threadScroll\s*\{[^}]*overflow-y:\s*auto[^}]*display:\s*flex[^}]*flex-direction:\s*column/s,
+  );
+  expect(css).toMatch(/\.thread\s*\{[^}]*max-width:\s*var\(--reading-width\)[^}]*margin:\s*auto auto 0/s);
+  expect(css).toMatch(/\.dock\s*\{[^}]*max-width:\s*var\(--dock-width\)/s);
+  expect(css).toMatch(
+    /\.bubble\s*\{[^}]*background:\s*var\(--surface-bubble\)[^}]*border-radius:\s*var\(--radius-bubble\)/s,
+  );
+  expect(css).toMatch(/\.composer\s*\{[^}]*border-radius:\s*var\(--radius-composer\)/s);
+  expect(css).toMatch(/\.composer:focus-within\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s);
+  expect(css).toMatch(/\.chip\s*\{[^}]*height:\s*30px[^}]*border-radius:\s*15px/s);
+  expect(css).toMatch(/\.send\s*\{[^}]*background:\s*var\(--ink\)/s);
 });

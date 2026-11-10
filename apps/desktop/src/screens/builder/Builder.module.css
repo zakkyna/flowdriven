@@ -1,6 +1,6 @@
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--chat-width);
+  grid-template-columns: minmax(0, 1fr) var(--pane-width);
   height: 100%;
   min-height: 0;
 }
@@ -8,14 +8,15 @@
   min-width: 0;
   overflow: auto;
   padding: 28px 32px 48px;
+  border-left: 1px solid var(--border);
+  background: var(--surface-app);
 }
 .toolbar,
 .stepHeader,
 .stepActions,
 .meta,
 .sectionHeading,
-.uses,
-.suggestions {
+.uses {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -40,8 +41,7 @@
 }
 .flowHeader h1,
 .flowHeader p,
-.panel h2,
-.chat h2 {
+.panel h2 {
   margin: 0 0 8px;
 }
 .meta {
@@ -156,50 +156,168 @@
   overflow-wrap: anywhere;
 }
 .chat {
-  min-width: 0;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
-  background: var(--surface-panel);
-  padding: 24px 20px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
-.chat header p {
+.bar {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: none;
+  height: var(--bar-height);
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+.bar h2 {
   margin: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
 }
-.messages {
+.threadScroll {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px;
+}
+.thread {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--reading-width);
+  margin: auto auto 0;
+  overflow-wrap: anywhere;
 }
 .message {
   min-width: 0;
   overflow-wrap: anywhere;
-  margin: 20px 0;
+  margin-bottom: 20px;
 }
-.message strong {
-  font-size: var(--text-s);
+.user {
+  display: flex;
+  justify-content: flex-end;
 }
-.message time {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+.bubble {
+  min-width: 0;
+  max-width: 88%;
+  background: var(--surface-bubble);
+  border-radius: var(--radius-bubble);
+  padding: 10px 14px;
+  font-size: var(--text-read);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
-.message p {
-  margin: 6px 0;
+.agent {
+  min-width: 0;
+  font-size: var(--text-read);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
 }
-.suggestions {
-  flex-wrap: wrap;
+.bubble p,
+.agent p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
-.suggestions button {
-  height: 28px;
-}
-.composer {
+.questions {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.questions li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+  margin-top: 6px;
+}
+.chip {
+  height: 30px;
+  border-radius: 15px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-panel);
+  color: var(--text);
+  font-size: var(--text-s);
+  padding: 0 12px;
+  cursor: pointer;
+  max-width: 100%;
+}
+.chip:hover {
+  background: var(--surface-hover);
+}
+.dock {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  max-width: var(--dock-width);
+  margin: 0 auto;
+  padding: 0 24px 24px;
+}
+.composer {
+  min-width: 0;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-composer);
+  padding: 14px 12px 10px 16px;
+}
+.composer:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .composer textarea {
+  display: block;
   width: 100%;
-  resize: vertical;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  resize: none;
+  font: 400 var(--text-read) / 1.5 var(--font-ui);
+  padding: 0;
+  outline: 0;
+}
+.composerRow {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-top: 4px;
+}
+.send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--on-ink);
+  cursor: pointer;
+}
+.send:hover:not(:disabled) {
+  background: var(--ink-hover);
+}
+.send:disabled {
+  background: var(--surface-selected);
+  color: var(--text-muted);
+}
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
