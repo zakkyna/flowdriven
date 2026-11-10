@@ -17,7 +17,7 @@ test("brain labels have separate baseline-aligned pieces with spacing", async ()
 });
 test("fallback titles and risk tags use the section typography and baseline", () => {
   const style = css("screens/settings/Settings.module.css");
-  expect(style).toMatch(/\.panel h3\s*\{[^}]*font-size:\s*var\(--text-title\);[^}]*font-weight:\s*600/s);
+  expect(style).toMatch(/\.panel h3\s*\{[^}]*font-size:\s*var\(--text-m\);[^}]*font-weight:\s*600/s);
   expect(style).toMatch(/\.orderLine\s*\{[^}]*align-items:\s*baseline/s);
 });
 test("blocked reason keeps icon and text together", async () => {

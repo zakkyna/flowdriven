@@ -56,7 +56,10 @@ export function BrainSection({ settings }: { settings: Settings }): ReactElement
                 onChange={() => void choose(backend)}
               />
               <span id={`${id}-${backend.id}`} className={styles.brainDetails}>
-                <span>{backend.name}</span> <RiskBadge risk={backend.risk} />
+                <span>{backend.name}</span>{" "}
+                <span className={styles.risk}>
+                  <RiskBadge risk={backend.risk} />
+                </span>
                 {state && <span className={styles.small}>{state}</span>}
                 {backend.kind === "harness" && (
                   <span className={styles.small}>
@@ -68,16 +71,16 @@ export function BrainSection({ settings }: { settings: Settings }): ReactElement
                   </span>
                 )}
                 {disabledReason && <span className={styles.small}>{disabledReason}</span>}
+                {settings.brain.main === backend.id && disabledReason && (
+                  <span className={styles.small}>
+                    {backend.kind === "harness" &&
+                    backend.consent !== "given" &&
+                    backend.consent !== "not_needed"
+                      ? "Needs consent. This brain is not used until you give consent."
+                      : `This brain is unavailable: ${disabledReason}.`}
+                  </span>
+                )}
               </span>
-              {settings.brain.main === backend.id && disabledReason && (
-                <span className={styles.small}>
-                  {backend.kind === "harness" &&
-                  backend.consent !== "given" &&
-                  backend.consent !== "not_needed"
-                    ? "Needs consent. This brain is not used until you give consent."
-                    : `This brain is unavailable: ${disabledReason}.`}
-                </span>
-              )}
             </label>
           );
         })}

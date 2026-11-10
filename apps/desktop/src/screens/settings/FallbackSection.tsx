@@ -28,7 +28,10 @@ export function FallbackSection({ settings }: { settings: Settings }): ReactElem
             return (
               <li key={id}>
                 <span className={styles.orderLine}>
-                  <span>{backend.name}</span> <RiskBadge risk={backend.risk} />{" "}
+                  <span>{backend.name}</span>{" "}
+                  <span className={styles.risk}>
+                    <RiskBadge risk={backend.risk} />
+                  </span>{" "}
                   {backend.kind === "harness" &&
                     backend.consent !== "given" &&
                     backend.consent !== "not_needed" && <span>Needs consent before use.</span>}

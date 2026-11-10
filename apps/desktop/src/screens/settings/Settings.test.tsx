@@ -27,6 +27,38 @@ test("settings styles: sections have a hairline, no card, and the meter uses sta
   expect(css).toMatch(/min-width:\s*0\b/);
 });
 
+test("keeps the long brain option in a control and details row", async () => {
+  renderApp("#/settings");
+  const radio = await screen.findByRole("radio", { name: "Antigravity CLI" });
+  const row = radio.closest("label");
+  const details = screen.getByText("Needs consent on the Harnesses screen").parentElement;
+  expect(row?.children).toHaveLength(2);
+  expect(details?.parentElement).toBe(row);
+  const css = readFileSync("apps/desktop/src/screens/settings/Settings.module.css", "utf8");
+  expect(css).toMatch(/\.brain\s*\{[^}]*display:\s*flex/s);
+  expect(css).not.toMatch(/\.brain\s*\{[^}]*flex-wrap:\s*wrap/s);
+  expect(css).toMatch(/\.brainDetails\s*\{[^}]*flex-wrap:\s*wrap/s);
+});
+test("aligns both risk tags to the name baseline", async () => {
+  renderApp("#/settings");
+  const radio = await screen.findByRole("radio", { name: "Antigravity CLI" });
+  const brainTag = within(radio.closest("label") as HTMLElement).getByText("Unofficial").parentElement;
+  const fallback = screen.getByRole("heading", { name: "Fallback order" }).closest("section");
+  const fallbackTag = within(fallback as HTMLElement).getAllByText("Official")[0]?.parentElement;
+  expect(brainTag?.parentElement?.className).toContain("risk");
+  expect(fallbackTag?.parentElement?.className).toContain("risk");
+  const css = readFileSync("apps/desktop/src/screens/settings/Settings.module.css", "utf8");
+  expect(css).toMatch(/\.risk\s*>\s*span\s*\{[^}]*align-items:\s*baseline/s);
+});
+test("sets fallback subheadings one size below section headings", async () => {
+  renderApp("#/settings");
+  expect(await screen.findByRole("heading", { name: "Subscription harnesses", level: 3 })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "API keys", level: 3 })).toBeTruthy();
+  const css = readFileSync("apps/desktop/src/screens/settings/Settings.module.css", "utf8");
+  expect(css).toMatch(/\.panel h3\s*\{[^}]*font-size:\s*var\(--text-m\)/s);
+  expect(css).toMatch(/\.panel h3\s*\{[^}]*font-weight:\s*600/s);
+});
+
 describe("Settings", () => {
   test("lists brains official first, with reasons for disabled ones", async () => {
     renderApp("#/settings");

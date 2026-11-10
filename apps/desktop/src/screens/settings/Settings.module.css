@@ -16,7 +16,7 @@
   font-weight: 600;
 }
 .panel h3 {
-  font-size: var(--text-title);
+  font-size: var(--text-m);
   font-weight: 600;
 }
 .group {
@@ -27,8 +27,7 @@
 }
 .brain {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  align-items: baseline;
   gap: 8px;
   min-height: 32px;
 }
@@ -37,6 +36,9 @@
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px;
+}
+.risk > span {
+  align-items: baseline;
 }
 .checkbox {
   display: flex;

@@ -313,7 +313,7 @@ const paths = {
 
 ### Settings (Task 15), route `#/settings`
 
-`Page` narrow. Plain sections, no cards: each section is an `h2` (15/600) and its content, with a 1 px `--border` rule between sections and 24 px of space. Radios and the checkbox sit in 32 px rows. The budget meter is an 8 px track (`--surface-sunken`, radius 6) with a `--text-muted` fill; a warning fill is `--wait`, a stopped fill is `--bad`. Fields are labelled inputs in the shared form style.
+`Page` narrow. Plain sections, no cards: each section is an `h2` (15/600) and its content, with a 1 px `--border` rule between sections and 24 px of space. Radios and the checkbox sit in 32 px rows; each brain radio stays beside its wrapping details, and risk tags align to the name baseline in brain and fallback rows. Fallback subheadings are 14 px at weight 600. The budget meter is an 8 px track (`--surface-sunken`, radius 6) with a `--text-muted` fill; a warning fill is `--wait`, a stopped fill is `--bad`. Fields are labelled inputs in the shared form style.
 
 ---
 
