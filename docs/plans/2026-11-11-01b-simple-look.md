@@ -328,7 +328,7 @@ const paths = {
 - Produces: the token set of "UI design: Colour" and "Type, space, radii" (names exactly as listed there); `export const WINDOW_BACKGROUND: { readonly light: string; readonly dark: string }` and `export function windowBackground(dark: boolean): string` in `electron/window-colors.ts`.
 - Transitional tokens kept until their last user is restyled: `--accent-hover` (value of `--ink-hover` in each theme; removed in Task 3), `--shadow-dialog` and `--text-l` (removed in Task 3), `--chat-width: 380px` (removed in Task 8). The old screens keep working with the new values: the primary button turns violet and waiting states turn violet until Tasks 2 to 3 re-tone them.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/desktop/src/styles/tokens.test.ts`:
 
@@ -470,20 +470,20 @@ test("the window is painted with the page colour of each theme", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/styles apps/desktop/electron/window-colors.test.ts`
 Expected: FAIL (`expected '#f3f4f2' to be '#ffffff'`; `Failed to resolve import "./window-colors"`)
 
-- [ ] **Step 3: Rewrite `tokens.css`**
+- [x] **Step 3: Rewrite `tokens.css`**
 
 Keep the three-block structure of plan 01: `:root` (light values, `color-scheme: light dark`), `:root[data-theme="light"] { color-scheme: light; }` (only that), `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ... } }` and `:root[data-theme="dark"] { ... }`, the last two with the identical list of dark values (colour tokens and `--overlay`). Use the names and values of "UI design: Colour" and "Type, space, radii". `--overlay` is light `rgba(0, 0, 0, 0.4)`, dark `rgba(0, 0, 0, 0.6)`. Keep the transitional tokens listed under Interfaces: `--accent-hover` takes the `--ink-hover` value of each theme (hex, so the light and dark lists stay equal), and `--shadow-dialog` and `--text-l` keep their plan 01 values.
 
-- [ ] **Step 4: Update `base.css`**
+- [x] **Step 4: Update `base.css`**
 
 `body`: `font: 400 var(--text-m) / 1.5 var(--font-ui)`, `-webkit-font-smoothing: antialiased`, `margin: 0`, `color: var(--text)`, `background: var(--surface-app)`. `:focus-visible`: `outline: 2px solid var(--accent); outline-offset: 2px`. Leave the `select, textarea, input` rule, the link rule, `pre` and the reduced-motion block exactly as they are (`review-b.test.ts` pins them).
 
-- [ ] **Step 5: Create `electron/window-colors.ts` and use it**
+- [x] **Step 5: Create `electron/window-colors.ts` and use it**
 
 ```ts
 export const WINDOW_BACKGROUND = { light: "#ffffff", dark: "#212121" } as const;
@@ -492,26 +492,26 @@ export function windowBackground(dark: boolean): string
 
 In `window.ts`, import it and replace the `backgroundColor: dark ? "#161918" : "#F3F4F2"` expression with `backgroundColor: windowBackground(dark)`. Change nothing else in that file.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src/styles apps/desktop/electron/window-colors.test.ts`
 Expected: PASS (6 tests)
 
-- [ ] **Step 7: Run the gate**
+- [x] **Step 7: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 8: Chair step (GUI)**: `pnpm capture`. It must exit 0 and write 16 PNGs to `.workflow/scratch/screens/`. Open one light and one dark file and check the window edge has no old-colour flash line.
+- [x] **Step 8: Chair step (GUI)**: `pnpm capture`. It must exit 0 and write 16 PNGs to `.workflow/scratch/screens/`. Open one light and one dark file and check the window edge has no old-colour flash line.
 
-- [ ] **Step 9: Chair step (commit)**
+- [x] **Step 9: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/styles apps/desktop/electron/window.ts apps/desktop/electron/window-colors.ts apps/desktop/electron/window-colors.test.ts
 git commit -m "Add the simple look tokens and paint the window with the page colour" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

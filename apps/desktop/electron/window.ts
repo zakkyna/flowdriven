@@ -2,6 +2,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, nativeTheme, protocol, session, type WebContents } from "electron";
 import policy from "./csp.json";
+import { windowBackground } from "./window-colors";
 
 const CONTENT_SECURITY_POLICY = policy.policy;
 
@@ -86,7 +87,7 @@ export function createMainWindow(options: {
     minWidth: MIN_WINDOW.width,
     minHeight: MIN_WINDOW.height,
     title: "FlowDriven",
-    backgroundColor: dark ? "#161918" : "#F3F4F2",
+    backgroundColor: windowBackground(dark),
     show: options.show,
     webPreferences: secureWebPreferences(options.preloadPath),
   });
