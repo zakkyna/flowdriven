@@ -1804,7 +1804,7 @@ Empty scenario (`buildEmpty()`): no flows, runs, approvals or readiness reports;
 
 Long scenario (`buildLong()`): `buildStory()` plus (a) flow `dev.example.quarterly-compliance-review`, appended last, `saved: true`, kind `light`, version 1.0.0, sign-off approved 1.0.0, name "Quarterly supplier compliance and contract renewal review for every regional warehouse in the northern distribution network", one step `review` "Review every warehouse contract" (`do: "worker"`, one `user` check "You approve the review"), one requirement `worker` (type `harness`, ref `codex`, why "Does the review."), a playback, an empty conversation, and a ready readiness report with one `ok` item `worker` "Worker harness"; (b) approval `ap-0016`: `risky_action` / `send`, that flow, no run, created 2026-11-10T09:25, `pending`, editable, summary "Send the renewal notice to 16 warehouse managers", email to `manager-01@example.com` through `manager-16@example.com`, subject "Renewal notice for the northern distribution network", body of two short paragraphs, the second containing `String.fromCodePoint(0x202e)` once and `String.fromCodePoint(0x200b)` once (built in code, never typed into the file), then a line holding one 4,000-character token without spaces (`"x".repeat(4000)`). `ap-0016` is the newest pending approval, so it is the first item of the Waiting list in this scenario.
 
-- [ ] **Step 1: Write the failing story test** `packages/fixtures/src/story.test.ts`
+- [x] **Step 1: Write the failing story test** `packages/fixtures/src/story.test.ts`
 
 ```ts
 import { describe, expect, test } from "vitest";
@@ -1886,29 +1886,31 @@ describe("sample story", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm vitest run packages/fixtures`
 Expected: FAIL with missing exports (`buildStory`, `buildLong`)
 
-- [ ] **Step 3: Write the story files with the pinned values above, then `state.ts`; export the Interfaces from `index.ts`**
+- [x] **Step 3: Write the story files with the pinned values above, then `state.ts`; export the Interfaces from `index.ts`**
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm vitest run packages/fixtures`
 Expected: PASS (9 tests)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/fixtures
 git commit -m "Add the sample story" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 
