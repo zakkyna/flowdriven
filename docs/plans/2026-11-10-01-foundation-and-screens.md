@@ -266,7 +266,7 @@ Theme-independent tokens:
 - **Page**: `<section data-screen={name} data-screen-ready={"true" | "false"}>` (names: `builder`, `inbox`, `runs`, `run` for run detail, `readiness`, `harnesses`, `settings`, `not_found`); scrolls with padding `28px 32px 48px`; header with `h1` (`--text-xl`), description (`--text-m`, `--text-muted`, max width 640px) and an actions slot on the right; 24px below the header.
 - **Ready, loading and error** (one rule for every screen): `data-screen-ready` is `"true"` only when every needed `useRunnerQuery`, including dependent queries, has answered without error. While any query loads, the screen renders `ScreenState` (a `Page` with `ready={false}`, its fixed title, and `<p role="status">Loading</p>`). When a query fails with anything other than `not_found`, `ScreenState` renders `<p role="alert">` with the `RunnerError` message and a quiet button "Try again" that calls `reload`. A `not_found` error shows the screen's own not-found page (a `Page` with `ready`, title, text and a link back). The screenshot script waits for `data-screen-ready="true"` and no loading state, so a screen must never set it earlier.
 - **Long text**: every grid or flex child that holds user text sets `min-width: 0`; every box that holds user text (payloads, `pre`, definition values, table cells, chat messages, step titles, flow names) sets `overflow-wrap: anywhere`; `pre` also sets `white-space: pre-wrap`.
-- **CheckList**: a `div` with `role="group"` and `aria-label="Checks"` (no list roles, because it sits inside list items); one row per check: verdict badge (when a verdict exists), the check summary (`--text-m`), the type in mono (`command`, `files` ...), "(optional)" after non-required checks; evidence below in a `pre` (`--text-mono`, `--surface-sunken`, radius `--radius-s`, padding `8px 10px`). Rows have an 8px gap and optional labels are muted. Evidence longer than 12 lines shows its first 12 lines and a quiet button "Show all N lines" that announces its expanded state and can collapse the evidence again; a trailing newline is not an extra line, and a passed check without evidence says "No evidence recorded". When every required check is `judge`, the list ends with a neutral badge (icon `half`) "Judged, not verified".
+- **CheckList**: a `div` with `role="group"` and `aria-label="Checks"` (no list roles, because it sits inside list items); one row per check: verdict badge (when a verdict exists), the check summary (`--text-m`), the type in mono (`command`, `files` ...), "(optional)" after non-required checks; evidence below in a `pre` (`--text-mono`, `--surface-sunken`, radius `--radius-s`, padding `8px 10px`). Rows have an 8px gap and optional labels are muted. Evidence longer than 12 lines shows its first 12 lines and a quiet button "Show all N lines" that announces its expanded state and can collapse the evidence again; a trailing newline is not an extra line, and a passed check without evidence or with whitespace-only evidence says "No evidence recorded". When every required check is `judge`, the list ends with a neutral badge (icon `half`) "Judged, not verified".
 - **Panel**: `--surface-panel`, 1px `--border`, radius `--radius-l`, padding `16px 20px`.
 - **Dates**: `formatDateTime` gives "10 Nov, 09:12"; `formatTime` gives "13:00"; `formatUsd` gives "$16.40"; `formatDuration` rounds to whole seconds and gives "38 s", "4 min 12 s", "1 h 5 min". Every `Intl` call names its locale (`en-GB` for dates and times, `en-US` for money), never `undefined`.
 
@@ -294,7 +294,7 @@ Theme-independent tokens:
 - Nav: a `nav` labelled "Main" (`aria-busy` is `"true"` until the inbox-count query has loaded, then `"false"`), links in this order: Builder (`#/builder`), Inbox (`#/inbox`), Runs (`#/runs`), Readiness (`#/readiness`), Harnesses (`#/harnesses`), Settings (`#/settings`). Item height 36px, padding `0 10px`, gap 10px, icon 18px, label `--text-m` weight 500, colour `--text-muted`, radius `--radius-m`; hover `--surface-sunken`; current item `aria-current="page"`, background `--surface-panel`, colour `--text`, `box-shadow: inset 2px 0 0 var(--text)`. A run detail counts as Runs.
 - Inbox count: pill 20px high, min width 20px, radius 10px, `--accent` fill, `--on-accent` text, `--text-xs` weight 600, pushed right; hidden at 0; the link's `aria-label` is "Inbox, 5 waiting" when the count is 5, else "Inbox".
 - Rail footer (bottom, `--text-xs`, `--text-muted`): "Sample data. Nothing here runs yet." and on the next line "Desktop app" or "Browser preview" (from `shellKind()`).
-- On every route change, reset main scroll, set the document title to the screen title followed by " - FlowDriven", and focus the screen h1.
+- On every route change, reset the Page scroll, set the document title to the screen title followed by " - FlowDriven", and focus the screen h1.
 - Not found: `Page` title "Page not found", text "There is no page at #/nowhere." (the actual hash), link "Go to Builder".
 
 ### Builder (Task 9), routes `#/builder` and `#/builder/<flowId>`
@@ -3312,8 +3312,8 @@ Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 ### Task 14: Electron shell and screen capture
 
 **Files:**
-- Create: `apps/desktop/tsconfig.electron.json`, `apps/desktop/electron/security.ts`, `window.ts`, `main.ts`, `preload.ts`, `capture.ts`, `screens.json`
-- Test: `apps/desktop/electron/security.test.ts`, `apps/desktop/src/screens.test.ts`, `apps/desktop/src/layout-guards.test.ts`
+- Create: `apps/desktop/tsconfig.electron.json`, `apps/desktop/electron/security.ts`, `window.ts`, `main.ts`, `preload.ts`, `capture.ts`, `capture-diagnostics.ts`, `csp.json`, `screens.json`
+- Test: `apps/desktop/electron/security.test.ts`, `window.test.ts`, `capture-diagnostics.test.ts`, `apps/desktop/src/screens.test.ts`, `apps/desktop/src/layout-guards.test.ts`
 - Modify: root `package.json` scripts
 - Modify (only if the guard fails): the module CSS files named in `layout-guards.test.ts`
 
@@ -3368,7 +3368,7 @@ export function createMainWindow(options: { preloadPath: string; show: boolean; 
 ]
 ```
 
-`tsconfig.electron.json`: extends `../../tsconfig.base.json`; `module: "nodenext"`, `moduleResolution: "nodenext"`, `verbatimModuleSyntax: false` (CommonJS output), `noEmit: false`, `outDir: "dist-electron"`, `rootDir: "electron"`, `types: ["node"]`, `lib: ["ES2023", "DOM"]`; `include: ["electron/**/*.ts", "electron/screens.json"]`. Test files are excluded from the Electron build. Root scripts: `typecheck` gains `&& tsc -p apps/desktop/tsconfig.electron.json --noEmit`; `"build:electron": "tsc -p apps/desktop/tsconfig.electron.json"`; `"build": "pnpm build:web && pnpm build:electron"`; `"start": "pnpm build && pnpm --filter @flowdriven/desktop exec electron ."`; `"capture": "pnpm build && TZ=UTC pnpm --filter @flowdriven/desktop exec electron dist-electron/capture.js"` (UTC, so the screenshots show the times the plan quotes).
+`tsconfig.electron.json`: extends `../../tsconfig.base.json`; `module: "nodenext"`, `moduleResolution: "nodenext"`, `verbatimModuleSyntax: false` (CommonJS output), `noEmit: false`, `outDir: "dist-electron"`, `rootDir: "electron"`, `types: ["node"]`, `lib: ["ES2023", "DOM"]`; `include: ["electron/**/*.ts", "electron/screens.json"]`. Test files are excluded from the Electron build and typechecked by `apps/desktop/tsconfig.json`. Root scripts: `typecheck` gains `&& tsc -p apps/desktop/tsconfig.electron.json --noEmit`; `"build:electron": "tsc -p apps/desktop/tsconfig.electron.json"`; `"build": "pnpm build:web && pnpm build:electron"`; `"start": "pnpm build && pnpm --filter @flowdriven/desktop exec electron ."`; `"capture": "pnpm build && TZ=UTC pnpm --filter @flowdriven/desktop exec electron dist-electron/capture.js"` (UTC, so the screenshots show the times the plan quotes).
 
 - [x] **Step 1: Write the failing tests**
 
@@ -3462,7 +3462,7 @@ Expected: PASS (6 tests)
 - [x] **Step 5: Build headless**
 
 Run: `pnpm build && ls apps/desktop/dist-electron`
-Expected: build succeeds; the listing shows `capture.js`, `main.js`, `preload.js`, `screens.json`, `security.js`, `csp.js`, `window.js`
+Expected: build succeeds; the listing shows `capture.js`, `capture-diagnostics.js`, `main.js`, `preload.js`, `screens.json`, `security.js`, `csp.json`, `window.js`
 
 - [x] **Step 6: Run the gate**
 

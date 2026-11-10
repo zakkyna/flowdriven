@@ -6,7 +6,8 @@ import { Badge, StatusBadge } from "./StatusBadge";
 
 function CheckRow({ check }: { check: Check | CheckResult }): ReactElement {
   const [expanded, setExpanded] = useState(false);
-  const evidence = "evidence" in check ? check.evidence : undefined;
+  const rawEvidence = "evidence" in check ? check.evidence : undefined;
+  const evidence = rawEvidence?.trim() ? rawEvidence : undefined;
   const lines = evidence ? evidence.replace(/\r?\n$/, "").split("\n") : [];
   return (
     <div className={styles.row}>

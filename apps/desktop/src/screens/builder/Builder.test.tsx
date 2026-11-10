@@ -2,7 +2,7 @@ import { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "@flowdriven/fixt
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { App } from "../../App";
-import { RunnerProvider } from "../../runner/runner-context";
+import { RunnerProvider, useRunnerQuery } from "../../runner/runner-context";
 import { readyState, renderApp } from "../../test/render";
 
 const FIGMA = "#/builder/dev.example.figma-to-flutter";
@@ -131,30 +131,26 @@ test("does not repeat a summary equal to the flow name", async () => {
   expect(screen.getAllByText("Figma to Flutter")).toHaveLength(2);
 });
 
-test("late dependent queries never mark the loading Builder ready", async () => {
-  window.location.hash = "#/builder";
+function Probe({ skip, commits }: { skip: boolean; commits: boolean[] }) {
+  const query = useRunnerQuery("runs.status", { runId: "run-0006" }, { skip });
+  commits.push(query.loading);
+  return <span>{query.loading ? "Loading" : "Ready"}</span>;
+}
+
+test("a re-enabled dependent query never commits stale ready data", async () => {
   const client = createFixtureRunnerClient();
-  const original = client.call.bind(client);
-  const releases: (() => void)[] = [];
-  vi.spyOn(client, "call").mockImplementation((name, input) =>
-    new Promise<void>((resolve) => releases.push(resolve)).then(() => original(name, input)),
-  );
-  const { container } = render(
+  const commits: boolean[] = [];
+  const view = (skip: boolean) => (
     <RunnerProvider client={client}>
-      <App />
-    </RunnerProvider>,
+      <Probe skip={skip} commits={commits} />
+    </RunnerProvider>
   );
-  const check = () => {
-    if (screen.queryByText("Loading")) expect(readyState(container, "builder")).toBe("false");
-  };
-  check();
-  for (let i = 0; i < 5; i++) {
-    await act(async () => {
-      for (const release of releases.splice(0)) release();
-    });
-    check();
-  }
-  await waitFor(() => expect(readyState(container, "builder")).toBe("true"));
+  const { rerender } = render(view(false));
+  await screen.findByText("Ready");
+  rerender(view(true));
+  commits.length = 0;
+  rerender(view(false));
+  expect(commits[0]).toBe(true);
 });
 test("revisiting a flow waits for its re-enabled run query", async () => {
   const { client, container } = renderApp(FIGMA);
@@ -320,4 +316,14 @@ test("chat scrolls to the newest message after an update", async () => {
   fireEvent.click(within(chat).getByRole("button", { name: "Send" }));
   await within(chat).findByText(PREVIEW_AGENT_REPLY);
   await waitFor(() => expect(box.scrollTop).toBe(700));
+});
+
+test("focuses the flow heading after loading and changing flows", async () => {
+  renderApp(FIGMA);
+  const first = await screen.findByRole("heading", { level: 1, name: "Figma to Flutter" });
+  await waitFor(() => expect(document.activeElement).toBe(first));
+  expect(first.tabIndex).toBe(-1);
+  fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.social-posts" } });
+  const second = await screen.findByRole("heading", { level: 1, name: "One source into many social posts" });
+  await waitFor(() => expect(document.activeElement).toBe(second));
 });

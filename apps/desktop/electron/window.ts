@@ -1,7 +1,10 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, nativeTheme, protocol, session, type WebContents } from "electron";
-import { CONTENT_SECURITY_POLICY } from "./csp";
+import policy from "./csp.json";
+
+const CONTENT_SECURITY_POLICY = policy.policy;
+
 import {
   APP_ORIGIN,
   APP_SCHEME,

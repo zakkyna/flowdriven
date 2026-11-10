@@ -66,3 +66,13 @@ test("counts evidence lines without a trailing newline and reports missing proof
   expect(screen.getByText("No evidence recorded")).toBeTruthy();
   expect(container.querySelectorAll("pre")).toHaveLength(1);
 });
+
+test("whitespace-only evidence has no evidence block", () => {
+  const { container } = render(
+    <CheckList
+      checks={[{ type: "command", required: true, summary: "Check", verdict: "passed", evidence: "\n" }]}
+    />,
+  );
+  expect(container.querySelector("pre")).toBeNull();
+  expect(screen.getByText("No evidence recorded")).toBeTruthy();
+});

@@ -167,3 +167,19 @@ test("confirms a successful copy", async () => {
   fireEvent.click(within(ffmpeg).getByRole("button", { name: "Copy" }));
   expect((await within(ffmpeg).findByRole("status")).textContent).toBe("Copied");
 });
+
+test.each(["check", "install"])("%s performs exactly one recheck", async (mode) => {
+  const { client } = renderApp("#/readiness/dev.example.social-posts");
+  await screen.findByText("Not ready. 4 required items need attention.");
+  const spy = vi.spyOn(client, "call");
+  if (mode === "check") fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+  else {
+    fireEvent.click(within(row("FFmpeg")).getByRole("button", { name: "Install for me" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Install" }));
+    await screen.findByText("Not ready. 3 required items need attention.");
+  }
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Check again" })).toHaveProperty("disabled", false),
+  );
+  expect(spy.mock.calls.filter(([name]) => name === "readiness.check")).toHaveLength(1);
+});

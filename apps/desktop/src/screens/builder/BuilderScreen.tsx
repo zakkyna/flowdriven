@@ -1,5 +1,5 @@
 import type { ChatMessage, FlowEdit, Step } from "@flowdriven/contracts";
-import { type ReactElement, useRef, useState } from "react";
+import { type ReactElement, useLayoutEffect, useRef, useState } from "react";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";
 import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
@@ -38,6 +38,14 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
   const run = useRunnerQuery("runs.status", { runId: runId ?? "" }, { skip: !runId });
   const loading = list.loading || flow.loading || run.loading || harnesses.loading;
   const queryError = list.error ?? flow.error ?? run.error ?? harnesses.error;
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focus must follow the selected flow.
+  useLayoutEffect(() => {
+    if (!loading && !queryError && headingRef.current) {
+      document.title = `${headingRef.current.textContent} - FlowDriven`;
+      headingRef.current.focus({ preventScroll: true });
+    }
+  }, [id, loading, queryError]);
   if (flow.error?.code === "not_found" && id)
     return (
       <NotFoundPage
@@ -131,7 +139,9 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
               </div>
             </div>
             <header className={styles.flowHeader}>
-              <h1>{detail.manifest.name}</h1>
+              <h1 ref={headingRef} tabIndex={-1}>
+                {detail.manifest.name}
+              </h1>
               {detail.manifest.summary !== detail.manifest.name && (
                 <p className={styles.muted}>{detail.manifest.summary}</p>
               )}
@@ -183,7 +193,9 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
           </>
         ) : (
           <>
-            <h1>Builder</h1>
+            <h1 ref={headingRef} tabIndex={-1}>
+              Builder
+            </h1>
             <div className={styles.panel}>
               <h2>No flows yet.</h2>
               <p>Describe work you repeat, and the agent turns it into a flow.</p>

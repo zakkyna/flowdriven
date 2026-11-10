@@ -98,7 +98,7 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
         reload={reload}
       />
     );
-  const data = (!flowId ? selectedReport : undefined) ?? report.data;
+  const data = selectedReport?.flowId === effectiveId ? selectedReport : report.data;
   const checkAgain = async () => {
     if (!effectiveId || checking) return;
     setChecking(true);
@@ -108,8 +108,7 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
       setSelectionError(result.error);
       return;
     }
-    if (!flowId) setSelectedReport(result.data);
-    else report.reload();
+    setSelectedReport(result.data);
   };
   const count = data ? attentionCount(data.items) : 0;
   const install = async () => {
@@ -124,7 +123,8 @@ export function ReadinessScreen({ flowId }: { flowId?: string }): ReactElement {
       setStatus(`Marked ${installing.name} as OK. Sample data: nothing was installed.`);
       setActionError("");
       setInstalling(undefined);
-      void checkAgain();
+      if (flowId) setSelectedReport(undefined);
+      else void checkAgain();
     } else {
       setActionError(result.error.message);
       setInstalling(undefined);

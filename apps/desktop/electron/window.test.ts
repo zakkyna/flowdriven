@@ -35,9 +35,13 @@ test("registers only the intended scheme privileges", () => {
 test("filters requests and permits only app clipboard writes", () => {
   lockDownSession();
   const cb = vi.fn();
-  mocks.request.mock.calls[0][0]({ url: "https://example.com" }, cb);
+  const requestCall = mocks.request.mock.calls[0];
+  const permissionCall = mocks.permission.mock.calls[0];
+  const checkCall = mocks.check.mock.calls[0];
+  if (!requestCall || !permissionCall || !checkCall) throw new Error("Missing handlers");
+  requestCall[0]({ url: "https://example.com" }, cb);
   expect(cb).toHaveBeenCalledWith({ cancel: true });
-  const request = mocks.permission.mock.calls[0][0];
+  const request = permissionCall[0];
   request({ getURL: () => "app://flowdriven/index.html" }, "clipboard-sanitized-write", cb, {
     requestingUrl: "app://flowdriven/index.html",
   });
@@ -50,7 +54,7 @@ test("filters requests and permits only app clipboard writes", () => {
     requestingUrl: "https://evil.test",
   });
   expect(cb).toHaveBeenLastCalledWith(false);
-  const check = mocks.check.mock.calls[0][0];
+  const check = checkCall[0];
   expect(check(null, "clipboard-sanitized-write", "app://flowdriven/index.html")).toBe(true);
   expect(check(null, "clipboard-sanitized-write", "https://evil.test")).toBe(false);
   expect(check(null, "camera", "app://flowdriven/index.html")).toBe(false);
@@ -59,7 +63,9 @@ test("locks each web contents against windows, webviews and external navigations
   const events = new Map<string, (event: { preventDefault: () => void }, url: string) => void>();
   const contents = { on: vi.fn((name, handler) => events.set(name, handler)), setWindowOpenHandler: vi.fn() };
   lockDownWebContents(contents as never);
-  expect(contents.setWindowOpenHandler.mock.calls[0][0]()).toEqual({ action: "deny" });
+  const openCall = contents.setWindowOpenHandler.mock.calls[0];
+  if (!openCall) throw new Error("Missing window handler");
+  expect(openCall[0]()).toEqual({ action: "deny" });
   for (const name of ["will-navigate", "will-frame-navigate", "will-redirect", "will-attach-webview"]) {
     const preventDefault = vi.fn();
     events.get(name)?.({ preventDefault, url: "https://evil.test" } as never, "https://evil.test");
@@ -76,13 +82,15 @@ test("serves build files without network access and rejects invalid paths", asyn
       ["index.html", "<html>ok</html>", "text/html; charset=utf-8"],
       ["assets/app.js", "const x = 1;", "text/javascript; charset=utf-8"],
       ["assets/app.css", "body {}", "text/css; charset=utf-8"],
-    ];
+    ] as const;
     for (const [file, bytes] of files) await writeFile(path.join(dist, file), bytes);
     await writeFile(path.join(dist, "unknown.bin"), "unknown");
     await writeFile(path.join(root, "secret.html"), "secret");
     await symlink(path.join(root, "secret.html"), path.join(dist, "link.html"));
     serveApp(dist);
-    const handler = mocks.handle.mock.calls[0][1];
+    const handleCall = mocks.handle.mock.calls[0];
+    if (!handleCall) throw new Error("Missing protocol handler");
+    const handler = handleCall[1];
     for (const [file, bytes, type] of files) {
       const response = await handler({ url: `app://flowdriven/${file}?theme=light#/builder` });
       expect(response.status).toBe(200);
