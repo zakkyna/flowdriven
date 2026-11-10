@@ -6,7 +6,7 @@ import { formatDateTime } from "../../ui/format";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { actionName } from "./ApprovalList";
 import styles from "./Inbox.module.css";
-import { PayloadView } from "./PayloadView";
+import { PayloadView, Revealed } from "./PayloadView";
 
 export function ApprovalDetail({
   approval: a,
@@ -20,6 +20,9 @@ export function ApprovalDetail({
   resolve,
   reject,
   approveAll,
+  status,
+  error,
+  next,
 }: {
   approval: Approval;
   similar: Approval[];
@@ -32,26 +35,37 @@ export function ApprovalDetail({
   resolve: (decision: ApprovalDecision) => void;
   reject: () => void;
   approveAll: () => void;
+  status: string;
+  error?: string;
+  next: () => void;
 }): ReactElement {
   return (
     <div className={styles.panel}>
-      <h2>{a.summary}</h2>
+      <h2>
+        <Revealed text={a.summary} />
+      </h2>
       <dl className={styles.definitions}>
         <dt>Action</dt>
         <dd>{actionName(a)}</dd>
         <dt>Flow</dt>
-        <dd>{a.flowName}</dd>
+        <dd>
+          <Revealed text={a.flowName} />
+        </dd>
         {a.stepTitle && (
           <>
             <dt>Step</dt>
-            <dd>{a.stepTitle}</dd>
+            <dd>
+              <Revealed text={a.stepTitle} />
+            </dd>
           </>
         )}
         {a.runId && (
           <>
             <dt>Run</dt>
             <dd className={styles.mono}>
-              <AppLink to={{ screen: "run", runId: a.runId }}>{a.runId}</AppLink>
+              <AppLink to={{ screen: "run", runId: a.runId }}>
+                <Revealed text={a.runId} />
+              </AppLink>
             </dd>
           </>
         )}
@@ -106,6 +120,20 @@ export function ApprovalDetail({
           )}
         </div>
       )}
+      {a.state !== "pending" && status && <Button onClick={next}>Next decision</Button>}
+      {status && (
+        <p role="status" className={styles.muted}>
+          {status}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className={styles.error}>
+          {error}
+        </p>
+      )}
+      <p className={styles.small}>
+        Approvals expire after 24 hours. The step then fails with a clear reason.
+      </p>
     </div>
   );
 }

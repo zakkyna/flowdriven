@@ -133,3 +133,18 @@
   min-height: 140px;
   font: inherit;
 }
+
+.selected.waiting {
+  border-left-color: var(--accent);
+}
+.definitions dd,
+.patch {
+  white-space: pre-wrap;
+}
+.patch > div {
+  min-height: 1em;
+}
+.recipients {
+  max-height: 12em;
+  overflow: auto;
+}

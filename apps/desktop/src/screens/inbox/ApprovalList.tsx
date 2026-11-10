@@ -4,6 +4,7 @@ import { formatDateTime } from "../../ui/format";
 import { Icon, type IconName } from "../../ui/icons";
 import { StatusBadge } from "../../ui/StatusBadge";
 import styles from "./Inbox.module.css";
+import { Revealed } from "./PayloadView";
 
 export function actionName(a: Approval): string {
   if (a.kind === "risky_action")
@@ -61,10 +62,16 @@ export function ApprovalList({
           >
             <Icon name={icon(a)} />
             <span className={styles.itemText}>
-              <span className={styles.summary}>{a.summary}</span>
+              <span className={styles.summary}>
+                <Revealed text={a.summary} />
+              </span>
               <span className={styles.muted}>
-                {a.flowName}
-                {a.stepTitle ? `, ${a.stepTitle}` : ""}
+                <Revealed text={a.flowName} />
+                {a.stepTitle && (
+                  <>
+                    , <Revealed text={a.stepTitle} />
+                  </>
+                )}
               </span>
               {a.state === "pending" ? (
                 <span className={styles.small}>Expires {formatDateTime(a.expiresAt)}</span>
