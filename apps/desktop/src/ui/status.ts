@@ -1,3 +1,13 @@
+import type {
+  ApprovalState,
+  CheckVerdict,
+  ConnectionState,
+  RequirementState,
+  RiskLabel,
+  RunState,
+  SignOffState,
+  StepRunState,
+} from "@flowdriven/contracts";
 import type { IconName } from "./icons";
 export type Tone = "ok" | "bad" | "info" | "neutral" | "accent";
 export type StatusDomain =
@@ -14,7 +24,17 @@ export interface StatusPresentation {
   label: string;
   tone: Tone;
 }
-const statuses: Record<StatusDomain, Record<string, StatusPresentation>> = {
+type StatusValues = {
+  run: RunState;
+  step: StepRunState;
+  check: CheckVerdict;
+  requirement: RequirementState;
+  approval: ApprovalState;
+  signOff: SignOffState;
+  connection: ConnectionState;
+  risk: RiskLabel;
+};
+export const statuses = {
   run: {
     queued: { icon: "clock", label: "Queued", tone: "neutral" },
     checking: { icon: "ring", label: "Checking readiness", tone: "info" },
@@ -68,9 +88,9 @@ const statuses: Record<StatusDomain, Record<string, StatusPresentation>> = {
     gray: { icon: "half", label: "Gray", tone: "neutral" },
     unofficial: { icon: "alert", label: "Unofficial", tone: "bad" },
   },
-};
+} satisfies { [D in StatusDomain]: Record<StatusValues[D], StatusPresentation> };
 export function statusOf(domain: StatusDomain, value: string): StatusPresentation {
-  const table = statuses[domain];
+  const table: Record<string, StatusPresentation> = statuses[domain];
   const presentation = Object.hasOwn(table, value) ? table[value] : undefined;
   if (!presentation) throw new Error(`Unknown ${domain} status: ${value}`);
   return presentation;

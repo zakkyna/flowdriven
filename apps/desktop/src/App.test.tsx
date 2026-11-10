@@ -42,3 +42,18 @@ test("empty: no count on the inbox once the data has loaded", async () => {
   expect(within(nav).getByRole("link", { name: "Inbox" })).toBeTruthy();
   expect(within(nav).queryByRole("link", { name: /waiting/ })).toBeNull();
 });
+
+test("route changes reset scroll, title and focus", async () => {
+  renderApp("#/runs");
+  const main = screen.getByRole("main");
+  main.scrollTop = 200;
+  fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+  await screen.findByRole("heading", { level: 1, name: "Settings" });
+  await waitFor(() => {
+    const heading = screen.getByRole("heading", { level: 1, name: "Settings" });
+    expect(main.scrollTop).toBe(0);
+    expect(document.title).toBe("Settings - FlowDriven");
+    expect(document.activeElement).toBe(heading);
+    expect(heading.getAttribute("tabindex")).toBe("-1");
+  });
+});

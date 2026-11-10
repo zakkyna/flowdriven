@@ -41,3 +41,43 @@ test("a skipped query makes no call and is not loading", async () => {
   expect(await screen.findByText("skipped")).toBeTruthy();
   expect(call.mock.calls.filter(([name]) => name === "runs.status")).toHaveLength(0);
 });
+
+function RetryQuery() {
+  const { error, loading, reload } = useRunnerQuery("approvals.list", { state: "pending" });
+  return (
+    <>
+      <p>{loading ? "loading" : error ? error.message : "done"}</p>
+      <button type="button" onClick={reload}>
+        Reload
+      </button>
+    </>
+  );
+}
+
+test("retry after an error displays loading until the response", async () => {
+  const client = createFixtureRunnerClient();
+  vi.spyOn(client, "call")
+    .mockRejectedValueOnce(new Error("failed"))
+    .mockImplementationOnce(() => new Promise(() => {}));
+  render(
+    <RunnerProvider client={client}>
+      <RetryQuery />
+    </RunnerProvider>,
+  );
+  expect(await screen.findByText("failed")).toBeTruthy();
+  await act(() => screen.getByText("Reload").click());
+  expect(screen.getByText("loading")).toBeTruthy();
+});
+
+test("a synchronous client error becomes a query error", async () => {
+  const client = createFixtureRunnerClient();
+  vi.spyOn(client, "call").mockImplementation(() => {
+    throw new Error("synchronous failure");
+  });
+  render(
+    <RunnerProvider client={client}>
+      <RetryQuery />
+    </RunnerProvider>,
+  );
+  expect(await screen.findByText("synchronous failure")).toBeTruthy();
+});

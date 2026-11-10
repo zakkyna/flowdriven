@@ -1,9 +1,9 @@
-import type { ReactElement } from "react";
+import { type ReactElement, useLayoutEffect, useRef } from "react";
 import styles from "./App.module.css";
 import { APP_NAME, SAMPLE_DATA_NOTE } from "./app-info";
 import { AppLink } from "./nav/AppLink";
 import { NotFoundPage } from "./nav/NotFoundPage";
-import { type Route, useRoute } from "./nav/route";
+import { type Route, routeToHash, useRoute } from "./nav/route";
 import { useRunnerQuery } from "./runner/runner-context";
 import { BuilderScreen } from "./screens/builder/BuilderScreen";
 import { HarnessesScreen } from "./screens/harnesses/HarnessesScreen";
@@ -53,6 +53,19 @@ function Screen({ route }: { route: Route }): ReactElement {
 }
 export function App(): ReactElement {
   const [route] = useRoute();
+  const mainRef = useRef<HTMLElement>(null);
+  const routeKey = routeToHash(route);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: route changes must reset the main area.
+  useLayoutEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    main.scrollTop = 0;
+    const heading = main.querySelector("h1");
+    if (heading) {
+      document.title = `${heading.textContent} - FlowDriven`;
+      heading.focus({ preventScroll: true });
+    }
+  }, [routeKey]);
   const { data, loading } = useRunnerQuery("approvals.list", { state: "pending" });
   const count = data?.length ?? 0;
   return (
@@ -89,7 +102,7 @@ export function App(): ReactElement {
           <div>{shellKind() === "electron" ? "Desktop app" : "Browser preview"}</div>
         </footer>
       </aside>
-      <main className={styles.main}>
+      <main ref={mainRef} className={styles.main}>
         <Screen route={route} />
       </main>
     </div>

@@ -262,7 +262,7 @@ Theme-independent tokens:
 
 - **Icons**: authored in `ui/icons.tsx`; `viewBox="0 0 24 24"`, `fill="none"`, `stroke="currentColor"`, `stroke-width="1.75"`, round caps and joins, `aria-hidden="true"`, `focusable="false"`, default size 18. Names: `builder`, `inbox`, `runs`, `readiness`, `harnesses`, `settings`, `check`, `cross`, `clock`, `hand`, `ring`, `retry`, `pause`, `dash`, `stop`, `key`, `circle-slash`, `alert`, `shield`, `half`, `arrow-up`, `arrow-down`, `arrow-left`, `plus`, `copy`, `duplicate`, `trash`, `undo`, `send`, `post`, `coin`, `lock`.
 - **Button** variants: `primary` (fill `--accent`, text `--on-accent`, hover `--accent-hover`), `secondary` (fill `--surface-panel`, 1px `--border-strong`, text `--text`), `quiet` (transparent, text `--text-muted`, hover fill `--surface-sunken`), `danger` (transparent, 1px `--bad`, text `--bad`). Height 32px, padding `0 14px`, radius `--radius-m`, `--text-s` weight 600. Icon-only quiet buttons are 28 by 28 with an `aria-label`. Disabled: opacity 0.5. At most one primary button per screen region.
-- **Dialog**: `role="dialog"`, `aria-modal="true"`, labelled by its title; backdrop `--overlay`; panel 480px wide, radius `--radius-l`, padding 24px, `--shadow-dialog`; title `--text-l`; actions right-aligned, cancel first, then the confirming button; Escape cancels; focus starts on the confirming button.
+- **Dialog**: `role="dialog"`, `aria-modal="true"`, labelled by its title; backdrop `--overlay`; panel 480px wide, radius `--radius-l`, padding 24px, `--shadow-dialog`; title `--text-l`; actions right-aligned, cancel first, then the confirming button; Escape cancels; focus starts on the enabled confirming button, otherwise the first focusable element or the panel, stays inside, and returns to the opener on close; the panel has max-height `calc(100vh - 48px)` and a scrolling body so the title and actions remain visible.
 - **Page**: `<section data-screen={name} data-screen-ready={"true" | "false"}>` (names: `builder`, `inbox`, `runs`, `run` for run detail, `readiness`, `harnesses`, `settings`, `not_found`); header with `h1` (`--text-xl`), description (`--text-m`, `--text-muted`, max width 640px) and an actions slot on the right; 24px below the header.
 - **Ready, loading and error** (one rule for every screen): `data-screen-ready` is `"true"` only when every non-skipped `useRunnerQuery` of the screen has `loading === false` and no error. While any query loads, the screen renders `ScreenState` (a `Page` with `ready={false}`, its fixed title, and `<p role="status">Loading</p>`). When a query fails with anything other than `not_found`, `ScreenState` renders `<p role="alert">` with the `RunnerError` message and a quiet button "Try again" that calls `reload`. A `not_found` error shows the screen's own not-found page (a `Page` with `ready`, title, text and a link back). The screenshot script waits for `data-screen-ready="true"`, so a screen must never set it earlier.
 - **Long text**: every grid or flex child that holds user text sets `min-width: 0`; every box that holds user text (payloads, `pre`, definition values, table cells, chat messages, step titles, flow names) sets `overflow-wrap: anywhere`; `pre` also sets `white-space: pre-wrap`.
@@ -294,6 +294,7 @@ Theme-independent tokens:
 - Nav: a `nav` labelled "Main" (`aria-busy` is `"true"` until the inbox-count query has loaded, then `"false"`), links in this order: Builder (`#/builder`), Inbox (`#/inbox`), Runs (`#/runs`), Readiness (`#/readiness`), Harnesses (`#/harnesses`), Settings (`#/settings`). Item height 36px, padding `0 10px`, gap 10px, icon 18px, label `--text-m` weight 500, colour `--text-muted`, radius `--radius-m`; hover `--surface-sunken`; current item `aria-current="page"`, background `--surface-panel`, colour `--text`, `box-shadow: inset 2px 0 0 var(--text)`. A run detail counts as Runs.
 - Inbox count: pill 20px high, min width 20px, radius 10px, `--accent` fill, `--on-accent` text, `--text-xs` weight 600, pushed right; hidden at 0; the link's `aria-label` is "Inbox, 5 waiting" when the count is 5, else "Inbox".
 - Rail footer (bottom, `--text-xs`, `--text-muted`): "Sample data. Nothing here runs yet." and on the next line "Desktop app" or "Browser preview" (from `shellKind()`).
+- On every route change, reset main scroll, set the document title to the screen title followed by " - FlowDriven", and focus the screen h1.
 - Not found: `Page` title "Page not found", text "There is no page at #/nowhere." (the actual hash), link "Go to Builder".
 
 ### Builder (Task 9), routes `#/builder` and `#/builder/<flowId>`
@@ -2311,7 +2312,7 @@ export function routeToHash(route: Route): string;    // "#/runs/run-0006"
 export function useRoute(): [Route, (next: Route) => void];   // reads location.hash, listens to hashchange; navigate sets both
 // nav/AppLink.tsx
 export function AppLink(props: { to: Route } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">): ReactElement;
-  // renders <a href={routeToHash(to)}>; onClick calls preventDefault, then the navigate of useRoute(), so navigation does not depend on the DOM firing hashchange
+  // renders <a href={routeToHash(to)}>; onClick handles only a plain primary click without a target, calling preventDefault and then the navigate of useRoute(), so navigation does not depend on the DOM firing hashchange
 // nav/NotFoundPage.tsx
 export function NotFoundPage(props: { screen: string; title: string; text: string; linkLabel: string; to: Route }): ReactElement;
   // a Page with ready, data-screen={screen}, title and description={text}, containing an AppLink labelled linkLabel to `to`
@@ -2322,7 +2323,7 @@ export function useRunnerQuery<N extends OperationName>(name: N, input: Operatio
   { data: OperationOutput<N> | undefined; error: RunnerError | undefined; loading: boolean; reload: () => void };
   // skip: true makes no call; loading is false and data and error are undefined; when skip turns false the query runs like any other
   // refetches when JSON.stringify(input) changes and when an event's topics intersect operations[name].reads;
-  // loading is true only until the first response for the current input: a refetch keeps the previous data and leaves loading false
+  // loading is true until the first response for the current input and when retrying an error: a refetch with previous data keeps that data and leaves loading false
 export function useRunnerAction(): <N extends OperationName>(name: N, input: OperationInput<N>) =>
   Promise<{ ok: true; data: OperationOutput<N> } | { ok: false; error: RunnerError }>;
 // runner/create-client.ts

@@ -12,7 +12,15 @@ export function AppLink({
       href={routeToHash(to)}
       onClick={(event) => {
         onClick?.(event);
-        if (!event.defaultPrevented) {
+        if (
+          !event.defaultPrevented &&
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          !event.altKey &&
+          !event.currentTarget.hasAttribute("target")
+        ) {
           event.preventDefault();
           navigate(to);
         }

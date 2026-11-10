@@ -71,15 +71,17 @@ export function useRunnerQuery<N extends OperationName>(
     if (skip) return;
     let active = true;
     const queryKey = `${name}:${key}`;
-    setResult((old) => (old.key === queryKey ? old : { key: queryKey, loading: true }));
-    client.call(name, JSON.parse(key) as OperationInput<N>).then(
-      (data) => {
-        if (active) setResult({ key: queryKey, data, loading: false, revision });
-      },
-      (error: unknown) => {
-        if (active) setResult({ key: queryKey, error: asRunnerError(error), loading: false, revision });
-      },
-    );
+    setResult((old) => (old.key === queryKey && !old.error ? old : { key: queryKey, loading: true }));
+    Promise.resolve()
+      .then(() => client.call(name, JSON.parse(key) as OperationInput<N>))
+      .then(
+        (data) => {
+          if (active) setResult({ key: queryKey, data, loading: false, revision });
+        },
+        (error: unknown) => {
+          if (active) setResult({ key: queryKey, error: asRunnerError(error), loading: false, revision });
+        },
+      );
     return () => {
       active = false;
     };

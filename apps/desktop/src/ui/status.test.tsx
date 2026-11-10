@@ -56,3 +56,9 @@ describe("status", () => {
     }
   });
 });
+
+test("status table keys exactly match contract states", async () => {
+  const { statuses } = await import("./status");
+  for (const [domain, values] of domains)
+    expect(Object.keys(statuses[domain]).sort()).toEqual([...values].sort());
+});
