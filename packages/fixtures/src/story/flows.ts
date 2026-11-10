@@ -1,6 +1,198 @@
 import type { CheckType, FlowManifest, Requirement, Step } from "@flowdriven/contracts";
 import type { FlowRecord } from "../state";
 
+const work: Record<string, Record<string, { instructions: string; uses: string[]; checks: string[] }>> = {
+  "documents-and-reports": {
+    inventory: {
+      instructions: "List the supplier files supplied for this report.",
+      uses: ["worker", "sources"],
+      checks: ["The source inventory lists every supplier file"],
+    },
+    "extract-facts": {
+      instructions: "Extract supplier names, dates and figures with their source references.",
+      uses: ["worker", "sources"],
+      checks: ["Extracted facts include a value and source reference"],
+    },
+    "draft-report": {
+      instructions: "Write a report using the extracted facts and cite each source.",
+      uses: ["worker", "sources", "output"],
+      checks: [
+        "The draft includes a supplier summary and source citations",
+        "The draft has no unresolved placeholders",
+      ],
+    },
+    "cross-check": {
+      instructions: "Compare every number in the draft with its cited source and explain discrepancies.",
+      uses: ["worker", "sources", "output"],
+      checks: ["Each reported number agrees with its cited source"],
+    },
+    export: {
+      instructions: "Export the approved draft as Word and Markdown files.",
+      uses: ["worker", "output", "pandoc"],
+      checks: ["Word and Markdown reports exist in the report folder"],
+    },
+    "final-approval": {
+      instructions: "Ask the user to review the completed report.",
+      uses: ["output"],
+      checks: ["You approve the final report"],
+    },
+  },
+  "figma-to-flutter": {
+    "read-design": {
+      instructions: "Read the selected Figma frames and save their screen structure.",
+      uses: ["coder", "figma", "figma-seat", "project"],
+      checks: [],
+    },
+    "plan-widgets": {
+      instructions: "Plan the screens, shared widgets and design tokens from the frames.",
+      uses: ["coder", "figma", "figma-seat", "project"],
+      checks: [],
+    },
+    "build-screens": {
+      instructions: "Implement the planned Flutter screens and run analysis and tests.",
+      uses: ["coder", "flutter", "project"],
+      checks: [],
+    },
+    "visual-review": {
+      instructions: "Compare each screen with the corresponding Figma frame and list mismatches.",
+      uses: ["coder", "figma", "figma-seat", "project"],
+      checks: [],
+    },
+    "open-pr": {
+      instructions: "Commit the changes and push a branch for review without merging.",
+      uses: ["coder", "git", "project"],
+      checks: [],
+    },
+  },
+  "email-triage": {
+    "fetch-unread": {
+      instructions: "Fetch unread threads from the connected mailbox.",
+      uses: ["worker", "mail", "mail-account"],
+      checks: ["The mailbox returns the unread threads"],
+    },
+    classify: {
+      instructions: "Classify each thread by topic and urgency.",
+      uses: ["worker", "mail"],
+      checks: ["Every thread has a topic and urgency"],
+    },
+    "draft-replies": {
+      instructions: "Draft a concise reply for each thread using its context.",
+      uses: ["worker", "mail"],
+      checks: ["Each reply addresses its thread", "Replies are helpful and supported by the thread"],
+    },
+    "create-drafts": {
+      instructions: "Save the replies as drafts in the mailbox.",
+      uses: ["worker", "mail", "mail-account"],
+      checks: ["Each reply is saved as a mailbox draft"],
+    },
+    "send-approved": {
+      instructions: "Ask before sending each approved draft to its recipient.",
+      uses: ["worker", "mail", "mail-account"],
+      checks: [
+        "The mailbox confirms each approved reply was sent",
+        "You approve each reply before it is sent",
+      ],
+    },
+  },
+  "lead-follow-up": {
+    "read-leads": {
+      instructions: "Read new leads from the spreadsheet with their contact details.",
+      uses: ["worker", "sheet"],
+      checks: ["Each new lead has a name and contact address"],
+    },
+    "score-leads": {
+      instructions: "Score each lead and assign a segment using the supplied criteria.",
+      uses: ["worker", "sheet"],
+      checks: ["Each lead has a score and segment", "Scores reflect the stated qualification criteria"],
+    },
+    "draft-follow-ups": {
+      instructions: "Write a personal follow-up for each qualified lead.",
+      uses: ["worker", "sheet", "mail"],
+      checks: [
+        "Each follow-up includes the lead's relevant context",
+        "The follow-ups are relevant and avoid unsupported claims",
+      ],
+    },
+    "save-drafts": {
+      instructions: "Save follow-up drafts and update lead status in the spreadsheet.",
+      uses: ["worker", "sheet", "mail"],
+      checks: ["Drafts exist and lead statuses are updated"],
+    },
+    "send-approved": {
+      instructions: "Ask before sending each follow-up to its lead.",
+      uses: ["worker", "mail"],
+      checks: [
+        "The mailbox confirms each approved follow-up was sent",
+        "You approve each follow-up before it is sent",
+      ],
+    },
+  },
+  "social-posts": {
+    "extract-points": {
+      instructions: "Read the source and extract its main points and possible hooks.",
+      uses: ["writer", "source"],
+      checks: ["Key points and hooks are present in the extracted outline"],
+    },
+    "write-posts": {
+      instructions: "Adapt the source into a draft for each publishing platform.",
+      uses: ["writer", "source", "youtube", "instagram", "wordpress", "tiktok-draft"],
+      checks: [
+        "Each platform has a draft with a clear hook",
+        "Each draft reflects the source and suits its platform",
+      ],
+    },
+    "make-media": {
+      instructions: "Create requested media assets in the formats needed by each platform.",
+      uses: ["writer", "source", "ffmpeg"],
+      checks: ["Requested media files exist in the output folder"],
+    },
+    "upload-drafts": {
+      instructions: "Upload each draft to its corresponding platform without publishing it.",
+      uses: ["writer", "youtube", "instagram", "wordpress", "tiktok-draft"],
+      checks: ["Each platform confirms its draft was uploaded"],
+    },
+    publish: {
+      instructions: "Ask before publishing each approved post to its platform.",
+      uses: ["writer", "youtube", "instagram", "wordpress", "tiktok-draft", "tiktok-browser"],
+      checks: ["The platform confirms each approved post is published"],
+    },
+    "collect-metrics": {
+      instructions: "Collect available post metrics and ask the user to review the lessons.",
+      uses: ["writer", "youtube", "instagram", "wordpress", "tiktok-draft"],
+      checks: ["Available platform metrics are collected", "You review the metrics and lessons"],
+    },
+  },
+};
+const reasons: Record<string, string> = {
+  worker: "Runs the research and writing steps.",
+  coder: "Builds and reviews the Flutter screens.",
+  writer: "Writes and prepares the platform drafts.",
+  sources: "Supplies the files cited in the report.",
+  output: "Stores the finished reports.",
+  pandoc: "Converts the report into a Word document.",
+  figma: "Reads the selected design frames.",
+  "figma-seat": "Grants access to the Figma file.",
+  flutter: "Analyzes and tests the Flutter app.",
+  git: "Pushes the finished branch for review.",
+  project: "Contains the Flutter app and generated design files.",
+  mail: "Reads threads and saves or sends approved replies.",
+  "mail-account": "Connects the mailbox used for replies.",
+  sheet: "Supplies lead details and stores their follow-up status.",
+  source: "Supplies the material for the posts.",
+  youtube: "Stores and publishes the YouTube draft.",
+  instagram: "Stores and publishes the Instagram post.",
+  wordpress: "Stores and publishes the WordPress post.",
+  "tiktok-draft": "Uploads the TikTok draft.",
+  "tiktok-browser": "Provides the optional browser session for TikTok.",
+  ffmpeg: "Prepares video assets when media is requested.",
+};
+const summaries: Record<string, string> = {
+  "documents-and-reports": "Turn supplier files into a sourced report.",
+  "figma-to-flutter": "Build Flutter screens from selected design frames.",
+  "email-triage": "Sort unread threads and prepare replies for review.",
+  "lead-follow-up": "Qualify new leads and prepare personal follow-ups.",
+  "social-posts": "Adapt one source into drafts for several platforms.",
+};
 type StepSpec = [string, string, CheckType[], string[]?, number?];
 type ReqSpec = [string, Requirement["type"], string, boolean?];
 export function makeFlow(
@@ -17,21 +209,24 @@ export function makeFlow(
     type,
     ref,
     required,
-    sensitive: false,
-    why: `Provides ${ref} for this flow.`,
+    sensitive: type === "account" || type === "browser_session" || key === "mail",
+    why: reasons[key] ?? "Runs the review work.",
     routes: [],
   }));
   const steps: Step[] = specs.map(([key, title, types, summaries, retry]) => ({
     id: key,
     title,
     do: "worker",
-    instructions: `${title} for this flow.`,
-    uses: [requirements[0]?.id ?? "worker"],
+    instructions: work[id]?.[key]?.instructions ?? "Review the warehouse contracts and record the findings.",
+    uses: work[id]?.[key]?.uses ?? [requirements[0]?.id ?? "worker"],
+    ...(key === "send-approved" || key === "publish"
+      ? { risky: [key === "publish" ? ("post" as const) : ("send" as const)] }
+      : {}),
     outputs: [],
     checks: types.map((type, i) => ({
       type,
       required: true,
-      summary: summaries?.[i] ?? `${title}: ${type} check`,
+      summary: summaries?.[i] ?? work[id]?.[key]?.checks[i] ?? "You approve the review",
     })),
     retry: retry ?? 2,
   }));
@@ -39,7 +234,7 @@ export function makeFlow(
     format: "flowdriven-flow/1",
     id: `dev.example.${id}`,
     name,
-    summary: name,
+    summary: summaries[id] ?? "Review supplier contracts across the distribution network.",
     description: `A repeatable workflow for ${name.toLowerCase()}.`,
     version,
     license: "AGPL-3.0-only",
@@ -55,7 +250,19 @@ export function makeFlow(
     hash: `sha256:${number.toString(16).padStart(64, "0")}`,
     saved: true,
     signOff: { state: "approved", version },
-    playback: { goal: name, touches: requirements.map((r) => r.ref), asksApprovalFor: [] },
+    playback: {
+      goal: name,
+      touches: requirements.map((r) => r.ref),
+      asksApprovalFor: [
+        ...new Set(
+          steps.flatMap((step) =>
+            (step.risky ?? []).map((action) =>
+              action === "send" ? "Sending each reply" : "Publishing each post",
+            ),
+          ),
+        ),
+      ],
+    },
     conversation: [],
     history: [],
     retiredStepIds: [],
@@ -217,10 +424,5 @@ export function flows(): FlowRecord[] {
     ];
     leads.signOff = { state: "stale", version: "1.2.0" };
   }
-  for (const record of records)
-    for (const step of record.manifest.steps) {
-      if (step.id === "send-approved") step.risky = ["send"];
-      if (step.id === "publish") step.risky = ["post"];
-    }
   return records;
 }

@@ -280,7 +280,11 @@ export function createFixtureRunnerClient(
         outputs: [],
         usage: [],
         estimatedCostUsd: 0,
-        ...(!readiness.ready ? { blockedReason: `Not ready: ${count} required items need attention.` } : {}),
+        ...(!readiness.ready
+          ? {
+              blockedReason: `Not ready: ${count} required ${count === 1 ? "item needs" : "items need"} attention.`,
+            }
+          : {}),
       };
       state.runs.push(r);
       return r;

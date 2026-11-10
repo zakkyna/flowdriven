@@ -37,6 +37,11 @@ export function readiness(flows: FlowRecord[]): Record<string, ReadinessReport> 
           item.route = { via: "remote", risk: "official" };
           item.enforcement = "enforced by the harness's settings";
           item.detail = "Figma sign-in expired on 9 Nov.";
+          item.guide.steps = [
+            "Open the Figma connection in your harness settings.",
+            "Sign in to the Figma account with access to the file.",
+            "Choose Check again.",
+          ];
         }
       }
       if (manifest.id.endsWith("social-posts"))
@@ -44,13 +49,29 @@ export function readiness(flows: FlowRecord[]): Record<string, ReadinessReport> 
           switch (item.requirementId) {
             case "instagram":
               item.state = "needs_login";
+              item.enforcement = "enforced by FlowDriven";
+              item.guide.steps = [
+                "Open the Instagram connection settings.",
+                "Sign in to the publishing account and authorize access.",
+                "Choose Check again.",
+              ];
               break;
             case "wordpress":
               item.state = "missing";
+              item.guide.steps = [
+                "Open your WordPress profile and create an application password.",
+                "Add the site address and application password to the WordPress connection.",
+                "Choose Check again.",
+              ];
               break;
             case "tiktok-draft":
               item.state = "failed";
               item.detail = "Probe failed: the draft-upload scope is not approved for FlowDriven yet.";
+              item.guide.steps = [
+                "Request the draft-upload scope for your TikTok app in the developer portal.",
+                "Reconnect the account after the scope is approved.",
+                "Choose Check again.",
+              ];
               break;
             case "tiktok-browser":
               item.state = "missing";
@@ -59,6 +80,10 @@ export function readiness(flows: FlowRecord[]): Record<string, ReadinessReport> 
                 risk: "unofficial",
                 note: "TikTok's terms forbid automated posting scripts.",
               };
+              item.guide.steps = [
+                "Open TikTok in the browser and sign in to the publishing account.",
+                "Connect the browser session, then choose Check again.",
+              ];
               item.guide.verified = false;
               break;
             case "ffmpeg":

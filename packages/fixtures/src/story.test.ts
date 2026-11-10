@@ -116,3 +116,51 @@ test("passed sample steps record their first attempt", () => {
       if (step.state === "passed") expect(step.attempts[0]?.number).toBe(1);
     }
 });
+
+test("risky flows explain their approval and story content describes the work", () => {
+  for (const { manifest, playback } of story.flows) {
+    if (manifest.steps.some((step) => step.risky?.length))
+      expect(playback.asksApprovalFor.length).toBeGreaterThan(0);
+    expect(manifest.summary).not.toBe(manifest.name);
+    for (const requirement of manifest.requirements) {
+      expect(requirement.why).not.toMatch(/^Provides .* for this flow\.$/);
+      if (requirement.type === "account" || requirement.id === "mail")
+        expect(requirement.sensitive).toBe(true);
+    }
+    for (const step of manifest.steps) {
+      expect(step.instructions).not.toBe(`${step.title} for this flow.`);
+      for (const check of step.checks) expect(check.summary).not.toBe(`${step.title}: ${check.type} check`);
+    }
+  }
+  const email = story.flows.find((flow) => flow.manifest.id.endsWith("email-triage"));
+  expect(email?.manifest.steps.find((step) => step.id === "send-approved")?.uses).toContain("mail");
+  const social = story.flows.find((flow) => flow.manifest.id.endsWith("social-posts"));
+  expect(social?.manifest.steps.find((step) => step.id === "publish")?.uses).toContain("instagram");
+  const items = Object.values(story.readiness).flatMap((report) => report.items);
+  for (const item of items.filter((item) => item.state !== "ok"))
+    expect(item.guide.steps[0]).not.toMatch(/^Set up /);
+  expect(items.some((item) => item.enforcement === "enforced by FlowDriven")).toBe(true);
+});
+
+test("sample runs have evidence, workers, complete timing and relevant artifacts", () => {
+  for (const run of story.runs) {
+    if (run.state === "done" || run.state === "failed") expect(run.endedAt).toBeTruthy();
+    for (const step of run.steps) {
+      if (step.do === "worker") expect(step.worker?.name).toBeTruthy();
+      for (const attempt of step.attempts) {
+        expect(attempt.number).toBeGreaterThan(0);
+        expect(attempt.endedAt).not.toBe(attempt.startedAt);
+      }
+      for (const check of step.checks) if (check.verdict === "passed") expect(check.evidence).toBeTruthy();
+    }
+  }
+  const attempts = story.runs.find((run) => run.id === "run-0006")?.steps[2]?.attempts ?? [];
+  expect(new Set(attempts.map((attempt) => attempt.startedAt)).size).toBe(attempts.length);
+  const report = story.runs.find((run) => run.id === "run-0005");
+  expect(report?.inputs.length).toBeGreaterThan(0);
+  expect(report?.outputs.map((output) => output.value)).toEqual(
+    expect.arrayContaining([expect.stringContaining("report.docx"), expect.stringContaining("report.md")]),
+  );
+  const once = story.runs.find((run) => run.id === "run-0002");
+  expect(once?.steps[0]?.checks[0]?.summary).toMatch(/screenshot/i);
+});

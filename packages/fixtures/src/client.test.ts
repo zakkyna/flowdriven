@@ -99,6 +99,17 @@ describe("FixtureRunnerClient", () => {
     });
     expect(again.manifest.steps.map((s) => s.id)).toContain("open-pr-3");
   });
+  test("blocked run reason uses singular and plural", async () => {
+    const c = createFixtureRunnerClient();
+    const single = await c.call("flows.run", { flowId: FIGMA });
+    const plural = await c.call("flows.run", { flowId: "dev.example.social-posts" });
+    expect((await c.call("runs.status", { runId: single.id })).blockedReason).toBe(
+      "Not ready: 1 required item needs attention.",
+    );
+    expect((await c.call("runs.status", { runId: plural.id })).blockedReason).toBe(
+      "Not ready: 4 required items need attention.",
+    );
+  });
   test("running a flow that is not ready opens a blocked run", async () => {
     const c = createFixtureRunnerClient();
     expect(await c.call("flows.run", { flowId: FIGMA })).toMatchObject({ id: "run-0008", state: "blocked" });
