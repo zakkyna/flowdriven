@@ -2972,7 +2972,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 - Consumes: `useRunnerQuery("flows.list" | "readiness.check")`, `useRunnerAction()` with `readiness.check`, `readiness.install`; `useRoute`, `AppLink`, `NotFoundPage`; `attentionCount`, `isReady`; Task 7 parts.
 - Produces: `ReadinessScreen(props: { flowId?: string }): ReactElement`. To find the default flow, the screen calls `readiness.check` for each flow in `flows.list` order and takes the first that is not ready (else the first flow). Layout, regions and copy: "UI design: Readiness".
 
-- [ ] **Step 1: Write the failing tests** `Readiness.test.tsx`
+- [x] **Step 1: Write the failing tests** `Readiness.test.tsx`
 
 ```tsx
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -3052,35 +3052,37 @@ describe("Readiness", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/readiness`
 Expected: FAIL (`Unable to find text "Not ready. 1 required item needs attention."`)
 
-- [ ] **Step 3: Implement the Readiness screen per "UI design: Readiness"**
+- [x] **Step 3: Implement the Readiness screen per "UI design: Readiness"**
 
 Ready, loading and error states follow "UI design: Shared parts".
 
 Each item is an `li` with `aria-label` equal to the item's name. An unknown flow id (`readiness.check` fails `not_found`) shows a `NotFoundPage`; every in-app link is an `AppLink`. Queries: `flows.list` always, and `useRunnerQuery("readiness.check", { flowId }, { skip })` for the effective flow id (the route's, else the stored one below), skipped while that id is undefined. With no `flowId`, an effect calls `readiness.check` through `useRunnerAction` for each flow in `flows.list` order until one is not ready (else the first flow), stores that id in state, and `data-screen-ready` stays `"false"` until it finishes. Hooks are never called conditionally. `Readiness.module.css` sets `overflow-wrap: anywhere` on boxes with user text and `min-width: 0` (exactly, not `0px`) on grid and flex children; Task 14's `layout-guards.test.ts` checks both.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src/screens/readiness`
 Expected: PASS (10 tests)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: preview `#/readiness/dev.example.social-posts`; show the owner.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/readiness
 git commit -m "Build the readiness checklist with fixes" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 

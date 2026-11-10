@@ -1,0 +1,94 @@
+.toolbar,
+.labels,
+.actions,
+.rowHeader,
+.banner,
+.command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.toolbar {
+  margin-bottom: 16px;
+  gap: 16px;
+}
+.toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.small {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.muted {
+  color: var(--text-muted);
+  font-size: var(--text-s);
+}
+.mono {
+  font: var(--text-mono) / 18px var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.banner,
+.list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+}
+.banner {
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.ready {
+  background: var(--ok-soft);
+}
+.attention {
+  background: var(--accent-soft);
+}
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  background: var(--surface-panel);
+}
+.row {
+  padding: 16px 20px;
+}
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+.rowHeader {
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+}
+.content,
+.rowHeader > *,
+.labels > *,
+.command > *,
+.guide {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.content p,
+.row > p {
+  margin: 4px 0;
+}
+.actions {
+  margin-top: 8px;
+}
+.guide {
+  background: var(--surface-sunken);
+  padding: 12px;
+  border-radius: var(--radius-m);
+  margin-top: 12px;
+}
+.guide h3 {
+  margin: 0 0 8px;
+}
+.command pre {
+  font: var(--text-mono) / 18px var(--font-mono);
+}
+.error {
+  color: var(--bad);
+}
