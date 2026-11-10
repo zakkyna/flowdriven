@@ -26,6 +26,11 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
   const [emptyMessages, setEmptyMessages] = useState<ChatMessage[]>([]);
   const list = useRunnerQuery("flows.list", {});
   const id = flowId ?? list.data?.[0]?.id;
+  const previousId = useRef(id);
+  if (previousId.current !== id) {
+    previousId.current = id;
+    if (errorState) setError(undefined);
+  }
   const harnesses = useRunnerQuery("harnesses.list", {});
   const error = errorState && errorState.id === id ? errorState.message : undefined;
   const flow = useRunnerQuery("flows.get", { flowId: id ?? "" }, { skip: !id });
@@ -66,11 +71,11 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
     const result = await action("flows.update", { flowId: id, edit: change });
     inFlight.current = false;
     setBusy(false);
-    setError(result.ok ? undefined : { id, message: result.error.message });
+    if (previousId.current === id) setError(result.ok ? undefined : { id, message: result.error.message });
   };
   const send = async (message: string) => {
     const result = await action("flows.build", { flowId: id, message });
-    setError(result.ok ? undefined : { id, message: result.error.message });
+    if (previousId.current === id) setError(result.ok ? undefined : { id, message: result.error.message });
     if (result.ok && !id) {
       setEmptyMessages((messages) => [
         ...messages,
@@ -89,7 +94,7 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
     setRunning(false);
     inFlight.current = false;
     setBusy(false);
-    setError(result.ok ? undefined : { id, message: result.error.message });
+    if (previousId.current === id) setError(result.ok ? undefined : { id, message: result.error.message });
     if (result.ok) navigate({ screen: "run", runId: result.data.id });
   };
   return (

@@ -350,17 +350,17 @@ Right column (panel), in order:
 1. `h2` the summary sentence.
 2. Definition list (label column 120px, muted): "Action" ("Send", "Post", "Pay", "Delete", "Merge", "Flow sign-off", "Result sign-off", "Budget raise", "New requirement"), "Flow", "Step" (omitted when absent), "Run" (link with the run id in mono, to `#/runs/<runId>`; omitted when absent), "Expires" (date). Resolved items add "Decision" (state badge) and "Resolved" (date).
 3. Payload, headed by its kind. Every payload is rendered as text, never as HTML. Hidden characters (the four classes of the Task 2 table, controls and lookalike spaces) are shown as visible tokens such as `<U+202E>` in a distinct style (mono, `--bad-soft` fill, `--bad` text, `mark` element), in every string: summaries, flow names, step titles, run IDs, recipients, subject, body, post text, media paths and patch lines; single-line fields also reveal tabs and line breaks. A recipient list longer than 5 shows the first 5 and an "and 11 more" control (the real count) that expands the full list for To and for Cc. Kinds: "Email" (rows To (one element per recipient, one per line), Cc when present (same), Subject, then the body pre-wrap in a sunken box), "Post" (Platform, Text, Media as mono paths), "Changes" (per file: mono path, then the patch in mono, one element per line, each line keeping its leading `+` or `-`; `+` lines `--ok`, `-` lines `--bad`), "Amount" ("$12.00" and the description), "Text".
-4. Actions (waiting items only), left to right: primary "Approve"; secondary "Edit" (only when `editable`); secondary "Reject"; when more than one waiting item shares the `similarGroup`, quiet "Approve all 3 similar for this run". All four are disabled while a decision is being sent.
+4. Actions (waiting items only), left to right: primary "Approve"; secondary "Edit" (only when `editable`); secondary "Reject"; when more than one waiting item shares the `similarGroup`, quiet "Approve all 3 similar for this run". All four are disabled while a decision is being sent and after it succeeds until the list shows the new state.
 5. Status line (`role="status"`, `--text-s`) and error line (`role="alert"`, tone bad); the error line is rendered only while an error exists.
 6. Footnote (`--text-xs` muted): "Approvals expire after 24 hours. The step then fails with a clear reason."
 
 Edit mode shows a revealed preview beside a textarea labelled "Edit the text" (prefilled with the email body, post text or text), and replaces the actions with primary "Approve with edits" and secondary "Cancel".
 
 Dialogs:
-- Approve all similar: title "Approve 3 similar sends?" (plural noun per action: sends, posts, payments, deletions, merges); body "These items from run run-0007 are approved individually:" then a list of every item's summary, then "This covers this run only and is logged."; buttons "Cancel" and "Approve 3" (primary).
+- Approve all similar: title "Approve 3 similar sends?" (plural noun per action: sends, posts, payments, deletions, merges); body "These items from run run-0007 are approved individually:" then a list of every item's summary, then "This covers this run only and is logged."; buttons "Cancel" and "Approve 3" (primary); Cancel is disabled and Escape is ignored while the batch is running.
 - Reject: title "Reject this send?" (noun per action: send, post, payment, deletion, merge; "change" for flow sign-off; "result" for result sign-off; "budget raise"; "requirement"); body for run items "The run stops at step “Send approved drafts” and is marked failed."; for items without a run "Nothing runs until you approve a version of this flow."; buttons "Keep waiting" and "Reject" (danger).
 
-After a decision the resolved item remains visible until the person chooses "Next decision" or selects an item. Status texts: "Approved.", "Approved with edits.", "Approved 3 sends.", "Rejected.".
+After a decision the resolved item remains visible until the person chooses "Next decision" or selects an item; a decision completing after another selection does not change that selection. Status texts: "Approved.", "Approved with edits.", "Approved 3 sends.", "Rejected.".
 
 Empty: Waiting tab with no items shows "Nothing is waiting for you." (`--text-l`) and "When a run needs a decision, it shows up here."; Resolved tab with none shows "No resolved decisions yet."; the right column is hidden when the tab is empty.
 
@@ -2120,7 +2120,7 @@ export function Badge(props: { tone: Tone; icon?: IconName; children: ReactNode 
 export function RiskBadge(props: { risk: RiskLabel }): ReactElement;
 export function Button(props: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "quiet" | "danger"; icon?: IconName }): ReactElement;
 export function Dialog(props: { title: string; children: ReactNode; confirmLabel: string; confirmVariant?: "primary" | "danger";
-  cancelLabel?: string; confirmDisabled?: boolean; onConfirm: () => void; onCancel: () => void }): ReactElement;   // cancelLabel default "Cancel"
+  cancelLabel?: string; confirmDisabled?: boolean; cancelDisabled?: boolean; onConfirm: () => void; onCancel: () => void }): ReactElement;   // cancelLabel default "Cancel"
 export function Page(props: { screen: string; ready: boolean; title: string; description?: string; actions?: ReactNode; children?: ReactNode }): ReactElement;
 export function ScreenState(props: { screen: string; title: string; description?: string; loading: boolean; error: RunnerError | undefined;
   reload: () => void }): ReactElement;   // a Page with ready={false}: <p role="status">Loading</p> while loading, else <p role="alert">{error.message}</p> and a quiet button "Try again" that calls reload

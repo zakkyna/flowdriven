@@ -279,3 +279,45 @@ test("shows harness names, singular count, and clears errors on flow switch", as
   await screen.findByRole("heading", { name: "Email triage and draft replies" });
   expect(screen.queryByText("Run failed")).toBeNull();
 });
+
+test("clears a failed update when leaving and returning to the flow", async () => {
+  const { client } = renderApp(FIGMA);
+  await screen.findByRole("heading", { name: "Figma to Flutter" });
+  const original = client.call.bind(client);
+  vi.spyOn(client, "call").mockImplementation((name, input) =>
+    name === "flows.update" ? Promise.reject(new Error("Update failed")) : original(name, input as never),
+  );
+  fireEvent.click(within(row(1)).getByRole("button", { name: "Move up" }));
+  await screen.findByRole("alert");
+  fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.email-triage" } });
+  await screen.findByRole("heading", { name: "Email triage and draft replies" });
+  fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.figma-to-flutter" } });
+  await screen.findByRole("heading", { name: "Figma to Flutter" });
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("step boundaries, undo and duplicate", async () => {
+  renderApp(FIGMA);
+  await screen.findByRole("heading", { name: "Figma to Flutter" });
+  expect(within(row(4)).getByRole("button", { name: "Move down" })).toHaveProperty("disabled", true);
+  expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
+  fireEvent.click(within(row(0)).getByRole("button", { name: "Duplicate" }));
+  await waitFor(() => expect(rows()).toHaveLength(6));
+  expect(titles()[1]).toContain("Read the design");
+});
+
+test("chat scrolls to the newest message after an update", async () => {
+  renderApp(FIGMA);
+  const chat = await screen.findByRole("complementary", { name: "Chat" });
+  const message = await within(chat).findByText(
+    "Turn the frames in our Figma file into Flutter screens and push a branch. Never merge.",
+  );
+  const box = message.parentElement?.parentElement;
+  if (!box) throw new Error("Message box missing");
+  Object.defineProperty(box, "scrollHeight", { configurable: true, value: 700 });
+  box.scrollTop = 0;
+  fireEvent.change(within(chat).getByLabelText("Message"), { target: { value: "New message" } });
+  fireEvent.click(within(chat).getByRole("button", { name: "Send" }));
+  await within(chat).findByText(PREVIEW_AGENT_REPLY);
+  await waitFor(() => expect(box.scrollTop).toBe(700));
+});

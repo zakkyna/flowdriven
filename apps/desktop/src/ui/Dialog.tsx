@@ -11,6 +11,7 @@ export function Dialog({
   confirmVariant = "primary",
   cancelLabel = "Cancel",
   confirmDisabled,
+  cancelDisabled,
   onConfirm,
   onCancel,
 }: {
@@ -20,6 +21,7 @@ export function Dialog({
   confirmVariant?: "primary" | "danger";
   cancelLabel?: string;
   confirmDisabled?: boolean;
+  cancelDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }): ReactElement {
@@ -46,7 +48,7 @@ export function Dialog({
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.stopPropagation();
-            onCancel();
+            if (!cancelDisabled) onCancel();
           }
           if (event.key === "Tab") {
             const controls = Array.from(
@@ -76,7 +78,7 @@ export function Dialog({
         <h2 id={id}>{title}</h2>
         <div className={styles.body}>{children}</div>
         <div className={styles.actions}>
-          <Button variant="quiet" onClick={onCancel}>
+          <Button variant="quiet" disabled={cancelDisabled} onClick={onCancel}>
             {cancelLabel}
           </Button>
           <Button data-dialog-confirm variant={confirmVariant} disabled={confirmDisabled} onClick={onConfirm}>

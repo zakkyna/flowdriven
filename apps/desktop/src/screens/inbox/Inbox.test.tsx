@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { createFixtureRunnerClient } from "@flowdriven/fixtures";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
+import { App } from "../../App";
+import { RunnerProvider } from "../../runner/runner-context";
 import { readyState, renderApp } from "../../test/render";
 import { PayloadView } from "./PayloadView";
 
@@ -242,4 +245,104 @@ test("expired decisions have no actions", async () => {
   expect((await screen.findAllByText("Expired")).length).toBeGreaterThan(0);
   expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
+});
+
+test("batch cannot be dismissed while approvals are running", async () => {
+  const { client } = renderApp("#/inbox/ap-0011");
+  const original = client.call.bind(client);
+  let release: (() => void) | undefined;
+  vi.spyOn(client, "call").mockImplementation((name, input) => {
+    if (name === "approvals.resolve")
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      }).then(() => original(name, input as never));
+    return original(name, input as never);
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Approve all 3 similar for this run" }));
+  const dialog = screen.getByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Approve 3" }));
+  const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+  expect(cancel).toHaveProperty("disabled", true);
+  fireEvent.click(cancel);
+  fireEvent.keyDown(dialog, { key: "Escape" });
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  for (let i = 0; i < 3; i++) {
+    await waitFor(() => expect(release).toBeDefined());
+    const next = release;
+    release = undefined;
+    await act(async () => next?.());
+  }
+  await screen.findByText("Approved 3 sends.");
+  expect(
+    client.state.approvals
+      .filter((a) => ["ap-0011", "ap-0012", "ap-0013"].includes(a.id))
+      .map((a) => a.state),
+  ).toEqual(["approved", "approved", "approved"]);
+});
+
+test.each(["approve", "edit", "reject"] as const)(
+  "%s cannot be repeated before a delayed change event",
+  async (decision) => {
+    window.location.hash = "#/inbox/ap-0012";
+    const client = createFixtureRunnerClient();
+    const subscribe = client.subscribe.bind(client);
+    const events: (() => void)[] = [];
+    vi.spyOn(client, "subscribe").mockImplementation((listener) =>
+      subscribe((event) => events.push(() => listener(event))),
+    );
+    const spy = vi.spyOn(client, "call");
+    render(
+      <RunnerProvider client={client}>
+        <App />
+      </RunnerProvider>,
+    );
+    await screen.findByRole("button", { name: "Approve" });
+    if (decision === "edit") {
+      fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+      fireEvent.click(screen.getByRole("button", { name: "Approve with edits" }));
+    } else if (decision === "reject") {
+      fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Reject" }));
+    } else fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await screen.findByText(
+      decision === "reject" ? "Rejected." : decision === "edit" ? "Approved with edits." : "Approved.",
+    );
+    const approve = screen.queryByRole("button", { name: "Approve" });
+    if (approve) fireEvent.click(approve);
+    expect(spy.mock.calls.filter(([name]) => name === "approvals.resolve")).toHaveLength(1);
+    await act(async () => {
+      for (const event of events.splice(0)) event();
+    });
+  },
+);
+
+test("a pending decision does not change a newer selection", async () => {
+  const { client } = renderApp("#/inbox/ap-0012");
+  const original = client.call.bind(client);
+  let release: (() => void) | undefined;
+  vi.spyOn(client, "call").mockImplementation((name, input) =>
+    name === "approvals.resolve"
+      ? new Promise<void>((resolve) => {
+          release = resolve;
+        }).then(() => original(name, input as never))
+      : original(name, input as never),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+  const other = client.state.approvals.find((a) => a.id === "ap-0011");
+  if (!other) throw new Error("Missing fixture");
+  fireEvent.click(within(list()).getByRole("button", { name: new RegExp(other.summary) }));
+  await waitFor(() => expect(window.location.hash).toBe("#/inbox/ap-0011"));
+  await act(async () => release?.());
+  expect(window.location.hash).toBe("#/inbox/ap-0011");
+  expect(screen.getByRole("heading", { level: 2, name: other.summary })).toBeTruthy();
+});
+
+test("a failed plain approval shows an alert in the detail", async () => {
+  const { client } = renderApp("#/inbox/ap-0014");
+  await screen.findByRole("button", { name: "Approve" });
+  vi.spyOn(client, "call").mockRejectedValue(new Error("Approval failed"));
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Approval failed");
+  expect(alert.parentElement?.querySelector("h2")).toBeTruthy();
 });

@@ -24,6 +24,7 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
   const previousSelection = useRef<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
+  const justResolved = useRef(new Set<string>());
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string>();
   if (query.loading || query.error)
@@ -49,6 +50,9 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
         to={{ screen: "inbox" }}
       />
     );
+  for (const item of all) {
+    if (item.state !== "pending") justResolved.current.delete(item.id);
+  }
   const waiting = all.filter((a) => a.state === "pending");
   const resolved = all.filter((a) => a.state !== "pending");
   const activeTab = identified ? (identified.state === "pending" ? "waiting" : "resolved") : tab;
@@ -74,7 +78,8 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
     setError(undefined);
   };
   const resolve = async (decision: ApprovalDecision, ids = selected ? [selected.id] : []) => {
-    if (!selected || !ids.length || inFlight.current) return;
+    if (!selected || !ids.length || inFlight.current || ids.some((id) => justResolved.current.has(id)))
+      return;
     inFlight.current = true;
     setBusy(true);
     setError(undefined);
@@ -91,15 +96,17 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
         failure = result.error.message;
         break;
       }
+      justResolved.current.add(id);
       count += result.data.length;
     }
     if (failure) {
       if (count) {
         setDialog(undefined);
-        navigate({ screen: "inbox", approvalId: selected.id });
+        if (previousSelection.current === selected.id) navigate({ screen: "inbox", approvalId: selected.id });
       }
-      setError(count ? `${count} approved before the error: ${failure}` : failure);
-    } else {
+      if (previousSelection.current === selected.id)
+        setError(count ? `${count} approved before the error: ${failure}` : failure);
+    } else if (previousSelection.current === selected.id) {
       setStatus(
         decision === "reject"
           ? "Rejected."
@@ -183,7 +190,7 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
               navigate({ screen: "inbox" });
             }}
             similar={similar}
-            busy={busy}
+            busy={busy || justResolved.current.has(selected.id)}
             editing={editing}
             text={text}
             setText={setText}
@@ -232,6 +239,7 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
           title={`Approve ${dialog.ids.length} similar ${plural}?`}
           confirmLabel={`Approve ${dialog.ids.length}`}
           confirmDisabled={busy}
+          cancelDisabled={busy}
           onCancel={() => setDialog(undefined)}
           onConfirm={() => void resolve("approve", dialog.ids)}
         >
