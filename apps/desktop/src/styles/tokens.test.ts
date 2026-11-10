@@ -152,3 +152,14 @@ test("rail, pane and the smallest chat fit the minimum window", () => {
   expect(px("rail-width") + px("pane-width") + 360).toBeLessThanOrEqual(minimum);
   expect(tokens).not.toMatch(/--chat-width/);
 });
+
+test("no stylesheet uses a shadow: hairlines only", () => {
+  for (const [file, css] of cssFiles()) expect(css, file).not.toMatch(/box-shadow\s*:\s*(?!none)/);
+});
+test("the tone accent is gone from the code", () => {
+  const sources = (readdirSync(SRC, { recursive: true }) as string[]).filter(
+    (f) => /\.tsx?$/.test(f) && !f.endsWith(".test.tsx") && !f.endsWith(".test.ts"),
+  );
+  for (const file of sources)
+    expect(readFileSync(`${SRC}/${file}`, "utf8"), file).not.toMatch(/tone[:=]\s*\{?"accent"/);
+});

@@ -1906,7 +1906,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 **Interfaces:**
 - Consumes: everything above. This task changes no product code. If a guard below fails, fix the stylesheet or component it names; do not weaken the guard.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `layout-guards.test.ts`: add `"nav/Sidebar.module.css"` and `"ui/Page.module.css"` to `files`.
 
@@ -1940,21 +1940,21 @@ test("every captured screen becomes ready and never shows Loading once ready", {
 
 (Rename the file's import list as Biome asks; `screens.test.ts` becomes `screens.test.tsx` only if the executor needs JSX, which this test does not.)
 
-- [ ] **Step 2: Prove each guard, then run them**
+- [x] **Step 2: Prove each guard, then run them**
 
 These are guard tests over finished work, so there is no failing step in the usual sense. Prove each guard bites once, then undo the probe: add `box-shadow: 0 0 1px var(--border);` to `ui/Page.module.css` and run `pnpm vitest run apps/desktop/src/styles` (expected FAIL naming `ui/Page.module.css`); set one `tone: "wait"` in `ui/status.ts` back to `tone: "accent"` and run the same command (expected FAIL naming `ui/status.ts`); add `text-overflow: ellipsis;` to a rule in `nav/Sidebar.module.css` and run `pnpm vitest run apps/desktop/src/layout-guards.test.ts apps/desktop/src/App.test.tsx` (expected FAIL in `a long flow name wraps in the sidebar`). Revert each probe by hand (remove the one added line, put the one `tone` back) and confirm `git status` lists only the three test files of this task; the executor runs no git write.
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS. Any FAIL names the file that still has a shadow, an accent tone, a missing ready attribute or a leftover "Loading". Fix that file, not the test.
 
-- [ ] **Step 3: Run the gate and the build**
+- [x] **Step 3: Run the gate and the build**
 
 Run: `pnpm format && pnpm check && pnpm build:web`
 Expected: PASS
 
-- [ ] **Step 4: Chair step (GUI)**: `pnpm capture` must exit 0 with 16 PNGs in `.workflow/scratch/screens/`. Open all 16 (eight screens, light and dark) and compare with the approved look; show the owner. `pnpm start` once to see the real window.
+- [x] **Step 4: Chair step (GUI)**: `pnpm capture` must exit 0 with 16 PNGs in `.workflow/scratch/screens/`. Open all 16 (eight screens, light and dark) and compare with the approved look; show the owner. `pnpm start` once to see the real window.
 
-- [ ] **Step 5: Chair step (commit)**: first add this section to `docs/plans/ROADMAP.md`, directly after the "01 Foundation and screens" section and before "02" (the "Order changed" paragraph already says plan 01b is applied alongside and does not change the order, so no other line moves):
+- [x] **Step 5: Chair step (commit)**: first add this section to `docs/plans/ROADMAP.md`, directly after the "01 Foundation and screens" section and before "02" (the "Order changed" paragraph already says plan 01b is applied alongside and does not change the order, so no other line moves):
 
 ```markdown
 ### 01b The simple look (detailed: `2026-11-11-01b-simple-look.md`)
@@ -1971,4 +1971,4 @@ git add apps/desktop/src docs/plans/ROADMAP.md
 git commit -m "Guard the simple look: no shadows, no accent tone, every screen ready" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 const files = [
+  "nav/Sidebar.module.css",
+  "ui/Page.module.css",
   "ui/CheckList.module.css",
   "screens/builder/Builder.module.css",
   "screens/inbox/Inbox.module.css",
