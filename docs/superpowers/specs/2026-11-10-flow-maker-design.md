@@ -1785,7 +1785,7 @@ steps:
          outputs: [{id: verdict, type: json}], checks: [{type: schema, file: checks/verdict.schema.json}]}
   - id: pick
     do: ask
-    ask: {question: "Which jobs get a prototype?", max_pick: ${params.daily_builds}, expires: 24h,
+    ask: {question: "Which jobs get a prototype?", max_pick: "${params.daily_builds}", expires: 24h,
           choose_from: "${steps.review.items where steps.full.outputs.verdict.fit}",
           approves: [host.prototype_publish]}
   - id: build

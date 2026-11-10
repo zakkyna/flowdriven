@@ -26,6 +26,12 @@ The outlines below were written before this change. Until each is re-outlined ju
 - Spec: 8.2, 8.7 (contract v0), 9, 10.1 to 10.4, 10.7, 11.1, 11.2, 11.5, 12.2, 12.3, 13.1 to 13.5, 16 (as sample data), 17.4 to 17.6 (local half), 18.4.
 - Depends on: the owner approving the starting dependency allowlist.
 
+### 01b The simple look (detailed: `2026-11-11-01b-simple-look.md`)
+- Goal: every screen of plan 01 gets the approved simple look: a sidebar with the flows, the conversation in the centre, the work pane on the right, hairlines, an ink primary button, the system font, a light and a dark theme. "New flow" is the only new behaviour.
+- Owner sees: the 16 screenshots again in the new look, and the app in its window.
+- Spec: 5 and 18.4 (the look), 8.2, 12, 13.2, 13.3.
+- Depends on: 01. Changes no contract and not the plan order (see "Order changed").
+
 ### 02 Flow format SDK, storage and runner core (outline, detailed just in time)
 - Goal: a real background runner that stores flows and runs, executes steps against a fake harness and grades them with real checks, and the app reading it instead of sample data.
 - Owner sees: a sample flow run end to end in the app against the fake harness, with real check results, history and a Markdown run export (spec 13.4; plan 01 has the flow, project and state filters).
@@ -93,7 +99,7 @@ The outlines below were written before this change. Until each is re-outlined ju
 |---|---|
 | Stage (0) local half: instruction files, local checks, dependency allowlist | 01 |
 | Stage (0) GitHub half: settings, rulesets, accounts, CI workflows, CODEOWNERS, people files | 10 (before the first push) |
-| Desktop app | 01 (screens), 02 (wired to the runner) |
+| Desktop app | 01 (screens), 01b (look), 02 (wired to the runner) |
 | Runner | 02 |
 | Chat plus step-list builder | 01 (UI), 02 (SDK-validated edits), 03 (chat agent) |
 | One-time flows with "save as flow" | 03 (arrives with stage a) |
