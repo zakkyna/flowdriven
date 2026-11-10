@@ -1,0 +1,117 @@
+# FlowDriven phase-1 roadmap
+
+Spec: `docs/superpowers/specs/2026-11-10-flow-maker-design.md` (section 17 sets the phases and the build order).
+Rule for every plan: it ends in something the owner can see or run. Plan 01 is detailed; every later plan is an **outline, detailed just in time**, written after the plan before it is done, so it can use what that plan taught.
+
+## Plans
+
+### 01 Foundation and screens on sample data (detailed: `2026-11-10-01-foundation-and-screens.md`)
+- Goal: the app opens and shows every phase-1 screen on sample data, in a repository that already enforces the local half of the agent rules.
+- Owner sees: the Builder, Inbox, Runs, Readiness, Harnesses and Settings screens in a browser and in the Electron window, light and dark, plus 16 screenshots (eight screens, two themes) to correct the design.
+- Spec: 8.2, 8.7 (contract v0), 9, 10.1 to 10.4, 10.7, 11.1, 11.2, 11.5, 12.2, 12.3, 13.1 to 13.5, 16 (as sample data), 17.4 to 17.6 (local half), 18.4.
+- Depends on: the owner approving the starting dependency allowlist.
+
+### 02 Flow format SDK, storage and runner core (outline, detailed just in time)
+- Goal: a real background runner that stores flows and runs, executes steps against a fake harness and grades them with real checks, and the app reading it instead of sample data.
+- Owner sees: a sample flow run end to end in the app against the fake harness, with real check results, history and a Markdown run export (spec 13.4; plan 01 has the flow, project and state filters).
+- Spec: 9 (MIT SDK: parser, validator, hasher, packer; content hash 9.6), 8.3 (runner process, local socket, JSON-RPC, launch agent), 8.4 (SQLite through Node's built-in `node:sqlite`, if it proves stable enough), 8.7 (contract over the socket), 10.2 (edits validated by the SDK, in-place editing), 13.1, 13.2, 13.4, 13.5 (resume after a crash).
+- Depends on: 01 (contracts, `RunnerClient`, screens).
+
+### 03 Agent core and brain providers (outline, detailed just in time)
+- Goal: the one agent: clarifying chat to a flow, one-time flows from chat, memory and the API-key budget, with one real API-key brain and a fake brain for tests.
+- Owner sees: with the scripted fake brain, describing work in chat produces a flow in the step list; a one-off request runs as a one-time flow and offers "Save this as a flow?"; the budget stops spending at the cap. The only real brain in this plan is an API key, which stays off at a budget of 0 (spec 10.4), so the first real brain the owner sees is the official Codex adapter of plan 04.
+- Spec: 10.1 to 10.7, 13.7, 3.3 (anti-goals 1 to 4), `BrainProvider` (10.3).
+- Depends on: 02.
+
+### 04 Harness detection, adapters and the fake-harness kit (outline, detailed just in time)
+- Goal: detect installed harnesses and their inventory, and run Codex, Claude Code and Antigravity as brain and worker through per-run scoped configs.
+- Owner sees: the Harnesses screen showing the owner's real harnesses, consent screens, and a step done by real Codex.
+- Spec: 6.1, 10.3 (harness backends and fallback), 11.1 to 11.6, 11.7 (scoped config), 17.1 (fake harness CLIs), 18.3 (scoped-config research, needed before stage a ends).
+- Depends on: 02; 03 for brain fallback.
+
+### 05 Readiness engine, gateway, approvals enforcement, notifications (outline, detailed just in time)
+- Goal: requirement checks with fixes from a signed catalog, the MCP gateway that holds risky calls, approval hooks that fail closed, macOS notifications, schedules and Keychain secrets.
+- Owner sees: a live checklist with "Install for me", a risky send held in the Inbox, a notification only when a decision is needed.
+- Spec: 8.5, 10.6, 11.7, 12 (all), 13.3, 13.6, 15.2, audit log (8.4).
+- Depends on: 02, 04.
+
+### 06 First flow end to end: Documents and reports, and the stage (a) check (outline, detailed just in time)
+- Goal: ship the Documents and reports flow on the real engine and pass stage (a).
+- Owner sees: three real runs on the owner's own files with every step check passing, and one-time flows from chat (the ten-run count of the exit test starts here).
+- Spec: 16.2, requirement catalog first entries (18.4), 17 stage (a).
+- Depends on: 02 to 05.
+
+### 07 Stage (b): Figma to Flutter (outline, detailed just in time)
+- Goal: the Figma flow through a catalogued harness's native connector, in a git worktree.
+- Owner sees: Flutter screens on a `flowdriven/...` branch from a real Figma file, analyze and tests passing.
+- Spec: 16.1, 9.8, 6.2 (Figma), 11.4 (worktrees), 11.7 (native route).
+- Depends on: 06.
+
+### 08 Stage (c): Gmail and spreadsheets, Email triage, Lead follow-up (outline, detailed just in time)
+- Goal: mail and sheet routes per phase-1 harness, then both flows with drafts by default and sends held for approval.
+- Owner sees: drafts in the mailbox, sends approved one by one or as a batch, leads scored from a sheet.
+- Spec: 16.3, 16.4, 6.2, 18.3 (Gmail and sheet research first).
+- Depends on: 06; research in 18.3.
+
+### 09 Stage (d): social draft routes, One source into many social posts (outline, detailed just in time)
+- Goal: draft or schedule routes for YouTube, Instagram, WordPress and TikTok draft, managed browser profiles, then the social flow.
+- Owner sees: one source turned into platform drafts, each publish held for approval.
+- Spec: 16.5, 12.6, 6.2, 18.3.
+- Depends on: 08.
+
+### 10 Stage (0), GitHub half: repository rules on GitHub (outline, detailed just in time)
+- Goal: everything of 17.2 to 17.6 that needs GitHub or acts on contributors, applied before the first push.
+- Contents: licence files (AGPL-3.0 core, MIT SDK), README with the approved one-line description, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, pull-request template, issue forms, `CODEOWNERS`, CI workflows (aggregate test job, hidden-character scan of the diff, workflow lint, dependency gate against the base branch, single-purpose check, secret scanning), rulesets, the machine account and narrow token, Claude Code hooks and deny rules for the "Never do" list, the local pre-push check (spec 17.5 lists it with the local half; plan 01 decision 23 moves it here, and the owner does not push before then), and the stage (0) done test of 17.5.
+- Owner sees: a GitHub repository where a direct push, an unlisted dependency and a hidden character are each refused.
+- Spec: 14.9 (description), 17.2 to 17.6, 18.2 items 5 to 7, 18.3 (GitHub and harness-control research).
+- Depends on: the owner's tasks in 18.2 items 6 and 7. It can move earlier at any time; it must land before the first push.
+
+### 11 Stage (e): release path, docs site and the phase-1 exit test (outline, detailed just in time)
+- Goal: a signed and notarized pre-release built from a tag through the protected release path, the docs site with llms.txt and llms-full.txt, and the recorded exit test.
+- Owner sees: an installable signed build, the docs site, and `docs/release-readiness.md` with the exit-test results.
+- Spec: 14.9 (phase-1 discoverability), 17 (exit test), 17.5 (release path and stage e checks), 18.2 item 8.
+- Depends on: 07 to 10; the Apple developer account.
+
+## Coverage of phase 1 (spec 17 phase table and build order)
+
+| Phase-1 scope item | Plan |
+|---|---|
+| Stage (0) local half: instruction files, local checks, dependency allowlist | 01 |
+| Stage (0) GitHub half: settings, rulesets, accounts, CI workflows, CODEOWNERS, people files | 10 (before the first push) |
+| Desktop app | 01 (screens), 02 (wired to the runner) |
+| Runner | 02 |
+| Chat plus step-list builder | 01 (UI), 02 (SDK-validated edits), 03 (chat agent) |
+| One-time flows with "save as flow" | 03 (arrives with stage a) |
+| SDK: format, validator, hasher | 02 |
+| Harness detection and inventory | 04 |
+| Adapters for Codex, Claude Code and Antigravity (brain, worker, scoped config, approval hooks) | 04 (hooks enforced in 05) |
+| Brain picker with fallback | 01 (UI), 03 (logic), 04 (harness backends) |
+| Budget | 01 (UI), 03 |
+| Readiness engine with catalog | 05; catalog entries in 06 to 09 |
+| Gateway | 05 |
+| Runner checks, retries, approval inbox, history, resume | 02 (core), 05 (risky-action enforcement) |
+| Memory | 03 |
+| Notifications | 05 |
+| Fake-harness test kit | 02 (minimal fake), 04 (full kit) |
+| Signed and notarized Mac build through the protected release path | 11 |
+| Discoverability basics: one-line description on repo, README, SDK package | 10 |
+| Discoverability basics: docs site with llms.txt and llms-full.txt | 11 |
+| Readiness work: Figma native route | 07 |
+| Readiness work: Gmail, spreadsheets | 08 |
+| Readiness work: social draft routes (YouTube, Instagram, WordPress, TikTok draft) | 09 |
+| Flow: Documents and reports | 06 |
+| Flow: Figma to Flutter | 07 |
+| Flows: Email triage and replies; Lead follow-up | 08 |
+| Flow: One source into many social posts | 09 |
+| Exit test (three runs per flow, ten one-time flows, fake-harness suite, stage 0 and stage e checks) | 11 records it; runs accumulate from 06 |
+
+| Build-order stage (spec 17) | Plans |
+|---|---|
+| (0) repository groundwork | 01 (local half), 10 (GitHub half) |
+| (a) core engine with Documents and reports, one-time flows | 01 to 06 |
+| (b) Figma to Flutter | 07 |
+| (c) Gmail and spreadsheet readiness, Email triage, Lead follow-up | 08 |
+| (d) social draft routes, One source into many social posts | 09 |
+| (e) release | 11 |
+
+Phase 2 (marketplace, MCP-server mode, Sign in with ChatGPT, further adapters) gets its own roadmap after the phase-1 exit test.

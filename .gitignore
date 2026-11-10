@@ -1,0 +1,12 @@
+# Private working notes: never published
+docs/research/
+.workflow/
+
+# macOS
+.DS_Store
+
+# Build output
+node_modules/
+dist/
+dist-electron/
+*.tsbuildinfo
