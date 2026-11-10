@@ -9,13 +9,26 @@
   },
   "scripts": {
     "test:tools": "node --test \"tools/checks/test/*.test.mjs\"",
-    "check": "pnpm test:tools && pnpm check:hidden && pnpm check:deps",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:hidden && pnpm check:deps",
     "check:hidden": "node tools/checks/hidden-chars.mjs",
-    "check:deps": "node tools/checks/dependency-gate.mjs"
+    "check:deps": "node tools/checks/dependency-gate.mjs",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "tsc -p packages/contracts && tsc -p packages/fixtures && tsc -p apps/desktop",
+    "test": "TZ=UTC vitest run && pnpm test:tools"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron"
     ]
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "@biomejs/biome": "2.6.3",
+    "vite": "8.3.5",
+    "@vitejs/plugin-react": "6.1.2",
+    "vitest": "5.0.5",
+    "happy-dom": "21.0.4",
+    "@types/node": "24.19.2"
   }
 }

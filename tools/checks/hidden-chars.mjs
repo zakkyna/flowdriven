@@ -2,7 +2,14 @@ import { closeSync, lstatSync, openSync, readFileSync, readSync, realpathSync } 
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { charClass, HIDDEN_RANGES } from "./lib/ranges.mjs";
-import { decodeText, deletedPaths, isBinaryFile, listRepoEntries, repoRoot, showText } from "./lib/repo-files.mjs";
+import {
+  decodeText,
+  deletedPaths,
+  isBinaryFile,
+  listRepoEntries,
+  repoRoot,
+  showText,
+} from "./lib/repo-files.mjs";
 
 export { HIDDEN_RANGES };
 
@@ -115,10 +122,10 @@ function entryFailure(entry, info, deleted) {
 
 /**
  * @param {string} root
- * @param {string[]} argv
+ * @param {string[]} _argv
  * @returns {{lines: string[], code: 0 | 1 | 2}}
  */
-export function run(root, argv) {
+export function run(root, _argv) {
   try {
     const lines = [];
     const entries = listRepoEntries(root);
@@ -148,7 +155,9 @@ export function run(root, argv) {
     }
     return { lines: [`hidden-chars: OK, 0 findings in ${count} files`], code: 0 };
   } catch (error) {
-    const message = String(error.message).split(/\r\n|\r|\n/, 1)[0].trim();
+    const message = String(error.message)
+      .split(/\r\n|\r|\n/, 1)[0]
+      .trim();
     return { lines: [`hidden-chars: ERROR ${showText(message)}`], code: 2 };
   }
 }

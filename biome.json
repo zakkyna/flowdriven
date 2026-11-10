@@ -1,0 +1,41 @@
+{
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 110
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "a11y": {
+        "useSemanticElements": "off"
+      }
+    }
+  },
+  "css": {
+    "parser": {
+      "cssModules": true
+    }
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/dist-electron",
+      "!.workflow",
+      "!docs/research",
+      "!pnpm-lock.yaml",
+      "!**/*.md",
+      "!pnpm-workspace.yaml"
+    ]
+  }
+}

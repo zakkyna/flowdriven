@@ -4,7 +4,14 @@ import { existsSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  decodeText, deletedPaths, isBinaryFile, listRepoEntries, listRepoFiles, repoRoot, showPath, showText,
+  decodeText,
+  deletedPaths,
+  isBinaryFile,
+  listRepoEntries,
+  listRepoFiles,
+  repoRoot,
+  showPath,
+  showText,
 } from "../lib/repo-files.mjs";
 import { makeRepo, removeRepo } from "./helpers/temp-repo.mjs";
 
@@ -36,8 +43,11 @@ test("listRepoEntries gives modes and marks names", () => {
 test("listRepoEntries reports a submodule link", () => {
   const root = makeRepo({});
   try {
-    execFileSync("git", ["update-index", "--add", "--cacheinfo",
-      "160000,1111111111111111111111111111111111111111,sub"], { cwd: root });
+    execFileSync(
+      "git",
+      ["update-index", "--add", "--cacheinfo", "160000,1111111111111111111111111111111111111111,sub"],
+      { cwd: root },
+    );
     assert.deepEqual(listRepoEntries(root), [{ path: "sub", mode: "160000", validName: true }]);
   } finally {
     removeRepo(root);
@@ -58,9 +68,12 @@ test("deletedPaths lists tracked files gone from disk", () => {
 test("isBinaryFile needs the extension and the signature", () => {
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
   const cases = [
-    ["logo.png", png], ["a.jpg", Buffer.from([0xff, 0xd8, 0xff])],
-    ["a.gif", Buffer.from("GIF8")], ["a.webp", Buffer.from("RIFF1234WEBP")],
-    ["a.ico", Buffer.from([0, 0, 1, 0])], ["a.icns", Buffer.from("icns")],
+    ["logo.png", png],
+    ["a.jpg", Buffer.from([0xff, 0xd8, 0xff])],
+    ["a.gif", Buffer.from("GIF8")],
+    ["a.webp", Buffer.from("RIFF1234WEBP")],
+    ["a.ico", Buffer.from([0, 0, 1, 0])],
+    ["a.icns", Buffer.from("icns")],
   ];
   for (const [path, head] of cases) {
     assert.equal(isBinaryFile(path, head), true, path);

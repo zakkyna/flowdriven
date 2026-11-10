@@ -1,9 +1,15 @@
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join, posix } from "node:path";
-import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
-import { decodeText, deletedPaths, listRepoEntries, repoRoot, showPath, showText }
-  from "./lib/repo-files.mjs";
+import { isDeepStrictEqual } from "node:util";
+import {
+  decodeText,
+  deletedPaths,
+  listRepoEntries,
+  repoRoot,
+  showPath,
+  showText,
+} from "./lib/repo-files.mjs";
 
 /** @typedef {{registry: string, installScripts: string[], packages: {name: string, range: string, packages: string[], why: string}[]}} Allowlist */
 const registry = "https://registry.npmjs.org/";
@@ -15,7 +21,12 @@ export function parseRange(range) {
   const caret = typeof range === "string" && range.startsWith("^");
   const match = typeof range === "string" && (caret ? range.slice(1) : range).match(exact);
   if (!match) throw new Error(`unsupported range ${range}`);
-  return { kind: caret ? "caret" : "exact", major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
+  return {
+    kind: caret ? "caret" : "exact",
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+  };
 }
 
 /** @param {string} version @param {string} range @returns {boolean} */
@@ -28,10 +39,29 @@ export function satisfies(version, range) {
   return cmp >= 0 && v.major === r.major && (r.major !== 0 || v.minor === r.minor);
 }
 
-const rootFields = ["name", "private", "type", "license", "packageManager", "engines", "scripts",
-  "dependencies", "devDependencies", "pnpm"];
-const packageFields = ["name", "version", "private", "type", "license", "main", "exports",
-  "dependencies", "devDependencies"];
+const rootFields = [
+  "name",
+  "private",
+  "type",
+  "license",
+  "packageManager",
+  "engines",
+  "scripts",
+  "dependencies",
+  "devDependencies",
+  "pnpm",
+];
+const packageFields = [
+  "name",
+  "version",
+  "private",
+  "type",
+  "license",
+  "main",
+  "exports",
+  "dependencies",
+  "devDependencies",
+];
 const forbiddenFields = ["overrides", "resolutions", "dependenciesMeta"];
 
 function checkManifestFields(path, json, allowlist) {
@@ -104,12 +134,21 @@ export function checkInstallScripts(rootManifest, allowlist) {
   const expected = new Set(allowlist.installScripts);
   const valid = Array.isArray(list) && list.every((item) => typeof item === "string");
   const actual = new Set(valid ? list : []);
-  if (plainObject(rootManifest.pnpm) && Object.keys(rootManifest.pnpm).length === 1 && valid &&
-      actual.size === expected.size && [...expected].every((name) => actual.has(name))) return [];
-  return [`package.json: pnpm.onlyBuiltDependencies must equal allowlist installScripts [${[...expected].sort().join(", ")}]`];
+  if (
+    plainObject(rootManifest.pnpm) &&
+    Object.keys(rootManifest.pnpm).length === 1 &&
+    valid &&
+    actual.size === expected.size &&
+    [...expected].every((name) => actual.has(name))
+  )
+    return [];
+  return [
+    `package.json: pnpm.onlyBuiltDependencies must equal allowlist installScripts [${[...expected].sort().join(", ")}]`,
+  ];
 }
 
-const resolutionPattern = /^\s+resolution: \{integrity: sha(?:1|256|384|512)-[A-Za-z0-9+/]+=*(?:, tarball: https:\/\/registry\.npmjs\.org\/[^\s,}]+)?\}$/;
+const resolutionPattern =
+  /^\s+resolution: \{integrity: sha(?:1|256|384|512)-[A-Za-z0-9+/]+=*(?:, tarball: https:\/\/registry\.npmjs\.org\/[^\s,}]+)?\}$/;
 
 /** Check lockfile sources and importer folders. */
 export function checkLockfile(text, allowlist) {
@@ -123,7 +162,7 @@ export function checkLockfile(text, allowlist) {
   for (const [index, line] of lines.entries()) {
     if (/^[^\s#][^:]*:/.test(line)) inImporters = /^importers:/.test(line);
     const loc = `pnpm-lock.yaml:${index + 1}`;
-    const importer = inImporters && line.match(/^  ([^\s][^:]*):\s*$/);
+    const importer = inImporters && line.match(/^ {2}([^\s][^:]*):\s*$/);
     if (importer && allowlist && !Object.values(allowlist.workspaces).includes(importer[1])) {
       errors.push(`${loc}: unknown importer ${importer[1]}`);
     }
@@ -186,8 +225,14 @@ function isValidEntry(entry) {
   } catch {
     return false;
   }
-  return typeof entry?.name === "string" && !!entry.name.trim() && strings(entry.packages) &&
-    entry.packages.length > 0 && typeof entry.why === "string" && !!entry.why.trim();
+  return (
+    typeof entry?.name === "string" &&
+    !!entry.name.trim() &&
+    strings(entry.packages) &&
+    entry.packages.length > 0 &&
+    typeof entry.why === "string" &&
+    !!entry.why.trim()
+  );
 }
 
 export function checkAllowlist(allowlist) {
@@ -209,36 +254,68 @@ export function checkAllowlist(allowlist) {
   }
   const workspaces = allowlist?.workspaces;
   const folders = plainObject(workspaces) ? Object.values(workspaces) : [];
-  const validWorkspaces = plainObject(workspaces) && Object.keys(workspaces).length > 0 &&
-    Object.entries(workspaces).every(([name, folder]) => name.trim() && !names.has(name) &&
-      typeof folder === "string" && (folder === "." || /^(apps|packages)\/[^/]+(?:\/[^/]+)*$/.test(folder)) &&
-      (folder === "." || !folder.split("/").some((part) => part === "." || part === ".."))) &&
+  const validWorkspaces =
+    plainObject(workspaces) &&
+    Object.keys(workspaces).length > 0 &&
+    Object.entries(workspaces).every(
+      ([name, folder]) =>
+        name.trim() &&
+        !names.has(name) &&
+        typeof folder === "string" &&
+        (folder === "." || /^(apps|packages)\/[^/]+(?:\/[^/]+)*$/.test(folder)) &&
+        (folder === "." || !folder.split("/").some((part) => part === "." || part === "..")),
+    ) &&
     new Set(folders).size === folders.length;
   if (!validWorkspaces) errors.push("allowlist.json: invalid workspaces");
   const scripts = allowlist?.rootScripts;
-  const commands = { "test:tools": 'node --test "tools/checks/test/*.test.mjs"',
+  const commands = {
+    "test:tools": 'node --test "tools/checks/test/*.test.mjs"',
     "check:hidden": "node tools/checks/hidden-chars.mjs",
-    "check:deps": "node tools/checks/dependency-gate.mjs" };
-  const lifecycle = new Set(["preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare",
-    "prepublish", "prepublishOnly", "prepack", "postpack", "publish", "postpublish"]);
-  const validScripts = plainObject(scripts) && Object.entries(scripts).every(([name, value]) =>
-    typeof value === "string" && !name.startsWith("pnpm:") && !lifecycle.has(name) &&
-    !["pre", "post"].some((prefix) => name.startsWith(prefix) &&
-      Object.hasOwn(scripts, name.slice(prefix.length)))) &&
+    "check:deps": "node tools/checks/dependency-gate.mjs",
+  };
+  const lifecycle = new Set([
+    "preinstall",
+    "install",
+    "postinstall",
+    "preprepare",
+    "prepare",
+    "postprepare",
+    "prepublish",
+    "prepublishOnly",
+    "prepack",
+    "postpack",
+    "publish",
+    "postpublish",
+  ]);
+  const validScripts =
+    plainObject(scripts) &&
+    Object.entries(scripts).every(
+      ([name, value]) =>
+        typeof value === "string" &&
+        !name.startsWith("pnpm:") &&
+        !lifecycle.has(name) &&
+        !["pre", "post"].some(
+          (prefix) => name.startsWith(prefix) && Object.hasOwn(scripts, name.slice(prefix.length)),
+        ),
+    ) &&
     Object.entries(commands).every(([name, value]) => scripts[name] === value) &&
-    typeof scripts.check === "string" && ["pnpm check:hidden", "pnpm check:deps"]
-      .every((command) => scripts.check.includes(command)) &&
+    typeof scripts.check === "string" &&
+    ["pnpm check:hidden", "pnpm check:deps"].every((command) => scripts.check.includes(command)) &&
     (scripts.check.includes("pnpm test:tools") ||
       (/\bpnpm test(?= |&&|$)/.test(scripts.check) && scripts.test?.includes("pnpm test:tools")));
   if (!validScripts) errors.push("allowlist.json: invalid rootScripts");
-  if (!strings(allowlist?.guardTests) || !allowlist.guardTests.length ||
-      !allowlist.guardTests.every((name) => /^[^/\\]+\.test\.mjs$/.test(name))) {
+  if (
+    !strings(allowlist?.guardTests) ||
+    !allowlist.guardTests.length ||
+    !allowlist.guardTests.every((name) => /^[^/\\]+\.test\.mjs$/.test(name))
+  ) {
     errors.push("allowlist.json: invalid guardTests");
   }
   if (!Array.isArray(allowlist?.packages)) errors.push("allowlist.json: invalid entry 0");
   const seen = new Set();
   for (const [index, entry] of entries.entries()) {
-    if (!isValidEntry(entry) || seen.has(entry?.name)) errors.push(`allowlist.json: invalid entry ${entry?.name || index}`);
+    if (!isValidEntry(entry) || seen.has(entry?.name))
+      errors.push(`allowlist.json: invalid entry ${entry?.name || index}`);
     seen.add(entry?.name);
   }
   return errors;
@@ -248,7 +325,8 @@ export function checkWorkspaceYaml(text) {
   const errors = [];
   for (const [index, line] of text.split(/\r?\n/).entries()) {
     const key = line.match(/^([^\s:#][^:]*):/);
-    if (key && key[1] !== "packages") errors.push(`pnpm-workspace.yaml:${index + 1}: ${key[1]} is not allowed`);
+    if (key && key[1] !== "packages")
+      errors.push(`pnpm-workspace.yaml:${index + 1}: ${key[1]} is not allowed`);
   }
   return errors;
 }
@@ -263,8 +341,17 @@ export function checkFiles(entries, allowlist) {
     }
   }
   const folders = Object.values(allowlist.workspaces);
-  const forbidden = ["package.yaml", "package.yml", "package.json5", "pnpm-workspace.yml",
-    ".pnpmfile.cjs", ".pnpmfile.mjs", "pnpmfile.cjs", "pnpmfile.mjs", ".pnpmrc"];
+  const forbidden = [
+    "package.yaml",
+    "package.yml",
+    "package.json5",
+    "pnpm-workspace.yml",
+    ".pnpmfile.cjs",
+    ".pnpmfile.mjs",
+    "pnpmfile.cjs",
+    "pnpmfile.mjs",
+    ".pnpmrc",
+  ];
   for (const entry of entries) {
     const { path, mode, validName } = entry;
     if (!validName) {
@@ -286,8 +373,11 @@ export function checkFiles(entries, allowlist) {
       errors.push(`${showPath(path)}: package.json is not in an approved workspace folder`);
     }
     const special = ["package.json", ".npmrc", "pnpm-workspace.yaml", "pnpm-lock.yaml"];
-    if (forbidden.includes(lower) || (special.includes(lower) && name !== lower) ||
-        (["pnpm-workspace.yaml", "pnpm-lock.yaml"].includes(lower) && folder !== ".")) {
+    if (
+      forbidden.includes(lower) ||
+      (special.includes(lower) && name !== lower) ||
+      (["pnpm-workspace.yaml", "pnpm-lock.yaml"].includes(lower) && folder !== ".")
+    ) {
       errors.push(`${showPath(path)}: is not allowed`);
     } else if (name === ".npmrc" && path !== ".npmrc") {
       errors.push(`${showPath(path)}: only the root .npmrc is allowed`);
@@ -332,8 +422,9 @@ function readJson(root, path, invalid) {
 }
 
 function validManifest(json) {
-  return plainObject(json) &&
-    fields.every((field) => !Object.hasOwn(json, field) || plainObject(json[field]));
+  return (
+    plainObject(json) && fields.every((field) => !Object.hasOwn(json, field) || plainObject(json[field]))
+  );
 }
 
 function readManifests(root, paths, errors) {
@@ -400,36 +491,56 @@ export function run(root, argv) {
     errors.push(...checkManifests(manifests, allow.value));
     if (rootManifest) errors.push(...checkInstallScripts(rootManifest, allow.value));
     else if (!paths.includes("package.json")) errors.push("package.json: missing");
-    checkTextFile(root, ".npmrc", (text) => {
-      const problems = checkNpmrc(text);
-      if (!problems.length && text !== `${allow.value.npmrc.join("\n")}\n`) {
-        problems.push(".npmrc: must hold exactly the approved lines");
-      }
-      return problems;
-    }, errors, true);
-    checkTextFile(root, "pnpm-workspace.yaml", (text) => {
-      const problems = checkWorkspaceYaml(text);
-      const expected = `packages:\n${allow.value.workspaceGlobs.map((glob) => `  - "${glob}"\n`).join("")}`;
-      if (text !== expected) {
-        problems.push("pnpm-workspace.yaml: must hold exactly the approved packages list");
-      }
-      return problems;
-    }, errors, false);
+    checkTextFile(
+      root,
+      ".npmrc",
+      (text) => {
+        const problems = checkNpmrc(text);
+        if (!problems.length && text !== `${allow.value.npmrc.join("\n")}\n`) {
+          problems.push(".npmrc: must hold exactly the approved lines");
+        }
+        return problems;
+      },
+      errors,
+      true,
+    );
+    checkTextFile(
+      root,
+      "pnpm-workspace.yaml",
+      (text) => {
+        const problems = checkWorkspaceYaml(text);
+        const expected = `packages:\n${allow.value.workspaceGlobs.map((glob) => `  - "${glob}"\n`).join("")}`;
+        if (text !== expected) {
+          problems.push("pnpm-workspace.yaml: must hold exactly the approved packages list");
+        }
+        return problems;
+      },
+      errors,
+      false,
+    );
     let lock = "lockfile checked";
     if (paths.includes("pnpm-lock.yaml")) {
       checkTextFile(root, "pnpm-lock.yaml", (text) => checkLockfile(text, allow.value), errors, true);
     } else if (argv.includes("--manifests-only")) {
       lock = "lockfile skipped (--manifests-only)";
     } else {
-      const hasExternal = manifests.some(({ json }) => fields.some((field) =>
-        Object.values(json[field] ?? {}).some((spec) =>
-          typeof spec !== "string" || !spec.startsWith("workspace:"))));
+      const hasExternal = manifests.some(({ json }) =>
+        fields.some((field) =>
+          Object.values(json[field] ?? {}).some(
+            (spec) => typeof spec !== "string" || !spec.startsWith("workspace:"),
+          ),
+        ),
+      );
       if (hasExternal) errors.push("pnpm-lock.yaml: missing");
       else lock = "lockfile skipped (no dependencies)";
     }
     return finish(errors.map(showText), manifests, lock);
   } catch (error) {
-    const message = showText(String(error.message).split(/\r\n|\r|\n/)[0].trim());
+    const message = showText(
+      String(error.message)
+        .split(/\r\n|\r|\n/)[0]
+        .trim(),
+    );
     return { lines: [`dependency-gate: ERROR ${message}`], code: 2 };
   }
 }

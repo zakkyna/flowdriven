@@ -29,8 +29,13 @@ export const HIDDEN_RANGES = [
  * @returns {string | null}
  */
 export function charClass(codePoint, next) {
-  if (codePoint === 0x09 || codePoint === 0x0a || (codePoint === 0x0d && next === 0x0a)
-    || (codePoint >= 0x20 && codePoint <= 0x7e)) return null;
+  if (
+    codePoint === 0x09 ||
+    codePoint === 0x0a ||
+    (codePoint === 0x0d && next === 0x0a) ||
+    (codePoint >= 0x20 && codePoint <= 0x7e)
+  )
+    return null;
   const char = String.fromCodePoint(codePoint);
   const hidden = HIDDEN_RANGES.find((range) => codePoint >= range.from && codePoint <= range.to);
   if (hidden) return hidden.cls;

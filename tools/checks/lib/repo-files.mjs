@@ -4,9 +4,7 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { charClass } from "./ranges.mjs";
 
-export const BINARY_EXTENSIONS = [
-  "png", "jpg", "jpeg", "gif", "webp", "ico", "icns",
-];
+export const BINARY_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "ico", "icns"];
 
 /** @returns {string} */
 export function repoRoot() {
@@ -69,7 +67,7 @@ export function listRepoEntries(root) {
     const mode = info.isSymbolicLink() ? "120000" : info.isDirectory() ? "040000" : "100644";
     entries.push(nameEntry(name, mode));
   }
-  return entries.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  return entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
 /** @param {string} root @returns {Set<string>} */

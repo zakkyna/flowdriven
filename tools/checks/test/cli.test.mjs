@@ -4,8 +4,8 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, wri
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { run } from "../hidden-chars.mjs";
 import { run as runGate } from "../dependency-gate.mjs";
+import { run } from "../hidden-chars.mjs";
 import { repoRoot } from "../lib/repo-files.mjs";
 import { makeRepo, removeRepo } from "./helpers/temp-repo.mjs";
 
@@ -111,8 +111,11 @@ test("a symbolic link is refused", () => {
 
 test("a submodule link and .gitmodules are refused", () => {
   withRepo({ ".gitmodules": "" }, (root) => {
-    execFileSync("git", ["update-index", "--add", "--cacheinfo",
-      "160000,1111111111111111111111111111111111111111,sub"], { cwd: root });
+    execFileSync(
+      "git",
+      ["update-index", "--add", "--cacheinfo", "160000,1111111111111111111111111111111111111111,sub"],
+      { cwd: root },
+    );
     const result = run(root, []);
     assert.equal(result.code, 1);
     assert.ok(result.lines.includes("sub: submodules are not allowed"));
@@ -179,20 +182,24 @@ test("a byte-order mark at the start of a file fails", () => {
   const content = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("hi\n")]);
   withRepo({ "AGENTS.md": content }, (root) => {
     assert.deepEqual(run(root, []).lines, [
-      "AGENTS.md:1:1 U+FEFF zero-width", "hidden-chars: FAIL, 1 findings",
+      "AGENTS.md:1:1 U+FEFF zero-width",
+      "hidden-chars: FAIL, 1 findings",
     ]);
   });
 });
 
 test("the size limit is exact", () => {
-  for (const [size, code] of [[8388608, 0], [8388609, 1]]) {
+  for (const [size, code] of [
+    [8388608, 0],
+    [8388609, 1],
+  ]) {
     withRepo({ "a.md": Buffer.alloc(size, 0x61) }, (root) => assert.equal(run(root, []).code, code));
   }
 });
 
 test("the count is the number of text files scanned", () => {
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-  withRepo({ "a": "a", "b": "b", "c": "c", "logo.png": png }, (root) => {
+  withRepo({ a: "a", b: "b", c: "c", "logo.png": png }, (root) => {
     assert.equal(run(root, []).lines.at(-1), "hidden-chars: OK, 0 findings in 3 files");
   });
 });
@@ -211,7 +218,8 @@ test("scan: the process exits 1 on a finding and 2 on an error (spawn)", () => {
     const target = join(outside, "tools/checks");
     cpSync(source, target, { recursive: true, filter: (path) => path !== join(source, "test") });
     const result = spawnSync(process.execPath, [join(target, "hidden-chars.mjs")], {
-      encoding: "utf8", env: { ...process.env, GIT_CEILING_DIRECTORIES: outside },
+      encoding: "utf8",
+      env: { ...process.env, GIT_CEILING_DIRECTORIES: outside },
     });
     assert.equal(result.status, 2);
     const lines = result.stdout.trimEnd().split("\n");
@@ -283,8 +291,8 @@ function desktop(changes = {}) {
 test("the base repository passes", () => {
   gate({}, (r) => {
     assert.equal(r.code, 0);
-    const expected = "dependency-gate: OK, 0 direct dependencies in 1 manifests, " +
-      "lockfile skipped (--manifests-only)";
+    const expected =
+      "dependency-gate: OK, 0 direct dependencies in 1 manifests, " + "lockfile skipped (--manifests-only)";
     assert.equal(r.lines.at(-1), expected);
   });
 });
@@ -300,20 +308,31 @@ test("a range instead of an exact version fails with its line", () => {
 });
 
 test("a missing .npmrc and a missing lockfile are reported", () => {
-  const files = { ".npmrc": null, "apps/desktop/package.json": desktop({ dependencies: { react: "19.3.1" } }) };
-  gate(files, (r) => {
-    assert.ok(r.lines.includes(".npmrc: missing"));
-    assert.ok(r.lines.includes("pnpm-lock.yaml: missing"));
-  }, []);
+  const files = {
+    ".npmrc": null,
+    "apps/desktop/package.json": desktop({ dependencies: { react: "19.3.1" } }),
+  };
+  gate(
+    files,
+    (r) => {
+      assert.ok(r.lines.includes(".npmrc: missing"));
+      assert.ok(r.lines.includes("pnpm-lock.yaml: missing"));
+    },
+    [],
+  );
 });
 
 test("a valid lockfile is checked", () => {
-  const lock = "lockfileVersion: '9.0'\n\npackages:\n\n  react@19.3.1:\n" +
-    "    resolution: {integrity: sha512-AAAA}\n";
-  gate({ "pnpm-lock.yaml": lock }, (r) => {
-    assert.equal(r.code, 0);
-    assert.ok(r.lines.at(-1).endsWith("lockfile checked"));
-  }, []);
+  const lock =
+    "lockfileVersion: '9.0'\n\npackages:\n\n  react@19.3.1:\n" + "    resolution: {integrity: sha512-AAAA}\n";
+  gate(
+    { "pnpm-lock.yaml": lock },
+    (r) => {
+      assert.equal(r.code, 0);
+      assert.ok(r.lines.at(-1).endsWith("lockfile checked"));
+    },
+    [],
+  );
 });
 
 test("nested manifests are counted and look-alikes are not", () => {
@@ -324,9 +343,11 @@ test("nested manifests are counted and look-alikes are not", () => {
 
 test("an .npmrc setting outside the short list fails", () => {
   for (const [text, message] of [
-    [npmrc + "dangerously-allow-all-builds=true\n",
-      ".npmrc:4: setting dangerously-allow-all-builds is not allowed"],
-    [npmrc + "strict-ssl=false\n", ".npmrc:4: setting strict-ssl is not allowed"],
+    [
+      `${npmrc}dangerously-allow-all-builds=true\n`,
+      ".npmrc:4: setting dangerously-allow-all-builds is not allowed",
+    ],
+    [`${npmrc}strict-ssl=false\n`, ".npmrc:4: setting strict-ssl is not allowed"],
     [npmrc.replace("engine-strict=true", "engine-strict=false"), ".npmrc:2: engine-strict must be true"],
   ]) {
     gate({ ".npmrc": text }, (r) => assert.ok(r.lines.includes(message)));
@@ -350,8 +371,11 @@ test("pnpm-workspace.yaml must hold exactly the approved list", () => {
   const approved = 'packages:\n  - "apps/*"\n  - "packages/*"\n';
   gate({ "pnpm-workspace.yaml": approved }, (r) => assert.equal(r.code, 0));
   const message = "pnpm-workspace.yaml: must hold exactly the approved packages list";
-  for (const yaml of ['  packages:\n    - "apps/*"\n  overrides:\n    react: npm:evil@1.0.0\n',
-    'packages: ["apps/*", "packages/*"]', `${approved}  - "../**"\n`]) {
+  for (const yaml of [
+    '  packages:\n    - "apps/*"\n  overrides:\n    react: npm:evil@1.0.0\n',
+    'packages: ["apps/*", "packages/*"]',
+    `${approved}  - "../**"\n`,
+  ]) {
     gate({ "pnpm-workspace.yaml": yaml }, (r) => assert.ok(r.lines.includes(message)));
   }
   const yaml = 'packages:\n  - "apps/*"\noverrides:\n  react: npm:evil@1.0.0\n';
@@ -362,18 +386,25 @@ test("pnpm-workspace.yaml must hold exactly the approved list", () => {
 });
 
 test("the pnpm field is root-only and holds one key", () => {
-  gate({ "package.json": rootWith({ pnpm: { ...manifest.pnpm, extra: true } }),
-    "apps/desktop/package.json": desktop({ pnpm: {} }) }, (r) => {
-    const message = "package.json: pnpm.onlyBuiltDependencies must equal allowlist installScripts " +
-      `[${[...allowlist.installScripts].sort().join(", ")}]`;
-    assert.ok(r.lines.includes(message));
-    assert.ok(r.lines.includes("apps/desktop/package.json: field pnpm is not allowed"));
-  });
+  gate(
+    {
+      "package.json": rootWith({ pnpm: { ...manifest.pnpm, extra: true } }),
+      "apps/desktop/package.json": desktop({ pnpm: {} }),
+    },
+    (r) => {
+      const message =
+        "package.json: pnpm.onlyBuiltDependencies must equal allowlist installScripts " +
+        `[${[...allowlist.installScripts].sort().join(", ")}]`;
+      assert.ok(r.lines.includes(message));
+      assert.ok(r.lines.includes("apps/desktop/package.json: field pnpm is not allowed"));
+    },
+  );
 });
 
 test("install-script lists must be arrays", () => {
   gate({ "package.json": rootWith({ pnpm: { onlyBuiltDependencies: "electron" } }) }, (r) => {
-    const message = "package.json: pnpm.onlyBuiltDependencies must equal allowlist installScripts " +
+    const message =
+      "package.json: pnpm.onlyBuiltDependencies must equal allowlist installScripts " +
       `[${[...allowlist.installScripts].sort().join(", ")}]`;
     assert.ok(r.lines.includes(message));
   });
@@ -389,8 +420,12 @@ test("a symbolic link is refused by the gate", () => {
 });
 
 test("other manifest formats and letter cases are refused", () => {
-  const paths = ["apps/evil/package.yaml", "apps/evil/package.json5",
-    "apps/desktop/Package.json", "apps/desktop/.NPMRC"];
+  const paths = [
+    "apps/evil/package.yaml",
+    "apps/evil/package.json5",
+    "apps/desktop/Package.json",
+    "apps/desktop/.NPMRC",
+  ];
   for (const path of paths) {
     gate({ [path]: "" }, (r) => assert.ok(r.lines.includes(`${path}: is not allowed`)));
   }
@@ -410,14 +445,20 @@ test("a manifest must carry its folder's name", () => {
 });
 
 test("unknown manifest fields are refused", () => {
-  gate({ "apps/desktop/package.json": desktop({ scripts: {} }),
-    "package.json": rootWith({ publishConfig: {} }) }, (r) => {
-    assert.ok(r.lines.includes("apps/desktop/package.json: field scripts is not allowed"));
-    assert.ok(r.lines.includes("package.json: field publishConfig is not allowed"));
-  });
+  gate(
+    {
+      "apps/desktop/package.json": desktop({ scripts: {} }),
+      "package.json": rootWith({ publishConfig: {} }),
+    },
+    (r) => {
+      assert.ok(r.lines.includes("apps/desktop/package.json: field scripts is not allowed"));
+      assert.ok(r.lines.includes("package.json: field publishConfig is not allowed"));
+    },
+  );
   gate({ "package.json": rootWith({ resolutions: {} }) }, (r) => {
     assert.deepEqual(r.lines, [
-      "package.json: resolutions is not allowed", "dependency-gate: FAIL, 1 problems",
+      "package.json: resolutions is not allowed",
+      "dependency-gate: FAIL, 1 problems",
     ]);
   });
 });
@@ -431,16 +472,19 @@ test("the root manifest is pinned", () => {
     [{ scripts: { ...manifest.scripts, "pnpm:devPreinstall": "true" } }, "pnpm:devPreinstall"],
   ];
   for (const [changes, expected] of cases) {
-    const message = expected.startsWith("package.json:") ? expected :
-      `package.json: scripts must equal allowlist rootScripts (first difference: ${expected})`;
+    const message = expected.startsWith("package.json:")
+      ? expected
+      : `package.json: scripts must equal allowlist rootScripts (first difference: ${expected})`;
     gate({ "package.json": rootWith(changes) }, (r) => assert.ok(r.lines.includes(message)));
   }
 });
 
 test("the allowlist cannot approve a weakened check", () => {
   const allow = allowlist;
-  for (const scripts of [{ ...allow.rootScripts, check: "pnpm test:tools" },
-    { ...allow.rootScripts, precheck: "true" }]) {
+  for (const scripts of [
+    { ...allow.rootScripts, check: "pnpm test:tools" },
+    { ...allow.rootScripts, precheck: "true" },
+  ]) {
     gate({ "tools/checks/allowlist.json": JSON.stringify({ ...allow, rootScripts: scripts }) }, (r) => {
       assert.deepEqual(r.lines, ["allowlist.json: invalid rootScripts", "dependency-gate: FAIL, 1 problems"]);
     });
@@ -465,7 +509,7 @@ test("a broken manifest or allowlist gives one clear line", () => {
     gate(files, (r) => {
       assert.equal(r.code, 1);
       assert.ok(r.lines.includes(message));
-      assert.ok(r.lines.every((line) => !/^    at /.test(line)));
+      assert.ok(r.lines.every((line) => !/^ {4}at /.test(line)));
     });
   }
 });
@@ -491,8 +535,8 @@ test("gate: same result from a subfolder and through a symbolic link (spawn)", (
 });
 
 test("a tracked lockfile is checked even with --manifests-only", () => {
-  const lock = "lockfileVersion: '9.0'\n\npackages:\n\n  react@19.3.1:\n" +
-    "    resolution: {integrity: sha512-AAAA}\n";
+  const lock =
+    "lockfileVersion: '9.0'\n\npackages:\n\n  react@19.3.1:\n" + "    resolution: {integrity: sha512-AAAA}\n";
   baseRepo({ "pnpm-lock.yaml": lock }, (root) => {
     execFileSync("git", ["add", "pnpm-lock.yaml"], { cwd: root });
     assert.ok(runGate(root, ["--manifests-only"]).lines.at(-1).endsWith("lockfile checked"));
@@ -501,13 +545,16 @@ test("a tracked lockfile is checked even with --manifests-only", () => {
 
 test(".npmrc must hold exactly the approved lines", () => {
   const cr = cp(0x0d);
-  const text = `registry=https://registry.npmjs.org/\n# c${cr}@evil:registry=https://evil.example/` +
+  const text =
+    `registry=https://registry.npmjs.org/\n# c${cr}@evil:registry=https://evil.example/` +
     `${cr}engine-strict=true\nsave-exact=true\n`;
   gate({ ".npmrc": text }, (r) => {
     assert.ok(r.lines.includes(".npmrc:3: registry must be https://registry.npmjs.org/"));
   });
-  for (const changed of ["engine-strict=true\nregistry=https://registry.npmjs.org/\nsave-exact=true\n",
-    `${npmrc}# comment\n`]) {
+  for (const changed of [
+    "engine-strict=true\nregistry=https://registry.npmjs.org/\nsave-exact=true\n",
+    `${npmrc}# comment\n`,
+  ]) {
     gate({ ".npmrc": changed }, (r) => {
       assert.ok(r.lines.includes(".npmrc: must hold exactly the approved lines"));
     });
@@ -517,8 +564,10 @@ test(".npmrc must hold exactly the approved lines", () => {
 test("lockfile aliases, unknown importers and lone carriage returns fail", () => {
   const prefix = "lockfileVersion: '9.0'\nimporters:\n";
   const cases = [
-    ["  .:\n    dependencies:\n      react:\n        specifier: 19.3.1\n" +
-      "        version: evil@1.0.0\n", "pnpm-lock.yaml:7: aliased version evil@1.0.0"],
+    [
+      "  .:\n    dependencies:\n      react:\n        specifier: 19.3.1\n" + "        version: evil@1.0.0\n",
+      "pnpm-lock.yaml:7: aliased version evil@1.0.0",
+    ],
     ["  apps/evil:\n", "pnpm-lock.yaml:3: unknown importer apps/evil"],
     [`  .:${cp(0x0d)}packages:\n`, "pnpm-lock.yaml: lone carriage return is not allowed"],
     ["  .:\n    specifier: NPM:evil@1.0.0\n", "pnpm-lock.yaml:4: non-registry specifier NPM:evil@1.0.0"],
@@ -532,8 +581,11 @@ test("lockfile aliases, unknown importers and lone carriage returns fail", () =>
 test("values from files are shown escaped", () => {
   const name = `x${cp(0x0a)}y`;
   gate({ "apps/desktop/package.json": desktop({ dependencies: { [name]: "1.0.0" } }) }, (r) => {
-    assert.ok(r.lines.every((line) => line.startsWith("apps/desktop/package.json:") ||
-      line.startsWith("dependency-gate:")));
+    assert.ok(
+      r.lines.every(
+        (line) => line.startsWith("apps/desktop/package.json:") || line.startsWith("dependency-gate:"),
+      ),
+    );
     assert.ok(r.lines.some((line) => line.includes("x<U+000A>y")));
   });
 });
@@ -545,15 +597,17 @@ test("gate: the process exits 1 on a problem and 2 on an error (spawn)", () => {
     baseRepo({ "apps/desktop/package.json": desktop({ dependencies: { "left-pad": "1.3.0" } }) }, (root) => {
       const target = join(root, "tools/checks");
       cpSync(source, target, { recursive: true, filter: (path) => path !== join(source, "test") });
-      const result = spawnSync(process.execPath, [join(target, "dependency-gate.mjs"), "--manifests-only"],
-        { encoding: "utf8" });
+      const result = spawnSync(process.execPath, [join(target, "dependency-gate.mjs"), "--manifests-only"], {
+        encoding: "utf8",
+      });
       assert.equal(result.status, 1);
       assert.ok(result.stdout.trimEnd().split("\n").at(-1).startsWith("dependency-gate: FAIL"));
     });
     const target = join(outside, "tools/checks");
     cpSync(source, target, { recursive: true, filter: (path) => path !== join(source, "test") });
     const result = spawnSync(process.execPath, [join(target, "dependency-gate.mjs")], {
-      encoding: "utf8", env: { ...process.env, GIT_CEILING_DIRECTORIES: outside },
+      encoding: "utf8",
+      env: { ...process.env, GIT_CEILING_DIRECTORIES: outside },
     });
     assert.equal(result.status, 2);
     const lines = result.stdout.trimEnd().split("\n");

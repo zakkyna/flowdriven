@@ -1232,12 +1232,12 @@ Config values:
 - `tsconfig.base.json` `compilerOptions`: `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `forceConsistentCasingInFileNames`, `verbatimModuleSyntax`, `isolatedModules`, `skipLibCheck`, `resolveJsonModule` all `true`; `noEmit: true`; `target: "ES2023"`; `module: "ESNext"`; `moduleResolution: "bundler"`; `lib: ["ES2023"]`; `types: []`.
 - `packages/*/tsconfig.json`: extends `../../tsconfig.base.json`, `include: ["src"]`. `packages/fixtures/tsconfig.json` also sets `lib: ["ES2023", "DOM"]` (`structuredClone` is declared by `lib.dom`; fixtures run in the renderer).
 - `apps/desktop/tsconfig.json`: extends the base; `lib: ["ES2023", "DOM", "DOM.Iterable"]`, `jsx: "react-jsx"`, `types: ["vite/client"]`; `include: ["src"]`. (Electron sources and their tests are typechecked by `tsconfig.electron.json`, Task 14.)
-- `biome.json`: formatter on, `indentStyle: "space"`, `indentWidth: 2`, `lineWidth: 110`; JavaScript `quoteStyle: "double"`, `semicolons: "always"`; linter `{ enabled: true, rules: { recommended: true, a11y: { useSemanticElements: "off" } } }` (`useSemanticElements` is off because the UI design and its tests use explicit `role` attributes on `div` elements, `dialog` and `group`; every other recommended rule stays on, and no `biome-ignore` comments are used); `css.parser.cssModules: true`; `files.includes: ["**", "!**/node_modules", "!**/dist", "!**/dist-electron", "!.workflow", "!docs/research", "!pnpm-lock.yaml"]`.
+- `biome.json`: formatter on, `indentStyle: "space"`, `indentWidth: 2`, `lineWidth: 110`; JavaScript `quoteStyle: "double"`, `semicolons: "always"`; linter `{ enabled: true, rules: { preset: "recommended", a11y: { useSemanticElements: "off" } } }` (`useSemanticElements` is off because the UI design and its tests use explicit `role` attributes on `div` elements, `dialog` and `group`; every other recommended rule stays on, and no `biome-ignore` comments are used); `css.parser.cssModules: true`; `files.includes: ["**", "!**/node_modules", "!**/dist", "!**/dist-electron", "!.workflow", "!docs/research", "!pnpm-lock.yaml", "!**/*.md", "!pnpm-workspace.yaml"]`.
 - `vitest.config.ts` (`defineConfig` from `vitest/config`): `test.projects` only, no root `test` options, because inline projects do not inherit them. (1) `{ test: { name: "node", environment: "node", env: { TZ: "UTC" }, include: ["packages/*/src/**/*.test.ts", "apps/desktop/electron/**/*.test.ts"] } }`; (2) `{ plugins: [react()], resolve: { dedupe: ["react", "react-dom"] }, test: { name: "ui", environment: "happy-dom", env: { TZ: "UTC" }, include: ["apps/desktop/src/**/*.test.{ts,tsx}"], setupFiles: ["apps/desktop/src/test/setup.ts"] } }`. Every time-formatting test assumes UTC.
 - `apps/desktop/src/test/setup.ts`: `afterEach(cleanup)` with `cleanup` from `@testing-library/react`.
 - Root scripts: `"lint": "biome check ."`, `"format": "biome check --write ."`, `"typecheck": "tsc -p packages/contracts && tsc -p packages/fixtures && tsc -p apps/desktop"`, `"test": "TZ=UTC vitest run && pnpm test:tools"`, `"check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:hidden && pnpm check:deps"`.
 
-- [ ] **Step 1: Write the failing tests** `packages/contracts/src/version.test.ts` and `apps/desktop/src/test/timezone.test.ts`
+- [x] **Step 1: Write the failing tests** `packages/contracts/src/version.test.ts` and `apps/desktop/src/test/timezone.test.ts`
 
 ```ts
 import { expect, test } from "vitest";
@@ -1261,31 +1261,35 @@ test("the ui project runs in UTC", () => {
 });
 ```
 
-- [ ] **Step 2: Create every file in this task's Files list with the values above**
+- [x] **Step 2: Create every file in this task's Files list with the values above**
 
 `packages/fixtures/src/index.ts` is `export {};` until Task 6a.
 
-- [ ] **Step 3: Run the checks that work before install**
+- [x] **Step 3: Run the checks that work before install**
 
 Run: `pnpm test:tools && pnpm check:hidden && node tools/checks/dependency-gate.mjs --manifests-only`
 Expected: PASS; last line `dependency-gate: OK, 18 direct dependencies in 4 manifests, lockfile skipped (--manifests-only)`
 
-- [ ] **Step 4: Chair step (network): install**
+- [x] **Step 4: Chair step (network): install**
 
 Run: `pnpm install`, then `pnpm ignored-builds`, then `pnpm --filter @flowdriven/desktop exec install-electron`
 Expected: `pnpm-lock.yaml` written; Electron 45 has no postinstall script, so the third command fetches the Electron binary; `ignored-builds` lists only `fsevents`. Record the output of all three under this task.
 
-- [ ] **Step 5: Chair step (network): first full gate**
+- [x] **Step 5: Chair step (network): first full gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS; Vitest reports `3 passed`; last line `dependency-gate: OK, 18 direct dependencies in 4 manifests, lockfile checked`. If TypeScript 7 cannot typecheck the project, write `Blocked: typescript 7` under this task; moving to an earlier major is an allowlist change the owner approves.
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json biome.json vitest.config.ts packages apps tools
 git commit -m "Scaffold the pnpm workspace and declare the starting dependencies" -m "Assisted-by: Codex"
 ```
+
+Install record (chair, 2026-11-10): `pnpm install` added 83 packages (135 resolved) in 14.4 s with pnpm 10.9.0 and wrote `pnpm-lock.yaml` (1,361 lines); `pnpm ignored-builds` printed `None`; `install-electron` fetched Electron 45.1.0. First full gate: Biome 2.6 also formats Markdown, so `**/*.md` and `pnpm-workspace.yaml` are excluded from it; TypeScript 7.0.2 typechecks the workspace; Vitest reports `3 passed`; the node tests report `pass 105`; the last line is `dependency-gate: OK, 18 direct dependencies in 4 manifests, lockfile checked`.
+
+Done by: Codex/gpt-6.1-terra (steps 1 to 3 and the fix-ups) and the chair (steps 4 to 6), 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 

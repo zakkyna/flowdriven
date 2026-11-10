@@ -1,0 +1,20 @@
+{
+  "name": "@flowdriven/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "main": "dist-electron/main.js",
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "@flowdriven/contracts": "workspace:*",
+    "@flowdriven/fixtures": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/dom": "10.4.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  }
+}
