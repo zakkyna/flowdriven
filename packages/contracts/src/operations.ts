@@ -61,7 +61,7 @@ export const operations = {
     mcp: "no",
     errors: ["invalid_input", "not_found", "not_allowed"],
     reads: [],
-    writes: ["flows"],
+    writes: ["flows", "approvals"],
   },
   "flows.run": {
     input: z.union([

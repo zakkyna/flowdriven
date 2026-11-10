@@ -1,4 +1,5 @@
 import {
+  approvalExpiresAt,
   attentionCount,
   type ChatMessage,
   type FlowDetail,
@@ -15,6 +16,7 @@ import {
   type RunnerClient,
   RunnerError,
   type RunnerEvent,
+  Settings,
   Step,
 } from "@flowdriven/contracts";
 import {
@@ -57,7 +59,12 @@ export function createFixtureRunnerClient(
     return result;
   };
   const newest = (id: string) =>
-    state.runs.filter((r) => r.flowId === id).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+    state.runs
+      .filter((r) => r.flowId === id)
+      .sort(
+        (a, b) =>
+          b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id, undefined, { numeric: true }),
+      )[0];
   const detail = (f: FlowRecord): FlowDetail => {
     const last = newest(f.manifest.id);
     return {
@@ -95,11 +102,66 @@ export function createFixtureRunnerClient(
     while (used.has(id)) id = `${base}-${n++}`;
     return id;
   };
+  const syncSignOff = (f: FlowRecord, before: FlowRecord["manifest"]) => {
+    const pending = state.approvals.filter(
+      (a) => a.flowId === f.manifest.id && a.kind === "flow_sign_off" && a.state === "pending",
+    );
+    const previousPatch =
+      pending[0]?.payload.kind === "diff" ? pending[0].payload.files[0]?.patch : undefined;
+    for (const a of pending) state.approvals.splice(state.approvals.indexOf(a), 1);
+    if (f.signOff.state !== "stale") return;
+    const at = now();
+    const baseline = f.history.find(
+      (h) => h.signOff.state === "approved" && h.signOff.version === f.signOff.version,
+    )?.manifest;
+    const patch = baseline
+      ? `-${JSON.stringify(baseline)}\n+${JSON.stringify(f.manifest)}`
+      : `${previousPatch ? `${previousPatch}\n` : `-${JSON.stringify(before)}\n`}+${JSON.stringify(f.manifest)}`;
+    const number = Math.max(0, ...state.approvals.map((a) => Number(a.id.match(/^ap-(\d+)$/)?.[1] ?? 0))) + 1;
+    state.approvals.push({
+      id: pending[0]?.id ?? `ap-${String(number).padStart(4, "0")}`,
+      kind: "flow_sign_off",
+      flowId: f.manifest.id,
+      flowName: f.manifest.name,
+      summary: `Approve the changes to ${f.manifest.name} (version ${f.manifest.version})`,
+      payload: { kind: "diff", files: [{ path: "flow.yaml", patch }] },
+      editable: false,
+      createdAt: at,
+      expiresAt: approvalExpiresAt(at),
+      state: "pending",
+    });
+  };
+  const expireApprovals = () => {
+    const at = now();
+    let changed = false;
+    for (const a of state.approvals) {
+      if (a.state !== "pending" || a.expiresAt > at) continue;
+      changed = true;
+      a.state = "expired";
+      a.resolvedAt = a.expiresAt;
+      if (a.runId) {
+        const r = run(a.runId);
+        r.state = "failed";
+        const step = r.steps.find((s) => s.stepId === a.stepId);
+        if (step) {
+          step.state = "failed";
+          step.note = "The approval expired after 24 hours.";
+        }
+      }
+    }
+    if (changed)
+      for (const listener of listeners) listener({ type: "changed", topics: ["approvals", "runs"] });
+  };
   const update = (f: FlowRecord, edit: FlowEdit) => {
     if (edit.kind === "undo") {
+      const before = structuredClone(f.manifest);
+      const approvedVersion = f.signOff.state === "none" ? undefined : f.signOff.version;
       const previous = f.history.pop();
       if (!previous) throw new RunnerError("not_allowed", "Nothing to undo.");
       Object.assign(f, previous);
+      if (approvedVersion && approvedVersion !== f.manifest.version)
+        f.signOff = { state: "stale", version: approvedVersion };
+      syncSignOff(f, before);
       return detail(f);
     }
     const steps = f.manifest.steps;
@@ -111,17 +173,23 @@ export function createFixtureRunnerClient(
       throw new RunnerError("not_allowed", "The last step can't move down.");
     if (edit.kind === "delete" && steps.length === 1)
       throw new RunnerError("not_allowed", "A flow needs at least one step.");
+    if (edit.kind === "add" && !edit.title.trim())
+      throw new RunnerError("invalid_input", "Step title cannot be empty.");
+    const before = structuredClone(f.manifest);
     f.history.push(structuredClone({ manifest: f.manifest, hash: f.hash, signOff: f.signOff }));
     if (edit.kind === "add") {
       const slug =
         edit.title
+          .trim()
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "") || "step";
       steps.push(
         Step.parse({
           id: unique(f, slug),
-          title: edit.title,
+          title: edit.title.trim(),
           do: "worker",
           instructions: "",
           checks: [{ type: "user", required: true, summary: "You approve the result" }],
@@ -148,6 +216,7 @@ export function createFixtureRunnerClient(
     f.manifest.version = `${version[0]}.${version[1]}.${Number(version[2]) + 1}`;
     f.hash = `sha256:${(state.nextHashNumber++).toString(16).padStart(64, "0")}`;
     if (f.signOff.state === "approved") f.signOff = { state: "stale", version: f.signOff.version };
+    if (f.signOff.state === "stale") syncSignOff(f, before);
     return detail(f);
   };
   const handlers: Handlers = {
@@ -167,8 +236,18 @@ export function createFixtureRunnerClient(
       if ("description" in input)
         throw new RunnerError("unavailable", "One-time flows arrive with the agent.");
       const f = flow(input.flowId);
-      if (f.signOff.state !== "approved")
+      if (f.signOff.state !== "approved") {
+        if (
+          f.signOff.state === "stale" &&
+          !state.approvals.some(
+            (a) => a.flowId === f.manifest.id && a.kind === "flow_sign_off" && a.state === "pending",
+          )
+        ) {
+          syncSignOff(f, f.history[0]?.manifest ?? f.manifest);
+          for (const listener of listeners) listener({ type: "changed", topics: ["approvals"] });
+        }
         throw new RunnerError("not_allowed", "This version needs your approval before it runs.");
+      }
       const readiness = report(input.flowId);
       const count = attentionCount(readiness.items);
       const r: RunDetail = {
@@ -177,7 +256,10 @@ export function createFixtureRunnerClient(
         flowName: f.manifest.name,
         flowVersion: f.manifest.version,
         oneTime: false,
-        project: input.inputs?.project ?? "",
+        project:
+          input.inputs?.project ??
+          state.runs.find((r) => r.flowId === f.manifest.id && r.project)?.project ??
+          "~/Projects/sample",
         state: readiness.ready ? "queued" : "blocked",
         startedAt: now(),
         inputs: Object.entries(input.inputs ?? {}).map(([id, value]) => ({
@@ -211,7 +293,10 @@ export function createFixtureRunnerClient(
             (input.project === undefined || r.project === input.project) &&
             (input.state === undefined || r.state === input.state),
         )
-        .sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
+        .sort(
+          (a, b) =>
+            b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id, undefined, { numeric: true }),
+        ),
     "runs.status": ({ runId }) => run(runId),
     "runs.report": ({ runId }) => {
       const r = run(runId);
@@ -239,12 +324,23 @@ export function createFixtureRunnerClient(
       r.ready = isReady(r.items);
       return r;
     },
-    "approvals.list": ({ state: filter }) =>
-      state.approvals
+    "approvals.list": ({ state: filter }) => {
+      expireApprovals();
+      return state.approvals
         .filter((a) => !filter || a.state === filter)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        .sort(
+          (a, b) =>
+            b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id, undefined, { numeric: true }),
+        );
+    },
     "approvals.resolve": ({ approvalId, decision, editedText, applyToSimilar }) => {
+      expireApprovals();
       const approval = find(state.approvals, (a) => a.id === approvalId, "approval", approvalId);
+      if (approval.state === "expired") throw new RunnerError("not_allowed", "This approval expired.");
+      if (decision === "edit" && applyToSimilar)
+        throw new RunnerError("not_allowed", "Edits apply to one approval only.");
+      if (decision === "edit" && !editedText?.trim())
+        throw new RunnerError("invalid_input", "Edited text cannot be empty.");
       if (approval.state !== "pending")
         throw new RunnerError("not_allowed", "This decision was already made.");
       const resolved =
@@ -278,6 +374,7 @@ export function createFixtureRunnerClient(
           r.state = "failed";
           if (step) step.state = "failed";
         } else if (
+          r.state === "waiting_approval" &&
           !state.approvals.some((pending) => pending.runId === r.id && pending.state === "pending")
         ) {
           r.state = "running";
@@ -290,12 +387,23 @@ export function createFixtureRunnerClient(
     "harnesses.rescan": () => state.harnesses,
     "harnesses.setConsent": ({ harnessId, consent }) => {
       const card = find(state.harnesses, (h) => h.id === harnessId, "harness", harnessId);
+      if (!card.detected) throw new RunnerError("not_allowed", "This harness is not detected.");
       if (card.consent === "not_needed")
         throw new RunnerError("not_allowed", "This harness needs no consent.");
-      card.consent = consent;
       const backendId =
         harnessId === "claude-code" ? "claude-cli" : harnessId === "antigravity" ? "agy-cli" : harnessId;
       const backend = state.settings.backends.find((b) => b.id === backendId);
+      if (consent === "revoked" && state.settings.brain.main === backendId) {
+        const fallback = [...state.settings.brain.subscriptionOrder, ...state.settings.brain.apiKeyOrder]
+          .map((id) => state.settings.backends.find((b) => b.id === id))
+          .find(
+            (b) =>
+              b && b.id !== backendId && b.available && (b.consent === "given" || b.consent === "not_needed"),
+          );
+        if (!fallback) throw new RunnerError("not_allowed", "No allowed fallback brain is available.");
+        state.settings.brain.main = fallback.id;
+      }
+      card.consent = consent;
       if (backend) backend.consent = consent;
       return card;
     },
@@ -309,19 +417,30 @@ export function createFixtureRunnerClient(
       for (const [list, kind] of [
         [patch.brain?.subscriptionOrder, "harness"],
         [patch.brain?.apiKeyOrder, "api_key"],
-      ] as const)
+      ] as const) {
+        if (list && new Set(list).size !== list.length)
+          throw new RunnerError("invalid_input", "Brain order cannot contain duplicates.");
         for (const id of list ?? []) {
           const b = backend(id);
           if (b.kind !== kind) throw new RunnerError("invalid_input", `${b.name} can't be in this list.`);
         }
+      }
       if (patch.brain?.main !== undefined) {
         const b = backend(patch.brain.main);
         if (!b.available || (b.consent !== "not_needed" && b.consent !== "given"))
           throw new RunnerError("not_allowed", `${b.name} can't be the brain yet.`);
       }
-      Object.assign(state.settings.brain, patch.brain);
-      Object.assign(state.settings.budget, patch.budget);
-      if (patch.offerSaveOneTime !== undefined) state.settings.offerSaveOneTime = patch.offerSaveOneTime;
+      const next = structuredClone(state.settings);
+      Object.assign(
+        next.brain,
+        Object.fromEntries(Object.entries(patch.brain ?? {}).filter(([, value]) => value !== undefined)),
+      );
+      Object.assign(
+        next.budget,
+        Object.fromEntries(Object.entries(patch.budget ?? {}).filter(([, value]) => value !== undefined)),
+      );
+      if (patch.offerSaveOneTime !== undefined) next.offerSaveOneTime = patch.offerSaveOneTime;
+      state.settings = Settings.parse(next);
       return state.settings;
     },
   };
