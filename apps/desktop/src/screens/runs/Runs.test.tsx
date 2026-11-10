@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
@@ -176,4 +177,49 @@ test("unstarted and skipped steps show no worker", async () => {
   renderApp("#/runs/run-0006");
   const step = await screen.findByRole("region", { name: "Compare with the design" });
   expect(step.textContent).not.toContain("Worker:");
+});
+
+test("each run's state is an icon plus a word, and the run id is a link", async () => {
+  renderApp("#/runs");
+  await waitFor(() => expect(bodyRows()).toHaveLength(7));
+  const first = bodyRow(0);
+  expect(within(first).getByText("Waiting for you")).toBeTruthy();
+  expect(first.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  expect(within(first).getByRole("link", { name: "run-0007" }).getAttribute("href")).toBe("#/runs/run-0007");
+});
+test("Run detail puts All runs in the bar before the title", async () => {
+  renderApp("#/runs/run-0006");
+  const heading = await screen.findByRole("heading", { level: 1, name: "Figma to Flutter" });
+  const back = screen.getByRole("link", { name: "All runs" });
+  expect(heading.closest("header")?.contains(back)).toBe(true);
+  expect(back.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+test("a step block is a row with its number, state icon, title and state word", async () => {
+  renderApp("#/runs/run-0006");
+  const step = await screen.findByRole("region", { name: "Build the screens" });
+  expect(within(step).getByText("3")).toBeTruthy();
+  expect(step.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  expect(within(step).getAllByText("Failed").length).toBeGreaterThan(0);
+  expect(step.querySelector("h3")?.textContent).toBe("Build the screens");
+});
+test("Run detail keeps its six sections", async () => {
+  renderApp("#/runs/run-0005");
+  await screen.findByRole("heading", { level: 1, name: "Documents and reports" });
+  expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+    "Report",
+    "Steps",
+    "Inputs",
+    "Outputs",
+    "Approvals",
+    "Usage",
+  ]);
+});
+test("runs styles: hairline rows, 44 px table rows, steps as rows not cards", () => {
+  const css = readFileSync("apps/desktop/src/screens/runs/Runs.module.css", "utf8");
+  expect(css).toMatch(/\.table td\s*\{[^}]*height:\s*44px/s);
+  expect(css).toMatch(/\.table th\s*\{[^}]*color:\s*var\(--text-muted\)[^}]*font-size:\s*12\.5px/s);
+  expect(css).toMatch(/\.step\s*\{[^}]*border-top:\s*1px solid var\(--border\)/s);
+  expect(css).not.toMatch(/\.step\s*\{[^}]*(border-radius|background)/s);
+  expect(css).toMatch(/\.reason\s*\{[^}]*background:\s*var\(--bad-soft\)/s);
+  expect(css).toMatch(/overflow-wrap:\s*anywhere/);
 });

@@ -53,6 +53,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
       {isResumable(run.state) && next && (
         <Button
           variant="primary"
+          size="small"
           disabled={resuming}
           onClick={() => {
             if (resumeInFlight.current) return;
@@ -68,7 +69,11 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
           Resume from step {next.index}
         </Button>
       )}
-      {run.oneTime && <Button onClick={() => setSave((value) => !value)}>Save as flow</Button>}
+      {run.oneTime && (
+        <Button size="small" onClick={() => setSave((value) => !value)}>
+          Save as flow
+        </Button>
+      )}
     </div>
   );
   return (
@@ -76,6 +81,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
       <Page
         screen="run"
         ready
+        size="medium"
         title={run.flowName}
         actions={actions}
         before={
@@ -107,7 +113,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
             {run.blockedReason}
           </div>
         )}
-        <section>
+        <section className={styles.section}>
           <h2>Report</h2>
           {run.report ? (
             <>
@@ -123,13 +129,13 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
             <p className={styles.muted}>Some steps were judged, not verified.</p>
           )}
         </section>
-        <section>
+        <section className={styles.section}>
           <h2>Steps</h2>
           {run.steps.map((step, index) => (
             <StepBlock key={step.stepId} step={step} index={index + 1} />
           ))}
         </section>
-        <section>
+        <section className={styles.section}>
           <h2>Inputs</h2>
           {run.inputs.length === 0 && <p className={styles.muted}>No inputs.</p>}
           <dl className={styles.definitions}>
@@ -143,7 +149,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
             ))}
           </dl>
         </section>
-        <section>
+        <section className={styles.section}>
           <h2>Outputs</h2>
           {run.outputs.length ? (
             <ul className={styles.rows}>
@@ -159,7 +165,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
             <p className={styles.muted}>No outputs yet.</p>
           )}
         </section>
-        <section>
+        <section className={styles.section}>
           <h2>Approvals</h2>
           {related.length ? (
             <ul className={styles.rows}>
@@ -175,7 +181,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
             <p className={styles.muted}>No approvals in this run.</p>
           )}
         </section>
-        <section>
+        <section className={styles.section}>
           <h2>Usage</h2>
           {run.usage.length ? (
             <>

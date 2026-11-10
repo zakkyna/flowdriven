@@ -1,7 +1,6 @@
 .filters,
 .meta,
 .actions,
-.stepHeader,
 .rows li,
 .reason {
   display: flex;
@@ -16,15 +15,11 @@
   display: grid;
   gap: var(--space-1);
   color: var(--text-muted);
-  font-size: var(--text-s);
+  font-size: 12.5px;
   min-width: 0;
 }
 .filters select {
-  padding: 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-s);
-  background: var(--surface-panel);
-  color: var(--text);
+  height: 32px;
   max-width: 100%;
 }
 .table {
@@ -35,13 +30,13 @@
 .table th,
 .table td {
   text-align: left;
-  padding: 10px 8px;
+  padding: 8px;
   border-bottom: 1px solid var(--border);
   overflow-wrap: anywhere;
 }
 .table th {
   color: var(--text-muted);
-  font-size: var(--text-s);
+  font-size: 12.5px;
   font-weight: 500;
 }
 .table td {
@@ -53,10 +48,12 @@
 }
 .muted {
   color: var(--text-muted);
-  font-size: var(--text-s);
+  font-size: 13px;
 }
 .meta {
-  margin: var(--space-4) 0;
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 .meta > *,
 .actions > *,
@@ -77,16 +74,52 @@
   border-radius: var(--radius-l);
   overflow-wrap: anywhere;
 }
+.reason svg {
+  color: var(--bad);
+  flex: none;
+}
+.section > h2 {
+  margin: 24px 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
 .step {
-  padding: var(--space-4);
-  margin-bottom: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-l);
-  background: var(--surface-panel);
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
   overflow-wrap: anywhere;
 }
+.stepHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+.stepNumber {
+  flex: none;
+  width: 24px;
+  color: var(--text-muted);
+  font: 400 12px / 20px var(--font-mono);
+}
 .stepHeader h3 {
+  flex: 1;
   margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.stepState {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.stepState[data-muted="true"] {
+  color: var(--text-muted);
+}
+.stepDetails {
+  margin-left: 48px;
+  min-width: 0;
+}
+.stepDetails p {
+  margin: 4px 0;
 }
 .definitions div {
   display: grid;

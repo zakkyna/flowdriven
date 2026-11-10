@@ -1624,7 +1624,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.table`, `.step` and `.reason` in `Runs.module.css`.
 
-- [ ] **Step 1: Write the failing tests** (add to `Runs.test.tsx`; existing tests stay unchanged; add `import { readFileSync } from "node:fs";` at the top of the file)
+- [x] **Step 1: Write the failing tests** (add to `Runs.test.tsx`; existing tests stay unchanged; add `import { readFileSync } from "node:fs";` at the top of the file)
 
 ```tsx
 test("each run's state is an icon plus a word, and the run id is a link", async () => {
@@ -1668,33 +1668,33 @@ test("runs styles: hairline rows, 44 px table rows, steps as rows not cards", ()
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/runs`
 Expected: FAIL in `Run detail puts All runs in the bar before the title` (`expected false to be true`: the link is not in the header yet) and in the CSS test (`expected '...' to match /\.table td\s*\{...`). `each run's state is an icon plus a word, ...`, `a step block is a row with its number, ...` (`StepBlock` already renders the number) and `Run detail keeps its six sections` pass at once and are kept as pins of what the restyle must not change.
 
-- [ ] **Step 3: Implement** per the Interfaces. `Runs.module.css` keeps `overflow-wrap: anywhere` and `min-width: 0` (`layout-guards.test.ts` reads both). The filters' selects take the shared form style from `base.css`; the label is 12.5px muted above the select.
+- [x] **Step 3: Implement** per the Interfaces. `Runs.module.css` keeps `overflow-wrap: anywhere` and `min-width: 0` (`layout-guards.test.ts` reads both). The filters' selects take the shared form style from `base.css`; the label is 12.5px muted above the select.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: `pnpm build:web && pnpm preview:web`, open `#/runs` and `#/runs/run-0006` in light and dark.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/runs
 git commit -m "Restyle Runs and Run detail" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
