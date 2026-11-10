@@ -3,26 +3,24 @@ import styles from "./Button.module.css";
 import { Icon, type IconName } from "./icons";
 export function Button({
   variant = "secondary",
+  size = "default",
   icon,
   children,
   className,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "quiet" | "danger";
+  variant?: "primary" | "secondary" | "quiet" | "text" | "danger";
+  size?: "small" | "default" | "large";
   icon?: IconName;
 }): ReactElement {
   return (
     <button
       type="button"
       {...props}
-      className={[
-        styles.button,
-        styles[variant],
-        variant === "quiet" && icon && !children ? styles.iconOnly : "",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      data-variant={variant}
+      data-size={size}
+      data-icon-only={variant === "quiet" && icon && !children ? "true" : undefined}
+      className={[styles.button, className].filter(Boolean).join(" ")}
     >
       {icon && <Icon name={icon} />}
       {children}

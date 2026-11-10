@@ -623,7 +623,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.button` (`Button.module.css`) and `.panel` (`Dialog.module.css`), with the attribute selectors `[data-size]`, `[data-variant]` and `[data-icon-only]` on `.button`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `Button.test.tsx`:
 
@@ -694,33 +694,33 @@ test("the transitional tokens of Task 1 are gone once Button and Dialog stop usi
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/ui/Button.test.tsx apps/desktop/src/styles`
 Expected: FAIL (`expected null to be 'primary'`)
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `Button.tsx` as in Interfaces. `Button.module.css`: one `.button` class (32 px, radius `--radius-m`, `font: 500 13.5px / 20px var(--font-ui)`, inline-flex, gap 6, cursor pointer) and attribute selectors `.button[data-variant="..."]`, `.button[data-size="..."]`, `.button[data-icon-only="true"]` with the values of "UI design: Shared parts"; `.button:disabled { cursor: default; }` and `opacity: 0.5` for every variant except `primary`. `Dialog.module.css`: drop `box-shadow`, add `border: 1px solid var(--border)`, title `font-size: var(--text-title)`, keep every other rule (the existing test `keeps dialog actions visible around a scrolling body` pins them). `base.css`: add `button, input, select, textarea { font: inherit; }`, `input, select, textarea { padding: 5px 8px; }` as a separate rule (do not touch the existing rule: `review-b.test.ts` pins its properties and their order), `input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); padding: 0; }`, `::placeholder { color: var(--text-muted); opacity: 1; }`; keep the existing `select, textarea, input` rule intact. `tokens.css`: delete `--accent-hover`, `--shadow-dialog`, `--text-l` from every block.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/ui apps/desktop/src/styles
 git commit -m "Restyle buttons, form controls and the dialog" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

@@ -138,3 +138,7 @@ test("the body uses the UI font at 14px with a 1.5 line height", () => {
     /body\s*\{[^}]*font:\s*400 var\(--text-m\)\s*\/\s*1\.5 var\(--font-ui\)/,
   );
 });
+
+test("the transitional tokens of Task 1 are gone once Button and Dialog stop using them", () => {
+  expect(tokens).not.toMatch(/--accent-hover|--shadow-dialog|--text-l\b/);
+});

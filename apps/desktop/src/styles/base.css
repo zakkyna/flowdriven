@@ -18,6 +18,26 @@ pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+input,
+select,
+textarea {
+  padding: 5px 8px;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  padding: 0;
+}
+::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
 select,
 textarea,
 input {
