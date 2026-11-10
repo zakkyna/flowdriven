@@ -3097,7 +3097,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 - Consumes: `useRunnerQuery("harnesses.list")`, `useRunnerAction()` with `harnesses.rescan`, `harnesses.setConsent`; Task 7 parts.
 - Produces: `HarnessesScreen(): ReactElement` (data-screen `harnesses`). Layout, regions and copy: "UI design: Harnesses".
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```tsx
 // apps/desktop/src/screens/harnesses/Harnesses.test.tsx
@@ -3151,35 +3151,37 @@ describe("Harnesses", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/harnesses`
 Expected: FAIL (`Unable to find role="article"`)
 
-- [ ] **Step 3: Implement the Harnesses screen per "UI design: Harnesses"**
+- [x] **Step 3: Implement the Harnesses screen per "UI design: Harnesses"**
 
 Ready, loading and error states follow "UI design: Shared parts".
 
 Each card is an `article` with `aria-label` equal to the harness name. `Harnesses.module.css` sets `overflow-wrap: anywhere` on boxes with user text and `min-width: 0` (exactly, not `0px`) on grid and flex children; Task 14's `layout-guards.test.ts` checks both.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src/screens/harnesses`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: preview `#/harnesses`; show the owner.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/harnesses
 git commit -m "Build the Harnesses screen" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 

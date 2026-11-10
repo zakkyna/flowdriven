@@ -1,0 +1,69 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 16px;
+}
+.card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  background: var(--surface-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  padding: 16px 20px;
+}
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cardHeader > * {
+  min-width: 0;
+}
+.cardHeader h2 {
+  margin: 0;
+}
+.mono {
+  font: var(--text-mono) / 18px var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.small {
+  color: var(--text-muted);
+  font-size: var(--text-s);
+  line-height: 20px;
+}
+.warning {
+  display: flex;
+  gap: 8px;
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}
+.warning svg {
+  flex: none;
+}
+.facts {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 4px 12px;
+}
+.facts dt {
+  color: var(--text-muted);
+}
+.facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.inventory {
+  margin-top: 16px;
+}
+.inventory details {
+  margin-top: 8px;
+}
+.inventory li {
+  overflow-wrap: anywhere;
+}
+.missing {
+  margin-top: 24px;
+  overflow-wrap: anywhere;
+}
