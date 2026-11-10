@@ -1600,7 +1600,7 @@ Operation table v0 (MCP column copies spec 8.7 as `yes`, `restricted` (only `app
 | `settings.get` | `{}` | `Settings` | no | | settings, harnesses | |
 | `settings.update` | `{ patch: SettingsPatch }` | `Settings` | no | na | | settings |
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // packages/contracts/src/readiness.test.ts
@@ -1689,29 +1689,31 @@ test("output types are inferred from the schemas", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/contracts`
 Expected: FAIL with missing exports (`RequirementState`, `operations`)
 
-- [ ] **Step 3: Implement the five files with the schemas, functions and table above; re-export from `index.ts`**
+- [x] **Step 3: Implement the five files with the schemas, functions and table above; re-export from `index.ts`**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run packages/contracts`
 Expected: PASS (all contract tests)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts
 git commit -m "Add readiness, harness and settings schemas and runner API v0" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 

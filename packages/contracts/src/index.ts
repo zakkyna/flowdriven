@@ -1,5 +1,10 @@
 export * from "./approval";
+export * from "./client";
 export * from "./common";
 export * from "./flow";
+export * from "./harness";
+export * from "./operations";
+export * from "./readiness";
 export * from "./run";
+export * from "./settings";
 export { CONTRACT_VERSION } from "./version";
