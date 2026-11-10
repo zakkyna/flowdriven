@@ -1,5 +1,8 @@
+import { realpath, stat } from "node:fs/promises";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { BrowserWindow, nativeTheme, net, protocol, session } from "electron";
+import { app, BrowserWindow, nativeTheme, net, protocol, session, type WebContents } from "electron";
+import { CONTENT_SECURITY_POLICY } from "./csp";
 import {
   APP_ORIGIN,
   APP_SCHEME,
@@ -16,17 +19,56 @@ export function registerAppScheme(): void {
   ]);
 }
 export function serveApp(distDir: string): void {
-  protocol.handle(APP_SCHEME, (request) => {
-    const file = resolveAppPath(distDir, request.url);
-    return file ? net.fetch(pathToFileURL(file).toString()) : new Response("Not found", { status: 404 });
+  protocol.handle(APP_SCHEME, async (request) => {
+    const notFound = () => new Response("Not found", { status: 404 });
+    try {
+      const file = resolveAppPath(distDir, request.url);
+      if (!file) return notFound();
+      const root = await realpath(distDir);
+      const target = await realpath(file);
+      if (!target.startsWith(root + path.sep) || !(await stat(target)).isFile()) return notFound();
+      const response = await net.fetch(pathToFileURL(target).toString());
+      const headers = new Headers(response.headers);
+      headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+      headers.set("X-Content-Type-Options", "nosniff");
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    } catch {
+      return notFound();
+    }
   });
 }
 export function lockDownSession(): void {
   session.defaultSession.webRequest.onBeforeRequest((details, callback) =>
     callback({ cancel: isBlockedRequest(details.url) }),
   );
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) =>
+    callback(
+      permission === "clipboard-sanitized-write" &&
+        isAllowedNavigation(contents.getURL()) &&
+        isAllowedNavigation(details.requestingUrl),
+    ),
+  );
+  session.defaultSession.setPermissionCheckHandler(
+    (_contents, permission, origin) =>
+      permission === "clipboard-sanitized-write" && isAllowedNavigation(origin),
+  );
+}
+export function lockDownWebContents(contents: WebContents): void {
+  contents.setWindowOpenHandler(() => ({ action: "deny" }));
+  contents.on("will-attach-webview", (event) => event.preventDefault());
+  const checkNavigation = (event: { url: string; preventDefault: () => void }) => {
+    if (!isAllowedNavigation(event.url)) event.preventDefault();
+  };
+  contents.on("will-navigate", checkNavigation);
+  contents.on("will-frame-navigate", checkNavigation);
+  contents.on("will-redirect", checkNavigation);
+}
+export function registerWebContentsSecurity(): void {
+  app.on("web-contents-created", (_event, contents) => lockDownWebContents(contents));
 }
 export function createMainWindow(options: {
   preloadPath: string;
@@ -45,10 +87,6 @@ export function createMainWindow(options: {
     backgroundColor: dark ? "#161918" : "#F3F4F2",
     show: options.show,
     webPreferences: secureWebPreferences(options.preloadPath),
-  });
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  window.webContents.on("will-navigate", (event, url) => {
-    if (!isAllowedNavigation(url)) event.preventDefault();
   });
   const query = new URLSearchParams();
   if (options.theme) query.set("theme", options.theme);

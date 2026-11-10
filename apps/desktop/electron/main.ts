@@ -1,15 +1,19 @@
 import path from "node:path";
 import { app, BrowserWindow } from "electron";
-import { createMainWindow, lockDownSession, registerAppScheme, serveApp } from "./window";
+import {
+  createMainWindow,
+  lockDownSession,
+  registerAppScheme,
+  registerWebContentsSecurity,
+  serveApp,
+} from "./window";
 
 registerAppScheme();
+registerWebContentsSecurity();
 const preloadPath = path.join(__dirname, "preload.js");
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("web-contents-created", (_event, contents) => {
-    contents.on("will-attach-webview", (event) => event.preventDefault());
-  });
   app.on("second-instance", () => {
     const window = BrowserWindow.getAllWindows()[0];
     if (window) {

@@ -2,9 +2,17 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
 import screens from "./screens.json";
-import { createMainWindow, lockDownSession, registerAppScheme, serveApp } from "./window";
+import {
+  createMainWindow,
+  lockDownSession,
+  registerAppScheme,
+  registerWebContentsSecurity,
+  serveApp,
+} from "./window";
 
 registerAppScheme();
+registerWebContentsSecurity();
+app.on("window-all-closed", () => {});
 void app
   .whenReady()
   .then(async () => {

@@ -1,3 +1,5 @@
+import "./config";
+
 export * from "./approval";
 export * from "./client";
 export * from "./common";

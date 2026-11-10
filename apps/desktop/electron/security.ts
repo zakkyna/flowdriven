@@ -23,7 +23,13 @@ export function secureWebPreferences(preloadPath: string): WebPreferences {
 export function isAllowedNavigation(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "app:" && parsed.host === APP_HOST;
+    return (
+      parsed.protocol === "app:" &&
+      parsed.host === APP_HOST &&
+      !parsed.username &&
+      !parsed.password &&
+      !parsed.port
+    );
   } catch {
     return false;
   }
@@ -36,7 +42,9 @@ export function resolveAppPath(distDir: string, requestUrl: string): string | nu
   if (pathname === "/") pathname = "/index.html";
   try {
     const root = path.resolve(distDir);
-    const result = path.resolve(root, `.${decodeURIComponent(pathname)}`);
+    const decoded = decodeURIComponent(pathname);
+    if (decoded.includes("\0") || decoded.includes("\\")) return null;
+    const result = path.resolve(root, `.${decoded}`);
     return result.startsWith(root + path.sep) ? result : null;
   } catch {
     return null;
@@ -44,8 +52,12 @@ export function resolveAppPath(distDir: string, requestUrl: string): string | nu
 }
 export function isBlockedRequest(url: string): boolean {
   try {
-    return ["http:", "https:", "ws:", "wss:", "ftp:"].includes(new URL(url).protocol);
+    const parsed = new URL(url);
+    if (parsed.protocol === "app:") return !isAllowedNavigation(url);
+    if (parsed.protocol === "devtools:") return false;
+    if (parsed.protocol === "blob:") return !isAllowedNavigation(url.slice(5));
+    return true;
   } catch {
-    return false;
+    return true;
   }
 }

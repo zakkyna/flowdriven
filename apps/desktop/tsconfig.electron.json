@@ -10,5 +10,6 @@
     "types": ["node"],
     "lib": ["ES2023", "DOM"]
   },
-  "include": ["electron/**/*.ts", "electron/screens.json"]
+  "include": ["electron/**/*.ts", "electron/screens.json"],
+  "exclude": ["electron/**/*.test.ts"]
 }

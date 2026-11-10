@@ -87,7 +87,7 @@ Spec 18.4 leaves these to the builder. Each can be changed by a later plan.
 7. Both check scripts list files with `git ls-files --cached --others --exclude-standard`. Reason: git-ignored private notes (`docs/research/`, `.workflow/`) are not repository content.
 8. All scripts live in the root `package.json`; workspace packages have none. Reason: one place to read every command.
 9. Plan 01 runs `FixtureRunnerClient` inside the renderer, in Electron and in the browser alike. The socket transport and the real runner arrive in plan 02 behind the same `RunnerClient`. The preload exposes only `window.flowdrivenShell = { kind: "electron" }`.
-10. Electron serves the renderer from a privileged `app://flowdriven` protocol instead of `file://`, cancels every `http(s)`/`ws(s)` request, denies every permission request and new window, and the production `index.html` carries a strict Content Security Policy. Reason: Electron's own security guidance; "no remote content" becomes mechanical.
+10. Electron serves the renderer from a privileged `app://flowdriven` protocol instead of `file://`, allows only app-origin and DevTools requests, permits only app-origin sanitized clipboard writes, and denies new windows, and the production `index.html` carries a strict Content Security Policy. Reason: Electron's own security guidance; "no remote content" becomes mechanical.
 11. `apps/desktop` is a CommonJS package (no `"type"` field); its Electron sources are plain `.ts` compiled by `tsc` to CommonJS. Reason: sandboxed preloads must be CommonJS, and this needs no bundler for the main process.
 12. Navigation is hash-based (`#/runs/run-0006`) with a 40-line parser. Reason: no router library.
 13. Field spelling: fields copied from the flow manifest keep the spec's spelling (`do`, `from_step`); read-model fields the spec does not name use camelCase.
@@ -1304,7 +1304,7 @@ Done by: Codex/gpt-6.1-terra (steps 1 to 3 and the fix-ups) and the chair (steps
 - Modify: `packages/contracts/src/index.ts` (re-export everything)
 
 **Interfaces:**
-- Consumes: `zod` 4.
+- Consumes: `zod` 4, configured once with `jitless: true` before constructing contract schemas.
 - Produces: one Zod schema per name below (exported `const`) plus the inferred type of the same name (`export type X = z.infer<typeof X>`). `?` marks optional fields. All timestamps are `IsoDateTime`.
 
 ```ts
@@ -3331,23 +3331,23 @@ export function secureWebPreferences(preloadPath: string): WebPreferences;
   // { preload, contextIsolation: true, nodeIntegration: false, nodeIntegrationInWorker: false, sandbox: true, webSecurity: true,
   //   allowRunningInsecureContent: false, webviewTag: false, navigateOnDragDrop: false, spellcheck: false }
 export function isAllowedNavigation(url: string): boolean;
-  // true only when the string parses, url.protocol === "app:" and url.host === APP_HOST; do not use URL.origin (it is the string "null" for app:) and do not use startsWith; false when parsing throws
+  // true only when the string parses, url.protocol === "app:" and url.host === APP_HOST with no username, password or port; do not use URL.origin (it is the string "null" for app:) and do not use startsWith; false when parsing throws
 export function resolveAppPath(distDir: string, requestUrl: string): string | null;
   // app://flowdriven/<path> to an absolute path inside distDir; "/" gives index.html; query and hash ignored;
-  // null for another host, another scheme, or a decoded path that leaves distDir
-export function isBlockedRequest(url: string): boolean;   // true for http:, https:, ws:, wss:, ftp:
+  // null for another host, another scheme, a NUL or backslash, or a decoded path that leaves distDir
+export function isBlockedRequest(url: string): boolean;   // true unless the URL is app-origin, an app-origin blob, or DevTools
 // window.ts
 export function registerAppScheme(): void;   // protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true } }]); call before ready
-export function serveApp(distDir: string): void;   // protocol.handle("app", ...): net.fetch(pathToFileURL(path)) or a 404 Response
-export function lockDownSession(): void;   // webRequest.onBeforeRequest cancels isBlockedRequest URLs; permission request and check handlers deny everything
+export function serveApp(distDir: string): void;   // protocol.handle("app", ...): fetch regular files whose real paths stay inside distDir, add CSP and nosniff headers, or return a plain 404 Response
+export function lockDownSession(): void;   // webRequest.onBeforeRequest cancels isBlockedRequest URLs; permission request and check handlers allow only app-origin sanitized clipboard writes
 export function createMainWindow(options: { preloadPath: string; show: boolean; theme?: "light" | "dark"; scenario?: string; hash?: string }): BrowserWindow;   // scenario is a string because screens.json is imported as JSON; the renderer ignores unknown values
   // 1280x800, minWidth/minHeight from MIN_WINDOW, title "FlowDriven", backgroundColor "#F3F4F2" (light) or "#161918" (dark, or the OS theme when no theme is given),
-  // secureWebPreferences, setWindowOpenHandler denies, will-navigate prevented unless isAllowedNavigation,
+  // secureWebPreferences; all web contents deny window opens and webviews and block external navigation and redirects,
   // loads `${APP_ORIGIN}/index.html` plus the query (`theme=<theme>` and `scenario=<scenario>`, joined with `&`, each only when given) and `#<hash>` when given
 // main.ts: registerAppScheme(); single-instance lock; on ready: lockDownSession(), serveApp(<dist>), createMainWindow({ preloadPath: <dist-electron/preload.js>, show: true });
-//   "web-contents-created" prevents "will-attach-webview"; quit on window-all-closed except on macOS; re-create on "activate"
+//   "web-contents-created" installs web contents security handlers; quit on window-all-closed except on macOS; re-create on "activate"
 // preload.ts: contextBridge.exposeInMainWorld("flowdrivenShell", Object.freeze({ kind: "electron" }))
-// capture.ts: registerAppScheme() before ready; on ready lockDownSession() and serveApp(<dist>); then for theme of ["light", "dark"], for each entry of screens.json: createMainWindow({ show: process.env.FLOWDRIVEN_CAPTURE_SHOW === "1", theme, scenario: entry.scenario, hash: entry.hash });
+// capture.ts: registerAppScheme() before ready; keep the app alive between capture windows; on ready lockDownSession() and serveApp(<dist>); then for theme of ["light", "dark"], for each entry of screens.json: createMainWindow({ show: process.env.FLOWDRIVEN_CAPTURE_SHOW === "1", theme, scenario: entry.scenario, hash: entry.hash });
 //   poll executeJavaScript(`document.querySelector('[data-screen-ready="true"]') !== null`) every 100 ms for up to 10 s
 //   (else print "screen <name> never became ready" and exit 1); capturePage(); write toPNG() to
 //   <repo>/.workflow/scratch/screens/<name>-<theme>.png (mkdir -p); close; finally print "captured 16 screens to .workflow/scratch/screens" and exit 0
@@ -3368,7 +3368,7 @@ export function createMainWindow(options: { preloadPath: string; show: boolean; 
 ]
 ```
 
-`tsconfig.electron.json`: extends `../../tsconfig.base.json`; `module: "nodenext"`, `moduleResolution: "nodenext"`, `verbatimModuleSyntax: false` (CommonJS output), `noEmit: false`, `outDir: "dist-electron"`, `rootDir: "electron"`, `types: ["node"]`, `lib: ["ES2023", "DOM"]`; `include: ["electron/**/*.ts", "electron/screens.json"]`. The test file is included so it is typechecked; its emitted copy in `dist-electron/` is never run. Root scripts: `typecheck` gains `&& tsc -p apps/desktop/tsconfig.electron.json --noEmit`; `"build:electron": "tsc -p apps/desktop/tsconfig.electron.json"`; `"build": "pnpm build:web && pnpm build:electron"`; `"start": "pnpm build && pnpm --filter @flowdriven/desktop exec electron ."`; `"capture": "pnpm build && TZ=UTC pnpm --filter @flowdriven/desktop exec electron dist-electron/capture.js"` (UTC, so the screenshots show the times the plan quotes).
+`tsconfig.electron.json`: extends `../../tsconfig.base.json`; `module: "nodenext"`, `moduleResolution: "nodenext"`, `verbatimModuleSyntax: false` (CommonJS output), `noEmit: false`, `outDir: "dist-electron"`, `rootDir: "electron"`, `types: ["node"]`, `lib: ["ES2023", "DOM"]`; `include: ["electron/**/*.ts", "electron/screens.json"]`. Test files are excluded from the Electron build. Root scripts: `typecheck` gains `&& tsc -p apps/desktop/tsconfig.electron.json --noEmit`; `"build:electron": "tsc -p apps/desktop/tsconfig.electron.json"`; `"build": "pnpm build:web && pnpm build:electron"`; `"start": "pnpm build && pnpm --filter @flowdriven/desktop exec electron ."`; `"capture": "pnpm build && TZ=UTC pnpm --filter @flowdriven/desktop exec electron dist-electron/capture.js"` (UTC, so the screenshots show the times the plan quotes).
 
 - [x] **Step 1: Write the failing tests**
 
@@ -3452,7 +3452,7 @@ Expected: FAIL with `Failed to resolve import "./security"`
 
 - [x] **Step 3: Implement `security.ts`, `window.ts`, `main.ts`, `preload.ts`, `capture.ts`, `screens.json`, `tsconfig.electron.json` and the scripts above**
 
-`resolveAppPath` must not use `new URL` for the path: the URL parser already resolves `%2e%2e` dot segments, so `app://flowdriven/%2e%2e/%2e%2e/etc/passwd` would become `/etc/passwd` before any check. Instead: require the string to start with `app://flowdriven` and the remainder to be empty or start with `/`, `?` or `#` (else null); cut the remainder at the first `?` or `#`; an empty path means `/`, and `/` means `/index.html`; call `decodeURIComponent` once (a malformed escape gives null); then `path.resolve(distDir, "." + decoded)`, and return null unless the result starts with `distDir + path.sep`.
+`resolveAppPath` must not use `new URL` for the path: the URL parser already resolves `%2e%2e` dot segments, so `app://flowdriven/%2e%2e/%2e%2e/etc/passwd` would become `/etc/passwd` before any check. Instead: require the string to start with `app://flowdriven` and the remainder to be empty or start with `/`, `?` or `#` (else null); cut the remainder at the first `?` or `#`; an empty path means `/`, and `/` means `/index.html`; call `decodeURIComponent` once (a malformed escape, NUL or backslash gives null); then `path.resolve(distDir, "." + decoded)`, and return null unless the result starts with `distDir + path.sep`.
 
 - [x] **Step 4: Run the tests to verify they pass**
 
@@ -3462,7 +3462,7 @@ Expected: PASS (6 tests)
 - [x] **Step 5: Build headless**
 
 Run: `pnpm build && ls apps/desktop/dist-electron`
-Expected: build succeeds; the listing shows `capture.js`, `main.js`, `preload.js`, `screens.json`, `security.js`, `security.test.js`, `window.js`
+Expected: build succeeds; the listing shows `capture.js`, `main.js`, `preload.js`, `screens.json`, `security.js`, `csp.js`, `window.js`
 
 - [x] **Step 6: Run the gate**
 
