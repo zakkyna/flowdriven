@@ -183,3 +183,99 @@ test("revisiting a flow waits for its re-enabled run query", async () => {
   await act(async () => release?.());
   await waitFor(() => expect(readyState(container, "builder")).toBe("true"));
 });
+
+test("guards run and step edits while pending", async () => {
+  const { client } = renderApp(FIGMA);
+  await screen.findByRole("heading", { name: "Figma to Flutter" });
+  const original = client.call.bind(client);
+  let release: (() => void) | undefined;
+  const spy = vi.spyOn(client, "call").mockImplementation((name, input) => {
+    if (name === "flows.run" || name === "flows.update")
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      }).then(() => original(name, input as never));
+    return original(name, input as never);
+  });
+  const move = within(row(1)).getByRole("button", { name: "Move up" });
+  fireEvent.click(move);
+  fireEvent.click(move);
+  expect(spy.mock.calls.filter(([name]) => name === "flows.update")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Run now" })).toHaveProperty("disabled", true);
+  await act(async () => release?.());
+  await screen.findByText("Version 1.0.1");
+  const run = screen.getByRole("button", { name: "Run now" });
+  fireEvent.click(run);
+  fireEvent.click(run);
+  expect(spy.mock.calls.filter(([name]) => name === "flows.run")).toHaveLength(1);
+  expect(run).toHaveProperty("disabled", true);
+  expect(run.textContent).toContain("Running");
+  await act(async () => release?.());
+});
+
+test("chat guards submissions and preserves a draft when choosing a suggestion", async () => {
+  const { client } = renderApp(FIGMA);
+  const chat = await screen.findByRole("complementary", { name: "Chat" });
+  const suggestion = await within(chat).findByRole("button", { name: "Use the last folder" });
+  const original = client.call.bind(client);
+  let release: (() => void) | undefined;
+  const spy = vi.spyOn(client, "call").mockImplementation((name, input) => {
+    if (name === "flows.build")
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      }).then(() => original(name, input as never));
+    return original(name, input as never);
+  });
+  const input = within(chat).getByLabelText("Message");
+  fireEvent.change(input, { target: { value: "my draft" } });
+  fireEvent.click(suggestion);
+  fireEvent.keyDown(input, { key: "Enter", metaKey: true });
+  expect(spy.mock.calls.filter(([name]) => name === "flows.build")).toHaveLength(1);
+  expect(within(chat).getByRole("button", { name: "Send" })).toHaveProperty("disabled", true);
+  await act(async () => release?.());
+  expect(input).toHaveProperty("value", "my draft");
+  fireEvent.click(within(chat).getByRole("button", { name: "Send" }));
+  fireEvent.keyDown(input, { key: "Enter", metaKey: true });
+  expect(spy.mock.calls.filter(([name]) => name === "flows.build")).toHaveLength(2);
+  await act(async () => release?.());
+});
+
+test("empty chat displays messages and failed sends retain the draft", async () => {
+  const { client } = renderApp("#/builder", { scenario: "empty" });
+  await screen.findByText("No flows yet.");
+  const original = client.call.bind(client);
+  const spy = vi.spyOn(client, "call").mockImplementation((name, input) => {
+    if (name === "flows.build") return Promise.reject(new Error("Chat unavailable"));
+    return original(name, input as never);
+  });
+  const input = screen.getByLabelText("Message");
+  fireEvent.change(input, { target: { value: "New work" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("Chat unavailable");
+  expect(input).toHaveProperty("value", "New work");
+  spy.mockImplementation((name, args) => original(name, args as never));
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  expect(await screen.findByText("New work")).toBeTruthy();
+  expect(screen.getByText(PREVIEW_AGENT_REPLY)).toBeTruthy();
+});
+
+test("shows harness names, singular count, and clears errors on flow switch", async () => {
+  const { client } = renderApp(FIGMA);
+  const flow = client.state.flows.find((item) => item.manifest.id === "dev.example.figma-to-flutter");
+  if (!flow) throw new Error("Fixture flow missing");
+  flow.manifest.steps = flow.manifest.steps.slice(0, 1);
+  const firstStep = flow.manifest.steps[0];
+  if (!firstStep) throw new Error("Fixture step missing");
+  firstStep.worker = { prefer: ["codex", "claude-code", "unknown"], effort: "medium" };
+  await screen.findByRole("heading", { name: "Figma to Flutter" });
+  expect(screen.getByText("1 step")).toBeTruthy();
+  expect(screen.getByText("Prefers Codex, Claude Code, unknown. Effort: medium.")).toBeTruthy();
+  const original = client.call.bind(client);
+  vi.spyOn(client, "call").mockImplementation((name, input) =>
+    name === "flows.run" ? Promise.reject(new Error("Run failed")) : original(name, input as never),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Run now" }));
+  await screen.findByText("Run failed");
+  fireEvent.change(screen.getByLabelText("Flow"), { target: { value: "dev.example.email-triage" } });
+  await screen.findByRole("heading", { name: "Email triage and draft replies" });
+  expect(screen.queryByText("Run failed")).toBeNull();
+});

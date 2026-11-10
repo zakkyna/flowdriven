@@ -1,4 +1,4 @@
-import type { FlowEdit, Step, StepRun, StepRunState } from "@flowdriven/contracts";
+import type { FlowEdit, HarnessCard, Step, StepRun, StepRunState } from "@flowdriven/contracts";
 import { type ReactElement, useState } from "react";
 import { Button } from "../../ui/Button";
 import { CheckList } from "../../ui/CheckList";
@@ -7,6 +7,8 @@ import styles from "./Builder.module.css";
 
 export function StepRow({
   step,
+  busy,
+  harnesses,
   index,
   count,
   status,
@@ -15,6 +17,8 @@ export function StepRow({
   onDelete,
 }: {
   step: Step;
+  busy: boolean;
+  harnesses: HarnessCard[];
   index: number;
   count: number;
   status: StepRunState;
@@ -24,7 +28,9 @@ export function StepRow({
 }): ReactElement {
   const [expanded, setExpanded] = useState(false);
   const preferences = [
-    step.worker?.prefer?.length ? `Prefers ${step.worker.prefer.join(", ")}.` : "",
+    step.worker?.prefer?.length
+      ? `Prefers ${step.worker.prefer.map((id) => harnesses.find((harness) => harness.id === id)?.name ?? id).join(", ")}.`
+      : "",
     step.worker?.effort ? `Effort: ${step.worker.effort}.` : "",
   ]
     .filter(Boolean)
@@ -55,23 +61,30 @@ export function StepRow({
               variant="quiet"
               icon="arrow-up"
               aria-label="Move up"
-              disabled={index === 0}
+              disabled={busy || index === 0}
               onClick={() => edit({ kind: "move", stepId: step.id, direction: "up" })}
             />
             <Button
               variant="quiet"
               icon="arrow-down"
               aria-label="Move down"
-              disabled={index === count - 1}
+              disabled={busy || index === count - 1}
               onClick={() => edit({ kind: "move", stepId: step.id, direction: "down" })}
             />
             <Button
               variant="quiet"
               icon="duplicate"
               aria-label="Duplicate"
+              disabled={busy}
               onClick={() => edit({ kind: "duplicate", stepId: step.id })}
             />
-            <Button variant="quiet" icon="trash" aria-label="Delete" onClick={() => onDelete(step)} />
+            <Button
+              variant="quiet"
+              icon="trash"
+              aria-label="Delete"
+              disabled={busy}
+              onClick={() => onDelete(step)}
+            />
           </div>
         </div>
         <p className={styles.muted}>

@@ -1,5 +1,5 @@
-import type { FlowEdit, Step } from "@flowdriven/contracts";
-import { type ReactElement, useState } from "react";
+import type { ChatMessage, FlowEdit, Step } from "@flowdriven/contracts";
+import { type ReactElement, useRef, useState } from "react";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";
 import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
@@ -16,17 +16,23 @@ import { StepList } from "./StepList";
 export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
   const [, navigate] = useRoute();
   const action = useRunnerAction();
-  const [error, setError] = useState<string>();
+  const [errorState, setError] = useState<{ id?: string; message: string }>();
   const [deleted, setDeleted] = useState<Step>();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [running, setRunning] = useState(false);
+  const inFlight = useRef(false);
+  const [emptyMessages, setEmptyMessages] = useState<ChatMessage[]>([]);
   const list = useRunnerQuery("flows.list", {});
   const id = flowId ?? list.data?.[0]?.id;
+  const harnesses = useRunnerQuery("harnesses.list", {});
+  const error = errorState && errorState.id === id ? errorState.message : undefined;
   const flow = useRunnerQuery("flows.get", { flowId: id ?? "" }, { skip: !id });
   const runId = list.data?.find((item) => item.id === id)?.lastRun?.runId;
   const run = useRunnerQuery("runs.status", { runId: runId ?? "" }, { skip: !runId });
-  const loading = list.loading || flow.loading || run.loading;
-  const queryError = list.error ?? flow.error ?? run.error;
+  const loading = list.loading || flow.loading || run.loading || harnesses.loading;
+  const queryError = list.error ?? flow.error ?? run.error ?? harnesses.error;
   if (flow.error?.code === "not_found" && id)
     return (
       <NotFoundPage
@@ -48,24 +54,42 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
           list.reload();
           flow.reload();
           run.reload();
+          harnesses.reload();
         }}
       />
     );
   const detail = flow.data;
   const edit = async (change: FlowEdit) => {
-    if (!id) return;
+    if (!id || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
     const result = await action("flows.update", { flowId: id, edit: change });
-    setError(result.ok ? undefined : result.error.message);
+    inFlight.current = false;
+    setBusy(false);
+    setError(result.ok ? undefined : { id, message: result.error.message });
   };
   const send = async (message: string) => {
     const result = await action("flows.build", { flowId: id, message });
-    setError(result.ok ? undefined : result.error.message);
+    setError(result.ok ? undefined : { id, message: result.error.message });
+    if (result.ok && !id) {
+      setEmptyMessages((messages) => [
+        ...messages,
+        { id: `user-${messages.length}`, role: "user", text: message, at: result.data.reply.at },
+        { ...result.data.reply, id: `reply-${messages.length}` },
+      ]);
+    }
     return result.ok;
   };
   const runNow = async () => {
-    if (!id) return;
+    if (!id || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setRunning(true);
     const result = await action("flows.run", { flowId: id });
-    setError(result.ok ? undefined : result.error.message);
+    setRunning(false);
+    inFlight.current = false;
+    setBusy(false);
+    setError(result.ok ? undefined : { id, message: result.error.message });
     if (result.ok) navigate({ screen: "run", runId: result.data.id });
   };
   return (
@@ -91,13 +115,13 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
                 <Button
                   variant="quiet"
                   icon="undo"
-                  disabled={!detail.canUndo}
+                  disabled={busy || !detail.canUndo}
                   onClick={() => void edit({ kind: "undo" })}
                 >
                   Undo
                 </Button>
-                <Button variant="primary" onClick={() => void runNow()}>
-                  Run now
+                <Button variant="primary" disabled={busy} onClick={() => void runNow()}>
+                  {running ? "Running..." : "Run now"}
                 </Button>
               </div>
             </div>
@@ -123,9 +147,12 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
             <Playback playback={detail.playback} />
             <div className={styles.sectionHeading}>
               <h2>Steps</h2>
-              <span className={styles.muted}>{detail.manifest.steps.length} steps</span>
+              <span className={styles.muted}>
+                {detail.manifest.steps.length} {detail.manifest.steps.length === 1 ? "step" : "steps"}
+              </span>
               <Button
                 icon="plus"
+                disabled={busy}
                 onClick={() => {
                   setTitle("");
                   setAdding(true);
@@ -142,6 +169,8 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
             )}
             <StepList
               flow={detail}
+              busy={busy}
+              harnesses={harnesses.data ?? []}
               run={run.data}
               edit={(change) => void edit(change)}
               onDelete={setDeleted}
@@ -163,7 +192,7 @@ export function BuilderScreen({ flowId }: { flowId?: string }): ReactElement {
           </>
         )}
       </div>
-      <ChatPanel messages={detail?.conversation ?? []} send={send} />
+      <ChatPanel messages={detail?.conversation ?? emptyMessages} send={send} />
       {deleted && (
         <Dialog
           title={`Delete “${deleted.title}”?`}

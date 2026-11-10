@@ -1,14 +1,18 @@
-import type { FlowDetail, FlowEdit, RunDetail, Step } from "@flowdriven/contracts";
+import type { FlowDetail, FlowEdit, HarnessCard, RunDetail, Step } from "@flowdriven/contracts";
 import type { ReactElement } from "react";
 import styles from "./Builder.module.css";
 import { StepRow } from "./StepRow";
 export function StepList({
   flow,
+  busy,
+  harnesses,
   run,
   edit,
   onDelete,
 }: {
   flow: FlowDetail;
+  busy: boolean;
+  harnesses: HarnessCard[];
   run?: RunDetail;
   edit: (edit: FlowEdit) => void;
   onDelete: (step: Step) => void;
@@ -19,6 +23,8 @@ export function StepList({
         <StepRow
           key={step.id}
           step={step}
+          busy={busy}
+          harnesses={harnesses}
           index={index}
           count={flow.manifest.steps.length}
           status={flow.stepStatus[step.id] ?? "pending"}
