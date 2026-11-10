@@ -1413,7 +1413,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.layout`, `.item`, `.summary`, `.tab`, `.items`, `.detailScroll` and `.count` in `Inbox.module.css`.
 
-- [ ] **Step 1: Write the failing tests** (add to `Inbox.test.tsx`; every existing Inbox test stays unchanged)
+- [x] **Step 1: Write the failing tests** (add to `Inbox.test.tsx`; every existing Inbox test stays unchanged)
 
 ```tsx
 test("the Inbox has one h1 and, with a decision open, one h2", async () => {
@@ -1483,31 +1483,31 @@ await waitFor(() => expect(zone()?.scrollTop).toBe(0));
 
 The Settings half of the test stays as Task 7 wrote it. The decision scroller is inside the keyed `ApprovalDetail`, so a new decision always starts at the top; `App` resets it too.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/inbox apps/desktop/src/App.test.tsx`
 Expected: FAIL (`expected [] to have a length of 1`: no row has `aria-current`; in `the Inbox has one h1`, the description line is still shown, so `toBeNull()` fails). The updated `App.test.tsx` test passes before and after the change (before, the `Page` body is the zone): it is a pin that the change must keep green.
 
-- [ ] **Step 3: Implement** the shell, tabs, rows and CSS. Keep the `.patch`, `.hidden`, `.added`, `.removed`, `.recipients` and `.editor` rules and the `white-space: pre-wrap` and `min-height` rules that `Inbox.test.tsx` reads from the CSS file; keep `overflow-wrap: anywhere` and `min-width: 0` on user-text boxes. Remove the old `.waiting` left border.
+- [x] **Step 3: Implement** the shell, tabs, rows and CSS. Keep the `.patch`, `.hidden`, `.added`, `.removed`, `.recipients` and `.editor` rules and the `white-space: pre-wrap` and `min-height` rules that `Inbox.test.tsx` reads from the CSS file; keep `overflow-wrap: anywhere` and `min-width: 0` on user-text boxes. Remove the old `.waiting` left border.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS (all Inbox tests, old and new)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/inbox apps/desktop/src/App.test.tsx
 git commit -m "Restyle the Inbox list and screen shell" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

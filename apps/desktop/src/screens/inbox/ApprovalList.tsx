@@ -57,15 +57,18 @@ export function ApprovalList({
         <li key={a.id}>
           <button
             type="button"
-            className={`${styles.item} ${a.state === "pending" ? styles.waiting : ""} ${a.id === selected ? styles.selected : ""}`}
+            className={styles.item}
+            aria-current={a.id === selected ? "true" : undefined}
             onClick={() => select(a.id)}
           >
-            <Icon name={icon(a)} />
+            <span className={styles.itemIcon}>
+              <Icon name={icon(a)} />
+            </span>
             <span className={styles.itemText}>
               <span className={styles.summary}>
                 <Revealed text={a.summary} />
               </span>
-              <span className={styles.muted}>
+              <span className={styles.flow}>
                 <Revealed text={a.flowName} />
                 {a.stepTitle && (
                   <>
@@ -74,7 +77,9 @@ export function ApprovalList({
                 )}
               </span>
               {a.state === "pending" ? (
-                <span className={styles.small}>Expires {formatDateTime(a.expiresAt)}</span>
+                <span className={styles.expiry}>
+                  <Icon name="clock" size={13} /> Expires {formatDateTime(a.expiresAt)}
+                </span>
               ) : (
                 <StatusBadge domain="approval" value={a.state} />
               )}

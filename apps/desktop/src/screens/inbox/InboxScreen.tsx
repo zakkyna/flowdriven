@@ -1,10 +1,9 @@
 import type { ApprovalDecision } from "@flowdriven/contracts";
-import { type ReactElement, useRef, useState } from "react";
+import { type ReactElement, useLayoutEffect, useRef, useState } from "react";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";
 import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
 import { Dialog } from "../../ui/Dialog";
-import { Page } from "../../ui/Page";
 import { ScreenState } from "../../ui/ScreenState";
 import { ApprovalDetail } from "./ApprovalDetail";
 import { ApprovalList, noun } from "./ApprovalList";
@@ -27,6 +26,13 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
   const justResolved = useRef(new Set<string>());
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string>();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const loaded = !query.loading && !query.error;
+  useLayoutEffect(() => {
+    if (!loaded || !headingRef.current) return;
+    document.title = "Inbox - FlowDriven";
+    headingRef.current.focus({ preventScroll: true });
+  }, [loaded]);
   if (query.loading || query.error)
     return (
       <ScreenState
@@ -125,89 +131,99 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
     setBusy(false);
   };
   return (
-    <Page screen="inbox" ready size="wide" title="Inbox" description={description}>
-      <div className={styles.layout}>
-        <div>
-          <div role="tablist" aria-label="Decisions" className={styles.tabs}>
-            {(["waiting", "resolved"] as const).map((value) => (
-              <button
-                type="button"
-                role="tab"
-                id={`inbox-tab-${value}`}
-                aria-controls="inbox-panel"
-                aria-selected={activeTab === value}
-                tabIndex={activeTab === value ? 0 : -1}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-                    event.preventDefault();
-                    const next = value === "waiting" ? "resolved" : "waiting";
-                    clearSelection();
-                    setTab(next);
-                    navigate({ screen: "inbox" });
-                    document.getElementById(`inbox-tab-${next}`)?.focus();
-                  }
-                }}
-                key={value}
-                onClick={() => {
-                  setTab(value);
+    <section data-screen="inbox" data-screen-ready="true" className={styles.layout}>
+      <div className={styles.listZone}>
+        <header className={styles.bar}>
+          <h1 ref={headingRef} tabIndex={-1}>
+            Inbox
+          </h1>
+        </header>
+        <div role="tablist" aria-label="Decisions" className={styles.tabs}>
+          {(["waiting", "resolved"] as const).map((value) => (
+            <button
+              type="button"
+              role="tab"
+              className={styles.tab}
+              id={`inbox-tab-${value}`}
+              aria-controls="inbox-panel"
+              aria-selected={activeTab === value}
+              tabIndex={activeTab === value ? 0 : -1}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  const next = value === "waiting" ? "resolved" : "waiting";
                   clearSelection();
+                  setTab(next);
                   navigate({ screen: "inbox" });
-                }}
-              >
-                {value === "waiting" ? `Waiting (${waiting.length})` : `Resolved (${resolved.length})`}
-              </button>
-            ))}
-          </div>
-          <div role="tabpanel" id="inbox-panel" aria-labelledby={`inbox-tab-${activeTab}`}>
-            {items.length ? (
-              <ApprovalList
-                items={items}
-                selected={selected?.id}
-                select={(id) => {
-                  clearSelection();
-                  navigate({ screen: "inbox", approvalId: id });
-                }}
-              />
-            ) : activeTab === "waiting" ? (
-              <div>
-                <h2>Nothing is waiting for you.</h2>
-                <p>When a run needs a decision, it shows up here.</p>
-              </div>
-            ) : (
-              <p>No resolved decisions yet.</p>
-            )}
-          </div>
+                  document.getElementById(`inbox-tab-${next}`)?.focus();
+                }
+              }}
+              key={value}
+              onClick={() => {
+                setTab(value);
+                clearSelection();
+                navigate({ screen: "inbox" });
+              }}
+            >
+              {value === "waiting" ? "Waiting" : "Resolved"}{" "}
+              <span className={styles.count}>({value === "waiting" ? waiting.length : resolved.length})</span>
+            </button>
+          ))}
         </div>
-        {selected && (
-          <ApprovalDetail
-            key={selected.id}
-            approval={selected}
-            status={status}
-            error={dialog ? undefined : error}
-            next={() => {
-              clearSelection();
-              setTab("waiting");
-              navigate({ screen: "inbox" });
-            }}
-            similar={similar}
-            busy={busy || justResolved.current.has(selected.id)}
-            editing={editing}
-            text={text}
-            setText={setText}
-            edit={() => {
-              const p = selected.payload;
-              setText(p.kind === "email" ? p.body : p.kind === "post" || p.kind === "text" ? p.text : "");
-              setEditing(true);
-            }}
-            cancel={() => setEditing(false)}
-            resolve={(decision) => void resolve(decision)}
-            reject={() => setDialog({ kind: "reject", approvalId: selected.id, ids: [selected.id] })}
-            approveAll={() =>
-              setDialog({ kind: "all", approvalId: selected.id, ids: similar.map((a) => a.id) })
-            }
-          />
-        )}
+        <div
+          role="tabpanel"
+          id="inbox-panel"
+          aria-labelledby={`inbox-tab-${activeTab}`}
+          className={styles.items}
+        >
+          {items.length ? (
+            <ApprovalList
+              items={items}
+              selected={selected?.id}
+              select={(id) => {
+                clearSelection();
+                navigate({ screen: "inbox", approvalId: id });
+              }}
+            />
+          ) : activeTab === "waiting" ? (
+            <div>
+              <h2>Nothing is waiting for you.</h2>
+              <p>When a run needs a decision, it shows up here.</p>
+            </div>
+          ) : (
+            <p>No resolved decisions yet.</p>
+          )}
+        </div>
       </div>
+      {selected && (
+        <ApprovalDetail
+          key={selected.id}
+          approval={selected}
+          status={status}
+          error={dialog ? undefined : error}
+          next={() => {
+            clearSelection();
+            setTab("waiting");
+            navigate({ screen: "inbox" });
+          }}
+          similar={similar}
+          busy={busy || justResolved.current.has(selected.id)}
+          editing={editing}
+          text={text}
+          setText={setText}
+          edit={() => {
+            const p = selected.payload;
+            setText(p.kind === "email" ? p.body : p.kind === "post" || p.kind === "text" ? p.text : "");
+            setEditing(true);
+          }}
+          cancel={() => setEditing(false)}
+          resolve={(decision) => void resolve(decision)}
+          reject={() => setDialog({ kind: "reject", approvalId: selected.id, ids: [selected.id] })}
+          approveAll={() =>
+            setDialog({ kind: "all", approvalId: selected.id, ids: similar.map((a) => a.id) })
+          }
+        />
+      )}
       {dialog?.kind === "reject" && selected?.id === dialog.approvalId && (
         <Dialog
           title={`Reject this ${noun(selected)}?`}
@@ -264,6 +280,6 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
           )}
         </Dialog>
       )}
-    </Page>
+    </section>
   );
 }

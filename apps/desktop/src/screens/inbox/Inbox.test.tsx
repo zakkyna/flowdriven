@@ -346,3 +346,51 @@ test("a failed plain approval shows an alert in the detail", async () => {
   expect(alert.textContent).toContain("Approval failed");
   expect(alert.parentElement?.querySelector("h2")).toBeTruthy();
 });
+
+test("the Inbox has one h1 and, with a decision open, one h2", async () => {
+  renderApp("#/inbox/ap-0011");
+  await screen.findByRole("heading", { level: 2, name: "Send a reply to Priya Shah about invoice 1042" });
+  expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual(["Inbox"]);
+  expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(1);
+  const heading = screen.getByRole("heading", { level: 1, name: "Inbox" });
+  expect(heading.tabIndex).toBe(-1);
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+  expect(document.title).toBe("Inbox - FlowDriven");
+  expect(
+    screen.queryByText("Decisions waiting for you. Nothing risky happens until you approve it."),
+  ).toBeNull();
+});
+test("the open decision is marked in the list and its title is the detail heading", async () => {
+  renderApp("#/inbox/ap-0011");
+  const heading = await screen.findByRole("heading", { level: 2 });
+  const current = within(list())
+    .getAllByRole("button")
+    .filter((b) => b.getAttribute("aria-current") === "true");
+  expect(current).toHaveLength(1);
+  expect(current[0]?.textContent).toContain(heading.textContent ?? "never");
+});
+test("waiting rows say when they expire, and resolved rows show the decision as icon plus word", async () => {
+  renderApp("#/inbox");
+  const tab = await screen.findByRole("tab", { name: "Waiting (5)" });
+  expect(tab.textContent).toBe("Waiting (5)");
+  expect(tab.hasAttribute("aria-label")).toBe(false);
+  const waiting = await within(list()).findAllByRole("listitem");
+  for (const item of waiting) expect(item.textContent).toMatch(/Expires \d+ \w+, \d\d:\d\d/);
+  fireEvent.click(await screen.findByRole("tab", { name: "Resolved (2)" }));
+  await waitFor(() => expect(within(list()).getAllByRole("listitem")).toHaveLength(2));
+  for (const item of within(list()).getAllByRole("listitem")) {
+    expect(item.textContent).toMatch(/Approved|Rejected|Expired/);
+    expect(item.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  }
+});
+test("the list column and rows follow the approved layout", () => {
+  expect(css).toMatch(/\.layout\s*\{[^}]*grid-template-columns:\s*var\(--list-width\) minmax\(0, 1fr\)/s);
+  expect(css).toMatch(/\.item\[aria-current="true"\]\s*\{[^}]*background:\s*var\(--surface-selected\)/s);
+  expect(css).toMatch(/\.item\[aria-current="true"\]::before\s*\{[^}]*background:\s*var\(--accent\)/s);
+  expect(css).toMatch(/\.summary\s*\{[^}]*-webkit-line-clamp:\s*2/s);
+  expect(css).toMatch(/\.tab\[aria-selected="true"\]\s*\{[^}]*background:\s*var\(--surface-selected\)/s);
+  expect(css).toMatch(/\.tab\[aria-selected="true"\]::after\s*\{[^}]*background:\s*var\(--accent\)/s);
+  expect(css).toMatch(/\.items\s*\{[^}]*overflow-y:\s*auto/s);
+  expect(css).toMatch(/\.detailScroll\s*\{[^}]*overflow-y:\s*auto/s);
+  expect(css).toMatch(/\.count\s*\{[^}]*font-family:\s*var\(--font-mono\)/s);
+});

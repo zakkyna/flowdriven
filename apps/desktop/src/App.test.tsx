@@ -118,17 +118,21 @@ test("empty: no count on the inbox once the data has loaded", async () => {
 });
 
 test("route changes reset scroll, title and focus", async () => {
-  renderApp("#/inbox");
-  await screen.findByText("Decisions waiting for you. Nothing risky happens until you approve it.");
+  renderApp("#/inbox/ap-0011");
+  await screen.findByRole("heading", { level: 2, name: "Send a reply to Priya Shah about invoice 1042" });
   const page = document.querySelector<HTMLElement>('section[data-screen="inbox"]');
   if (!page) throw new Error("Missing inbox page");
-  const zone = page.querySelector<HTMLElement>('[data-scroll="top"]');
-  if (!zone) throw new Error("Missing inbox scroller");
-  zone.scrollTop = 200;
-  const item = within(page).getAllByRole("button", { name: /expires/i })[1];
+  const zone = () => page.querySelector<HTMLElement>('[data-scroll="top"]');
+  const first = zone();
+  if (!first) throw new Error("Missing decision scroller");
+  first.scrollTop = 200;
+  const item = within(page)
+    .getAllByRole("button", { name: /expires/i })
+    .find((b) => b.getAttribute("aria-current") !== "true");
   if (!item) throw new Error("Missing inbox item");
   fireEvent.click(item);
-  await waitFor(() => expect(zone.scrollTop).toBe(0));
+  await waitFor(() => expect(window.location.hash).not.toBe("#/inbox/ap-0011"));
+  await waitFor(() => expect(zone()?.scrollTop).toBe(0));
   fireEvent.click(screen.getByRole("link", { name: "Settings" }));
   await screen.findByRole("heading", { level: 1, name: "Settings" });
   await waitFor(() => {
