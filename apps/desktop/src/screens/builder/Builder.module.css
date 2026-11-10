@@ -1,0 +1,204 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--chat-width);
+  height: 100vh;
+  margin: -28px -32px -48px;
+}
+.main {
+  min-width: 0;
+  overflow: auto;
+  padding: 28px 32px 48px;
+}
+.toolbar,
+.stepHeader,
+.stepActions,
+.meta,
+.sectionHeading,
+.uses,
+.suggestions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.toolbar,
+.sectionHeading {
+  justify-content: space-between;
+}
+.toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.toolbar select {
+  max-width: 100%;
+}
+.flowHeader {
+  margin: 24px 0;
+  overflow-wrap: anywhere;
+}
+.flowHeader h1,
+.flowHeader p,
+.panel h2,
+.chat h2 {
+  margin: 0 0 8px;
+}
+.meta {
+  gap: 16px;
+  margin: 12px 0 8px;
+  flex-wrap: wrap;
+}
+.muted {
+  color: var(--text-muted);
+  font-size: var(--text-s);
+}
+.panel {
+  background: var(--surface-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  padding: 16px 20px;
+  overflow-wrap: anywhere;
+}
+.playback {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px 16px;
+}
+.playback dt {
+  color: var(--text-muted);
+}
+.playback dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.playback ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.sectionHeading {
+  margin-top: 24px;
+  justify-content: flex-start;
+}
+.sectionHeading h2 {
+  margin: 0;
+}
+.sectionHeading button {
+  margin-left: auto;
+}
+.error {
+  color: var(--bad);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+.step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.stepNumber {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.stepBody {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.stepHeader {
+  flex-wrap: wrap;
+}
+.titleButton {
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.stepActions {
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.stepBody > p {
+  margin: 8px 0;
+}
+.uses {
+  flex-wrap: wrap;
+  margin: 8px 0;
+  font-size: var(--text-s);
+  color: var(--text-muted);
+}
+.uses code {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-s);
+  padding: 2px 6px;
+  overflow-wrap: anywhere;
+}
+.details h3 {
+  font-size: var(--text-s);
+  margin: 12px 0 4px;
+}
+.prewrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--surface-panel);
+  padding: 24px 20px;
+}
+.chat header p {
+  margin: 0;
+}
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin: 20px 0;
+}
+.message strong {
+  font-size: var(--text-s);
+}
+.message time {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.message p {
+  margin: 6px 0;
+}
+.suggestions {
+  flex-wrap: wrap;
+}
+.suggestions button {
+  height: 28px;
+}
+.composer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.composer textarea {
+  width: 100%;
+  resize: vertical;
+}

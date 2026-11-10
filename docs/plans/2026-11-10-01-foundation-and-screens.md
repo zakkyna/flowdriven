@@ -2548,7 +2548,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 - Consumes: `useRunnerQuery("flows.list" | "flows.get" | "runs.status")`, `useRunnerAction()` with `flows.update`, `flows.build`, `flows.run`; `useRoute`, `AppLink`, `NotFoundPage`; `Page`, `StatusBadge`, `Badge`, `CheckList`, `Button`, `Dialog`, `formatDateTime`.
 - Produces: `BuilderScreen(props: { flowId?: string }): ReactElement`. Layout, regions and copy: "UI design: Builder". `Run now` navigates to `{ screen: "run", runId }` of the returned run. The step row's check verdicts come from the flow's last run via `runs.status` when `FlowSummary.lastRun` exists.
 
-- [ ] **Step 1: Write the failing tests** `Builder.test.tsx`
+- [x] **Step 1: Write the failing tests** `Builder.test.tsx`
 
 ```tsx
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -2660,33 +2660,35 @@ describe("Builder", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/builder`
 Expected: FAIL (`Unable to find role="list" and name "Steps"` or similar)
 
-- [ ] **Step 3: Implement the Builder screen per "UI design: Builder"**
+- [x] **Step 3: Implement the Builder screen per "UI design: Builder"**
 
 The step list is an `ol` with `aria-label="Steps"`; the first button in each row is the title button. A step row contains no `ul`, `ol` or `li` besides the row itself (the Uses chips and the Outputs are plain elements), because the tests count the `listitem` roles under Steps. `RunnerError` messages from `flows.update`, `flows.build` and `flows.run` appear in the error line, which is rendered only while an error exists. Queries: `flows.list`, `flows.get` and `runs.status`. With no `flowId`, `flows.get` is skipped until `flows.list` has loaded and then asks for the first flow; `runs.status` is skipped without a `lastRun`. The screen is ready when every non-skipped query has loaded ("UI design: Shared parts"). A `not_found` from `flows.get` shows a `NotFoundPage`; every in-app link is an `AppLink`. `Builder.module.css` sets `overflow-wrap: anywhere` on boxes with user text and `min-width: 0` (exactly, not `0px`) on grid and flex children; Task 14's `layout-guards.test.ts` checks both.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src/screens/builder`
 Expected: PASS (12 tests)
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: `pnpm build:web && pnpm preview:web`, open `http://127.0.0.1:4173/#/builder/dev.example.figma-to-flutter` in light and dark; show the owner.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/builder
 git commit -m "Build the Builder screen on sample data" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-10. Evidence: pnpm format && pnpm check.
 
 ---
 
