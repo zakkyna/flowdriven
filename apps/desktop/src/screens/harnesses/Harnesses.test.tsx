@@ -1,9 +1,28 @@
 // apps/desktop/src/screens/harnesses/Harnesses.test.tsx
+import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
 
 const card = (name: string) => screen.getByRole("article", { name });
+
+test("Re-scan sits in the page bar and each harness is a flat article with its name and risk", async () => {
+  renderApp("#/harnesses");
+  const codex = await screen.findByRole("article", { name: "Codex" });
+  const bar = screen.getByRole("heading", { level: 1, name: "Harnesses" }).closest("header") as HTMLElement;
+  expect(within(bar).getByRole("button", { name: "Re-scan" })).toBeTruthy();
+  expect(within(codex).getByRole("heading", { level: 2, name: "Codex" })).toBeTruthy();
+  expect(within(card("Antigravity")).getByText("Unofficial")).toBeTruthy();
+});
+test("harnesses styles: one flat column with hairlines, no cards", () => {
+  const css = readFileSync("apps/desktop/src/screens/harnesses/Harnesses.module.css", "utf8");
+  expect(css).toMatch(/\.card\s*\{[^}]*border-top:\s*1px solid var\(--border\)/s);
+  expect(css).not.toMatch(/\.card\s*\{[^}]*(border-radius|background)/s);
+  expect(css).not.toMatch(/repeat\(auto-fill/);
+  expect(css).toMatch(/\.warning\s*\{[^}]*color:\s*var\(--bad\)/s);
+  expect(css).toMatch(/overflow-wrap:\s*anywhere/);
+  expect(css).toMatch(/min-width:\s*0\b/);
+});
 
 describe("Harnesses", () => {
   test("shows each detected harness with its risk, quota, sandbox and inventory", async () => {

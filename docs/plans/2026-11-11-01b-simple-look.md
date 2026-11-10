@@ -1780,7 +1780,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 - The CSS tests below read these class names, so the CSS module must use them exactly: `.card` and `.warning` in `Harnesses.module.css`.
 
-- [ ] **Step 1: Write the failing tests** (add to `Harnesses.test.tsx`; add `import { readFileSync } from "node:fs";` at the top of the file)
+- [x] **Step 1: Write the failing tests** (add to `Harnesses.test.tsx`; add `import { readFileSync } from "node:fs";` at the top of the file)
 
 ```tsx
 test("Re-scan sits in the page bar and each harness is a flat article with its name and risk", async () => {
@@ -1802,33 +1802,33 @@ test("harnesses styles: one flat column with hairlines, no cards", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run apps/desktop/src/screens/harnesses`
 Expected: FAIL in the CSS test, on its first assertion (`.card` `border-top`: `expected '...' to match /\.card\s*\{...`). The first test (`Re-scan sits in the page bar ...`) may pass at once; it is kept as a pin.
 
-- [ ] **Step 3: Implement** per "UI design: Harnesses". The vendor warning keeps its `alert` icon and its words.
+- [x] **Step 3: Implement** per "UI design: Harnesses". The vendor warning keeps its `alert` icon and its words.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run apps/desktop/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
 - [ ] **Step 6: Chair step (GUI)**: preview `#/harnesses` in light and dark.
 
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src/screens/harnesses
 git commit -m "Restyle the Harnesses screen" -m "Assisted-by: Codex"
 ```
 
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

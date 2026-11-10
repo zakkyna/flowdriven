@@ -1,15 +1,11 @@
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-  gap: 16px;
+.list {
+  min-width: 0;
 }
 .card {
   min-width: 0;
   overflow-wrap: anywhere;
-  background: var(--surface-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-l);
-  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
 }
 .cardHeader {
   display: flex;
@@ -22,6 +18,8 @@
 }
 .cardHeader h2 {
   margin: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
 }
 .mono {
   font: var(--text-mono) / 18px var(--font-mono);
@@ -65,5 +63,11 @@
 }
 .missing {
   margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
   overflow-wrap: anywhere;
+}
+.missing h2 {
+  font-size: var(--text-title);
+  font-weight: 600;
 }

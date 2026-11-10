@@ -62,6 +62,7 @@ export function HarnessesScreen(): ReactElement {
       screen="harnesses"
       ready
       title="Harnesses"
+      size="medium"
       description={description}
       actions={
         <Button disabled={busy} onClick={() => void rescan()}>
@@ -81,7 +82,7 @@ export function HarnessesScreen(): ReactElement {
           <p>Install Codex, Claude Code or another AI agent, then choose Re-scan.</p>
         </div>
       ) : (
-        <div className={styles.grid}>
+        <div className={styles.list}>
           {detected.map((card) => (
             <HarnessCardView
               key={card.id}
