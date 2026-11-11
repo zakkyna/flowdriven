@@ -12,6 +12,7 @@ import type { RunView } from "../engine.ts";
 import { limits } from "../exec/limits.ts";
 import { reportLines, sumUsage } from "../report.ts";
 import type { AuditEntry, RunRow, StepRow } from "../storage.ts";
+import { triggerWords } from "../triggers/rules.ts";
 import { toApproval } from "./map-approval.ts";
 import { coreVersion } from "./map-flow.ts";
 export function blockedCalls(
@@ -65,6 +66,7 @@ export function toRunSummary(
   flowName: string,
   reportFirstLine?: string,
   waiting?: import("../keeper/types.ts").Waiting,
+  trigger?: { kind: string; words: string },
 ): RunSummary {
   return RunSummary.parse({
     id: run.id,
@@ -78,9 +80,14 @@ export function toRunSummary(
     endedAt: run.endedAt,
     reportFirstLine,
     waiting,
+    trigger,
   });
 }
-export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => string): RunDetail {
+export function toRunDetail(
+  view: RunView,
+  harnessIdOf: (workerName: string) => string,
+  flowNameOf: (id: string) => string | undefined = () => undefined,
+): RunDetail {
   const { run, manifest } = view;
   const lines = reportLines(view);
   function leaf(step: LeafStep, row: StepRow | undefined): LeafStepRun {
@@ -194,7 +201,7 @@ export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => 
     };
   });
   return RunDetail.parse({
-    ...toRunSummary(run, manifest.name, lines[0], view.waiting?.run),
+    ...toRunSummary(run, manifest.name, lines[0], view.waiting?.run, runTrigger(run, flowNameOf)),
     inputs,
     steps,
     approvalIds: view.approvals.map((a) => a.id),
@@ -220,4 +227,13 @@ export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => 
 }
 export function toAuditRecord(entry: AuditEntry): AuditRecord {
   return AuditRecord.parse({ ...entry, detail: JSON.stringify(entry.detail) });
+}
+
+export function runTrigger(
+  run: RunRow,
+  flowNameOf: (id: string) => string | undefined,
+): { kind: string; words: string } | undefined {
+  if (!run.trigger) return undefined;
+  const words = triggerWords(run.trigger.kind, run.trigger.payload, flowNameOf);
+  return words ? { kind: run.trigger.kind, words } : undefined;
 }

@@ -17,17 +17,20 @@ import type { Engine } from "../engine.ts";
 import type { HarnessQuota, Keeper } from "../keeper/types.ts";
 import { renderRunReport, reportLines } from "../report.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
+import type { TriggerService } from "../triggers/service.ts";
 import type { HarnessService } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
 import { defaultSettings, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
 import { toQueueView } from "./map-queue.ts";
-import { toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
+import { runTrigger, toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
+import { toTriggerStatus } from "./map-trigger.ts";
 import { liveWindow, summarizeUsage } from "./usage-summary.ts";
 import type { createWeekly } from "./weekly-limit.ts";
 
 export type HandlerContext = {
   engine: Engine;
+  triggers?: TriggerService;
   store: Store;
   mode: "demo" | "live";
   projectDir: string;
@@ -96,6 +99,7 @@ export function createDispatcher(
 }
 export function createHandlers({
   engine,
+  triggers,
   store,
   mode,
   projectDir,
@@ -115,6 +119,12 @@ export function createHandlers({
     if (!row) throw new RunnerError("not_found", `There is no run ${id}.`);
     return row;
   }
+  const flowNameOf = (id: string) => {
+    const manifest = store.getFlow(id)?.manifest;
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return undefined;
+    const name = "name" in manifest ? manifest.name : undefined;
+    return typeof name === "string" ? name : undefined;
+  };
   function flowName(row: RunRow): string {
     const f = store.getFlow(row.flowId, row.flowHash);
     if (!f) throw new Error("Flow not found.");
@@ -252,7 +262,13 @@ export function createHandlers({
         inputs: input.inputs,
         params: input.params,
       });
-      return toRunSummary(begun.run, FlowManifest.parse(f.manifest).name);
+      return toRunSummary(
+        begun.run,
+        FlowManifest.parse(f.manifest).name,
+        undefined,
+        undefined,
+        runTrigger(begun.run, flowNameOf),
+      );
     },
     "runs.list": ({ flowId, project, state }) =>
       store
@@ -265,11 +281,11 @@ export function createHandlers({
           try {
             first = reportLines(engine.getRun(r.id)).at(0);
           } catch {}
-          return toRunSummary(r, flowName(r), first, engine.waitingOf(r.id).run);
+          return toRunSummary(r, flowName(r), first, engine.waitingOf(r.id).run, runTrigger(r, flowNameOf));
         }),
     "runs.status": ({ runId }) => {
       run(runId);
-      return toRunDetail(engine.getRun(runId), harnessIdOf);
+      return toRunDetail(engine.getRun(runId), harnessIdOf, flowNameOf);
     },
     "runs.report": ({ runId }) => {
       run(runId);
@@ -282,7 +298,13 @@ export function createHandlers({
     "runs.resume": ({ runId }) => {
       run(runId);
       const begun = engine.beginResume(runId);
-      return toRunSummary(begun.run, flowName(begun.run));
+      return toRunSummary(
+        begun.run,
+        flowName(begun.run),
+        undefined,
+        undefined,
+        runTrigger(begun.run, flowNameOf),
+      );
     },
     "readiness.check": ({ flowId }) => toReadinessReport(flow(flowId), now().toISOString()),
     "readiness.install": () => unavailable("Installing a requirement arrives with the readiness engine."),
@@ -352,8 +374,16 @@ export function createHandlers({
     },
     "usage.summary": summary,
     "settings.get": settings,
-    "triggers.list": () => [],
-    "triggers.setEnabled": () => unavailable("Switching a trigger arrives in this plan."),
+    "triggers.list": ({ flowId }) => {
+      flow(flowId);
+      if (!triggers) return unavailable("Trigger service is unavailable.");
+      return triggers.list(flowId).map(toTriggerStatus);
+    },
+    "triggers.setEnabled": ({ flowId, index, enabled, hash }) => {
+      if (enabled && mode === "demo") throw new RunnerError("not_allowed", "Triggers stay off in the demo.");
+      if (!triggers) return unavailable("Trigger service is unavailable.");
+      return toTriggerStatus(triggers.setEnabled(flowId, index, enabled, hash));
+    },
     "settings.update": ({ patch }) => {
       if (!patch.keeper || Object.keys(patch).some((key) => key !== "keeper"))
         return unavailable("Changing settings arrives with the agent.");

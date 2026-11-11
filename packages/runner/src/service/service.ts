@@ -1,16 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { operations, type RunnerTopic } from "@flowdriven/contracts";
+import { type Notice, operations, type RunnerTopic } from "@flowdriven/contracts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { createEngine, type Engine } from "../engine.ts";
 import type { HarnessAdapter } from "../harness.ts";
 import type { Probes } from "../keeper/types.ts";
 import type { Store } from "../storage.ts";
+import { localDay } from "../triggers/schedule.ts";
+import type { TriggerDeps, TriggerService } from "../triggers/service.ts";
 import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
 import { createDispatcher, createHandlers } from "./handlers.ts";
 import { type Every, wireKeeper } from "./keeper-wiring.ts";
+import { createNotifier, observeStore } from "./notify-wiring.ts";
+import { wireTriggers } from "./trigger-wiring.ts";
 import { createWeekly } from "./weekly-limit.ts";
 
 export type ServiceOptions = {
@@ -25,6 +29,8 @@ export type ServiceOptions = {
   scanTimeoutMs?: number;
   keeper?: { probes?: Probes; every?: Every };
   markChanged?: (topic: RunnerTopic) => void;
+  notify?: (notice: Notice) => void;
+  triggers?: { every?: Every; watch?: TriggerDeps["watch"]; dayOf?: (date: Date) => string };
 };
 export type RunnerService = {
   engine: Engine;
@@ -35,8 +41,19 @@ export type RunnerService = {
 };
 export const DEMO_HASH = `sha256:${"0".repeat(63)}1`;
 export function createRunnerService(options: ServiceOptions): RunnerService {
-  const { store, mode } = options;
+  const { mode } = options;
   const now = options.now ?? (() => new Date());
+  const dayOf = options.triggers?.dayOf ?? localDay;
+  let triggers: TriggerService;
+  const notifier = createNotifier({ store: options.store, now, send: (notice) => options.notify?.(notice) });
+  const store = observeStore(options.store, {
+    onApproval: notifier.onApproval,
+    onWeekly: notifier.onWeekly,
+    onRunState: (id, state) => {
+      notifier.onRunState(id, state);
+      if (state === "done" || state === "failed" || state === "blocked") triggers.poke();
+    },
+  });
   const projectDir = join(options.dataDir, mode === "demo" ? "demo-project" : "project");
   const newId =
     options.newId ?? ((prefix: string) => `${prefix}-${randomUUID().replaceAll("-", "").slice(0, 12)}`);
@@ -69,6 +86,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     store,
     now,
     newId,
+    dayOf,
     harness: wired?.harness ?? harness,
     queue: wired?.keeper,
     readiness: hs
@@ -77,8 +95,20 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
         ? () => ({ ready: true })
         : () => ({ ready: false, reason: "No harness is connected yet." }),
   });
+  triggers = wireTriggers({
+    store,
+    engine,
+    now,
+    projectDir,
+    dayOf,
+    every: options.triggers?.every,
+    watch: options.triggers?.watch,
+    onFlood: notifier.onFlood,
+    onPaused: notifier.onPaused,
+  });
   const handlers = createHandlers({
     engine,
+    triggers,
     store,
     mode,
     projectDir,
@@ -102,10 +132,16 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       const settled = hs
         ? hs.start().settled.then(async () => {
             try {
-              await engine.beginRecover().settled;
+              const recovery = engine.beginRecover();
+              triggers.start();
+              await recovery.settled;
             } catch {}
           })
-        : engine.beginRecover().settled;
+        : (() => {
+            const recovery = engine.beginRecover();
+            if (mode === "live") triggers.start();
+            return recovery.settled;
+          })();
       if (mode === "demo") {
         const demo = demoFlow();
         engine.registerFlow(demo.manifest, DEMO_HASH, demo.files);
@@ -113,6 +149,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       return { settled };
     },
     stop: () => {
+      triggers.stop();
       engine.shutdown();
       hs?.stop();
     },

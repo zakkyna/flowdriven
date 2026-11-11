@@ -80,7 +80,7 @@ function stepModel(step: Step) {
     },
   };
 }
-function triggerSummary(t: Trigger): string {
+export function triggerSummary(t: Trigger): string {
   switch (t.kind) {
     case "manual":
       return "Run by hand";

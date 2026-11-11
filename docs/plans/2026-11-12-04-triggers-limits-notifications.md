@@ -657,7 +657,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `handlers.ts`: `HandlerContext` gains `triggers: TriggerService`; `"triggers.list": ({ flowId })` (`flow(flowId)` first, so an unknown flow is `not_found`) returns `triggers.list(flowId).map(toTriggerStatus)`; `"triggers.setEnabled": ({ flowId, index, enabled, hash })` throws `RunnerError("not_allowed", "Triggers stay off in the demo.")` when `enabled && mode === "demo"`, else returns `toTriggerStatus(triggers.setEnabled(...))`. These two are the only code that calls `triggers.setEnabled`.
 - `service.ts`: `dayOf = options.triggers?.dayOf ?? localDay` goes to `createEngine({ dayOf })` and to the trigger service, so both use one day. Order: `notifier = createNotifier({ store, now, send: (n) => options.notify?.(n) })`; `store` becomes `observeStore(options.store, { onApproval: notifier.onApproval, onRunState: (id, state) => { notifier.onRunState(id, state); if (state === "done" || state === "failed" || state === "blocked") triggers.poke(); } })` (the closure reads `triggers` lazily); the observer's `onWeekly` is `notifier.onWeekly` (`createWeekly` is not changed); the engine is built; `triggers = wireTriggers({ ..., onFlood: notifier.onFlood, onPaused: notifier.onPaused })`. `start()`: in live mode `triggers.start()` is called right after `engine.beginRecover()` returns (not after its `settled`; with a harness service it runs inside the `hs.start().settled.then(...)` callback before awaiting `beginRecover().settled`); demo mode never starts it. `stop()`: `triggers.stop()` first, then the present stops.
 
-- [ ] **Step 1: Write the failing tests** (`trigger-wiring.test.ts`, `createRunnerService` in live mode with an injected harness, so a fire ends `blocked` with "No harness is connected yet." and that is enough to prove it started; injected `every`, `watch`, `now`; `notify` collects notices; **no test fires one trigger more than twice**, because three blocked runs in a row pause it (Task 9b), and the pause itself is proved in Tasks 9b and 15):
+- [x] **Step 1: Write the failing tests** (`trigger-wiring.test.ts`, `createRunnerService` in live mode with an injected harness, so a fire ends `blocked` with "No harness is connected yet." and that is enough to prove it started; injected `every`, `watch`, `now`; `notify` collects notices; **no test fires one trigger more than twice**, because three blocked runs in a row pause it (Task 9b), and the pause itself is proved in Tasks 9b and 15):
   1. "triggers.list shows each non-manual trigger of a flow with its state, its reason and its next run"
   2. "triggers.setEnabled switches on with the current hash, refuses a stale hash with not_allowed, refuses new_item as not available yet, and switches off"
   3. "in demo mode triggers.list works and setEnabled(true) is not_allowed; switching off is allowed"
@@ -666,11 +666,11 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   6. "a fired run that ends blocked sends one blocked notice through notify, and a flood sends one flood notice" (`limits.max_runs_per_day: 1` and two fires, so one run starts and one is dropped)
   7. "start() starts the repeating job once and ticks at once; stop() cancels it and closes the watchers; demo mode never starts it"
   8. "the audit log holds trigger_enabled with the flow id, the index and the hash and no payload text"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/trigger-wiring.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.** Replace the stub handlers of Task 1.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner packages/contracts`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/trigger-wiring.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.** Replace the stub handlers of Task 1.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner packages/contracts`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
@@ -710,6 +710,10 @@ git commit -m "Wire the trigger service, the trigger operations and the notices 
 git add apps/desktop/electron
 git commit -m "Show a macOS notification for a runner notice and open its item on click" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check (run by the chair: 176 test files, 1,128 tests).
+
+Chair's note (2026-11-12): the executor stopped with `Blocked:` on one type error (`handlers.ts`: the stored manifest is `unknown`, so `manifest.name` did not compile after the object check). The chair changed that one line to `"name" in manifest ? manifest.name : undefined`, ran the gate and it passed. Nothing else of the executor's work was changed.
 
 ---
 
