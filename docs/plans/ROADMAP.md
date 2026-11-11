@@ -27,7 +27,7 @@ The owner decided that the engine stays TypeScript and that its effort goes into
 
 | Plan | Content | Shows working |
 |---|---|---|
-| 03b (new, before 04) | Usage, the keeper and the queue (spec 21.2 to 21.4): token accounting from Claude Code's result event and its full rate-limit event (the fake `claude` learns both), `usage_events`, usage in the run report and on the run screen; the keeper's memory gate, quota gate and ceiling with their probes, waiting reasons and the queue on the Runs screen; the effort-to-model table for Claude Code; R19 | Two runs started together with the ceiling set to 1: one runs, the other waits and says why; the run report shows tokens per step |
+| 03b (new, before 04) | Usage, the keeper and the queue (spec 21.2 to 21.4; detailed: `2026-11-11-03b-usage-keeper-queue.md`): token accounting from Claude Code's result event and its full rate-limit event (the fake `claude` learns both), `usage_events`, usage in the run report and on the run screen; the keeper's memory gate, quota gate and ceiling with their probes, waiting reasons and the queue on the Runs screen; the effort-to-model table for Claude Code; R19 | Two runs started together with the ceiling set to 1: one runs, the other waits and says why; the run report shows tokens per step |
 | 04 | As above. Of the limit keeper it keeps overlap, per-day caps and floods (R7), inside the keeper that 03b built; triggered runs enter the keeper's third class | As above |
 | 05 | As above, and: the skill copy drops front matter (R14); the install preview shows the cost of what a step loads | As above |
 | 06 | As above, with the `projects`, `threads` and `messages` tables. Memory moves out to 06b | As above |
