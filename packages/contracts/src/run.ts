@@ -52,6 +52,46 @@ export const SkipReason = z.enum(SKIP_REASONS);
 export type SkipReason = z.infer<typeof SkipReason>;
 export const BlockedCall = z.object({ tool: z.string(), reason: z.string(), count: z.number().int().min(1) });
 export type BlockedCall = z.infer<typeof BlockedCall>;
+export const ModelTokens = z.object({
+  model: z.string().min(1).max(100),
+  input: z.number().int().min(0),
+  output: z.number().int().min(0),
+  cacheRead: z.number().int().min(0),
+  cacheWrite: z.number().int().min(0),
+});
+export type ModelTokens = z.infer<typeof ModelTokens>;
+export const CALL_KINDS = ["worker", "judge", "brain", "poll"] as const;
+export const CallKind = z.enum(CALL_KINDS);
+export type CallKind = z.infer<typeof CallKind>;
+export const UsageCall = z.object({
+  runId: Id,
+  stepId: Id,
+  itemKey: z.string(),
+  attempt: z.number().int().min(0),
+  kind: CallKind,
+  harnessId: Id,
+  models: z.array(ModelTokens),
+  turns: z.number().int().min(0),
+  wallSeconds: z.number().min(0),
+  queuedSeconds: z.number().min(0),
+  memoryPeakMb: z.number().min(0).optional(),
+  exit: ExitClass,
+  costUsd: z.number().min(0).optional(),
+  at: IsoDateTime,
+});
+export type UsageCall = z.infer<typeof UsageCall>;
+export const StepUsage = z.object({
+  calls: z.number().int().min(0),
+  input: z.number().int().min(0),
+  output: z.number().int().min(0),
+  cacheRead: z.number().int().min(0),
+  cacheWrite: z.number().int().min(0),
+  turns: z.number().int().min(0),
+  wallSeconds: z.number().min(0),
+  queuedSeconds: z.number().min(0),
+  reported: z.boolean(),
+});
+export type StepUsage = z.infer<typeof StepUsage>;
 export const LeafStepRun = z.object({
   stepId: Id,
   title: z.string(),
@@ -64,6 +104,7 @@ export const LeafStepRun = z.object({
   blocked: z.array(BlockedCall).max(20).optional(),
   note: z.string().optional(),
   picks: z.array(z.object({ key: z.string(), label: z.string() })).optional(),
+  usage: StepUsage.optional(),
 });
 export type LeafStepRun = z.infer<typeof LeafStepRun>;
 export const RunItem = z.object({
@@ -111,6 +152,7 @@ export const RunDetail = RunSummary.extend({
   approvalIds: z.array(Id),
   outputs: z.array(z.object({ id: Id, type: OutputType, value: z.string() })),
   usage: z.array(UsageRow),
+  calls: z.array(UsageCall).optional(),
   estimatedCostUsd: z.number(),
   report: RunReport.optional(),
   blockedReason: z.string().optional(),

@@ -232,7 +232,7 @@ If `availableMemory` is 0 or `undefined` under either, stop and report: the memo
   - `StepUsage = z.object({ calls: int >= 0, input, output, cacheRead, cacheWrite: int >= 0, turns: int >= 0, wallSeconds: number >= 0, queuedSeconds: number >= 0, reported: z.boolean() })`
   - `LeafStepRun.usage: StepUsage.optional()`; `RunDetail.calls: z.array(UsageCall).optional()`. `UsageRow` is unchanged.
 
-- [ ] **Step 1: Write the failing test** `packages/contracts/src/usage.test.ts`
+- [x] **Step 1: Write the failing test** `packages/contracts/src/usage.test.ts`
 
 ```ts
 import { expect, test } from "vitest";
@@ -259,16 +259,18 @@ test("leaf steps and run details take the new optional fields, and UsageRow stay
 });
 ```
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/contracts/src/usage.test.ts`. Expected: FAIL ("UsageCall is not exported").
-- [ ] **Step 3: Implement** the schemas in `run.ts` above `LeafStepRun` (so `LeafStepRun` can use `StepUsage`); add the two optional fields. `ExitClass` is already defined in `run.ts`.
-- [ ] **Step 4: Run** the test again. Expected: PASS.
-- [ ] **Step 5: Gate:** `pnpm format && pnpm check`. Expected: PASS (the fixtures and the runner build unchanged: both fields are optional).
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/contracts/src/usage.test.ts`. Expected: FAIL ("UsageCall is not exported").
+- [x] **Step 3: Implement** the schemas in `run.ts` above `LeafStepRun` (so `LeafStepRun` can use `StepUsage`); add the two optional fields. `ExitClass` is already defined in `run.ts`.
+- [x] **Step 4: Run** the test again. Expected: PASS.
+- [x] **Step 5: Gate:** `pnpm format && pnpm check`. Expected: PASS (the fixtures and the runner build unchanged: both fields are optional).
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts/src/run.ts packages/contracts/src/usage.test.ts
 git commit -m "Add usage rows per call and per step to the contract" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
