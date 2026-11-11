@@ -21,6 +21,21 @@ In plan 02b the app starts the runner as its child and talks to it over the runn
 
 The outlines below were written before this change. Until each is re-outlined just in time, this section wins where they differ. Plan 01b (the simple look, spec section 5) is applied alongside and does not change this order.
 
+## Order changed again on 2026-11-11: efficiency, and the agent's memory and skills
+
+The owner decided that the engine stays TypeScript and that its effort goes into efficiency and token saving without lower quality, and asked for good memory and skill management for the one agent. Spec section 21 says how; the owner approved it on 2026-11-11. It adds three plans and changes three. Where this section and the table above differ, this section wins.
+
+| Plan | Content | Shows working |
+|---|---|---|
+| 03b (new, before 04) | Usage, the keeper and the queue (spec 21.2 to 21.4): token accounting from Claude Code's result event and its full rate-limit event (the fake `claude` learns both), `usage_events`, usage in the run report and on the run screen; the keeper's memory gate, quota gate and ceiling with their probes, waiting reasons and the queue on the Runs screen; the effort-to-model table for Claude Code; R19 | Two runs started together with the ceiling set to 1: one runs, the other waits and says why; the run report shows tokens per step |
+| 04 | As above. Of the limit keeper it keeps overlap, per-day caps and floods (R7), inside the keeper that 03b built; triggered runs enter the keeper's third class | As above |
+| 05 | As above, and: the skill copy drops front matter (R14); the install preview shows the cost of what a step loads | As above |
+| 06 | As above, with the `projects`, `threads` and `messages` tables. Memory moves out to 06b | As above |
+| 06b (new, after 06) | The agent's memory (spec 21.5, 21.7): `memory_items`, the search index over items and names, the always-loaded index and the "now" block, recall, proposals with Keep and Drop, correcting and deleting, grants, the Memory screen; R14 for memory, R15, R17, R18, R20 | In a new chat the agent uses a decision from an earlier one without being told again; a lesson that came from a job post waits as a proposal marked as outside text; the Memory screen shows the always-loaded text and its meter |
+| 06c (new, after 06b) | History search and the skill library (spec 21.5, 21.6): chat turns and run reports join the search, for the agent and the owner; the library, `skill_ops`, proposals and approvals, R16, the Skills screen | Search finds an old chat turn and an old run report; a skill patch shows as a diff, approving it re-pins the flows that use it, and editing the skill's file by hand blocks them until re-consent |
+
+The release path (the old plan 11) compiles TypeScript before packaging (spec 21.3). Putting several items of a `for_each` into one call is not scheduled until the numbers of plan 03b say it pays (spec 21.3). Plan 03b moves M1 back by one plan. Sizes are the chair's estimates: 14 to 18 tasks for 03b, 12 to 16 each for 06b and 06c.
+
 ## Plans
 
 ### 01 Foundation and screens on sample data (detailed: `2026-11-10-01-foundation-and-screens.md`)
@@ -114,7 +129,9 @@ The outlines below were written before this change. Until each is re-outlined ju
 | Readiness engine with catalog | 05; catalog entries in 06 to 09 |
 | Gateway | 05 |
 | Runner checks, retries, approval inbox, history, resume | 02 (core), 05 (risky-action enforcement) |
-| Memory | 03 |
+| Memory | 03 in the old numbering; in the new order 06b (spec 21.5) |
+| Token accounting, the keeper for harness processes and the queue (spec 21.2 to 21.4) | 03b |
+| History search and the skill library (spec 21.5, 21.6) | 06c |
 | Notifications | 05 |
 | Fake-harness test kit | 02 (minimal fake), 04 (full kit) |
 | Signed and notarized Mac build through the protected release path | 11 |
