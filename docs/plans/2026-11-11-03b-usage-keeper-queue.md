@@ -75,6 +75,34 @@ What the code looks like today (commit `b1b15ec`); every task relies on these. L
 
 ---
 
+### Measured on 2026-11-11 (Task 1, chair step)
+
+Taken on the owner's Mac (16 GB) while Codex and the test suite were running. Claude Code in the restricted form of plan 03, no tools, model haiku, one turn and 1,605 output tokens per call. Raw files: `.workflow/scratch/plan-03b/m/` (git-ignored).
+
+| Step | RSS peak MB | Footprint peak MB | Ratio |
+|---|---|---|---|
+| 1 | 245.8 | 152.0 | 0.62 |
+| 2 | 249.8 | 168.0 | 0.67 |
+| 3 | 240.7 | 179.0 | 0.74 |
+
+RSS is the sum over the call's process group, sampled with `ps` every 2 seconds (4 or 5 samples; a call lasted about 8 to 10 seconds). Footprint is `phys_footprint_peak` from `footprint`. Median ratio 0.67: `CORRECTION` stays `2 / 3`.
+
+| Reading | Level | Free percentage | Meaning (xnu: 1 normal, 2 warn, 4 critical) |
+|---|---|---|---|
+| before the calls | 2 | 35% | warn |
+| step 1 running | 2 | 35% | warn |
+| step 3 running | 2 | 32% | warn |
+| after | 2 | 33% | warn |
+
+Earlier the same day one reading was 1. Level 4 was never seen, so `PRESSURE_HIGHEST = 4` rests on the xnu values and not on a reading. This Mac sits at level 2 under its usual load, which supports blocking only at the highest level.
+
+| Runtime | Version | `availableMemory` MB | `os.freemem` MB |
+|---|---|---|---|
+| Node | v24.14.0 | 3,045 | 81 |
+| Electron as Node | v24.22.1 (Electron 45.1.0) | 3,063 | 88 |
+
+Both read at the same moment. `availableMemory` works under both.
+
 ## Decisions made in this plan
 
 Spec 18.4 and 21 leave these to the builder. Where the spec and the code disagree, the spec wins unless the decision says why not.
@@ -157,7 +185,7 @@ docs/plans/ROADMAP.md                                             row 03b (Task 
 **Interfaces:**
 - Produces: the numbers for `CORRECTION` and `PRESSURE_HIGHEST` in `keeper/constants.ts` (Task 9). Task 9 ships the design's starting values (`2 / 3`, `4`); this task only confirms or changes them in one later commit.
 
-- [ ] **Step 1: RSS against footprint on three real restricted steps** (Claude Code, the form of plan 03, no tools; about 40 seconds each)
+- [x] **Step 1: RSS against footprint on three real restricted steps** (Claude Code, the form of plan 03, no tools; about 40 seconds each)
 
 ```bash
 mkdir -p .workflow/scratch/plan-03b/m && cd .workflow/scratch/plan-03b/m && set -m
@@ -186,7 +214,7 @@ Fill the table (RSS peak is the largest line of `rssN.txt`; footprint is the lar
 
 `CORRECTION` is the median ratio, rounded to two places. If it differs from `0.67` by more than `0.1`, change the constant and its test in a later commit (chair).
 
-- [ ] **Step 2: what the pressure levels mean.** Read the level three times: idle, while a step of Step 1 runs, and with the owner's usual apps open.
+- [x] **Step 2: what the pressure levels mean.** Read the level three times: idle, while a step of Step 1 runs, and with the owner's usual apps open.
 
 ```bash
 for i in 1 2 3; do sysctl -n kern.memorystatus_vm_pressure_level; memory_pressure | grep -i 'free percentage'; done
@@ -200,7 +228,7 @@ for i in 1 2 3; do sysctl -n kern.memorystatus_vm_pressure_level; memory_pressur
 
 Confirm that `4` is the highest level; if the Mac reports another top value, set `PRESSURE_HIGHEST` to it.
 
-- [ ] **Step 3: `process.availableMemory()` under the Node the runner really runs on** (the app starts the runner as the Electron binary with `ELECTRON_RUN_AS_NODE=1`, `apps/desktop/electron/runner-paths.ts:15`)
+- [x] **Step 3: `process.availableMemory()` under the Node the runner really runs on** (the app starts the runner as the Electron binary with `ELECTRON_RUN_AS_NODE=1`, `apps/desktop/electron/runner-paths.ts:15`)
 
 ```bash
 node -p "process.version + ' ' + Math.round(process.availableMemory()/1048576) + ' MB available, ' + Math.round(require('os').freemem()/1048576) + ' MB os.freemem'"
@@ -214,7 +242,7 @@ ELECTRON_RUN_AS_NODE=1 "$(cd apps/desktop && node -p "require('electron')")" -p 
 
 If `availableMemory` is 0 or `undefined` under either, stop and report: the memory gate then runs on the floor and the ceiling only, and the chair decides.
 
-- [ ] **Step 4: Chair step (commit):** nothing to commit; paste the three tables under "Facts" of this plan when the numbers are in.
+- [x] **Step 4: Chair step (commit):** nothing to commit; paste the three tables under "Facts" of this plan when the numbers are in.
 
 ---
 
@@ -1591,7 +1619,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `runKeeperDemo(o: { releaseFile: string }): Promise<string[]>` builds a live service on a temp data folder with the fake `claude` (`FAKE_CLAUDE_PATH`, a fake home from `makeFakeHome`), after the first scan and `harnesses.setConsent` given (as `service/check-flow.test.ts` does), with injected probes (8 GB free, level 1) and an `every` that is never called, calls `settings.update({ keeper: { ceiling: 1 } })`, registers two one-step worker flows `local.alpha` and `local.beta` (instructions start with `ALPHA` and `BETA`) and starts both together with `engine.beginStart`. The fake's play for `ALPHA` is `{ do: "hold", file: releaseFile }` then a result with `usage` 4 / 384 / 8454 / 156 (turns 2); `BETA` answers at once with the same usage. It reads `queue.list` until it shows one running and one waiting (a loop of at most 200 turns of `await new Promise((r) => setImmediate(r))`, no timer), then creates `releaseFile`, awaits both runs and returns these lines (ids exact): `ceiling 1: <runA> running, <runB> waiting: Waiting: 1 of 1 running`, `queue: 1 step running, 1 waiting`, `<runA> running`, `<runB> running, waiting: ceiling` (the keeper changes no run state, decision 2), then after both end `<runA> done, <runB> done`, one line per leaf step of run A, `usage <step>: input 4, output 384, cache read 8454, cache write 156`, and the row of run A in the `## Usage` table of `runs.export`. The text `Waiting: N of M running` is built by a local function with the same words as `waitingLabel` (Task 19).
 - `keeper-demo.ts` creates a temp `releaseFile` path, runs `runKeeperDemo` and prints each line with `process.stdout.write`.
 
-- [ ] **Step 1: Write the failing test** `packages/runner/src/service/keeper-demo.test.ts` (child processes: the fake `claude`, released by a file the test creates, never by a duration)
+- [x] **Step 1: Write the failing test** `packages/runner/src/service/keeper-demo.test.ts` (child processes: the fake `claude`, released by a file the test creates, never by a duration)
 
 ```ts
 test("two runs started together with the ceiling at 1: one runs, the other waits and says why, then both report tokens per step", async () => {
@@ -1606,8 +1634,8 @@ test("two runs started together with the ceiling at 1: one runs, the other waits
   expect(lines[6]).toMatch(/^\| a \| 1 \| 4 \| 384 \| 8454 \| 156 \| 2 \| /);
 }, { timeout: 30_000 });
 ```
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/keeper-demo.test.ts`. Expected: FAIL ("Cannot find module keeper-demo-run.ts").
-- [ ] **Step 3: Implement** `runKeeperDemo` and the script; `chmod 755` the script as a step. **Step 4: Run** the test, then `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/keeper-demo.test.ts`. Expected: FAIL ("Cannot find module keeper-demo-run.ts").
+- [x] **Step 3: Implement** `runKeeperDemo` and the script; `chmod 755` the script as a step. **Step 4: Run** the test, then `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
 - [ ] **Step 6: Chair step (GUI): the evidence for the owner**
   1. `node packages/runner/src/test-helpers/keeper-demo.ts` (fake `claude`; no real `claude`, no socket). Expected: the lines above.
   2. `pnpm build && pnpm capture`. Expected: `captured 20 screens`; the `runs` picture shows "1 step running, 2 waiting" and the reasons as icon plus words; the `run-detail` picture shows token lines under steps; the `harnesses` picture shows the limit windows.
@@ -1618,6 +1646,10 @@ test("two runs started together with the ceiling at 1: one runs, the other waits
 git add packages/runner/src docs/plans
 git commit -m "Add the two-runs evidence for the keeper" -m "Assisted-by: Codex"
 ```
+
+**Chair's note (2026-11-12).** The executor wrote the test, the helper and the script and then stopped after two failures of its own helper: `test-helpers/keeper-demo-run.ts` took the row of step `a` from the report's step table instead of the row under `## Usage`. The chair fixed that one selection (the row is now searched after the `## Usage` heading). The test passed 3 of 3 runs alone, and the script prints the seven lines, the last being `| a | 1 | 4 | 384 | 8454 | 156 | 2 | 0.1 | 0.0 |`.
+
+Done by: Codex/gpt-6.1-terra, with the chair's one-line fix, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
