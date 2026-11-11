@@ -569,7 +569,7 @@ export function validateJsonSchema(schema: unknown, value: unknown): string[]; /
 ```
 Scripted harness rules: the script key is `"<stepId>@<itemKey>"` first, then `"<stepId>"`; an array is consumed in order and its last entry repeats; a missing key throws `no script for step <key>` (a test bug must be loud); a script function that throws makes `runStep` reject with that error; the request is recorded in `calls` before the script is looked up; a `Reply` defaults to `{ exit: "ok", text: "", outputs: {} }`; `hang: true` waits until `signal` aborts, then rejects with an `AbortError`. Defaults without `replan`, `judge`, `probe`: `replan` returns `undefined`; `judge` and `probe` throw.
 Check runner rules: order is automated (`command`, `files`, `schema`, `contains`, `not_contains`), then `judge` and `probe`, then `user`; the outcomes come back in the same order as the input `checks`. If a required automated check fails, later `judge`, `probe` and `user` checks are not run and return `verdict: "pending"` with summary `not run: an earlier check failed`. `user` returns `pending` (the interpreter turns it into an approval). The value a check reads (`of`): the named output; with no `of`, the only declared output when `declaredOutputs` has exactly one, else the text. `contains` needs every pattern, `not_contains` none; patterns pass through `ctx.bind`; the evidence names the pattern and, for `not_contains`, the offset. `files` binds each path with `ctx.bind`, resolves it with `path.resolve(folder, p)`, rejects a path that leaves the folder, also after `realpath` (an absolute path or a link to outside fails with `outside the project folder`), and applies the glob (`*`, `**`, `?`) and the count and size bounds. `schema` validates the value against the schema text in `ctx.files` (text is parsed as JSON first). `command` calls `ctx.runCommand(cmd, args, { cwd: folder, ... })` and fails with the last 2000 characters of stderr as evidence. `judge` fails when the harness returns an empty `evidence`. `defaultCommandRunner` uses `execFile` (never a shell) with `env` holding only `PATH` and `HOME` from the runner's environment, the time limit and the signal. JSON Schema subset: `type` (string or list of `object array string number integer boolean null`), `properties`, `required`, `additionalProperties` (boolean), `items`, `enum`, `const`, `minimum`, `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`; `$schema`, `$id`, `title`, `description` are ignored; any other keyword (`pattern` included, Decision 18) gives the problem `unsupported schema keyword <name>`.
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 ```ts
 test("scripted harness: keys, sequences, hang, loudness", async () => {
   const h = scriptedHarness({ steps: { "a@k1": { text: "item" }, a: [{ exit: "failed" }, { text: "second" }], b: { hang: true } } });
@@ -598,19 +598,19 @@ test("an earlier failing automated check skips judge and user", async () => {
 test("judge needs evidence; user is pending", async () => { /* judge returns { verdict: "passed", reasons: "ok", evidence: "" } -> failed with "the judge quoted no evidence"; with evidence "line 3" -> passed; a lone user check -> verdict "pending" */ });
 // json-schema.test.ts: one row per keyword of the subset, valid and invalid; "additionalProperties: false" rejects an extra key; "type": ["string","null"]; { "type": "string", "pattern": "^(a+)+$" } gives "unsupported schema keyword pattern".
 ```
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/scripted-harness.test.ts packages/runner/src/checks`. Expected: FAIL with "Failed to resolve import"
-- [ ] **Step 3: Implement** the interfaces, `scriptedHarness`, `runChecks`, `validateJsonSchema`, the glob matcher and `defaultCommandRunner`.
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 3: Implement** the interfaces, `scriptedHarness`, `runChecks`, `validateJsonSchema`, the glob matcher and `defaultCommandRunner`.
+- [x] **Step 4: Run the tests to verify they pass**
   Run: `pnpm vitest run packages/runner/src/scripted-harness.test.ts packages/runner/src/checks`. Expected: PASS
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add the harness interface, a scripted harness and the check runner" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
