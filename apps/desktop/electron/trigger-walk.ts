@@ -30,7 +30,7 @@ void app
     await mkdir(output, { recursive: true });
     const env: Record<string, string | undefined> = { ...process.env, FLOWDRIVEN_DATA_DIR: dataDir };
     delete env.FLOWDRIVEN_DEMO;
-    const onNotice = electronNoticeHandler({
+    const showNotice = electronNoticeHandler({
       Notification,
       windows: () => BrowserWindow.getAllWindows(),
       open: (hash) => {
@@ -45,6 +45,16 @@ void app
         void window.loadURL(`${APP_ORIGIN}/index.html#${hash}`);
       },
     });
+    // The chair reads this line as evidence that a notice reached the macOS notification call.
+    const onNotice = (value: unknown) => {
+      const kind = typeof value === "object" && value !== null && "kind" in value ? value.kind : undefined;
+      const word = typeof kind === "string" && /^[a-z_]{1,30}$/.test(kind) ? kind : "unknown";
+      const focused = BrowserWindow.getAllWindows().some((window) => window.isFocused());
+      process.stdout.write(
+        `notice ${word}: notifications supported ${Notification.isSupported()}, window focused ${focused}\n`,
+      );
+      showNotice(value);
+    };
     const bridge = startRunnerBridge({
       ipc: ipcMain,
       spawn: (command, args, options) => spawn(command, args, options),
