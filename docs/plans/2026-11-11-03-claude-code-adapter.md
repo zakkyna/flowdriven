@@ -937,22 +937,24 @@ Covers decision 13 made in this plan, as corrected (spec 11.2, 20.7: text from o
 
 **Rules.** `HarnessCardView.tsx` adds `import { Revealed } from "../inbox/PayloadView";`. The inventory list item shows the name as `<span className={styles.mono}><Revealed text={item.name} singleLine /></span>` (the scope text and the connection badge stay as they are); the path line becomes `<div className={styles.mono}><Revealed text={card.path} singleLine /></div>`; the version line is `Version <Revealed text={card.version} singleLine />`. The heading, the `aria-label` (the harness's own constant name), the risk note and the quota note stay as they are. Nothing else changes: the present Harnesses tests pass unchanged, and no new file or style is added (`Revealed` brings the style of the Inbox with it).
 
-- [ ] **Step 1: Write the failing tests** (3; build the card by hand as a `HarnessCard` typed object with `id: "claude-code"`, `detected: true`, `login: "logged_in"`, `risk: "gray"`, `consent: "given"`, `sandbox: "none"`, `adapter: "full"`, `quota: { state: "unknown", today: { calls: 0 }, week: { calls: 0 } }`, and render `HarnessCardView` directly with `render` from Testing Library, `onGive` and `onRevoke` as `() => {}`, `busy: false`; hidden characters are built with `String.fromCodePoint`)
+- [x] **Step 1: Write the failing tests** (3; build the card by hand as a `HarnessCard` typed object with `id: "claude-code"`, `detected: true`, `login: "logged_in"`, `risk: "gray"`, `consent: "given"`, `sandbox: "none"`, `adapter: "full"`, `quota: { state: "unknown", today: { calls: 0 }, week: { calls: 0 } }`, and render `HarnessCardView` directly with `render` from Testing Library, `onGive` and `onRevoke` as `() => {}`, `busy: false`; hidden characters are built with `String.fromCodePoint`)
   1. `a name with a hidden character that visible does not know is revealed in the card`: a skill named `"a" + String.fromCodePoint(0x3164) + "b"`, a plugin named `"p" + String.fromCodePoint(0x2800)`, an MCP server named `"m" + String.fromCodePoint(0x115f) + "x"` (with `source: "config"`, `connection: "connected"`) and the path `"/u/bin/cl" + String.fromCodePoint(0x202e) + "aude"`: the card shows `<U+3164>`, `<U+2800>`, `<U+115F>` and `<U+202E>`, each as an element with role `img` whose title is `hidden character U+3164` (and so on).
   2. `plain names, the path and the version read as before`: a skill `notes`, the path `/u/bin/claude` and the version `2.1.318` give `getByText("notes")`, `getByText("/u/bin/claude")` and `getByText("Version 2.1.318")`, and the summaries `Skills (1)`, `Plugins (0)` and `MCP servers (0)`.
   3. `a line break or a tab in a name is shown as a hidden character too`: a skill named `"a" + String.fromCodePoint(10) + "b"` shows `<U+000A>`, and a plugin named `"p" + String.fromCodePoint(9) + "q"` shows `<U+0009>` (single-line mode).
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run apps/desktop/src/screens/harnesses`. Expected: FAIL (tests 1 and 3: the characters are written as they are).
-- [ ] **Step 3: Implement** by the rules.
-- [ ] **Step 4: Run the tests, the typecheck and the web build**
+- [x] **Step 3: Implement** by the rules.
+- [x] **Step 4: Run the tests, the typecheck and the web build**
   Run: `pnpm vitest run apps/desktop/src && pnpm typecheck && pnpm build:web`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)** (the chair runs `pnpm capture` first: `captured 20 screens`, and looks at the light and dark captures of the Harnesses screen)
+- [x] **Step 6: Chair step (commit)** (the chair runs `pnpm capture` first: `captured 20 screens`, and looks at the light and dark captures of the Harnesses screen)
 ```bash
 git add apps/desktop/src
 git commit -m "Show the names on the Harnesses card with their hidden characters revealed" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

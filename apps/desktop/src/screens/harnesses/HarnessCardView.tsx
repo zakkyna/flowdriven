@@ -5,6 +5,7 @@ import { formatTime } from "../../ui/format";
 import { Icon } from "../../ui/icons";
 import { RiskBadge } from "../../ui/RiskBadge";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { Revealed } from "../inbox/PayloadView";
 import styles from "./Harnesses.module.css";
 
 export const vendorWarning = "Vendor terms prohibit this; your account could be suspended.";
@@ -40,7 +41,10 @@ function Inventory({
       <ul>
         {items.map((item) => (
           <li key={`${item.name}-${item.scope}-${item.source ?? ""}`}>
-            <span className={styles.mono}>{item.name}</span> {item.scope}{" "}
+            <span className={styles.mono}>
+              <Revealed text={item.name} singleLine />
+            </span>{" "}
+            {item.scope}{" "}
             {connections && item.connection && <StatusBadge domain="connection" value={item.connection} />}
           </li>
         ))}
@@ -76,8 +80,16 @@ export function HarnessCardView({
         <h2>{card.name}</h2>
         <RiskBadge risk={card.risk} />
       </div>
-      {card.path && <div className={styles.mono}>{card.path}</div>}
-      {card.version && <div className={styles.small}>Version {card.version}</div>}
+      {card.path && (
+        <div className={styles.mono}>
+          <Revealed text={card.path} singleLine />
+        </div>
+      )}
+      {card.version && (
+        <div className={styles.small}>
+          Version <Revealed text={card.version} singleLine />
+        </div>
+      )}
       {card.vendorProhibited && (
         <p className={styles.warning}>
           <Icon name="alert" />

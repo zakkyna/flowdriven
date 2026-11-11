@@ -1,8 +1,10 @@
 // apps/desktop/src/screens/harnesses/Harnesses.test.tsx
 import { readFileSync } from "node:fs";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import type { HarnessCard } from "@flowdriven/contracts";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
+import { HarnessCardView } from "./HarnessCardView";
 
 const card = (name: string) => screen.getByRole("article", { name });
 
@@ -106,4 +108,81 @@ test("shows a consent failure", async () => {
   vi.spyOn(client, "call").mockRejectedValueOnce(new Error("Consent failed"));
   fireEvent.click(within(claude).getByRole("button", { name: "Revoke consent" }));
   expect((await screen.findByRole("alert")).textContent).toBe("Consent failed");
+});
+
+const testHarnessCard: HarnessCard = {
+  id: "claude-code",
+  name: "Claude Code",
+  binary: "claude",
+  detected: true,
+  login: "logged_in",
+  risk: "gray",
+  vendorProhibited: false,
+  consent: "given",
+  sandbox: "none",
+  adapter: "full",
+  quota: { state: "unknown", today: { calls: 0 }, week: { calls: 0 } },
+  inventory: { supported: true, skills: [], plugins: [], mcpServers: [] },
+};
+
+function renderCard(card: HarnessCard) {
+  return render(<HarnessCardView card={card} onGive={() => {}} onRevoke={() => {}} busy={false} />);
+}
+
+test("a name with a hidden character that visible does not know is revealed in the card", () => {
+  renderCard({
+    ...testHarnessCard,
+    path: "/u/bin/cl" + String.fromCodePoint(0x202e) + "aude",
+    inventory: {
+      supported: true,
+      skills: [{ name: "a" + String.fromCodePoint(0x3164) + "b", scope: "user" }],
+      plugins: [{ name: "p" + String.fromCodePoint(0x2800), scope: "user" }],
+      mcpServers: [
+        {
+          name: "m" + String.fromCodePoint(0x115f) + "x",
+          scope: "user",
+          source: "config",
+          connection: "connected",
+        },
+      ],
+    },
+  });
+  for (const summary of ["Skills (1)", "Plugins (1)", "MCP servers (1)"])
+    fireEvent.click(screen.getByText(summary));
+  for (const code of ["3164", "2800", "115F", "202E"]) {
+    const mark = screen.getByRole("img", { name: `hidden character U+${code}` });
+    expect(mark.getAttribute("title")).toBe(`hidden character U+${code}`);
+    expect(mark.textContent).toBe(`<U+${code}>`);
+  }
+});
+
+test("plain names, the path and the version read as before", () => {
+  renderCard({
+    ...testHarnessCard,
+    path: "/u/bin/claude",
+    version: "2.1.318",
+    inventory: { ...testHarnessCard.inventory, skills: [{ name: "notes", scope: "user" }] },
+  });
+  fireEvent.click(screen.getByText("Skills (1)"));
+  expect(screen.getByText("notes")).toBeTruthy();
+  expect(screen.getByText("/u/bin/claude")).toBeTruthy();
+  expect(screen.getByText("Version 2.1.318")).toBeTruthy();
+  expect(screen.getByText("Skills (1)")).toBeTruthy();
+  expect(screen.getByText("Plugins (0)")).toBeTruthy();
+  expect(screen.getByText("MCP servers (0)")).toBeTruthy();
+});
+
+test("a line break or a tab in a name is shown as a hidden character too", () => {
+  renderCard({
+    ...testHarnessCard,
+    inventory: {
+      ...testHarnessCard.inventory,
+      skills: [{ name: "a" + String.fromCodePoint(10) + "b", scope: "user" }],
+      plugins: [{ name: "p" + String.fromCodePoint(9) + "q", scope: "user" }],
+    },
+  });
+  fireEvent.click(screen.getByText("Skills (1)"));
+  fireEvent.click(screen.getByText("Plugins (1)"));
+  expect(screen.getByRole("img", { name: "hidden character U+000A" }).textContent).toBe("<U+000A>");
+  expect(screen.getByRole("img", { name: "hidden character U+0009" }).textContent).toBe("<U+0009>");
 });
