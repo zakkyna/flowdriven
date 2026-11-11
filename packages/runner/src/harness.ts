@@ -1,5 +1,30 @@
 import type { Requirement, Value } from "@flowdriven/sdk";
 import type { ExitClass } from "./states.ts";
+import type { ModelUsage } from "./storage.ts";
+export type LimitWindow = { utilization?: number; resetsAt?: number; status?: string };
+export type RateLimit = {
+  status: string;
+  type?: string;
+  utilization?: number;
+  resetsAt?: number;
+  windows: { five_hour?: LimitWindow; seven_day?: LimitWindow };
+};
+export type CallInfo = {
+  models: ModelUsage[];
+  turns: number;
+  costUsd?: number;
+  wallMs: number;
+  limits: RateLimit[];
+};
+export class HarnessCallError extends Error {
+  exit: ExitClass;
+  call?: CallInfo;
+  constructor(message: string, exit: ExitClass, call?: CallInfo) {
+    super(message);
+    this.exit = exit;
+    this.call = call;
+  }
+}
 export type StepRequest = {
   runId: string;
   stepId: string;
@@ -16,10 +41,17 @@ export type StepRequest = {
   skill?: string;
   outputs: { id: string; type: string }[];
   lastFailure?: string;
+  onStart?: (pid: number) => void;
   maxDurationMs: number;
   signal: AbortSignal;
 };
-export type StepResult = { exit: ExitClass; text: string; outputs: Record<string, Value>; block?: string };
+export type StepResult = {
+  exit: ExitClass;
+  text: string;
+  outputs: Record<string, Value>;
+  block?: string;
+  call?: CallInfo;
+};
 export type ReplanRequest = {
   runId: string;
   stepId: string;
@@ -31,11 +63,18 @@ export type ReplanRequest = {
 export type JudgeRequest = {
   runId: string;
   stepId: string;
+  itemKey?: string;
+  onStart?: (pid: number) => void;
   rubric: string;
   output: string;
   signal: AbortSignal;
 };
-export type JudgeResult = { verdict: "passed" | "failed"; reasons: string; evidence: string };
+export type JudgeResult = {
+  verdict: "passed" | "failed";
+  reasons: string;
+  evidence: string;
+  call?: CallInfo;
+};
 export type ProbeRequest = { runId: string; stepId: string; tool: string; args: Record<string, Value> };
 export type ProbeResult = { ok: boolean; detail: string };
 export interface HarnessAdapter {

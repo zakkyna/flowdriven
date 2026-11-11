@@ -1,4 +1,5 @@
 import type { Value } from "@flowdriven/sdk";
+import type { CallInfo, RateLimit } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
 import { startChannel } from "./channel.ts";
 import { startChild } from "./child.ts";
@@ -15,6 +16,7 @@ import {
   LineReader,
   MAX_START_HOOK_EVENTS,
   parseEvent,
+  parseRateLimit,
   parseResult,
   type ResultInfo,
   startHookEvent,
@@ -29,6 +31,7 @@ export type RunInput = {
   model: ClaudeModel;
   schema?: object;
   signal: AbortSignal;
+  onStart?: (pid: number) => void;
   makePolicy: (control: { root: string; cwd: string }, sessionId: string) => Policy;
   makePrompt: (policy: Policy) => string;
 };
@@ -40,6 +43,8 @@ export type Outcome =
   | { kind: "block"; sentence: string }
   | { kind: "failed"; text: string };
 export type RunDeps = {
+  onCall?: (call: CallInfo) => void;
+  nowMs?: () => number;
   claudePath: string;
   env: Record<string, string | undefined>;
   controlRoot: string;
@@ -65,6 +70,9 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
   let forced: Outcome | undefined;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let result: ResultInfo | undefined;
+  const limits: RateLimit[] = [];
+  const nowMs = deps.nowMs ?? Date.now;
+  let startedAt: number | undefined;
   const detail = { stepId: input.stepId, itemKey: input.itemKey, attempt: input.attempt };
   const audit = (kind: string, data: Value) => {
     try {
@@ -134,6 +142,10 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       env: childEnv(deps.env),
       graceMs: deps.graceMs,
     });
+    if (child.pid !== undefined) {
+      startedAt = nowMs();
+      input.onStart?.(child.pid);
+    }
     const reader = new LineReader(deps.maxLineBytes);
     const tripwire = createTripwire(channel.allowedIds);
     let first = true;
@@ -189,6 +201,8 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         }
         auth ||= isAuthFailure(event);
         quota ||= isRateLimited(event);
+        const limit = parseRateLimit(event, nowMs());
+        if (limit && limits.length < 20) limits.push(limit);
         if (event.type === "result") {
           result = parseResult(event);
           if (exitTimer === undefined)
@@ -227,6 +241,14 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       ...(channel?.counts() ?? { allowed: 0, denied: 0 }),
       refused: result?.denials ?? 0,
     });
+    if (startedAt !== undefined)
+      deps.onCall?.({
+        models: result?.usage?.models ?? [],
+        turns: result?.usage?.turns ?? 0,
+        ...(result?.usage?.costUsd === undefined ? {} : { costUsd: result.usage.costUsd }),
+        wallMs: Math.max(0, nowMs() - startedAt),
+        limits,
+      });
     child?.kill();
     removeControlDir(dir);
     unregister?.();

@@ -109,7 +109,10 @@ test("a declared read passes and the argument list, folder, environment and prom
     }
   }
   expect(settings).toContain(`/bin/sh '${join(t.controlRoot, "cc-1", "hook.sh")}'`);
-  expect(await pending).toEqual({ exit: "ok", text: "KIWI", outputs: {} });
+  const { call: callInfo, ...result } = await pending;
+  expect(result).toEqual({ exit: "ok", text: "KIWI", outputs: {} });
+  expect(callInfo).toEqual({ models: [], turns: 0, wallMs: expect.any(Number), limits: [] });
+  expect(callInfo?.wallMs).toBeGreaterThanOrEqual(0);
   expect(call(t.home)).toMatchObject({
     args: buildClaudeArgs({
       model: "sonnet",
@@ -153,7 +156,10 @@ test("outputs go through the schema: the report is the text and every output is 
     { id: "summary", type: "text" },
     { id: "data", type: "json" },
   ];
-  expect(await t.adapter.runStep(t.request)).toEqual({
+  const { call: callInfo, ...result } = await t.adapter.runStep(t.request);
+  expect(callInfo).toEqual({ models: [], turns: 0, wallMs: expect.any(Number), limits: [] });
+  expect(callInfo?.wallMs).toBeGreaterThanOrEqual(0);
+  expect(result).toEqual({
     exit: "ok",
     text: "all done",
     outputs: structured.outputs,
@@ -165,7 +171,10 @@ test("outputs go through the schema: the report is the text and every output is 
   expect(c.args[c.args.indexOf("--tools") + 1]).toBe("");
   for (const bad of [{ report: "x" }, { report: "x", outputs: { summary: 5, data: 1 } }]) {
     writeFakeScript(t.home, { plays: [{ when: "", actions: [{ do: "result", structured: bad }] }] });
-    expect(await t.adapter.runStep(t.request)).toEqual({
+    const { call: badCall, ...badResult } = await t.adapter.runStep(t.request);
+    expect(badCall).toEqual({ models: [], turns: 0, wallMs: expect.any(Number), limits: [] });
+    expect(badCall?.wallMs).toBeGreaterThanOrEqual(0);
+    expect(badResult).toEqual({
       exit: "failed",
       text: "Claude Code returned no valid structured output.",
       outputs: {},
@@ -174,11 +183,17 @@ test("outputs go through the schema: the report is the text and every output is 
 });
 test("not signed in gives exit auth", { timeout: 20_000 }, async () => {
   const t = setup([{ do: "auth_failure" }]);
-  expect(await t.adapter.runStep(t.request)).toEqual({ exit: "auth", text: "", outputs: {} });
+  const { call: callInfo, ...result } = await t.adapter.runStep(t.request);
+  expect(result).toEqual({ exit: "auth", text: "", outputs: {} });
+  expect(callInfo).toEqual({ models: [], turns: 0, wallMs: expect.any(Number), limits: [] });
+  expect(callInfo?.wallMs).toBeGreaterThanOrEqual(0);
 });
 test("a stream with no result event is a failure with a sentence", { timeout: 20_000 }, async () => {
   const t = setup([{ do: "text", text: "x" }]);
-  expect(await t.adapter.runStep(t.request)).toEqual({
+  const { call: callInfo, ...result } = await t.adapter.runStep(t.request);
+  expect(callInfo).toEqual({ models: [], turns: 0, wallMs: expect.any(Number), limits: [] });
+  expect(callInfo?.wallMs).toBeGreaterThanOrEqual(0);
+  expect(result).toEqual({
     exit: "failed",
     text: "Claude Code ended without a result.",
     outputs: {},
@@ -211,7 +226,10 @@ test("quota: a rejected rate limit and a 429 give exit quota, an allowed warning
 });
 test("a non-zero exit gives failed with the tail of standard error", { timeout: 20_000 }, async () => {
   const t = setup([{ do: "exit", code: 2, stderr: "boom" }]);
-  expect(await t.adapter.runStep(t.request)).toEqual({ exit: "failed", text: "boom", outputs: {} });
+  const { call: callInfo, ...result } = await t.adapter.runStep(t.request);
+  expect(result).toEqual({ exit: "failed", text: "boom", outputs: {} });
+  expect(callInfo).toEqual({ models: [], turns: 0, wallMs: expect.any(Number), limits: [] });
+  expect(callInfo?.wallMs).toBeGreaterThanOrEqual(0);
   const stderr = `${"a".repeat(98000)}${"b".repeat(2000)}`;
   writeFakeScript(t.home, { plays: [{ when: "", actions: [{ do: "exit", code: 2, stderr }] }] });
   expect((await t.adapter.runStep(t.request)).text).toBe("b".repeat(2000));
@@ -240,9 +258,16 @@ test("judge, replan and probe", { timeout: 20_000 }, async () => {
   const verdict = { verdict: "passed", reasons: "yes", evidence: "word" };
   const t = setup([{ do: "result", structured: verdict }]);
   const signal = t.request.signal;
-  expect(
-    await t.adapter.judge({ runId: "r", stepId: "s", rubric: "rubric", output: "word", signal }),
-  ).toEqual(verdict);
+  const { call: judgeCall, ...judgeResult } = await t.adapter.judge({
+    runId: "r",
+    stepId: "s",
+    rubric: "rubric",
+    output: "word",
+    signal,
+  });
+  expect(judgeResult).toEqual(verdict);
+  expect(judgeCall).toEqual({ models: [], turns: 0, wallMs: expect.any(Number), limits: [] });
+  expect(judgeCall?.wallMs).toBeGreaterThanOrEqual(0);
   const c = call(t.home);
   if (c?.kind !== "call") throw Error("missing call");
   expect(c.args[c.args.indexOf("--tools") + 1]).toBe("");
@@ -250,9 +275,20 @@ test("judge, replan and probe", { timeout: 20_000 }, async () => {
   expect(c.args.slice(-2)).toEqual(["--json-schema", JSON.stringify(JUDGE_SCHEMA)]);
   expect(c.prompt).toBe(judgePrompt({ rubric: "rubric", output: "word", token: "0123456789abcdef" }));
   writeFakeScript(t.home, { plays: [{ when: "", actions: [{ do: "result", structured: {} }] }] });
-  expect(
-    await t.adapter.judge({ runId: "r", stepId: "s", rubric: "rubric", output: "word", signal }),
-  ).toEqual({ verdict: "failed", reasons: "Claude Code returned no valid verdict.", evidence: "" });
+  const { call: badCall, ...badResult } = await t.adapter.judge({
+    runId: "r",
+    stepId: "s",
+    rubric: "rubric",
+    output: "word",
+    signal,
+  });
+  expect(badResult).toEqual({
+    verdict: "failed",
+    reasons: "Claude Code returned no valid verdict.",
+    evidence: "",
+  });
+  expect(badCall).toEqual({ models: [], turns: 0, wallMs: expect.any(Number), limits: [] });
+  expect(badCall?.wallMs).toBeGreaterThanOrEqual(0);
   expect(
     await t.adapter.replan({ runId: "r", stepId: "s", itemKey: "", instructions: "", failures: [], signal }),
   ).toBeUndefined();

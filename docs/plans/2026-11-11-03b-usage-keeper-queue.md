@@ -564,7 +564,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 - `run.ts`: `RunInput.onStart?`, `RunDeps.onCall?: (call: CallInfo) => void` and `RunDeps.nowMs?: () => number` (default `Date.now`; it is also the `nowMs` given to `parseRateLimit`). `onCall` is called once, in the `finally`, whenever the child was started; `limits` holds at most 20 events.
 - Fake: `FakeAction` `result` gains `usage?: { models: ModelUsage[]; turns?: number; costUsd?: number }`; `FakeAction` gains `{ do: "hold"; file: string }`, which polls (every 25 ms, at most 60 s) until the file exists, so a test releases a child by creating a file; `rate_limit` gains `limit?: { type?: string; utilization?: number; resetsAt?: number; fiveHour?: LimitWindow; sevenDay?: LimitWindow }`. Without the new fields the events are exactly as before.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/runner/src/claude/usage.test.ts`
 
@@ -641,16 +641,21 @@ test("a refused step still reports its call, and onStart gets the child's pid", 
 });
 ```
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/usage.test.ts packages/runner/src/claude/adapter-usage.test.ts`. Expected: FAIL ("parseUsage is not exported").
-- [ ] **Step 3: Implement** `parseUsage`, `parseRateLimit`, the extra field of `ResultInfo`, then `run.ts` (collect `limits` where `isRateLimited` is called, call `input.onStart?.(child.pid)` when `child.pid !== undefined`, call `deps.onCall` in the `finally` before `child?.kill()`), then the adapter: its internal `run(input, claudePath)` takes a third parameter `onCall` and every return of `runStep` and the successful return of `judge` adds `call` when it is defined (a small helper `withCall(result, call)`); `req.onStart` is passed as `RunInput.onStart`. `RunDeps.nowMs` is passed through `ClaudeAdapterOptions.nowMs?` (default `Date.now`). Then the fake: `result` emits `usage`, `modelUsage` (camel case, as in the recorded event), `total_cost_usd`, `num_turns`, `duration_ms: 1` when `usage` is given; `rate_limit` emits `rateLimitType`, `utilization`, `resetsAt` and `unifiedWindows` when `limit` is given (`status: "allowed"` in each window).
-- [ ] **Step 4: Run** the two files and `pnpm vitest run packages/runner/src/claude packages/runner/src/test-helpers`. Expected: PASS (a failure of `review-03-s4.test.ts` "S4b" is re-run alone first; fact 12).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/usage.test.ts packages/runner/src/claude/adapter-usage.test.ts`. Expected: FAIL ("parseUsage is not exported").
+- [x] **Step 3: Implement** `parseUsage`, `parseRateLimit`, the extra field of `ResultInfo`, then `run.ts` (collect `limits` where `isRateLimited` is called, call `input.onStart?.(child.pid)` when `child.pid !== undefined`, call `deps.onCall` in the `finally` before `child?.kill()`), then the adapter: its internal `run(input, claudePath)` takes a third parameter `onCall` and every return of `runStep` and the successful return of `judge` adds `call` when it is defined (a small helper `withCall(result, call)`); `req.onStart` is passed as `RunInput.onStart`. `RunDeps.nowMs` is passed through `ClaudeAdapterOptions.nowMs?` (default `Date.now`). Then the fake: `result` emits `usage`, `modelUsage` (camel case, as in the recorded event), `total_cost_usd`, `num_turns`, `duration_ms: 1` when `usage` is given; `rate_limit` emits `rateLimitType`, `utilization`, `resetsAt` and `unifiedWindows` when `limit` is given (`status: "allowed"` in each window).
+- [x] **Step 4: Run** the two files and `pnpm vitest run packages/runner/src/claude packages/runner/src/test-helpers`. Expected: PASS (a failure of `review-03-s4.test.ts` "S4b" is re-run alone first; fact 12).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Read usage and rate limits from Claude Code's events" -m "Assisted-by: Codex"
 ```
+
+**Chair's note (2026-11-11), owned test edits of Task 8.** The first call stopped here: six present tests in `packages/runner/src/claude/adapter.test.ts` compare an adapter result with exact equality and now fail only because the result carries the new `call` field. They are "a declared read passes and the argument list, folder, environment and prompt are exactly what was decided", "outputs go through the schema: the report is the text and every output is returned", "not signed in gives exit auth", "a stream with no result event is a failure with a sentence", "a non-zero exit gives failed with the tail of standard error" and "judge, replan and probe". This task owns their update, in this way only: take `call` off the result with a rest pattern, compare the rest with the same `toEqual` object as before (every old field stays exact), and add an assertion on `call`: `limits`, `models` and `turns` exact for what the fake emitted, `wallMs` exact where the test injects the clock and otherwise a number that is not negative. Where a thrown error now carries `call`, assert the old message exactly and the new field the same way. Do not turn any `toEqual` into `toMatchObject`, and change nothing else in that file. These edits replace an assertion with a stricter one; no test is removed, skipped or loosened.
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

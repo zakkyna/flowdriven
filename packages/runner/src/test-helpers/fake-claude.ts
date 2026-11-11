@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 type Action = { do: string; [key: string]: unknown };
@@ -233,10 +233,34 @@ else if (command === "play") {
     } else if (action.do === "raw")
       process.stdout.write(String(action.line) + (action.newline === false ? "" : "\n"));
     else if (action.do === "pause") await new Promise((resolve) => setTimeout(resolve, Number(action.ms)));
-    else if (action.do === "ignore_sigterm") process.on("SIGTERM", () => {});
-    else if (action.do === "rate_limit")
-      emit({ type: "rate_limit_event", rate_limit_info: { status: action.status } });
-    else if (action.do === "exit") {
+    else if (action.do === "hold") {
+      if (typeof action.file !== "string") throw new Error("Missing hold file");
+      for (let i = 0; i < 2400 && !existsSync(action.file); i++)
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      if (!existsSync(action.file)) throw new Error("Hold timed out");
+    } else if (action.do === "ignore_sigterm") process.on("SIGTERM", () => {});
+    else if (action.do === "rate_limit") {
+      const limit = action.limit as
+        | { type?: string; utilization?: number; resetsAt?: number; fiveHour?: object; sevenDay?: object }
+        | undefined;
+      emit({
+        type: "rate_limit_event",
+        rate_limit_info: {
+          status: action.status,
+          ...(limit
+            ? {
+                rateLimitType: limit.type,
+                utilization: limit.utilization,
+                resetsAt: limit.resetsAt,
+                unifiedWindows: {
+                  ...(limit.fiveHour ? { five_hour: { ...limit.fiveHour, status: "allowed" } } : {}),
+                  ...(limit.sevenDay ? { seven_day: { ...limit.sevenDay, status: "allowed" } } : {}),
+                },
+              }
+            : {}),
+        },
+      });
+    } else if (action.do === "exit") {
       if (action.stderr !== undefined) process.stderr.write(String(action.stderr));
       process.exitCode = Number(action.code);
       break;
@@ -249,7 +273,42 @@ else if (command === "play") {
       result(true, "Not logged in - Please run /login", "api_error");
       process.exit(1);
     } else if (action.do === "result") {
+      const usage = action.usage as
+        | {
+            models: { model: string; input: number; output: number; cacheRead: number; cacheWrite: number }[];
+            turns?: number;
+            costUsd?: number;
+          }
+        | undefined;
+      const totals = usage?.models.reduce(
+        (a, m) => ({
+          input_tokens: a.input_tokens + m.input,
+          output_tokens: a.output_tokens + m.output,
+          cache_read_input_tokens: a.cache_read_input_tokens + m.cacheRead,
+          cache_creation_input_tokens: a.cache_creation_input_tokens + m.cacheWrite,
+        }),
+        { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      );
       result(action.isError === true, String(action.result ?? lastText), "completed", {
+        ...(usage
+          ? {
+              usage: totals,
+              modelUsage: Object.fromEntries(
+                usage.models.map((m) => [
+                  m.model,
+                  {
+                    inputTokens: m.input,
+                    outputTokens: m.output,
+                    cacheReadInputTokens: m.cacheRead,
+                    cacheCreationInputTokens: m.cacheWrite,
+                  },
+                ]),
+              ),
+              num_turns: usage.turns,
+              total_cost_usd: usage.costUsd,
+              duration_ms: 1,
+            }
+          : {}),
         ...(action.structured === undefined ? {} : { structured_output: action.structured }),
         api_error_status: action.apiErrorStatus ?? null,
       });

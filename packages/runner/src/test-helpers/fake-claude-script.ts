@@ -2,6 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { LimitWindow } from "../harness.ts";
+import type { ModelUsage } from "../storage.ts";
 
 export type FakeAction =
   | { do: "text"; text: string }
@@ -21,10 +23,28 @@ export type FakeAction =
       write?: { path: string; text: string };
     }
   | { do: "pause"; ms: number }
-  | { do: "rate_limit"; status: string }
+  | { do: "hold"; file: string }
+  | {
+      do: "rate_limit";
+      status: string;
+      limit?: {
+        type?: string;
+        utilization?: number;
+        resetsAt?: number;
+        fiveHour?: LimitWindow;
+        sevenDay?: LimitWindow;
+      };
+    }
   | { do: "ignore_sigterm" }
   | { do: "raw"; line: string; newline?: boolean }
-  | { do: "result"; result?: string; structured?: unknown; isError?: boolean; apiErrorStatus?: number }
+  | {
+      do: "result";
+      result?: string;
+      structured?: unknown;
+      isError?: boolean;
+      apiErrorStatus?: number;
+      usage?: { models: ModelUsage[]; turns?: number; costUsd?: number };
+    }
   | { do: "auth_failure" }
   | { do: "exit"; code: number; stderr?: string };
 export type FakePlay = {

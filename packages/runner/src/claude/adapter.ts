@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Value } from "@flowdriven/sdk";
-import type { HarnessAdapter } from "../harness.ts";
+import { type CallInfo, type HarnessAdapter, HarnessCallError } from "../harness.ts";
 import { buildPolicy } from "./policy.ts";
 import {
   buildPrompt,
@@ -14,6 +14,7 @@ import {
 import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
+  nowMs?: () => number;
   claudePath: () => string | undefined;
   env: () => Record<string, string | undefined>;
   controlRoot: string;
@@ -34,9 +35,13 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
   const active = new Set<(sentence?: string) => void>();
   let stopped = false;
   const guard = () => (stopped ? "FlowDriven is stopping." : options.allowed?.());
-  const run = (input: RunInput, claudePath: string) =>
+  const withCall = <T extends object>(result: T, call: CallInfo | undefined): T & { call?: CallInfo } =>
+    call === undefined ? result : { ...result, call };
+  const run = (input: RunInput, claudePath: string, onCall: (call: CallInfo) => void) =>
     runClaude(input, {
       claudePath,
+      onCall,
+      nowMs: options.nowMs ?? Date.now,
       env: options.env(),
       controlRoot: options.controlRoot,
       audit: options.audit,
@@ -73,6 +78,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       if (path === undefined)
         return { exit: "failed", text: "", outputs: {}, block: "Claude Code was not found." };
       const schema = outputSchema(req.outputs);
+      let call: CallInfo | undefined;
       const result = await run(
         {
           runId: req.runId,
@@ -82,6 +88,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           model: modelFor(req.effort),
           ...(schema === undefined ? {} : { schema }),
           signal: req.signal,
+          onStart: req.onStart,
           makePolicy: (control, sessionId) =>
             buildPolicy({
               kind: req.kind === "agent" ? "agent" : "worker",
@@ -101,24 +108,34 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
             }),
         },
         path,
+        (info) => {
+          call = info;
+        },
       );
       if (result.kind === "ok") {
-        if (schema === undefined) return { exit: "ok", text: result.text, outputs: {} };
+        if (schema === undefined) return withCall({ exit: "ok", text: result.text, outputs: {} }, call);
         const parsed = readOutputs(result.structured, req.outputs);
-        return parsed
-          ? { exit: "ok", text: parsed.report, outputs: parsed.outputs }
-          : { exit: "failed", text: "Claude Code returned no valid structured output.", outputs: {} };
+        return withCall(
+          parsed
+            ? { exit: "ok" as const, text: parsed.report, outputs: parsed.outputs }
+            : {
+                exit: "failed" as const,
+                text: "Claude Code returned no valid structured output.",
+                outputs: {},
+              },
+          call,
+        );
       }
       if (result.kind === "block")
-        return { exit: "failed", text: result.sentence, outputs: {}, block: result.sentence };
-      if (result.kind === "failed") return { exit: "failed", text: result.text, outputs: {} };
-      return { exit: result.kind, text: "", outputs: {} };
+        return withCall({ exit: "failed", text: result.sentence, outputs: {}, block: result.sentence }, call);
+      if (result.kind === "failed") return withCall({ exit: "failed", text: result.text, outputs: {} }, call);
+      return withCall({ exit: result.kind, text: "", outputs: {} }, call);
     },
     async judge(req) {
       const reason = guard();
-      if (reason !== undefined) throw new Error(reason);
+      if (reason !== undefined) throw new HarnessCallError(reason, "failed");
       const path = options.claudePath();
-      if (path === undefined) throw new Error("Claude Code was not found.");
+      if (path === undefined) throw new HarnessCallError("Claude Code was not found.", "failed");
       let prompt: string | undefined;
       for (let i = 0; i < 3; i++) {
         const token = (options.newToken ?? (() => randomBytes(8).toString("hex")))();
@@ -128,17 +145,20 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           break;
         }
       }
-      if (prompt === undefined) throw new Error("FlowDriven could not mark the judge's data.");
+      if (prompt === undefined)
+        throw new HarnessCallError("FlowDriven could not mark the judge's data.", "failed");
       const markedPrompt = prompt;
+      let call: CallInfo | undefined;
       const result = await run(
         {
           runId: req.runId,
           stepId: req.stepId,
-          itemKey: "",
+          itemKey: req.itemKey ?? "",
           attempt: 0,
           model: "sonnet",
           schema: JUDGE_SCHEMA,
           signal: req.signal,
+          onStart: req.onStart,
           makePolicy: (control, sessionId) =>
             buildPolicy({
               kind: "agent",
@@ -152,17 +172,23 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           makePrompt: () => markedPrompt,
         },
         path,
+        (info) => {
+          call = info;
+        },
       );
       if (result.kind !== "ok")
-        throw new Error(
+        throw new HarnessCallError(
           result.kind === "block" ? result.sentence : result.kind === "failed" ? result.text : result.kind,
+          result.kind === "block" ? "failed" : result.kind,
+          call,
         );
-      return (
+      return withCall(
         readVerdict(result.structured) ?? {
           verdict: "failed",
           reasons: "Claude Code returned no valid verdict.",
           evidence: "",
-        }
+        },
+        call,
       );
     },
     async replan() {

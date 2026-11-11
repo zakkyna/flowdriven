@@ -114,6 +114,7 @@ export async function runChecks(checks: Check[], ctx: CheckContext): Promise<Che
             ctx.harness.judge({
               runId: ctx.runId,
               stepId: ctx.stepId,
+              itemKey: ctx.itemKey,
               rubric,
               output: typeof value === "string" ? value : JSON.stringify(value),
               signal: ctx.signal,

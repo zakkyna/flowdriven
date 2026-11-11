@@ -1,3 +1,5 @@
+import type { LimitWindow, RateLimit } from "../harness.ts";
+import type { ModelUsage } from "../storage.ts";
 import { visible } from "./text.ts";
 
 export const MAX_START_HOOK_EVENTS = 8;
@@ -112,7 +114,76 @@ export function createTripwire(allowedIds: ReadonlySet<string>): Tripwire {
     },
   };
 }
+const count = (v: unknown): number =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0
+    ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(v))
+    : 0;
+export function parseUsage(
+  event: StreamEvent,
+): { models: ModelUsage[]; turns: number; costUsd?: number } | undefined {
+  if (event.type !== "result") return undefined;
+  const entries: [string, unknown][] = object(event.modelUsage)
+    ? Object.entries(event.modelUsage).slice(0, 20)
+    : object(event.usage)
+      ? [["unknown", event.usage]]
+      : [];
+  if (!object(event.modelUsage) && !object(event.usage)) return undefined;
+  const models = entries.map(([name, value]) => {
+    const v = object(value) ? value : {};
+    const aggregate = !object(event.modelUsage);
+    return {
+      model: name.slice(0, 100) || "unknown",
+      input: count(v[aggregate ? "input_tokens" : "inputTokens"]),
+      output: count(v[aggregate ? "output_tokens" : "outputTokens"]),
+      cacheRead: count(v[aggregate ? "cache_read_input_tokens" : "cacheReadInputTokens"]),
+      cacheWrite: count(v[aggregate ? "cache_creation_input_tokens" : "cacheCreationInputTokens"]),
+    };
+  });
+  return {
+    models,
+    turns: count(event.num_turns),
+    ...(typeof event.total_cost_usd === "number" &&
+    Number.isFinite(event.total_cost_usd) &&
+    event.total_cost_usd >= 0
+      ? { costUsd: event.total_cost_usd }
+      : {}),
+  };
+}
+export function parseRateLimit(event: StreamEvent, nowMs: number): RateLimit | undefined {
+  if (
+    event.type !== "rate_limit_event" ||
+    !object(event.rate_limit_info) ||
+    typeof event.rate_limit_info.status !== "string"
+  )
+    return undefined;
+  const info = event.rate_limit_info;
+  const window = (v: Record<string, unknown>): LimitWindow => ({
+    ...(typeof v.utilization === "number" && Number.isFinite(v.utilization)
+      ? { utilization: Math.max(0, Math.min(1, v.utilization)) }
+      : {}),
+    ...(typeof v.resetsAt === "number" &&
+    Number.isFinite(v.resetsAt) &&
+    v.resetsAt >= nowMs / 1000 &&
+    v.resetsAt <= nowMs / 1000 + 8 * 86400
+      ? { resetsAt: v.resetsAt }
+      : {}),
+    ...(typeof v.status === "string" ? { status: v.status } : {}),
+  });
+  const w = object(info.unifiedWindows) ? info.unifiedWindows : {};
+  const top = window(info);
+  return {
+    status: info.status as string,
+    ...(typeof info.rateLimitType === "string" ? { type: info.rateLimitType } : {}),
+    ...(top.utilization === undefined ? {} : { utilization: top.utilization }),
+    ...(top.resetsAt === undefined ? {} : { resetsAt: top.resetsAt }),
+    windows: {
+      ...(object(w.five_hour) ? { five_hour: window(w.five_hour) } : {}),
+      ...(object(w.seven_day) ? { seven_day: window(w.seven_day) } : {}),
+    },
+  };
+}
 export type ResultInfo = {
+  usage?: ReturnType<typeof parseUsage>;
   ok: boolean;
   text: string;
   structured?: unknown;
@@ -123,6 +194,7 @@ export type ResultInfo = {
 export function parseResult(event: StreamEvent): ResultInfo {
   const text = typeof event.result === "string" ? event.result : "";
   return {
+    ...(parseUsage(event) === undefined ? {} : { usage: parseUsage(event) }),
     ok: event.subtype === "success" && event.is_error === false,
     text,
     ...(Object.hasOwn(event, "structured_output") ? { structured: event.structured_output } : {}),
