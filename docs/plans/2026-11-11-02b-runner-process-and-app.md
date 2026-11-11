@@ -752,23 +752,25 @@ export function guardProcess(proc: Pick<NodeJS.Process, "on">, errors: (line: st
 **`runProcess` order (the brief's order):** (1) `prepareDataDir(dataDir)`; a refusal writes its message with `errors` and returns `EXIT.usage`. (2) `openSqliteStore(<dir>/flowdriven.sqlite, { now, exclusive: true })`; the lock refusal writes `Another FlowDriven runner is using this data folder.` (one line) and returns `EXIT.locked`; any other failure writes its message and returns `EXIT.crash`. (3) `createChangeEmitter` whose emit calls `server.notify` (late bound), `wrapStore(store, emitter.mark)`. (4) `createRunnerService({ store: wrapped, dataDir: dir, mode: demo ? "demo" : "live", now, newId })` and `service.start()` (this is the one-runner guard already passed, then `recoverAfterCrash`, then the demo flow). (5) `serveRpc({ input, output, call: service.call, knows: service.knows })`. (6) a `setInterval` every `sweepEveryMs ?? 60_000` ms, with `unref()`, whose callback calls `service.engine.sweepExpired()` and attaches a `.catch` that writes `The sweep failed: <message>` with `errors` (a rejected sweep is logged, never left unhandled). (7) `await server.done`; then clear the timer, `service.stop()`, `store.close()`, wait for `output.write("", callback)`, and return `EXIT.ok` for `"end"` and `EXIT.protocol` for `"protocol_error"`. Any unexpected throw closes the store when open, writes its message with `errors` and returns `EXIT.crash`. Nothing else writes to `output`.
 **`main.ts`** (never re-exported from `index.ts`, like `demo/main.ts`): `silenceSqliteWarning()`, `scrubEnvironment(process.env)`, `guardProcess(process, (line) => process.stderr.write(`${line}\n`))`, `parseArguments(process.argv.slice(2))` (on failure write the message and a newline to stderr and `process.exit(2)`), then `process.exit(await runProcess({ ...options, input: process.stdin, output: process.stdout, errors: (line) => process.stderr.write(`${line}\n`) }))`.
 
-- [ ] **Step 1: Write the failing tests** (12 new tests, the last one in the changed file `source-rules.test.ts`; `run-process.test.ts` uses two `PassThrough` streams, `connectRpcClient` of Task 12 and a temp data folder; ids are counters)
+- [x] **Step 1: Write the failing tests** (12 new tests, the last one in the changed file `source-rules.test.ts`; `run-process.test.ts` uses two `PassThrough` streams, `connectRpcClient` of Task 12 and a temp data folder; ids are counters)
   `args.test.ts` (2): (1) `parseArguments accepts --stdio, an absolute --data-dir and --demo and refuses everything else`: a relative path, a missing flag, an unknown argument, a repeated flag and a missing value each give `ok: false` with the usage message. (2) `scrubEnvironment removes ELECTRON_RUN_AS_NODE and nothing else`.
   `run-process.test.ts` (7): (3) `the crash guard writes one line per uncaught error and does not rethrow`: a fake `proc` records its two listeners; calling each with an `Error` and with a string writes `Internal error: ...` once each, the message cut at 200 characters. (4) `serves runner.info and the demo flow and returns 0 when its input ends, with the store closed`: `runner.info` is `{ contractVersion: CONTRACT_VERSION, mode: "demo" }`, `flows.list` has `local.sample-job-review`; after `toServer.end()` the promise is `0` and `openSqliteStore(path, { exclusive: true })` succeeds. (5) `a second runner on the same folder returns 3 with one line on stderr`: the second call gets `errors` called once with the sentence and returns 3 while the first runs. (6) `a protocol error returns 4`: write `not json\n`. (7) `a refused data folder returns 2`: a path that is a regular file. (8) `a run that was walking is found at the next start`: write, with a plain store, the demo flow, a run in state `running` with its `alerts` row `running`, close; `runProcess` in demo mode; `runs.status` shows the run `interrupted`. (9) `the sweep runs on its timer and sends a changed event`: `sweepEveryMs: 20`, a clock the test moves; start a demo run, wait for the pending choice, move the clock 24 h + 1 ms and wait for a `changed` event that carries `approvals` without any request in between; then `approvals.list` shows it `expired`.
   `main.test.ts` (2; spawns `process.execPath` with `main.ts`, `--stdio --data-dir <tmp> --demo`, env `{ ...process.env, NODE_OPTIONS: "", ELECTRON_RUN_AS_NODE: "1" }` and pipes): (10) `the real process answers runner.info over its pipes, prints nothing else on stdout and exits 0 when stdin ends`: every stdout line parses with `parseFrame`; stderr is empty (the SQLite warning is silenced); exit code 0. (11) `a second real process on the same folder exits 3 while the first runs`: its stderr is exactly the one sentence and a newline.
   `source-rules.test.ts` (1): (12) `nothing in the runner spawns process.execPath`: no runner source outside `*.test.ts` and `test-helpers/` contains `process.execPath`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/service packages/runner/src/main.test.ts packages/runner/src/source-rules.test.ts`. Expected: FAIL (modules missing).
-- [ ] **Step 3: Implement** by the rules above.
-- [ ] **Step 4: Run the tests, then the process by hand**
+- [x] **Step 3: Implement** by the rules above.
+- [x] **Step 4: Run the tests, then the process by hand**
   Run: `pnpm vitest run packages/runner`, then `printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"runner.info","params":{}}' | node packages/runner/src/main.ts --stdio --data-dir "$PWD/.workflow/scratch/runner-try" --demo`. Expected: PASS; one answer line `{"jsonrpc":"2.0","id":1,"result":{"contractVersion":1,"mode":"demo"}}`, exit 0, nothing on stderr. (Remove `.workflow/scratch/runner-try` afterwards; the folder is created with mode 0700.)
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add the runner process" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

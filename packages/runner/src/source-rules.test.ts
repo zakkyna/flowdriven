@@ -42,3 +42,13 @@ test("the SDK main entry stays free of node: modules", () => {
   for (const f of sources("sdk").filter((p) => !/[\\/](hash|load)[\\/]|[\\/]node\.ts$/.test(p)))
     expect(readFileSync(f, "utf8")).not.toMatch(/from "node:/);
 });
+test("nothing in the runner spawns process.execPath", () => {
+  for (const file of sources("runner").filter(
+    (p) =>
+      !relative(join(pkgs, "runner", "src"), p)
+        .split(sep)
+        .join("/")
+        .startsWith("test-helpers/"),
+  ))
+    expect(readFileSync(file, "utf8")).not.toContain("process.execPath");
+});
