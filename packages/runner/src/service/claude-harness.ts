@@ -61,7 +61,11 @@ export function gate(input: Parameters<typeof harnessGate>[0] & { manifest: Flow
   const cannot = new Set<string>(),
     sensitive = new Set<string>();
   for (const step of manifest.steps.flatMap((s) => ("steps" in s ? s.steps : [s]))) {
-    if (step.do === "skill") for (const id of step.uses) cannot.add(id);
+    for (const check of step.checks) if (check.type === "command") cannot.add(`command:${check.cmd}`);
+    if (step.do === "skill") {
+      cannot.add(step.skill);
+      for (const id of step.uses) cannot.add(id);
+    }
     if (step.do !== "worker") continue;
     for (const id of step.uses) {
       const req = manifest.requirements.find((r) => r.id === id);
@@ -178,6 +182,7 @@ export function createHarnessService(options: {
         try {
           const result = await scanClaude({
             explicit: options.claudePath,
+            cwd: options.dataDir,
             env: options.env,
             now: options.now,
             timeoutMs: options.scanTimeoutMs,
@@ -186,13 +191,14 @@ export function createHarnessService(options: {
             result.detected && result.path
               ? await readInventory({
                   claude: result.path,
+                  cwd: options.dataDir,
                   env: options.env,
                   project: options.projectDir,
                   withMcp,
                   timeoutMs: options.scanTimeoutMs,
                   mcpTimeoutMs: options.mcpTimeoutMs,
                 })
-              : { skills: [], plugins: [], mcpServers: withMcp ? [] : undefined };
+              : { skills: [], plugins: [] };
           if (stopped) return;
           const next: StoredScan = {
             scan: result,

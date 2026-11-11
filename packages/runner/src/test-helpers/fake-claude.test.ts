@@ -62,7 +62,11 @@ test("it answers --version, --help and auth status", () => {
   expect(run(h, ["--help"]).stdout).toContain("--permission-prompts");
   expect(JSON.parse(run(h, ["auth", "status", "--json"]).stdout).loggedIn).toBe(true);
   writeFakeScript(h, { auth: { loggedIn: false } });
-  expect(run(h, ["auth", "status", "--json"]).stdout).toContain('"loggedIn":false');
+  const signedOut = run(h, ["auth", "status", "--json"]);
+  expect(signedOut.stdout).toContain('"loggedIn":false');
+  expect(signedOut.status).toBe(1);
+  writeFakeScript(h, { auth: { raw: '{"loggedIn":false}' } });
+  expect(run(h, ["auth", "status", "--json"]).status).toBe(0);
 });
 test("it answers plugin list and mcp list, and a hang never ends until it is killed", {
   timeout: 20_000,

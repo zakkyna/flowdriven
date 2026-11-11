@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HarnessCard } from "@flowdriven/contracts";
-import { FlowManifest } from "@flowdriven/sdk";
+import { FlowManifest, validateManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
@@ -266,6 +266,7 @@ test("a scan at start fills the card from the fake, a re-scan adds the MCP serve
   expect((await hs.rescan()).at(0)?.inventory.mcpServers).toEqual([
     expect.objectContaining({ name: "claude.ai Gmail", connection: "needs_login" }),
   ]);
+  for (const call of readFakeCalls(h)) if (call.kind === "call") expect(call.cwd).toBe(realpathSync(dataDir));
   hs.stop();
 });
 test("the stored scan shows the card at once after a restart, and the gate and the recovery of an interrupted run wait for this process's own scan", {
@@ -505,4 +506,67 @@ test("a revoke stops a step that is running and blocks the run with the consent 
   expect(s.getRun(run.id)?.blockedReason).toBe(GATE.noConsent);
   expect(() => process.kill(call.pid, 0)).toThrow();
   expect(readdirSync(join(dataDir, "control"))).toEqual([]);
+});
+
+test("a flow with a command check is blocked until the install preview exists", () => {
+  const input = {
+    platform: "darwin",
+    dataDir: "/tmp/data",
+    scan,
+    finished: true,
+    fileExists: () => true,
+    consent: "given" as const,
+  };
+  const agent = {
+    id: "agent",
+    do: "agent",
+    instructions: "x",
+    uses: ["flutter"],
+    checks: [{ type: "command", cmd: "flutter" }],
+  };
+  const cli = { id: "flutter", type: "cli_tool", commands: ["flutter"] };
+  const single = manifest([agent], [cli]);
+  expect(validateManifest(single).filter((issue) => issue.severity === "error")).toEqual([]);
+  expect(gate({ ...input, manifest: single }).reason).toBe(
+    "This flow needs something FlowDriven cannot enforce yet: command:flutter.",
+  );
+  const worker = {
+    id: "worker",
+    do: "worker",
+    instructions: "x",
+    uses: ["gmail"],
+    checks: [{ type: "contains", pattern: "x" }],
+  };
+  const gmail = { id: "gmail", type: "mcp_server", tools: ["read"] };
+  const combined = manifest([agent, worker], [cli, gmail]);
+  expect(validateManifest(combined).filter((issue) => issue.severity === "error")).toEqual([]);
+  expect(gate({ ...input, manifest: combined }).reason).toBe(
+    "This flow needs something FlowDriven cannot enforce yet: command:flutter, gmail.",
+  );
+  const loop = { id: "loop", for_each: "items", as: "item", steps: [agent] };
+  expect(gate({ ...input, manifest: manifest([loop], [cli]) }).reason).toBe(
+    "This flow needs something FlowDriven cannot enforce yet: command:flutter.",
+  );
+});
+
+test("a re-scan whose mcp list hangs keeps the list of the scan before", { timeout: 20_000 }, async () => {
+  const h = home(),
+    dataDir = temp(),
+    s = await store();
+  const hs = createHarnessService({
+    store: s,
+    dataDir,
+    projectDir: dataDir,
+    env: env(h),
+    claudePath: FAKE_CLAUDE_PATH,
+    now,
+    newId: ids(),
+    mcpTimeoutMs: 300,
+  });
+  await hs.start().settled;
+  const before = (await hs.rescan()).at(0)?.inventory.mcpServers;
+  expect(before).toEqual([expect.objectContaining({ name: "claude.ai Gmail" })]);
+  writeFakeScript(h, { hang: ["mcp"] });
+  expect((await hs.rescan()).at(0)?.inventory.mcpServers).toEqual(before);
+  hs.stop();
 });

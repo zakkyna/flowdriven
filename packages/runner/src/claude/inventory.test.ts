@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import {
@@ -44,12 +44,18 @@ test("plugins: only the enabled ones, named by their id", () => {
     parsePlugins(
       JSON.stringify([
         { id: "design@market", enabled: true },
+        { id: "project@market", enabled: true, scope: "project" },
+        { id: "other@market", enabled: true, scope: "other" },
         { id: "old@market", enabled: false },
         { id: 42, enabled: true },
         null,
       ]),
     ),
-  ).toEqual([{ name: "design@market", scope: "user" }]);
+  ).toEqual([
+    { name: "design@market", scope: "user" },
+    { name: "project@market", scope: "project" },
+    { name: "other@market", scope: "user" },
+  ]);
   expect(parsePlugins("{}")).toEqual([]);
   expect(parsePlugins("bad")).toEqual([]);
 });
@@ -93,7 +99,7 @@ test("visible shows hidden characters, and the caps hold", () => {
 });
 test("readInventory runs mcp list only when asked", { timeout: 20_000 }, async () => {
   const h = home();
-  const options = { claude: FAKE_CLAUDE_PATH, env: { HOME: h, PATH: process.env.PATH } };
+  const options = { claude: FAKE_CLAUDE_PATH, cwd: h, env: { HOME: h, PATH: process.env.PATH } };
   const first = await readInventory({ ...options, withMcp: false });
   expect(first).not.toHaveProperty("mcpServers");
   expect(readFakeCalls(h).some((c) => c.kind === "call" && c.args[0] === "mcp")).toBe(false);
@@ -102,5 +108,15 @@ test("readInventory runs mcp list only when asked", { timeout: 20_000 }, async (
     { name: "claude.ai Gmail", scope: "user", source: "claude.ai", connection: "needs_login" },
   ]);
   writeFakeScript(h, { hang: ["mcp"] });
-  expect((await readInventory({ ...options, withMcp: true, mcpTimeoutMs: 300 })).mcpServers).toEqual([]);
+  expect(await readInventory({ ...options, withMcp: true, mcpTimeoutMs: 300 })).not.toHaveProperty(
+    "mcpServers",
+  );
+  const calls = readFakeCalls(h).filter((c) => c.kind === "call");
+  expect(calls.map((c) => c.args)).toEqual(
+    expect.arrayContaining([
+      ["plugin", "list", "--json"],
+      ["mcp", "list"],
+    ]),
+  );
+  for (const call of calls) expect(call.cwd).toBe(realpathSync(h));
 });

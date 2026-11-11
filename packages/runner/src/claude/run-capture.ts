@@ -28,7 +28,19 @@ export async function runCapture(
     timedOut = true;
     child.kill();
   }, options.timeoutMs);
-  const { code } = await child.done;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  const { code } = await Promise.race([
+    child.done,
+    new Promise<{ code: null }>((resolve) => {
+      deadline = setTimeout(() => {
+        timedOut = true;
+        child.kill();
+        child.destroyPipes();
+        resolve({ code: null });
+      }, options.timeoutMs + 1000);
+    }),
+  ]);
   clearTimeout(timer);
+  if (deadline !== undefined) clearTimeout(deadline);
   return { code, stdout: output.toString("utf8"), stderr: child.stderrTail(), timedOut, truncated };
 }

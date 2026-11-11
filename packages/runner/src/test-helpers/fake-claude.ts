@@ -94,6 +94,7 @@ else if (command === "auth") {
     orgName: "Example",
   };
   process.stdout.write(`${"raw" in auth ? auth.raw : JSON.stringify(auth)}\n`);
+  if (!("raw" in auth) && auth.loggedIn === false) process.exitCode = 1;
 } else if (command === "plugins") {
   const plugins = script.plugins ?? [
     { id: "design@market", enabled: true },

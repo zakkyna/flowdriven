@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import {
@@ -22,7 +22,7 @@ afterEach(() => {
 });
 const now = () => new Date("2026-11-11T00:00:00.000Z");
 function opts(h: string) {
-  return { explicit: FAKE_CLAUDE_PATH, env: { HOME: h, PATH: process.env.PATH }, now };
+  return { explicit: FAKE_CLAUDE_PATH, cwd: h, env: { HOME: h, PATH: process.env.PATH }, now };
 }
 
 test("findClaude takes the explicit path alone, then PATH in order, then the known folders", () => {
@@ -105,4 +105,14 @@ test("only loggedIn and authMethod are read, and nothing found runs nothing", {
   const empty = home();
   expect((await scanClaude({ ...opts(empty), explicit: join(empty, "missing") })).detected).toBe(false);
   expect(readFakeCalls(empty)).toEqual([]);
+});
+
+test("scan commands run in the given folder", { timeout: 20_000 }, async () => {
+  const h = home();
+  await scanClaude(opts(h));
+  const calls = readFakeCalls(h).filter((c) => c.kind === "call");
+  expect(calls.map((c) => c.args)).toEqual(
+    expect.arrayContaining([["--version"], ["--help"], ["auth", "status", "--json"]]),
+  );
+  for (const call of calls) expect(call.cwd).toBe(realpathSync(h));
 });

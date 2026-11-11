@@ -1,4 +1,5 @@
-import { rmSync } from "node:fs";
+import { chmodSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import {
   FAKE_CLAUDE_PATH,
@@ -53,4 +54,21 @@ test("a missing binary gives code null and a sentence, and only the given enviro
   expect(missing.stderr.length).toBeGreaterThan(0);
   await runCapture(FAKE_CLAUDE_PATH, ["--version"], { env: env(h), cwd: h, timeoutMs: 5000, maxBytes: 1000 });
   expect(readFakeCalls(h).at(0)).toMatchObject({ env: ["HOME", "PATH"] });
+});
+
+test("the hard deadline closes pipes held by a detached descendant", { timeout: 20_000 }, async () => {
+  const h = home();
+  const script = join(h, "holder");
+  writeFileSync(
+    script,
+    `#!/bin/sh
+/usr/bin/perl -e 'use POSIX; if (fork() == 0) { setsid(); $|=1; print "ready\\n"; sleep 6; exit 0 } sleep 6'
+`,
+  );
+  chmodSync(script, 0o755);
+  const started = performance.now();
+  const result = await runCapture(script, [], { env: env(h), cwd: h, timeoutMs: 1000, maxBytes: 1000 });
+  expect(result.stdout).toContain("ready");
+  expect(result.timedOut).toBe(true);
+  expect(performance.now() - started).toBeLessThan(3000);
 });

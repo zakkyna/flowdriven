@@ -47,6 +47,7 @@ export function findClaude(options: {
 }
 export async function scanClaude(options: {
   explicit?: string;
+  cwd: string;
   env: Record<string, string | undefined>;
   now: () => Date;
   timeoutMs?: number;
@@ -73,6 +74,7 @@ export async function scanClaude(options: {
     const capture = (args: string[]) =>
       runCapture(path, args, {
         env: childEnv(options.env),
+        cwd: options.cwd,
         timeoutMs: options.timeoutMs ?? 10_000,
         maxBytes: 262_144,
       });
@@ -89,7 +91,7 @@ export async function scanClaude(options: {
           (flag) => !new RegExp(`(?:^|[^a-zA-Z0-9-])${flag}(?![a-zA-Z0-9-])`).test(help.stdout),
         )
       : [...REQUIRED_FLAGS];
-    if (ok(auth)) {
+    if (!auth.timedOut && !auth.truncated) {
       try {
         const data: unknown = JSON.parse(auth.stdout);
         if (data && typeof data === "object" && !Array.isArray(data)) {

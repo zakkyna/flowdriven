@@ -46,7 +46,7 @@ export function parsePlugins(stdout: string): InventoryEntry[] {
       if (item && typeof item === "object" && !Array.isArray(item)) {
         const obj = item as Record<string, unknown>;
         if (typeof obj.id === "string" && obj.enabled === true)
-          entries.push({ name: visible(obj.id, 120), scope: "user" });
+          entries.push({ name: visible(obj.id, 120), scope: obj.scope === "project" ? "project" : "user" });
       }
       if (entries.length === 200) break;
     }
@@ -82,32 +82,34 @@ export function parseMcp(stdout: string): InventoryEntry[] {
 }
 export async function readInventory(options: {
   claude: string;
+  cwd: string;
   env: Record<string, string | undefined>;
   project?: string;
   withMcp: boolean;
   timeoutMs?: number;
   mcpTimeoutMs?: number;
 }): Promise<Inventory> {
-  const capture = async (args: string[], timeoutMs: number): Promise<string> => {
+  const capture = async (args: string[], timeoutMs: number): Promise<string | undefined> => {
     try {
       const result = await runCapture(options.claude, args, {
         env: childEnv(options.env),
+        cwd: options.cwd,
         timeoutMs,
         maxBytes: 262_144,
       });
-      return result.code === 0 && !result.timedOut && !result.truncated ? result.stdout : "";
+      return result.code === 0 && !result.timedOut && !result.truncated ? result.stdout : undefined;
     } catch {
-      return "";
+      return undefined;
     }
   };
   const [plugins, mcp] = await Promise.all([
     capture(["plugin", "list", "--json"], options.timeoutMs ?? 10_000),
-    options.withMcp ? capture(["mcp", "list"], options.mcpTimeoutMs ?? 30_000) : Promise.resolve(""),
+    options.withMcp ? capture(["mcp", "list"], options.mcpTimeoutMs ?? 30_000) : Promise.resolve(undefined),
   ]);
   const result: Inventory = {
     skills: listSkills({ home: options.env.HOME, project: options.project }),
-    plugins: parsePlugins(plugins),
+    plugins: parsePlugins(plugins ?? ""),
   };
-  if (options.withMcp) result.mcpServers = parseMcp(mcp);
+  if (mcp !== undefined) result.mcpServers = parseMcp(mcp);
   return result;
 }

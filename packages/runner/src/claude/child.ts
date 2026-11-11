@@ -7,6 +7,7 @@ export type Child = {
   stderrTail(): string;
   stop(): void;
   kill(): void;
+  destroyPipes(): void;
   done: Promise<{ code: number | null; signal: string | null }>;
 };
 export function startChild(
@@ -65,6 +66,11 @@ export function startChild(
     },
     kill() {
       signalGroup("SIGKILL");
+    },
+    destroyPipes() {
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.stderr.destroy();
     },
     done,
   };
