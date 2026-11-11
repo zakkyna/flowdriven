@@ -36,6 +36,22 @@ The owner decided that the engine stays TypeScript and that its effort goes into
 
 The release path (the old plan 11) compiles TypeScript before packaging (spec 21.3). Putting several items of a `for_each` into one call is not scheduled until the numbers of plan 03b say it pays (spec 21.3). Plan 03b moves M1 back by one plan. Sizes are the chair's estimates: 14 to 18 tasks for 03b, 12 to 16 each for 06b and 06c.
 
+## Order changed on 2026-11-12: plan 04 split
+
+Chair's call (owner may override). Plan 04 is split in two so that the part the owner asked for ("the hourly trigger fires while the window is closed; a flood is capped") is built and shown first, and the part that needs an owner decision waits. Where this section and the earlier ones differ, this section wins. Plan 04 is detailed in `2026-11-12-04-triggers-limits-notifications.md`. The heading `### 04 Harness detection, adapters and the fake-harness kit` below is superseded by the table here: plan 04 is now the triggers, limits and notifications plan, and the adapters named there were plan 03 and come again from plan 07.
+
+| Plan | Content | Shows working |
+|---|---|---|
+| 04 | The trigger service inside the runner for `schedule`, `flow_done` and `file_change` (spec 20.3): off until the owner enables each one, bound to the flow's content hash, `catch_up`, `overlap`, duplicate keys, the per-day cap and floods (R7), R4 again at enable and at run start; triggered runs enter the keeper's third class; a trigger that starts three blocked runs in a row is paused; notifications (spec 10.6, including the weekly-limit item of 21.2) through a runner notice and a macOS notification; the trigger switches on the flow's screen; the runner stays the app's child | The hourly trigger fires while the window is closed (the app stays open on macOS); a flood is capped at the daily limit with one notification |
+| 04b (new, after 04) | The local socket (mode 0600), the launch agent, and the hook channel moving to the socket, so a runner that the app did not start can run | A runner that the app did not start fires the hourly trigger after the app is quit; the hook answers over the socket |
+
+Why the split, from the 04 ledger:
+1. Triggers do not depend on the socket. On macOS the app stays alive when its window closes (`apps/desktop/electron/main.ts:50`), so the runner child keeps running and the row "the hourly trigger fires while the window is closed" holds without a socket.
+2. A socket raises a security question that spec 15.2 item 10 leaves open: any other process of the same user, including a harness the runner starts, could connect to a 0600 socket and call `approvals.resolve`. That needs the owner's decision before the socket exists.
+3. A launch agent is a permanent change on the owner's Mac and needs the owner's yes.
+
+Out of scope for 04 and not scheduled: `new_item`, `link` and `webhook` triggers, a tray icon, extra-folder grants for `file_change` (spec 9.4), R1 taint marks, and `LoopStep.parallel`. The coverage table above keeps its old rows: its row "Notifications" now reads plan 04, and "Schedules" moves from plan 05 to plan 04.
+
 ## Plans
 
 ### 01 Foundation and screens on sample data (detailed: `2026-11-10-01-foundation-and-screens.md`)
