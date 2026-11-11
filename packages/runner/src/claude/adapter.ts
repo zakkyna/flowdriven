@@ -1,0 +1,140 @@
+import { randomUUID } from "node:crypto";
+import type { Value } from "@flowdriven/sdk";
+import type { HarnessAdapter } from "../harness.ts";
+import { buildPolicy } from "./policy.ts";
+import {
+  buildPrompt,
+  JUDGE_SCHEMA,
+  judgePrompt,
+  modelFor,
+  outputSchema,
+  readOutputs,
+  readVerdict,
+} from "./prompt.ts";
+import { type RunInput, runClaude } from "./run.ts";
+import { MAX_LINE_BYTES } from "./stream.ts";
+export type ClaudeAdapterOptions = {
+  claudePath: () => string | undefined;
+  env: () => Record<string, string | undefined>;
+  controlRoot: string;
+  audit: (kind: string, runId: string, detail: Value) => void;
+  newId: (prefix: string) => string;
+  newSessionId?: () => string;
+  rounds?: number;
+  pollMs?: number;
+  graceMs?: number;
+  exitWaitMs?: number;
+  maxLineBytes?: number;
+};
+export function createClaudeAdapter(options: ClaudeAdapterOptions): HarnessAdapter {
+  const run = (input: RunInput, claudePath: string) =>
+    runClaude(input, {
+      claudePath,
+      env: options.env(),
+      controlRoot: options.controlRoot,
+      audit: options.audit,
+      newId: options.newId,
+      newSessionId: options.newSessionId ?? randomUUID,
+      rounds: options.rounds ?? 50,
+      pollMs: options.pollMs ?? 25,
+      graceMs: options.graceMs ?? 2000,
+      exitWaitMs: options.exitWaitMs ?? 10000,
+      maxLineBytes: options.maxLineBytes ?? MAX_LINE_BYTES,
+    });
+  return {
+    id: "claude-code",
+    name: "Claude Code",
+    async runStep(req) {
+      if (req.kind === "skill")
+        return { exit: "failed", text: "", outputs: {}, block: "Skill steps are not run yet." };
+      const path = options.claudePath();
+      if (path === undefined)
+        return { exit: "failed", text: "", outputs: {}, block: "Claude Code was not found." };
+      const schema = outputSchema(req.outputs);
+      const result = await run(
+        {
+          runId: req.runId,
+          stepId: req.stepId,
+          itemKey: req.itemKey,
+          attempt: req.attempt,
+          model: modelFor(req.effort),
+          ...(schema === undefined ? {} : { schema }),
+          signal: req.signal,
+          makePolicy: (control, sessionId) =>
+            buildPolicy({
+              kind: req.kind === "agent" ? "agent" : "worker",
+              requirements: req.requirements,
+              project: req.project,
+              controlRoot: control.root,
+              controlCwd: control.cwd,
+              sessionId,
+              schema: schema !== undefined,
+            }),
+          makePrompt: (policy) =>
+            buildPrompt({
+              ...(policy.tools.length ? { cwd: policy.cwd } : {}),
+              instructions: req.instructions,
+              outputs: req.outputs,
+              ...(req.lastFailure === undefined ? {} : { lastFailure: req.lastFailure }),
+            }),
+        },
+        path,
+      );
+      if (result.kind === "ok") {
+        if (schema === undefined) return { exit: "ok", text: result.text, outputs: {} };
+        const parsed = readOutputs(result.structured, req.outputs);
+        return parsed
+          ? { exit: "ok", text: parsed.report, outputs: parsed.outputs }
+          : { exit: "failed", text: "Claude Code returned no valid structured output.", outputs: {} };
+      }
+      if (result.kind === "block")
+        return { exit: "failed", text: result.sentence, outputs: {}, block: result.sentence };
+      if (result.kind === "failed") return { exit: "failed", text: result.text, outputs: {} };
+      return { exit: result.kind, text: "", outputs: {} };
+    },
+    async judge(req) {
+      const path = options.claudePath();
+      if (path === undefined) throw new Error("Claude Code was not found.");
+      const result = await run(
+        {
+          runId: req.runId,
+          stepId: req.stepId,
+          itemKey: "",
+          attempt: 0,
+          model: "sonnet",
+          schema: JUDGE_SCHEMA,
+          signal: req.signal,
+          makePolicy: (control, sessionId) =>
+            buildPolicy({
+              kind: "agent",
+              requirements: [],
+              project: control.cwd,
+              controlRoot: control.root,
+              controlCwd: control.cwd,
+              sessionId,
+              schema: true,
+            }),
+          makePrompt: () => judgePrompt({ rubric: req.rubric, output: req.output }),
+        },
+        path,
+      );
+      if (result.kind !== "ok")
+        throw new Error(
+          result.kind === "block" ? result.sentence : result.kind === "failed" ? result.text : result.kind,
+        );
+      return (
+        readVerdict(result.structured) ?? {
+          verdict: "failed",
+          reasons: "Claude Code returned no valid verdict.",
+          evidence: "",
+        }
+      );
+    },
+    async replan() {
+      return undefined;
+    },
+    async probe() {
+      return { ok: false, detail: "Probe checks are not connected yet." };
+    },
+  };
+}
