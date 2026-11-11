@@ -23,9 +23,10 @@ import {
   MAX_SCAN_ENTRIES,
   OPEN_STATES,
   RESCAN_MS,
+  SUPPORTED_KINDS,
   TICK_MS,
 } from "./constants.ts";
-import { checkEnable, inputsFromDefaults, payloadFiles, preflight } from "./rules.ts";
+import { checkEnable, inputsFromDefaults, payloadFiles, preflight, sanitizeText } from "./rules.ts";
 import { diffSnapshot, mergeHandled, parseSnapshot, resolveRoot, scanFolder } from "./scan.ts";
 import { dueSlots, nextSlot, scheduleOf, slotKey } from "./schedule.ts";
 
@@ -71,6 +72,8 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
   let chain = Promise.resolve();
   let cancel: (() => void) | undefined;
   let poked = false;
+  let running = false;
+  let stopped = false;
   let lastPurge: number | undefined;
   const watchers = new Map<
     string,
@@ -117,8 +120,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
   function view(flow: FlowRow, manifest: FlowManifest, index: number, trigger: Trigger): TriggerView {
     const row = store.getTrigger(flow.id, index);
     const valid = checked(flow, manifest, index);
-    const supported =
-      trigger.kind === "schedule" || trigger.kind === "file_change" || trigger.kind === "flow_done";
+    const supported = SUPPORTED_KINDS.some((kind) => kind === trigger.kind);
     const state: TriggerView["state"] = !supported
       ? "unavailable"
       : !row?.enabled
@@ -153,7 +155,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       summary: deps.summaryOf(trigger),
       state,
       canEnable: supported && valid.ok,
-      ...(reason ? { reason } : {}),
+      ...(reason ? { reason: sanitizeText(reason, 300) } : {}),
       ...(next === undefined ? {} : { nextAtMs: next }),
       ...(last
         ? {
@@ -244,6 +246,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     return view(flow, manifest, index, trigger);
   }
   function record(row: TriggerRow, outcome: TriggerOutcome, detail?: string, runId?: string): TriggerRow {
+    detail = detail === undefined ? undefined : Array.from(detail).slice(0, 200).join("");
     if (outcome !== "started" && row.lastFire?.outcome === outcome && row.lastFire.detail === detail)
       return row;
     return {
@@ -346,7 +349,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
           : "error";
       if (outcome === "refused" && (row.lastFire?.outcome !== outcome || row.lastFire.detail !== message))
         audit("trigger_refused", { flowId: flow.id, index: row.index, reason: message });
-      return record(row, outcome, message.slice(0, 200));
+      return record(row, outcome, message);
     }
   }
   function section(candidate: TriggerRow) {
@@ -469,14 +472,12 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
         }
         const max = manifest.limits?.max_items ?? DEFAULT_MAX_ITEMS;
         const batch = changed.slice(0, max);
-        const lines = batch
-          .map((path) => {
-            const item = scanned.files[path];
-            if (!item) throw new Error("Missing scanned file");
-            return `${path}|${item[0]}|${item[1]}`;
-          })
-          .join("\n");
-        const fireKey = `files:${createHash("sha256").update(lines).digest("hex")}`;
+        const entries = batch.map((path) => {
+          const item = scanned.files[path];
+          if (!item) throw new Error("Missing scanned file");
+          return [path, item[0], item[1]];
+        });
+        const fireKey = `files:${createHash("sha256").update(JSON.stringify(entries)).digest("hex")}`;
         const updated = fire(
           row,
           flow,
@@ -575,7 +576,8 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       const due = dueSlots(spec, { afterMs: cursor, uptoMs: now, anchorMs: anchor });
       if (due.latest === undefined) return;
       const onTime = now - due.latest <= GRACE_MS;
-      if (!onTime && trigger.catch_up !== "once") row = record(row, "missed", `${due.slots} missed`);
+      if (!onTime && trigger.catch_up !== "once")
+        row = record(row, "missed", `${due.capped ? "more than " : ""}${due.slots} missed`);
       else
         row = fire(
           row,
@@ -586,14 +588,17 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
           { slot: new Date(due.latest).toISOString(), missed: onTime ? due.slots - 1 : due.slots },
           trigger.overlap,
         );
+      if (due.capped && row.lastFire?.outcome === "started")
+        row = {
+          ...row,
+          lastFire: { ...row.lastFire, detail: `more than ${onTime ? due.slots - 1 : due.slots} missed` },
+        };
       store.putTrigger({ ...row, cursorMs: due.latest });
     } catch (e) {
       const fresh = store.getTrigger(candidate.flowId, candidate.index);
       if (fresh?.enabled) {
         try {
-          store.putTrigger(
-            record(fresh, "error", (e instanceof Error ? e.message : "Unknown error").slice(0, 200)),
-          );
+          store.putTrigger(record(fresh, "error", e instanceof Error ? e.message : "Unknown error"));
         } catch {
           /* keep other triggers running */
         }
@@ -601,8 +606,10 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     }
   }
   function tick(): Promise<void> {
+    if (stopped) return chain;
     chain = chain
       .then(() => {
+        if (stopped) return;
         const now = deps.now().getTime();
         if (Number.isFinite(now) && (lastPurge === undefined || now - lastPurge >= 3_600_000)) {
           store.purgeKeys(new Date(now - KEY_KEEP_MS).toISOString());
@@ -614,7 +621,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     return chain;
   }
   function poke() {
-    if (poked) return;
+    if (!running || poked) return;
     poked = true;
     queueMicrotask(() => {
       poked = false;
@@ -631,6 +638,8 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       await chain;
     },
     start() {
+      running = true;
+      stopped = false;
       if (cancel) return;
       try {
         cancel = deps.every(TICK_MS, () => {
@@ -646,6 +655,8 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       }
     },
     stop() {
+      running = false;
+      stopped = true;
       try {
         cancel?.();
       } catch {

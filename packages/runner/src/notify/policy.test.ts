@@ -80,7 +80,7 @@ test("a flood notifies once per flow per local day", () => {
   const { policy } = setup();
   const event = { kind: "flood_cap" as const, flowId: "f", flowName: "Flow", day: "2026-11-12", cap: 24 };
   expect(policy.decide(event)).toEqual({
-    id: "flood:f:2026-11-12",
+    id: "flood:252f10c83610ebca:2026-11-12",
     kind: "flood_cap",
     title: "Too many runs",
     body: "Flow reached its limit of 24 runs today. More fires are dropped until tomorrow.",
@@ -136,7 +136,7 @@ test("a paused trigger notifies once, even right after a blocked-run notice of t
     pausedAt: "2026-11-12T00:00:00.000Z",
   };
   expect(policy.decide(event)).toEqual({
-    id: `paused:flow-1:2:${event.pausedAt}`,
+    id: `paused:e865168f04ce2eb6:2:${event.pausedAt}`,
     kind: "trigger_paused",
     title: "Trigger paused",
     body: "Flow was switched off after 3 blocked runs in a row.",

@@ -91,7 +91,6 @@ test("restart: a run that ended while the runner was down starts the downstream 
 test("poke() runs one tick without re-entering the store call that caused it", async () => {
   const r = await rig();
   r.enable(down, 0);
-  const id = await finish(r);
   let inside = false;
   let reentered = false;
   const store = new Proxy(r.store, {
@@ -114,6 +113,9 @@ test("poke() runs one tick without re-entering the store call that caused it", a
     watch: () => undefined,
     summaryOf: (t) => t.kind,
   });
+  svc.start();
+  await svc.settled();
+  const id = await finish(r);
   inside = true;
   store.updateRun(id, { endedAt: r.clock.now().toISOString() });
   svc.poke();

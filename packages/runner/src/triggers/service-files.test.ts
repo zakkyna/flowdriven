@@ -1,4 +1,4 @@
-import { mkdirSync, renameSync, symlinkSync } from "node:fs";
+import { mkdirSync, renameSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { gate } from "../test-helpers/flows.ts";
@@ -9,7 +9,10 @@ import { createTriggerService } from "./service.ts";
 
 afterEach(cleanup);
 const id = "local.files";
-async function rig(max = 20, options: { hold?: ReturnType<typeof gate>; noWatch?: boolean } = {}) {
+async function rig(
+  max = 20,
+  options: { hold?: ReturnType<typeof gate>; noWatch?: boolean; onWatch?: () => void } = {},
+) {
   const r = await triggerRig(
     [{ manifest: triggerFlow(id, [{ kind: "file_change", path: "inbox" }], { limits: { max_items: max } }) }],
     undefined,
@@ -231,4 +234,35 @@ test("a watcher error closes it and falls back to periodic scans", async () => {
   await r.svc.tick();
   await r.idle();
   expect(r.runsOf(id)).toHaveLength(1);
+});
+
+test("after stop, poke and tick do not start runs or create watchers", async () => {
+  let calls = 0;
+  const r = await rig(20, { onWatch: () => calls++ });
+  r.enable(id, 0);
+  r.svc.start();
+  await r.idle();
+  expect(r.watchers.size).toBe(1);
+  r.svc.stop();
+  r.writeFile("inbox/a.txt");
+  r.svc.poke();
+  await r.svc.tick();
+  await r.idle();
+  expect(r.watchers.size).toBe(0);
+  expect(calls).toBe(1);
+  expect(r.runsOf(id)).toHaveLength(0);
+});
+
+test("distinct file batches with delimiter characters both fire", async () => {
+  const r = await rig();
+  r.enable(id, 0);
+  await r.svc.tick();
+  r.writeFile("inbox/a", "x", 1000);
+  r.writeFile("inbox/b", "x", 1000);
+  await scan(r);
+  rmSync(join(r.project, "inbox/a"));
+  rmSync(join(r.project, "inbox/b"));
+  r.writeFile(`inbox/a|1|1000${String.fromCodePoint(10)}b`, "x", 1000);
+  await scan(r);
+  expect(r.runsOf(id)).toHaveLength(2);
 });

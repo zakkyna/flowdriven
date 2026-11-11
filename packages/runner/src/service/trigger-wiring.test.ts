@@ -164,3 +164,30 @@ test("the audit log holds trigger_enabled with the flow id, the index and the ha
   expect(audit?.detail).toMatchObject({ flowId: r.manifest.id, index: 1, hash });
   expect(JSON.stringify(audit?.detail)).not.toContain("payload");
 });
+
+test("a long reason is cut and triggers.list still answers", async () => {
+  const r = await rig();
+  const flow = triggerFlow("local.long-reason", [{ kind: "flow_done", flow: `local.${"a".repeat(350)}` }]);
+  r.service.engine.registerFlow(flow, hash);
+  const result = TriggerStatus.array().parse(await r.call("triggers.list", { flowId: flow.id }));
+  expect(result.at(0)?.reason).toBe(
+    `${`The flow "local.${"a".repeat(350)}" is not on this Mac.`.slice(0, 297)}...`,
+  );
+});
+
+test("a recorded detail with supplementary characters is accepted by triggers.list", async () => {
+  const r = await rig();
+  await r.enable(1);
+  const row = r.store.getTrigger(r.manifest.id, 1);
+  if (!row) throw new Error("Missing trigger");
+  r.store.putTrigger({
+    ...row,
+    lastFire: {
+      at: "2026-11-12T00:00:00.000Z",
+      outcome: "error",
+      detail: String.fromCodePoint(0x1f600).repeat(200),
+    },
+  });
+  const detail = (await r.list()).at(0)?.last?.detail;
+  expect(detail).toBe(String.fromCodePoint(0x1f600).repeat(200));
+});

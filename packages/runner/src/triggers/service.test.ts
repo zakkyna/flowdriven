@@ -276,3 +276,41 @@ test("a setEnabled(false) that lands between the list and the trigger's section 
   expect(r.store.getTrigger("local.race", 0)?.enabled).toBe(false);
   expect(r.runsOf("local.race")).toHaveLength(0);
 });
+
+test("a recorded detail is cut to 200 code points", async () => {
+  const flow = triggerFlow("local.detail", [{ kind: "schedule", every: "1h" }]);
+  const r = await triggerRig([{ manifest: flow }]);
+  const svc = createTriggerService({
+    store: r.store,
+    now: r.clock.now,
+    dayOf: localDay,
+    projectDir: r.project,
+    summaryOf: (t) => t.kind,
+    watch: () => undefined,
+    every: () => () => {},
+    begin: () => {
+      throw new Error(String.fromCodePoint(0x1f600).repeat(250));
+    },
+  });
+  svc.setEnabled(flow.id, 0, true, r.hashOf(flow.id));
+  r.clock.advance(H);
+  await svc.tick();
+  expect(r.store.getTrigger(flow.id, 0)?.lastFire?.detail).toBe(String.fromCodePoint(0x1f600).repeat(200));
+  svc.stop();
+});
+
+test("a capped schedule reports more missed slots without changing run counts", async () => {
+  const r = await triggerRig([
+    { manifest: triggerFlow("local.capped-none", [{ kind: "schedule", every: "1h" }]) },
+    { manifest: triggerFlow("local.capped-once", [{ kind: "schedule", every: "1h", catch_up: "once" }]) },
+  ]);
+  r.enable("local.capped-none", 0);
+  r.enable("local.capped-once", 0);
+  r.clock.advance(10 * 24 * H + H / 2);
+  await r.svc.tick();
+  await r.idle();
+  expect(r.runsOf("local.capped-none")).toHaveLength(0);
+  expect(r.runsOf("local.capped-once")).toHaveLength(1);
+  expect(r.store.getTrigger("local.capped-none", 0)?.lastFire?.detail).toBe("more than 192 missed");
+  expect(r.store.getTrigger("local.capped-once", 0)?.lastFire?.detail).toBe("more than 192 missed");
+});

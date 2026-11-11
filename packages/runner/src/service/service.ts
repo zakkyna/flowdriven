@@ -51,7 +51,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     onWeekly: notifier.onWeekly,
     onRunState: (id, state) => {
       notifier.onRunState(id, state);
-      if (state === "done" || state === "failed" || state === "blocked") triggers.poke();
+      if (mode === "live" && (state === "done" || state === "failed" || state === "blocked")) triggers.poke();
     },
   });
   const projectDir = join(options.dataDir, mode === "demo" ? "demo-project" : "project");

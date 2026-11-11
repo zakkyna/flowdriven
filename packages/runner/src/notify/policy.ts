@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { sanitizeText } from "../triggers/rules.ts";
 
 export type NoticeEvent =
@@ -57,7 +58,7 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
         case "run_blocked": {
           if (
             !validId(event.runId) ||
-            !validId(event.flowId) ||
+            typeof event.flowId !== "string" ||
             typeof event.flowName !== "string" ||
             quiet(runs.get(event.runId), now, RUN_THROTTLE_MS) ||
             quiet(flows.get(event.flowId), now, BLOCKED_FLOW_QUIET_MS)
@@ -98,7 +99,7 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
         }
         case "flood_cap": {
           if (
-            !validId(event.flowId) ||
+            typeof event.flowId !== "string" ||
             typeof event.flowName !== "string" ||
             typeof event.day !== "string" ||
             !/^\d{4}-\d{2}-\d{2}$/.test(event.day) ||
@@ -108,17 +109,17 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
             return undefined;
           const name = sanitizeText(event.flowName, NAME_MAX) || "A flow";
           notice = {
-            id: `flood:${event.flowId}:${event.day}`,
+            id: `flood:${createHash("sha256").update(event.flowId).digest("hex").slice(0, 16)}:${event.day}`,
             kind: event.kind,
             title: "Too many runs",
             body: `${name} reached its limit of ${event.cap} runs today. More fires are dropped until tomorrow.`,
-            target: { screen: "builder", flowId: event.flowId },
+            target: validId(event.flowId) ? { screen: "builder", flowId: event.flowId } : { screen: "inbox" },
           };
           break;
         }
         case "trigger_paused": {
           if (
-            !validId(event.flowId) ||
+            typeof event.flowId !== "string" ||
             typeof event.flowName !== "string" ||
             !Number.isSafeInteger(event.index) ||
             event.index < 0 ||
@@ -127,11 +128,11 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
             return undefined;
           const name = sanitizeText(event.flowName, NAME_MAX) || "A flow";
           notice = {
-            id: `paused:${event.flowId}:${event.index}:${event.pausedAt}`,
+            id: `paused:${createHash("sha256").update(event.flowId).digest("hex").slice(0, 16)}:${event.index}:${event.pausedAt}`,
             kind: event.kind,
             title: "Trigger paused",
             body: `${name} was switched off after 3 blocked runs in a row.`,
-            target: { screen: "builder", flowId: event.flowId },
+            target: validId(event.flowId) ? { screen: "builder", flowId: event.flowId } : { screen: "inbox" },
           };
           break;
         }

@@ -23,6 +23,8 @@ async function fire(r: Rig, count = 1) {
   }
 }
 async function pause(r: Rig) {
+  r.svc.start();
+  await r.svc.settled();
   await fire(r, 3);
   r.svc.poke();
   await r.svc.settled();

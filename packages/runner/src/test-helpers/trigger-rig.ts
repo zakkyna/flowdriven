@@ -41,6 +41,7 @@ export async function triggerRig(
     afterList?: () => void;
     hold?: { wait: () => Promise<void> };
     noWatch?: boolean;
+    onWatch?: () => void;
     onPaused?: (event: PausedEvent) => void;
   } = {},
 ) {
@@ -111,6 +112,7 @@ export async function triggerRig(
       };
     },
     watch: (path, fn, onError) => {
+      options.onWatch?.();
       if (options.noWatch) return undefined;
       watchers.set(path, fn);
       watchErrors.set(path, onError);
