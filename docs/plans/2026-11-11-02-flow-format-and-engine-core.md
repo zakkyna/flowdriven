@@ -648,7 +648,7 @@ Interpreter rules (the tests below pin them; where a choice is open, this is it)
 4. **Leaf step.** (a) `when` false: row `skipped`, note `skipped: condition false`. (b) `builtin`: run the registered function, else the step fails `unknown builtin`. `do: flow`: the step fails with note `do: flow is not run by this engine yet` and the run is `blocked`. (c) `worker`, `agent`, `skill`: bind `instructions` with `interpolate`; an unresolved reference fails the step with that message, no retry, run `blocked`. (d) Attempts: at most `min(retry + 2, max_attempts ?? Infinity)` (Decision 15); attempt `retry + 2` is the re-plan attempt: first call `harness.replan` with the failures, and if it returns `undefined` stop. Each attempt records an `Attempt` with `worker` = `harness.name`, sets the step and run `running` (`retrying` between attempts), gives the harness an `AbortSignal` from an `AbortController` aborted by `setTimeout` at the time limit (not `AbortSignal.timeout`, which fake timers do not drive; the timer is cleared when the attempt ends), and the request fields of Task 6. `Attempt.exit` is `ok` only when the step passes with that attempt; a failed check, a missing output or a time-out records `failed`; a harness that rejects with `AbortError` after our abort counts as a time-out; any other rejection fails the attempt with the error's message as `lastFailure` and never escapes the engine. Exit `ok`: each declared output must be present in `outputs` (else the attempt failed with `missing output <id>`); only declared outputs are kept (Decision 22); then `runChecks`. Exit `failed` or a time-out: the attempt failed. Exit `quota` or `auth`: step `failed`, run `blocked` (`The harness has no quota left.` or `The harness needs you to sign in.`), stop. Exit `interrupted`: step and run `interrupted`, stop. A required check `failed`: the attempt failed and `lastFailure` is the evidence. A required check `pending` (a `user` check) and none failed: save the outputs on the row, set step and run `waiting_approval`, create a `result_sign_off` approval (payload the result text cut to 4,000 characters, summary `Approve the result of "<title or id>"`, `itemKey` of the row, expires 24 h), and stop. All required checks passed: step `passed`, outputs saved. (e) Attempts used up: step `failed`, run `blocked` with `Blocked at step "<title or id>": checks still failing after <n> attempts.`
 5. **Result sign-off.** `decide` refuses in the order of `answerAsk` (rule 10, Task 8): unknown id `not_found`; kind `ask` `invalid_input`; expired; already decided; run not `waiting_approval`. `approve`: approval `approved`, the step `passed` (its `user` check `passed`), then `walk`. `reject`: approval `rejected`, step and run `failed` with `endedAt`, other pending approvals of the run `expired`.
 6. **Expiry sweep** (sign-off part). Each pending `result_sign_off` with `expiresAt <= now`, oldest first: state `expired`, `resolvedAt = expiresAt`, step `failed` with note `The approval expired after 24 hours.` (as the sample client), run `failed` with `endedAt = expiresAt`.
-- [ ] **Step 1: Write the failing tests** (helpers in `test-helpers/engine.ts`: flows in these tests are `kind: "build"` (so no final user check is needed) with a requirement `host` (`mcp_server`, tools `["publish"]`); `setup(manifest, script, options?)` returns `{ engine, store, harness, clock }` with a fixed clock `2026-11-11T09:00:00.000Z` that tests move with `clock.advance(ms)`, ids `run-1`, `ap-1`, ..., and registers the flow with hash `sha256:` + 64 zeros; `stepRow(id, itemKey?)` reads a row)
+- [x] **Step 1: Write the failing tests** (helpers in `test-helpers/engine.ts`: flows in these tests are `kind: "build"` (so no final user check is needed) with a requirement `host` (`mcp_server`, tools `["publish"]`); `setup(manifest, script, options?)` returns `{ engine, store, harness, clock }` with a fixed clock `2026-11-11T09:00:00.000Z` that tests move with `clock.advance(ms)`, ids `run-1`, `ap-1`, ..., and registers the flow with hash `sha256:` + 64 zeros; `stepRow(id, itemKey?)` reads a row)
 ```ts
 // engine-steps.test.ts
 test("runs steps in order and binds inputs, params and earlier outputs", async () => { /* a: worker "Summarise ${inputs.file} in ${params.n} bullets" outputs draft; b: agent "Polish ${steps.a.outputs.draft}"; both files/contains checks pass */
@@ -681,19 +681,19 @@ test("max_runs_per_day counts only non-manual starts", async () => {
   /* flow with a schedule trigger and limits.max_runs_per_day 2 */ await engine.startRun("f", { project, trigger: { kind: "schedule" } }); await engine.startRun("f", { project, trigger: { kind: "schedule" } });
   await expect(engine.startRun("f", { project, trigger: { kind: "schedule" } })).rejects.toMatchObject({ code: "not_allowed" }); expect(store.listAudit().some((a) => a.kind === "run_dropped")).toBe(true); await engine.startRun("f", { project }); /* manual: fine */ });
 ```
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/engine-steps.test.ts`. Expected: FAIL with "Failed to resolve import"
-- [ ] **Step 3: Implement `createEngine`** and the modules above by the rules. Keep `engine.ts` to the facade, `walk`, the sweep and the day and cap helpers; `leaf.ts` exports one function taking a small context object `{ deps, run, manifest, scope, itemKey }`. A step outcome is one of `passed`, `skipped`, `failed` (attempts used up), `halt` (blocked, interrupted or waiting for a decision).
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 3: Implement `createEngine`** and the modules above by the rules. Keep `engine.ts` to the facade, `walk`, the sweep and the day and cap helpers; `leaf.ts` exports one function taking a small context object `{ deps, run, manifest, scope, itemKey }`. A step outcome is one of `passed`, `skipped`, `failed` (attempts used up), `halt` (blocked, interrupted or waiting for a decision).
+- [x] **Step 4: Run the tests to verify they pass**
   Run: `pnpm vitest run packages/runner/src/engine-steps.test.ts`. Expected: PASS
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add the engine with leaf steps, retries and sign-off" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

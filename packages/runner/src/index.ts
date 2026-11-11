@@ -1,6 +1,7 @@
 export * from "./checks/command.ts";
 export * from "./checks/json-schema.ts";
 export * from "./checks/run-checks.ts";
+export * from "./engine.ts";
 export * from "./entry.ts";
 export * from "./errors.ts";
 export * from "./harness.ts";
