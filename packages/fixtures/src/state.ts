@@ -14,12 +14,13 @@ import { approvals } from "./story/approvals";
 import { flows } from "./story/flows";
 import { harnesses } from "./story/harnesses";
 import { addLong } from "./story/long";
+import { addLooped } from "./story/looped";
 import { readiness } from "./story/readiness";
 import { runs } from "./story/runs";
 import { emptySettings, settings } from "./story/settings";
 
 export const FIXTURE_NOW = "2026-11-10T09:30:00.000Z";
-export type Scenario = "story" | "empty" | "long";
+export type Scenario = "story" | "empty" | "long" | "looped";
 export interface FlowRecord {
   manifest: FlowManifest;
   hash: ContentHash;
@@ -68,5 +69,11 @@ export function buildEmpty(): FixtureState {
 export function buildLong(): FixtureState {
   const state = buildStory();
   addLong(state);
+  return state;
+}
+
+export function buildLooped(): FixtureState {
+  const state = buildStory();
+  addLooped(state);
   return state;
 }

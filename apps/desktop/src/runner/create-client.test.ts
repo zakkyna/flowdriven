@@ -4,6 +4,8 @@ import { createRunnerClient, scenarioFromSearch } from "./create-client";
 test("the scenario query picks the sample data", async () => {
   expect(scenarioFromSearch("?scenario=empty")).toBe("empty");
   expect(scenarioFromSearch("?theme=dark&scenario=long")).toBe("long");
+  expect(scenarioFromSearch("?scenario=looped")).toBe("looped");
+  expect(await createRunnerClient("?scenario=looped").call("flows.list", {})).toHaveLength(6);
   expect(scenarioFromSearch("?scenario=nope")).toBe("story");
   expect(await createRunnerClient("?scenario=empty").call("flows.list", {})).toEqual([]);
   expect(await createRunnerClient("").call("flows.list", {})).toHaveLength(5);

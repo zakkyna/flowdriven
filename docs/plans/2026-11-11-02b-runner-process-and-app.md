@@ -366,21 +366,23 @@ Covers decision 4 ("the fixtures client implements every new operation, and its 
   2. Run `run-0008` of that flow, state `waiting_approval`, started `2026-11-10T09:10:00.000Z`, project `~/Projects/jobs`, `approvalIds: ["ap-0017"]`. Steps: `alerts` passed; `review` passed with `items`: `j1` "Job one" passed (rough, page, full all passed), `j2` "Job two" passed (rough passed, page and full skipped with note `skipped: condition false`), `j3` "Job three" failed (rough failed, note "The score was missing."), `j4` "Job four" skipped with `skip: "seen"` and note `skipped: seen in an earlier run`, `j5` "Job five" skipped with `skip: "capped"` and note `skipped: over the item cap`; `pick` `waiting_approval`; `build` pending. Attempts and checks follow the shape of the story's other runs (worker `{ harnessId: "claude-code", name: "Claude Code" }` for steps that ran).
   3. Approval `ap-0017`: `kind: "ask"`, flow and run as above, `stepId: "pick"`, `stepTitle: "Pick jobs"`, summary "Which jobs get a prototype?", payload `{ kind: "choice", question: "Which jobs get a prototype?", options: [{ key: "j1", label: "Job one" }, { key: "j2", label: "Job two" }], maxPick: 2 }`, `editable: false`, `createdAt: "2026-11-10T09:28:00.000Z"`, `expiresAt: approvalExpiresAt(createdAt)`, `state: "pending"`. It is the newest waiting decision of this scenario.
 
-- [ ] **Step 1: Write the failing tests** (6 named: 5 new, 1 changed)
+- [x] **Step 1: Write the failing tests** (6 named: 5 new, 1 changed)
   `looped.test.ts`: (1) `the looped scenario adds one flow, one waiting run and one pending choice and leaves the story alone`: `buildLooped()` has six flows and eight runs and six pending approvals; `buildStory()` still has five flows. (2) `its flow validates and shows a loop, a condition and an ask`: `FlowManifest.parse`; step `do` list `["worker","loop","ask","loop"]`; the `page` step has a `when`. (3) `its run shows items in several states and the choice waiting`: `RunDetail.parse`; item states `["passed","passed","failed","skipped","skipped"]`, skip reasons `["seen","capped"]` on the last two. (4) `its choice validates and is the newest waiting decision`. (5) `runs.export of the looped run lists its items`: contains `  - j3: failed`.
   `create-client.test.ts` (1 changed): the test "the scenario query picks the sample data" gains `expect(scenarioFromSearch("?scenario=looped")).toBe("looped")` and `expect(await createRunnerClient("?scenario=looped").call("flows.list", {})).toHaveLength(6)`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/fixtures/src/looped.test.ts apps/desktop/src/runner/create-client.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** as above.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** as above.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/fixtures apps/desktop/src/runner`. Expected: PASS (the story tests are unchanged and pass).
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/fixtures apps/desktop/src/runner
 git commit -m "Add a looped scenario to the sample data" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

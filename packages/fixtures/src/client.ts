@@ -23,6 +23,7 @@ import {
 import {
   buildEmpty,
   buildLong,
+  buildLooped,
   buildStory,
   FIXTURE_NOW,
   type FixtureState,
@@ -42,7 +43,13 @@ export function createFixtureRunnerClient(
   options: { scenario?: Scenario; now?: () => Date } = {},
 ): FixtureRunnerClient {
   const state = structuredClone(
-    options.scenario === "empty" ? buildEmpty() : options.scenario === "long" ? buildLong() : buildStory(),
+    options.scenario === "empty"
+      ? buildEmpty()
+      : options.scenario === "long"
+        ? buildLong()
+        : options.scenario === "looped"
+          ? buildLooped()
+          : buildStory(),
   );
   const now = () => (options.now?.() ?? new Date(FIXTURE_NOW)).toISOString();
   const listeners = new Set<(event: RunnerEvent) => void>();
