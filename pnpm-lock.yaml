@@ -73,6 +73,22 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/runner:
+    dependencies:
+      '@flowdriven/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+    devDependencies:
+      '@flowdriven/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
+  packages/sdk:
+    dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+
 packages:
 
   '@babel/code-frame@7.29.7':

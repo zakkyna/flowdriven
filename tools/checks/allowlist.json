@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "6c16518e0cad5373e94eb3fd9282d175d2aec37d7fe46bab61158c99d9de30a7",
+  "lockfileSha256": "fe3f514af5a2d2d4cdde8596555f0d69214783e8160f993e5d15f5b2803f29b8",
   "registry": "https://registry.npmjs.org/",
   "packageManager": "pnpm@10.9.0",
   "engines": {
@@ -12,6 +12,8 @@
     "flowdriven-workspace": ".",
     "@flowdriven/contracts": "packages/contracts",
     "@flowdriven/fixtures": "packages/fixtures",
+    "@flowdriven/sdk": "packages/sdk",
+    "@flowdriven/runner": "packages/runner",
     "@flowdriven/desktop": "apps/desktop"
   },
   "rootScripts": {
@@ -21,7 +23,7 @@
     "check:deps": "node tools/checks/dependency-gate.mjs",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "typecheck": "tsc -p packages/contracts && tsc -p packages/fixtures && tsc -p apps/desktop && tsc -p apps/desktop/tsconfig.electron.json --noEmit",
+    "typecheck": "tsc -p packages/contracts && tsc -p packages/fixtures && tsc -p packages/sdk && tsc -p packages/runner && tsc -p apps/desktop && tsc -p apps/desktop/tsconfig.electron.json --noEmit",
     "test": "TZ=UTC vitest run && pnpm test:tools",
     "build:web": "vite build --config apps/desktop/vite.config.mts",
     "dev:web": "vite --config apps/desktop/vite.config.mts",
@@ -60,7 +62,7 @@
     {
       "name": "zod",
       "range": "^4.6.7",
-      "packages": ["@flowdriven/contracts"],
+      "packages": ["@flowdriven/contracts", "@flowdriven/sdk"],
       "why": "Runtime-validated schemas with inferred types for the contract."
     },
     {

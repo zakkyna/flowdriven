@@ -132,7 +132,7 @@ Asked first: the owner said yes on 2026-11-11 to the change in item 1 of "Needs 
 - Produces (sdk `vocab.ts`, `as const` arrays with their types): `FORMAT_ID = "flowdriven-flow/1.1"`; `RISKY_ACTIONS` / `RiskyAction`; `CHECK_TYPES` / `CheckType` (`command`, `files`, `schema`, `contains`, `not_contains`, `judge`, `user`, `probe`); `BASE_REQUIREMENT_TYPES` (the nine of 9.4 in the contract's order) and `REQUIREMENT_TYPES` / `RequirementType` (those plus `web`, `desktop`, `trigger`). Runner `states.ts`: `RUN_STATES`, `STEP_STATES`, `APPROVAL_STATES`, `EXIT_CLASSES`, `CHECK_VERDICTS` and the types `RunState`, `StepState`, `ApprovalState`, `ExitClass`, `CheckVerdict`; it re-exports `RISKY_ACTIONS` and `RiskyAction` from `@flowdriven/sdk`. `node.ts` is `export {};` until Task 3.
 
 Manifests: `packages/sdk/package.json` = name `@flowdriven/sdk`, version `0.0.0`, `private: true`, `type: "module"`, `license: "MIT"`, `exports: { ".": "./src/index.ts", "./node": "./src/node.ts" }`, dependencies `{ "zod": "4.6.7" }`. `packages/runner/package.json` = name `@flowdriven/runner`, same shape with `exports: { ".": "./src/index.ts" }`, `license: "AGPL-3.0-only"`, dependencies `{ "@flowdriven/sdk": "workspace:*" }`, devDependencies `{ "@flowdriven/contracts": "workspace:*" }`. Both `tsconfig.json`: extends `../../tsconfig.base.json`, `include: ["src"]`; SDK `compilerOptions: { "types": ["node"], "allowImportingTsExtensions": true, "erasableSyntaxOnly": true }`; runner `compilerOptions: { "types": ["node"], "allowImportingTsExtensions": true }` (see "Plain-Node rule").
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 ```ts
 // packages/sdk/src/vocab.test.ts
 test("the format string is 1.1", () => expect(FORMAT_ID).toBe("flowdriven-flow/1.1"));
@@ -156,19 +156,19 @@ test("no eval and no Function constructor in the SDK and runner sources", () => 
 test("runner sources never import the contracts", () => { for (const f of sources("runner")) expect(readFileSync(f, "utf8")).not.toContain("@flowdriven/contracts"); });
 test("the SDK main entry stays free of node: modules", () => { for (const f of sources("sdk").filter((p) => !/[\\/](hash|load)[\\/]|[\\/]node\.ts$/.test(p))) expect(readFileSync(f, "utf8")).not.toMatch(/from "node:/); });
 ```
-- [ ] **Step 2: Run the SDK test to verify it fails**
+- [x] **Step 2: Run the SDK test to verify it fails**
   Run: `pnpm vitest run packages/sdk/src/vocab.test.ts`. Expected: FAIL with "Failed to resolve import "./vocab.ts"". (The runner tests cannot resolve `@flowdriven/contracts` or `@flowdriven/sdk` until the chair's install; they are checked in Step 5.)
-- [ ] **Step 3: Create the files above.** `vocab.ts` and `states.ts` copy the vocabularies from `packages/contracts/src/common.ts`, `flow.ts`, `run.ts` and `approval.ts` in the same order. Both `index.ts` re-export their modules. Set the root `typecheck` script and the allowlist (`rootScripts.typecheck` equal to it; leave `lockfileSha256` for Step 4). The executor stops here and reports.
-- [ ] **Step 4: Chair step (network): install and hash**
+- [x] **Step 3: Create the files above.** `vocab.ts` and `states.ts` copy the vocabularies from `packages/contracts/src/common.ts`, `flow.ts`, `run.ts` and `approval.ts` in the same order. Both `index.ts` re-export their modules. Set the root `typecheck` script and the allowlist (`rootScripts.typecheck` equal to it; leave `lockfileSha256` for Step 4). The executor stops here and reports.
+- [x] **Step 4: Chair step (network): install and hash**
   Run (with `CI` unset): `pnpm install --prefer-offline --no-frozen-lockfile`, then `shasum -a 256 pnpm-lock.yaml`; put the hash in `lockfileSha256`. Expected: the lockfile gains exactly the importers `packages/sdk` (`zod 4.6.7`) and `packages/runner` (two `link:` entries); no package is downloaded. (`--offline` fails here: there is no pnpm metadata cache, `ERR_PNPM_NO_OFFLINE_META`.)
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm vitest run packages/sdk packages/runner`, then `pnpm format && pnpm check`. Expected: PASS; the last line starts with `dependency-gate: OK`; `pnpm typecheck` ran `tsc -p packages/sdk` and `tsc -p packages/runner`.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add package.json pnpm-lock.yaml tools/checks/allowlist.json packages/sdk packages/runner
 git commit -m "Add the SDK and runner packages" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra (Steps 1 to 3) and the chair (Steps 4 to 6), 2026-11-11. Evidence: pnpm format && pnpm check (45 test files, 325 tests; dependency-gate: OK, 21 direct dependencies in 6 manifests).
 
 ---
 
