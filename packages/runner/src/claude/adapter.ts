@@ -11,7 +11,7 @@ import {
   readOutputs,
   readVerdict,
 } from "./prompt.ts";
-import { type RunInput, runClaude } from "./run.ts";
+import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
   claudePath: () => string | undefined;
@@ -25,8 +25,11 @@ export type ClaudeAdapterOptions = {
   graceMs?: number;
   exitWaitMs?: number;
   maxLineBytes?: number;
+  maxDeniedEntries?: number;
 };
 export function createClaudeAdapter(options: ClaudeAdapterOptions): HarnessAdapter {
+  const active = new Set<() => void>();
+  let stopped = false;
   const run = (input: RunInput, claudePath: string) =>
     runClaude(input, {
       claudePath,
@@ -40,11 +43,21 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): HarnessAdapt
       graceMs: options.graceMs ?? 2000,
       exitWaitMs: options.exitWaitMs ?? 10000,
       maxLineBytes: options.maxLineBytes ?? MAX_LINE_BYTES,
+      maxDeniedEntries: options.maxDeniedEntries ?? MAX_DENIED_ENTRIES,
+      register: (stop) => {
+        active.add(stop);
+        return () => active.delete(stop);
+      },
     });
   return {
     id: "claude-code",
     name: "Claude Code",
+    stop() {
+      stopped = true;
+      for (const stop of active) stop();
+    },
     async runStep(req) {
+      if (stopped) return { exit: "interrupted", text: "", outputs: {} };
       if (req.kind === "skill")
         return { exit: "failed", text: "", outputs: {}, block: "Skill steps are not run yet." };
       const path = options.claudePath();

@@ -799,7 +799,7 @@ Covers decisions 4, 5, 7 (stopping) and 11 (spec 20.7 R12). Every test here trie
 - **After the result.** Once a result event has arrived the child gets `deps.exitWaitMs` to exit; then the group is killed and the outcome is `{ kind: "failed", text: "Claude Code did not exit after its result." }`.
 - **Stop.** The adapter keeps the attempts that are running (each with its child, its channel and its control folder). `stop()` marks each as interrupted, sends SIGKILL to each group at once (`child.kill()`), stops each channel, removes each control folder synchronously, and the attempts resolve `{ kind: "interrupted" }` (so `runStep` returns `{ exit: "interrupted", text: "", outputs: {} }`). A `runStep` that starts after `stop()` returns `interrupted` without starting a child.
 
-- [ ] **Step 1: Write the failing tests** (12; the same set-up as Task 11 with `rounds: 20` (a test that needs real allows must not lose one to a slow machine; only tests 3 and 4 use 3); `exitWaitMs`, `graceMs`, `maxLineBytes`, `pollMs`, `maxDeniedEntries` set per test; every pause before a write is at least 1,500 ms; the pid of a fake is `readFakeCalls(home)` call line `pid`; "gone" means `process.kill(pid, 0)` throws within 2 s)
+- [x] **Step 1: Write the failing tests** (12; the same set-up as Task 11 with `rounds: 20` (a test that needs real allows must not lose one to a slow machine; only tests 3 and 4 use 3); `exitWaitMs`, `graceMs`, `maxLineBytes`, `pollMs`, `maxDeniedEntries` set per test; every pause before a write is at least 1,500 ms; the pid of a fake is `readFakeCalls(home)` call line `pid`; "gone" means `process.kill(pid, 0)` throws within 2 s)
   1. `a denied call is audited with its tool, reason and target and never with its content`: read-only folder, play `tool Write` of `<notes>/x.txt` with `input.content: "SECRET-TEXT"` and a `write` effect: the file does not exist, the model-side result is an error, the answer is `exit: "ok"`; the audit calls are exactly `tool_denied` with `{ stepId: "s", itemKey: "", attempt: 1, tool: "Write", reason: "This step may only read this folder.", target: "<real notes>/x.txt" }` and `tool_calls` with `allowed: 0, denied: 1`, both for run `r1`; `JSON.stringify` of all audit calls has no `SECRET-TEXT`.
   2. `a read outside the folders is blocked, the counts add up, and the audit keeps at most maxDeniedEntries denials`: one allowed `Read` of the note and three `Read` calls of `/etc/hosts` with different ids, `maxDeniedEntries: 2`: the audit has exactly two `tool_denied` entries (the first two), the first with `reason: "This path is outside the folders this step declares."`, and `tool_calls` has `allowed: 1, denied: 3` (a default run has the limit 50: the constant is exported and equals 50).
   3. `the channel stops answering in the middle of a step: the next call is blocked and nothing is written (R12, channel)`: `pollMs: 3_600_000` and `rounds: 3`, play `tool Write` of `<notes>/out.txt` with a `write` effect: the tool line is `{ hookExit: 2, ran: false }`, the file does not exist, and the audit has no `tool_denied` (the runner never saw the call).
@@ -812,18 +812,21 @@ Covers decisions 4, 5, 7 (stopping) and 11 (spec 20.7 R12). Every test here trie
   10. `an over-long line kills the child, and a child that does not exit after its result is killed`: `maxLineBytes: 1000` and a `raw` line of 5,000 characters gives `text: "Claude Code sent a line that was too long."`; `exitWaitMs: 300` with `[result, pause 30000]` gives `text: "Claude Code did not exit after its result."`; the fake is gone both times.
   11. `a child that ignores SIGTERM is killed after the grace when the step is aborted, and stop() ends every running step`: play `[ignore_sigterm, pause 30000]`, `graceMs: 200`: abort the signal after 300 ms and `runStep` settles within 3 s with `text: "The step was aborted."`, the fake gone, the control root empty; then two steps running at once (different runs) are ended by `stop()`: both answers have `exit: "interrupted"`, both fakes are gone (SIGKILL at once), the control root is empty, and a `runStep` after `stop()` is `interrupted` with no new call line.
   12. `two steps at the same time use their own folders, sessions and decisions`: two `runStep` calls with different projects and ids `cc-1`, `cc-2`: the call lines hold two different `--settings` paths and `--session-id` values; the second step's `Read` of a file in the first step's folder is denied with `outside`; each step's own read is allowed.
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/runner/src/claude/adapter-limits.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the rules in `run.ts` and `adapter.ts`.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** the rules in `run.ts` and `adapter.ts`.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner/src/claude
 git commit -m "Hold the adapter to its limits: start proof, tripwire, audit, abort and stop" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
