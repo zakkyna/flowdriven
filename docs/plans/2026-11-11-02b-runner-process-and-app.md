@@ -401,20 +401,22 @@ Covers decision 9 (the Builder's flow pane). Read-only for the new kinds; the pr
 - `Builder.module.css`: `.when { color: var(--text-muted); font-size: 12.5px; overflow-wrap: anywhere; min-width: 0; }`, `.nested { list-style: none; margin: 8px 0 0; padding: 0 0 0 20px; border-left: 1px solid var(--border); }`, `.nestedStep { padding: 8px 0; border-top: 1px solid var(--border); }` (the first nested row has no top border). Tokens only.
 - The tests use `renderApp("#/builder/dev.example.job-review", { scenario: "looped" })`. The present `rows()` helper of `Builder.test.tsx` returns nested `li` too (9 for this flow), so the new tests use a local `topRows()` that keeps only the `li` whose `parentElement` is the list named "Steps"; the present helpers and tests stay unchanged.
 
-- [ ] **Step 1: Write the failing tests** (6 new)
+- [x] **Step 1: Write the failing tests** (6 new)
   (1) `a loop step shows what it repeats over, its key and its nested steps one level down`: the step list has four top-level rows (`topRows()`), the second of them contains `For each item of` and the code text `${steps.alerts.outputs.jobs}`, and a list named "Steps in Review every alert" with three items. (2) `a nested step shows its worker line, its uses and its checks and has no edit buttons`: inside that list the first item has "Done by the brain, no tools." and a check row; `within(item).queryByRole("button", {name: "Delete"})` is null. (3) `a when line says when a step runs`: the nested `page` item contains `Runs only when` and `rough.score.value >= params.min_score`. (4) `an ask step shows its question, its source and the number of picks and has no check rows`. (5) `skill and flow steps say what they run`: a step edited into the looped client state with `do: "skill", skill: "prototype"` shows "Uses the prototype skill." and badge "Skill"; with `do: "flow", flow: "dev.example.other@1.0.0"` shows "Runs dev.example.other@1.0.0." (use `client.state.flows`; `renderApp` returns the client). (6) `a loop step still moves through flows.update`: clicking "Move down" in the second of `topRows()` calls `flows.update` with `{ flowId: "dev.example.job-review", edit: { kind: "move", stepId: "review", direction: "down" } }`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run apps/desktop/src/screens/builder`. Expected: FAIL.
-- [ ] **Step 3: Implement** the rows and the CSS.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** the rows and the CSS.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run apps/desktop/src/screens/builder apps/desktop/src/layout-guards.test.ts`. Expected: PASS (all present Builder tests unchanged).
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check && pnpm build:web`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add apps/desktop/src/screens/builder
 git commit -m "Show loops, asks and when lines in the flow pane" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

@@ -492,3 +492,95 @@ test("the running step is tinted, and check words stay in their own column", asy
   expect(css).toMatch(/\.pane\s*\{[^}]*border-left:\s*1px solid var\(--border\)/s);
   expect(css).toMatch(/\.paneBody\s*\{[^}]*overflow-y:\s*auto/s);
 });
+
+const LOOPED = "#/builder/dev.example.job-review";
+const topRows = () => {
+  const list = screen.getByRole("list", { name: "Steps" });
+  return within(list)
+    .getAllByRole("listitem")
+    .filter((item) => item.parentElement === list);
+};
+const topRow = (index: number) => {
+  const item = topRows().at(index);
+  if (!item) throw new Error("Top-level step missing");
+  return item;
+};
+
+test("a loop step shows what it repeats over, its key and its nested steps one level down", async () => {
+  renderApp(LOOPED, { scenario: "looped" });
+  await screen.findByRole("heading", { name: "Job alert review" });
+  expect(topRows()).toHaveLength(4);
+  const loop = topRow(1);
+  expect(loop.textContent).toContain("For each item of");
+  expect(within(loop).getByText("${steps.alerts.outputs.jobs}").tagName).toBe("CODE");
+  expect(within(loop).getByText("${job.id}").tagName).toBe("CODE");
+  expect(within(loop).getByText(/at most 20/)).toBeTruthy();
+  expect(
+    within(within(loop).getByRole("list", { name: "Steps in Review every alert" })).getAllByRole("listitem"),
+  ).toHaveLength(3);
+});
+
+test("a nested step shows its worker line, its uses and its checks and has no edit buttons", async () => {
+  renderApp(LOOPED, { scenario: "looped" });
+  const list = await screen.findByRole("list", { name: "Steps in Review every alert" });
+  const item = within(list).getAllByRole("listitem").at(0);
+  if (!item) throw new Error("Nested step missing");
+  expect(within(item).getByText("Done by the brain, no tools.")).toBeTruthy();
+  expect(within(item).getByText("worker")).toBeTruthy();
+  expect(within(item).getByRole("group", { name: "Checks" }).textContent).toContain("The score is valid");
+  expect(within(item).queryByRole("button", { name: "Delete" })).toBeNull();
+});
+
+test("a when line says when a step runs", async () => {
+  renderApp(LOOPED, { scenario: "looped" });
+  const list = await screen.findByRole("list", { name: "Steps in Review every alert" });
+  const item = within(list).getAllByRole("listitem").at(1);
+  if (!item) throw new Error("Nested step missing");
+  expect(item.textContent).toContain("Runs only when");
+  expect(within(item).getByText("rough.score.value >= params.min_score").tagName).toBe("CODE");
+});
+
+test("an ask step shows its question, its source and the number of picks and has no check rows", async () => {
+  renderApp(LOOPED, { scenario: "looped" });
+  await screen.findByRole("heading", { name: "Job alert review" });
+  const ask = topRow(2);
+  expect(within(ask).getByText("Which jobs get a prototype?").tagName).toBe("P");
+  expect(ask.textContent).toContain("Choose from");
+  expect(within(ask).getByText("${steps.review.items where steps.full.outputs.verdict.fit}").tagName).toBe(
+    "CODE",
+  );
+  expect(ask.textContent).toContain("up to 2.");
+  expect(within(ask).queryByRole("group", { name: "Checks" })).toBeNull();
+});
+
+test("skill and flow steps say what they run", async () => {
+  const { client } = renderApp(LOOPED, { scenario: "looped" });
+  const flow = client.state.flows.find((item) => item.manifest.id === "dev.example.job-review");
+  const skill = flow?.manifest.steps.at(0);
+  const subflow = flow?.manifest.steps.at(2);
+  if (!skill || !subflow) throw new Error("Fixture steps missing");
+  skill.do = "skill";
+  skill.skill = "prototype";
+  subflow.do = "flow";
+  subflow.flow = "dev.example.other@1.0.0";
+  delete subflow.ask;
+  subflow.checks = skill.checks;
+  await screen.findByRole("heading", { name: "Job alert review" });
+  expect(within(topRow(0)).getByText("Uses the prototype skill.")).toBeTruthy();
+  expect(within(topRow(0)).getByText("Skill")).toBeTruthy();
+  expect(within(topRow(2)).getByText("Runs dev.example.other@1.0.0.")).toBeTruthy();
+  expect(within(topRow(2)).getByText("Flow")).toBeTruthy();
+});
+
+test("a loop step still moves through flows.update", async () => {
+  const { client } = renderApp(LOOPED, { scenario: "looped" });
+  const spy = vi.spyOn(client, "call");
+  await screen.findByRole("heading", { name: "Job alert review" });
+  fireEvent.click(within(topRow(1)).getByRole("button", { name: "Move down" }));
+  await waitFor(() =>
+    expect(spy).toHaveBeenCalledWith("flows.update", {
+      flowId: "dev.example.job-review",
+      edit: { kind: "move", stepId: "review", direction: "down" },
+    }),
+  );
+});
