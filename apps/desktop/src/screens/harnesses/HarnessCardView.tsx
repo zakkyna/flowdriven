@@ -39,8 +39,9 @@ function Inventory({
         {title} ({items.length})
       </summary>
       <ul>
-        {items.map((item) => (
-          <li key={`${item.name}-${item.scope}-${item.source ?? ""}`}>
+        {items.map((item, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Inventory can contain identical rows.
+          <li key={`${item.name}-${item.scope}-${item.source ?? ""}-${index}`}>
             <span className={styles.mono}>
               <Revealed text={item.name} singleLine />
             </span>{" "}

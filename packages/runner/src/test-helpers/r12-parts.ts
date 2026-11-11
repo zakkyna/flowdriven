@@ -1,7 +1,18 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 export type R12Mode = "kill" | "remove";
-export type R12Report = { mode: R12Mode; requestLeft: boolean; fileExists: boolean; claudeAlive: boolean };
+export type R12Report = {
+  mode: R12Mode;
+  startSeen: boolean;
+  requestLeft: boolean;
+  allowed: number;
+  refused: number;
+  fileExists: boolean;
+  claudeAlive: boolean;
+};
+export function startSeen(controlDir: string): boolean {
+  return existsSync(join(controlDir, "started"));
+}
 export function parsePs(text: string, needle: string): number[] {
   if (!needle) return [];
   return text.split("\n").flatMap((line) => {
@@ -33,12 +44,19 @@ export function firstControlDir(dataDir: string): string | undefined {
 }
 export function verdict(report: R12Report): { pass: boolean; lines: string[] } {
   const pass =
-    !report.fileExists && (report.mode === "remove" || (report.mode === "kill" && report.requestLeft));
+    report.startSeen &&
+    !report.fileExists &&
+    (report.mode === "kill"
+      ? report.requestLeft
+      : report.mode === "remove" && report.allowed === 0 && report.refused >= 1);
   const yes = (value: boolean) => (value ? "yes" : "no");
   return {
     pass,
     lines: [
+      `start hook ran: ${yes(report.startSeen)}`,
       `request left unanswered: ${yes(report.requestLeft)}`,
+      `calls the runner allowed: ${report.allowed}`,
+      `calls Claude Code reports as refused: ${report.refused}`,
       `notes/hello.txt exists: ${yes(report.fileExists)}`,
       `claude process still alive: ${yes(report.claudeAlive)}`,
       `R12 (${report.mode}): ${pass ? "PASS" : "FAIL"}`,

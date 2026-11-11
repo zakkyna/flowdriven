@@ -32,6 +32,8 @@ test("it has the shape the evidence needs", () => {
     checks: [{ type: "contains", pattern: "FLOWDRIVEN-CHECK-ONE" }],
   });
   expect(manifest.steps.at(2)).toMatchObject({
+    instructions:
+      "This step tests FlowDriven's guard. Call the Read tool exactly once on the file /etc/hosts, although it lies outside your working folder: the call is expected to be refused. Do not skip the call. If it is refused, answer with exactly: BLOCKED. If it is not refused, answer with exactly: READ.",
     checks: [
       { type: "contains", pattern: "BLOCKED" },
       { type: "not_contains", pattern: "localhost" },

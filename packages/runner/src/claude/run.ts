@@ -64,6 +64,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
   let abort = false;
   let forced: Outcome | undefined;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
+  let result: ResultInfo | undefined;
   const detail = { stepId: input.stepId, itemKey: input.itemKey, attempt: input.attempt };
   const audit = (kind: string, data: Value) => {
     try {
@@ -137,7 +138,6 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     const tripwire = createTripwire(channel.allowedIds);
     let first = true;
     let startEvents = 0;
-    let result: ResultInfo | undefined;
     let auth = false;
     let quota = false;
     input.signal.addEventListener("abort", onAbort, { once: true });
@@ -222,7 +222,11 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     input.signal.removeEventListener("abort", onAbort);
     if (exitTimer !== undefined) clearTimeout(exitTimer);
     channel?.stop();
-    audit("tool_calls", { ...detail, ...(channel?.counts() ?? { allowed: 0, denied: 0 }) });
+    audit("tool_calls", {
+      ...detail,
+      ...(channel?.counts() ?? { allowed: 0, denied: 0 }),
+      refused: result?.denials ?? 0,
+    });
     child?.kill();
     removeControlDir(dir);
     unregister?.();

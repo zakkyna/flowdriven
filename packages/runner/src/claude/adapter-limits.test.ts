@@ -176,7 +176,7 @@ test("a denied call is audited with its tool, reason and target and never with i
     {
       kind: "tool_calls",
       runId: "r1",
-      detail: { stepId: "s", itemKey: "", attempt: 1, allowed: 0, denied: 1 },
+      detail: { stepId: "s", itemKey: "", attempt: 1, allowed: 0, denied: 1, refused: 1 },
     },
   ]);
   expect(JSON.stringify(t.audits)).not.toContain("SECRET-TEXT");
@@ -339,6 +339,7 @@ test("a stream that ends in a cut line has no result", { timeout: 20_000 }, asyn
     exit: "failed",
     text: "Claude Code ended without a result.",
   });
+  expect(t.audits.find((audit) => audit.kind === "tool_calls")?.detail).toMatchObject({ refused: 0 });
 });
 test("an over-long line kills the child, and a child that does not exit after its result is killed", {
   timeout: 20_000,

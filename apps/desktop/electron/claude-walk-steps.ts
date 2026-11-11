@@ -36,21 +36,19 @@ export const CLAUDE_WALK_STEPS: ClaudeWalkStep[] = [
   {
     name: "run-now",
     action: { kind: "click", role: "button", name: "Run now" },
-    waitFor: ["Claude Code check"],
-    shot: false,
-  },
-  { name: "runs", action: { kind: "go", hash: "#/runs" }, waitFor: ["Claude Code check"], shot: false },
-  {
-    name: "run-detail",
-    action: { kind: "firstRun" },
-    waitFor: ["Write the note", "Read the note", "Try a forbidden read"],
+    waitFor: ["All runs", "Write the note", "Read the note", "Try a forbidden read"],
     shot: false,
     timeoutMs: 120000,
   },
   {
     name: "run-done",
     action: { kind: "wait" },
-    waitFor: ["Passed", "Done", "Blocked calls", "This path is outside the folders this step declares."],
+    waitFor: [
+      "Done",
+      "3 of 3 steps passed",
+      "Blocked calls",
+      "This path is outside the folders this step declares.",
+    ],
     shot: true,
     timeoutMs: 240000,
   },

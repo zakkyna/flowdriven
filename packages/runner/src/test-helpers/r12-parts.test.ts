@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
-import { firstControlDir, listRequests, parsePs, verdict } from "./r12-parts.ts";
+import { firstControlDir, listRequests, parsePs, startSeen, verdict } from "./r12-parts.ts";
 
 const roots: string[] = [];
 function temp() {
@@ -37,28 +37,51 @@ test("firstControlDir finds the first folder and is undefined with none", () => 
   writeFileSync(join(root, "control", "0"), "");
   expect(firstControlDir(root)).toBe(join(root, "control", "a"));
 });
+test("startSeen detects the start hook marker", () => {
+  const root = temp();
+  expect(startSeen(root)).toBe(false);
+  writeFileSync(join(root, "started"), "");
+  expect(startSeen(root)).toBe(true);
+});
 test("verdict", () => {
-  const base = { mode: "kill" as const, requestLeft: true, fileExists: false, claudeAlive: true };
-  expect(verdict(base)).toEqual({
-    pass: true,
-    lines: [
-      "request left unanswered: yes",
-      "notes/hello.txt exists: no",
-      "claude process still alive: yes",
-      "R12 (kill): PASS",
-    ],
-  });
-  expect(verdict({ ...base, requestLeft: false }).pass).toBe(false);
-  expect(verdict({ ...base, fileExists: true }).pass).toBe(false);
-  expect(verdict({ ...base, mode: "remove", requestLeft: false, claudeAlive: false })).toEqual({
-    pass: true,
-    lines: [
-      "request left unanswered: no",
-      "notes/hello.txt exists: no",
-      "claude process still alive: no",
-      "R12 (remove): PASS",
-    ],
-  });
-  expect(verdict({ ...base, mode: "remove", requestLeft: true }).pass).toBe(true);
-  expect(verdict({ ...base, mode: "remove", fileExists: true }).pass).toBe(false);
+  const kill = {
+    mode: "kill" as const,
+    startSeen: true,
+    requestLeft: true,
+    allowed: 0,
+    refused: 0,
+    fileExists: false,
+    claudeAlive: true,
+  };
+  const remove = { ...kill, mode: "remove" as const, requestLeft: false, refused: 1, claudeAlive: false };
+  for (const [report, pass] of [
+    [kill, true],
+    [{ ...kill, startSeen: false }, false],
+    [{ ...kill, requestLeft: false }, false],
+    [{ ...kill, fileExists: true }, false],
+    [remove, true],
+    [{ ...remove, refused: 0 }, false],
+    [{ ...remove, allowed: 1 }, false],
+    [{ ...remove, fileExists: true }, false],
+    [{ ...remove, startSeen: false }, false],
+  ] as const)
+    expect(verdict(report).pass).toBe(pass);
+  expect(verdict(kill).lines).toEqual([
+    "start hook ran: yes",
+    "request left unanswered: yes",
+    "calls the runner allowed: 0",
+    "calls Claude Code reports as refused: 0",
+    "notes/hello.txt exists: no",
+    "claude process still alive: yes",
+    "R12 (kill): PASS",
+  ]);
+  expect(verdict(remove).lines).toEqual([
+    "start hook ran: yes",
+    "request left unanswered: no",
+    "calls the runner allowed: 0",
+    "calls Claude Code reports as refused: 1",
+    "notes/hello.txt exists: no",
+    "claude process still alive: no",
+    "R12 (remove): PASS",
+  ]);
 });

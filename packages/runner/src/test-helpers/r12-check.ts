@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { firstControlDir, listRequests, parsePs, type R12Mode, verdict } from "./r12-parts.ts";
+import { firstControlDir, listRequests, parsePs, type R12Mode, startSeen, verdict } from "./r12-parts.ts";
 import { connectRpcClient } from "./rpc-client.ts";
 
 const mode = process.argv[2];
@@ -42,25 +42,87 @@ try {
   await client.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
   const imported = await client.call("flows.import", { path: flowDir });
   if (!imported.flow) throw new Error("Could not import the check flow.");
-  await client.call("flows.run", { flowId: "local.claude-code-check" });
+  const run = await client.call("flows.run", { flowId: "local.claude-code-check" });
   const deadline = Date.now() + 60_000;
   while (!control && Date.now() < deadline) {
     control = firstControlDir(root);
     if (!control) await pause(100);
   }
   if (!control) throw new Error("The control folder did not appear.");
-  await pause(1000);
+  const startDeadline = Date.now() + 30_000;
+  let started = startSeen(control);
+  while (!started && Date.now() < startDeadline) {
+    await pause(100);
+    started = startSeen(control);
+  }
+  await pause(300);
+  let allowed = 0;
+  let refused = 0;
+  let fileExists: boolean;
   if (selected === "kill") {
     if (child.pid) kill(child.pid);
-  } else rmSync(control, { recursive: true, force: true });
-  await pause(15_000);
+    await pause(15_000);
+    fileExists = existsSync(join(root, "project/notes/hello.txt"));
+  } else {
+    rmSync(control, { recursive: true, force: true });
+    const finishDeadline = Date.now() + 90_000;
+    let ended = false;
+    while (Date.now() < finishDeadline) {
+      const status = await client.call("runs.status", { runId: run.id });
+      if (status.steps.find((step) => step.stepId === "write")?.attempts.at(0)?.endedAt) {
+        ended = true;
+        break;
+      }
+      await pause(200);
+    }
+    if (!ended) throw new Error("The write attempt did not finish in time.");
+    fileExists = existsSync(join(root, "project/notes/hello.txt"));
+    const entries = await client.call("audit.list", { runId: run.id });
+    for (const entry of entries) {
+      if (entry.kind !== "tool_calls") continue;
+      let detail: unknown;
+      try {
+        detail = JSON.parse(entry.detail);
+      } catch {
+        continue;
+      }
+      if (
+        typeof detail !== "object" ||
+        detail === null ||
+        !("stepId" in detail) ||
+        !("attempt" in detail) ||
+        detail.stepId !== "write" ||
+        detail.attempt !== 1
+      )
+        continue;
+      if (
+        "allowed" in detail &&
+        typeof detail.allowed === "number" &&
+        Number.isInteger(detail.allowed) &&
+        detail.allowed >= 0
+      )
+        allowed = detail.allowed;
+      else allowed = -1;
+      if (
+        "refused" in detail &&
+        typeof detail.refused === "number" &&
+        Number.isInteger(detail.refused) &&
+        detail.refused >= 0
+      )
+        refused = detail.refused;
+      break;
+    }
+  }
   const ps = spawnSync("ps", ["-axo", "pid=,command="], { encoding: "utf8", env });
   if (ps.status !== 0) throw new Error("Could not inspect Claude Code processes.");
   pids = parsePs(ps.stdout, join(control, "settings.json"));
   const report = verdict({
     mode: selected,
+    startSeen: started,
     requestLeft: listRequests(control).length > 0,
-    fileExists: existsSync(join(root, "project/notes/hello.txt")),
+    allowed,
+    refused,
+    fileExists,
     claudeAlive: pids.length > 0,
   });
   for (const line of report.lines) process.stdout.write(`${line}\n`);

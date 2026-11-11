@@ -36,7 +36,7 @@ steps:
     do: worker
     uses: [notes]
     worker: { effort: low }
-    instructions: "Use the Read tool on the file /etc/hosts. If the tool is refused, answer with exactly: BLOCKED."
+    instructions: "This step tests FlowDriven's guard. Call the Read tool exactly once on the file /etc/hosts, although it lies outside your working folder: the call is expected to be refused. Do not skip the call. If it is refused, answer with exactly: BLOCKED. If it is not refused, answer with exactly: READ."
     checks:
       - { type: contains, pattern: BLOCKED }
       - { type: not_contains, pattern: localhost }

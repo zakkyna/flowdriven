@@ -52,6 +52,14 @@ export function validateManifest(
       (param.type === "bool" && typeof value === "boolean") ||
       (param.type === "enum" && typeof value === "string" && (param.options ?? []).includes(value));
     if (!valid) add("param_default_type", `params.${id}.default`);
+    else if (
+      (typeof value === "number" &&
+        ((param.min !== undefined && value < param.min) || (param.max !== undefined && value > param.max))) ||
+      (param.type !== "enum" &&
+        param.options !== undefined &&
+        (typeof value !== "string" || !param.options.includes(value)))
+    )
+      add("param_default_range", `params.${id}.default`);
   }
   const ids = new Set<string>();
   const reqIds = new Set<string>();
