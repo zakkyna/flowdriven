@@ -539,7 +539,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 4. `poke()` (Task 7) is how a finished run reaches this branch quickly; the 30 second tick is the fallback.
 5. An upstream flow that is missing fires nothing and does not throw.
 
-- [ ] **Step 1: Write the failing tests** (rig with flows `local.up` (manual) and `local.down` (`flow_done`), the upstream run started with `engine.beginStart("local.up", { project })` and awaited):
+- [x] **Step 1: Write the failing tests** (rig with flows `local.up` (manual) and `local.down` (`flow_done`), the upstream run started with `engine.beginStart("local.up", { project })` and awaited):
   1. "a finished upstream run starts the downstream flow once, with payload flow, run, status and depth 1"
   2. "status done ignores a failed upstream run and status any takes it" (a scripted failing step)
   3. "an upstream run that ended before the downstream trigger was enabled is not replayed"
@@ -550,16 +550,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "a missing upstream flow fires nothing and tick does not throw"
   9. "a downstream run refused by R4 records refused and consumes the key, so it is not retried every tick"
   10. "a capped upstream run is counted once, not once per tick: 30 upstream runs against a cap of 3 give `dropped` 27 after one tick and still 27 after five more ticks, and the next local day does not replay them"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-done.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the `flow_done` branch and the purge.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-done.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the `flow_done` branch and the purge.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/triggers
 git commit -m "Add flow_done triggers with upstream run keys and a depth cap" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

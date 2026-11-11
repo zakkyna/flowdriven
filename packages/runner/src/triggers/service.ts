@@ -14,7 +14,11 @@ import type { FlowRow, Store, TriggerOutcome, TriggerRow } from "../storage.ts";
 import {
   DEFAULT_DAILY_CAP,
   DEFAULT_MAX_ITEMS,
+  FLOW_DONE_PER_TICK,
+  FLOW_DONE_WINDOW_MS,
   GRACE_MS,
+  KEY_KEEP_MS,
+  MAX_CHAIN_DEPTH,
   MAX_DEBOUNCE_WAIT_MS,
   MAX_SCAN_ENTRIES,
   OPEN_STATES,
@@ -67,6 +71,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
   let chain = Promise.resolve();
   let cancel: (() => void) | undefined;
   let poked = false;
+  let lastPurge: number | undefined;
   const watchers = new Map<
     string,
     {
@@ -259,6 +264,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     key: string,
     payload: Value,
     overlap: "skip" | "queue",
+    onClaim?: () => void,
   ): TriggerRow {
     const now = deps.now();
     const day = deps.dayOf(now);
@@ -276,8 +282,25 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       queued: runs.filter((r) => r.state === "queued").length,
       overlap,
     });
-    if (!result.ok && !result.consume) return record(row, result.outcome, result.detail);
-    if (!store.claimKey(flow.id, row.index, key, now.toISOString())) return record(row, "duplicate");
+    if (!result.ok && !result.consume) {
+      if (trigger.kind === "flow_done") {
+        const rollback = {};
+        let claimed = false;
+        try {
+          store.transaction(() => {
+            claimed = store.claimKey(flow.id, row.index, key, now.toISOString());
+            throw rollback;
+          });
+        } catch (error) {
+          if (error !== rollback) throw error;
+        }
+        if (!claimed) return row;
+      }
+      return record(row, result.outcome, result.detail);
+    }
+    if (!store.claimKey(flow.id, row.index, key, now.toISOString()))
+      return trigger.kind === "flow_done" ? row : record(row, "duplicate");
+    onClaim?.();
     if (!result.ok) {
       if (result.outcome === "dropped_cap") {
         const n = store.increment(`dropped:${flow.id}`, day);
@@ -465,6 +488,66 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
         }
         return;
       }
+      if (trigger.kind === "flow_done") {
+        if (!store.getFlow(trigger.flow)) return;
+        const now = deps.now().getTime();
+        const since = Math.max(Date.parse(row.enabledAt), now - FLOW_DONE_WINDOW_MS);
+        if (!Number.isFinite(since)) return;
+        const runs = store
+          .listRuns({ flowId: trigger.flow })
+          .filter(
+            (run) =>
+              run.endedAt !== undefined &&
+              Number.isFinite(Date.parse(run.endedAt)) &&
+              Date.parse(run.endedAt) >= since &&
+              Date.parse(run.endedAt) <= now &&
+              (run.state === "done" || (trigger.status === "any" && run.state === "failed")),
+          )
+          .sort((a, b) => Date.parse(a.endedAt ?? "") - Date.parse(b.endedAt ?? ""));
+        let handled = 0;
+        for (const run of runs) {
+          if (handled >= FLOW_DONE_PER_TICK) break;
+          let depth = 1;
+          if (run.trigger?.kind === "flow_done") {
+            const payload = run.trigger.payload;
+            if (
+              !payload ||
+              typeof payload !== "object" ||
+              Array.isArray(payload) ||
+              typeof payload.depth !== "number" ||
+              !Number.isSafeInteger(payload.depth) ||
+              payload.depth < 1
+            )
+              continue;
+            depth += payload.depth;
+          }
+          if (depth > MAX_CHAIN_DEPTH) {
+            if (!store.claimKey(flow.id, row.index, run.id, deps.now().toISOString())) continue;
+            handled++;
+            row = record(row, "depth");
+            store.putTrigger(row);
+            audit("trigger_depth", { flowId: flow.id, upstream: run.id, depth });
+            continue;
+          }
+          let claimed = false;
+          const updated = fire(
+            row,
+            flow,
+            manifest,
+            trigger,
+            run.id,
+            { flow: trigger.flow, run: run.id, status: run.state, depth },
+            "queue",
+            () => {
+              claimed = true;
+            },
+          );
+          if (claimed) handled++;
+          if (updated !== row) store.putTrigger(updated);
+          row = updated;
+        }
+        return;
+      }
       if (trigger.kind !== "schedule") return;
       const now = deps.now().getTime();
       const anchor = Date.parse(row.enabledAt);
@@ -505,6 +588,11 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
   function tick(): Promise<void> {
     chain = chain
       .then(() => {
+        const now = deps.now().getTime();
+        if (Number.isFinite(now) && (lastPurge === undefined || now - lastPurge >= 3_600_000)) {
+          store.purgeKeys(new Date(now - KEY_KEEP_MS).toISOString());
+          lastPurge = now;
+        }
         for (const row of store.listTriggers()) if (row.enabled) section(row);
       })
       .catch(() => {});
