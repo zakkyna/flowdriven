@@ -21,7 +21,7 @@ export const REFUSED_FLAGS = [
   "--yolo",
   "--trust-all-tools",
 ] as const;
-export type ClaudeModel = "haiku" | "sonnet" | "opus";
+export type ClaudeModel = string;
 export type ArgsInput = {
   model: ClaudeModel;
   sessionId: string;
@@ -36,6 +36,7 @@ export function assertSafeArgs(args: readonly string[]): void {
       if (arg === flag || arg.startsWith(`${flag}=`)) throw new Error(`Refused flag: ${flag}`);
 }
 export function buildClaudeArgs(input: ArgsInput): string[] {
+  if (!/^[a-z][a-z0-9.-]{0,63}$/.test(input.model)) throw new Error("Refused model name.");
   const args = [
     "-p",
     "--output-format",

@@ -77,3 +77,7 @@ test("each of the five refused flags is refused bare, as a value and as --flag=v
       expect(() => assertSafeArgs(args)).toThrow(`Refused flag: ${flag}`);
   expect(() => assertSafeArgs(buildClaudeArgs(input))).not.toThrow();
 });
+test("model names are validated before use", () => {
+  expect(() => buildClaudeArgs({ ...input, model: "--yolo" })).toThrow("Refused model name.");
+  expect(buildClaudeArgs({ ...input, model: "claude-haiku-5-5" })).toContain("claude-haiku-5-5");
+});

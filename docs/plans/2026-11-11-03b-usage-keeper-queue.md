@@ -1328,7 +1328,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `claude/args.ts`: `ClaudeModel = string`; `buildClaudeArgs` throws `Error("Refused model name.")` unless the model matches `^[a-z][a-z0-9.-]{0,63}$`.
 - `ClaudeAdapterOptions.effortModels?: () => { low: string; medium: string; high: string } | undefined`; the step's model is `table?.[req.effort ?? "medium"] ?? modelFor(req.effort)`, the judge's is `table?.medium ?? "sonnet"`. `service/claude-harness.ts` passes `effortModels: () => readKeeperSettings(options.store).effortModels["claude-code"]`, so a changed table applies to the next call.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `exec/limits.test.ts`
 
@@ -1372,14 +1372,16 @@ test("with max_attempts 3 the re-plan keeps its attempt and no medium attempt ha
 ```
 
 `claude/effort.test.ts` (the `setup(actions)` helper of `adapter.test.ts` with `effortModels: () => ({ low: "tiny-1", medium: "mid-2", high: "big-3" })` added to its options): a request with `effort: "low"` makes the fake log `--model tiny-1` (the `args` of the `call` entry of `readFakeCalls(home)`); `high` gives `big-3`; no effort gives `mid-2`; with the option absent the old aliases (`haiku`, `opus`, `sonnet`) are used. Add to `args.test.ts`: `expect(() => buildClaudeArgs({ ...okInput, model: "--yolo" })).toThrow("Refused model name.")`, and `claude-haiku-5-5` passes.
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/limits.test.ts packages/runner/src/engine-effort.test.ts packages/runner/src/claude/effort.test.ts`. Expected: FAIL (`replanAt` is undefined).
-- [ ] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/limits.test.ts packages/runner/src/engine-effort.test.ts packages/runner/src/claude/effort.test.ts`. Expected: FAIL (`replanAt` is undefined).
+- [x] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Map effort to a model by a table and give a low step one extra attempt at medium" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

@@ -65,10 +65,10 @@ export async function runLeaf(
     block(e instanceof Error ? e.message : "Invalid instructions");
     return "halt";
   }
-  const { duration, attempts } = limits(step, manifest);
+  const { duration, attempts, replanAt, mediumAt } = limits(step, manifest);
   const failures: string[] = [];
   for (let n = 1; n <= attempts; n++) {
-    const replan = n === step.retry + 2;
+    const replan = n === replanAt;
     const ctl = new AbortController();
     row.state = "running";
     store.updateRun(run.id, { state: "running" });
@@ -153,7 +153,11 @@ export async function runLeaf(
             uses: step.uses,
             project: run.project,
             requirements: step.uses.flatMap((id) => run.requirements.filter((r) => r.id === id)),
-            ...(step.worker?.effort === undefined ? {} : { effort: step.worker.effort }),
+            ...(mediumAt !== undefined && n >= mediumAt
+              ? { effort: "medium" as const }
+              : step.worker?.effort === undefined
+                ? {}
+                : { effort: step.worker.effort }),
             ...(step.do === "skill" ? { skill: step.skill } : {}),
             outputs: step.outputs.map(({ id, type }) => ({ id, type })),
             ...(failures.length ? { lastFailure: failures.at(-1) } : {}),

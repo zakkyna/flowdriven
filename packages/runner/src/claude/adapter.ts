@@ -14,6 +14,7 @@ import {
 import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
+  effortModels?: () => { low: string; medium: string; high: string } | undefined;
   nowMs?: () => number;
   claudePath: () => string | undefined;
   env: () => Record<string, string | undefined>;
@@ -85,7 +86,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           stepId: req.stepId,
           itemKey: req.itemKey,
           attempt: req.attempt,
-          model: modelFor(req.effort),
+          model: options.effortModels?.()?.[req.effort ?? "medium"] ?? modelFor(req.effort),
           ...(schema === undefined ? {} : { schema }),
           signal: req.signal,
           onStart: req.onStart,
@@ -155,7 +156,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           stepId: req.stepId,
           itemKey: req.itemKey ?? "",
           attempt: 0,
-          model: "sonnet",
+          model: options.effortModels?.()?.medium ?? "sonnet",
           schema: JUDGE_SCHEMA,
           signal: req.signal,
           onStart: req.onStart,

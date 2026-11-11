@@ -9,6 +9,7 @@ import { isProjectRef } from "../claude/policy.ts";
 import { type ClaudeScan, scanClaude } from "../claude/scan.ts";
 import type { HarnessAdapter } from "../harness.ts";
 import type { HarnessStateRow, Store } from "../storage.ts";
+import { readKeeperSettings } from "./keeper-wiring.ts";
 
 export const CLAUDE_ID = "claude-code";
 export const CONSENT_TEXT =
@@ -238,6 +239,7 @@ export function createHarnessService(options: {
     },
     newId: options.newId,
     ...options.adapter,
+    effortModels: () => readKeeperSettings(options.store).effortModels["claude-code"],
     allowed: () =>
       harnessGate({
         platform: options.platform ?? process.platform,
