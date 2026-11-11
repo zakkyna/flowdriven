@@ -360,24 +360,26 @@ export function runCapture(command: string, args: readonly string[], options: { 
 ```
 **Rules.** `buildClaudeArgs` returns exactly: `-p`, `--output-format`, `stream-json`, `--verbose`, `--no-session-persistence`, `--session-id`, `<sessionId>`, `--model`, `<model>`, `--restricted`, `--strict-mcp-config`, `--mcp-config`, `{"mcpServers":{}}`, `--tools`, `<tools joined by ",">` (the empty string for no tools), `--disable-slash-commands`, `--permission-prompts`, `none`, `--settings`, `<settingsPath>`, then `--add-dir <folder>` once per `addDirs` item, then `--json-schema <JSON.stringify(schema)>` when a schema is given. The prompt is never an argument, and `--permission-mode` and `--allowedTools` never appear. `assertSafeArgs` throws for any element that equals one of `REFUSED_FLAGS` or starts with one followed by `=`, in any position (also as the value of another flag). `startChild` and `runCapture` call it first (a throw, or for `runCapture` a rejected promise), refuse `process.platform === "win32"` with `Error("Windows is not supported.")`, spawn with `detached: true`, `stdio: ["pipe", "pipe", "pipe"]` and the given environment only, ignore errors on standard input, keep the last 65,536 bytes of standard error (`stderrTail`), and report a spawn error (for example `ENOENT`) as `done` with `code: null` and the message in the tail, never as a throw. **`done` resolves on the child's `close` event (all its pipes have ended), never on `exit`**: on `exit` the last chunk of standard output (the result event) can still be unread. A reader that listens to `stdout` from the start has therefore seen every byte when `done` resolves. `send(text)` writes and ends standard input. `stop()` sends SIGTERM to the group (`process.kill(-pid, "SIGTERM")`) and SIGKILL after `graceMs` (default 2000) unless it has ended; `kill()` sends SIGKILL to the group now and returns at once. `runCapture` reads standard output up to `maxBytes` (more: `truncated: true`, the group is killed), kills the group at `timeoutMs` (`timedOut: true`) and never throws for a failing process. No source here names `process.execPath`.
 
-- [ ] **Step 1: Write the failing tests** (10; processes are the fake, run from a home made by `makeFakeHome`, `PATH: process.env.PATH`)
+- [x] **Step 1: Write the failing tests** (10; processes are the fake, run from a home made by `makeFakeHome`, `PATH: process.env.PATH`)
   `env.test.ts` (1): 1. `the child gets exactly HOME, USER, PATH, TMPDIR and LANG, and only the ones the runner has`: a source with those five plus `LOGNAME`, `SHELL`, `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, `NODE_OPTIONS`, `ELECTRON_RUN_AS_NODE` gives an object with exactly the five keys and their values; a source with only `PATH` gives `{ PATH }`; `CHILD_ENV_NAMES` holds no name that starts with `ANTHROPIC_` or `CLAUDE_`.
   `args.test.ts` (3): 2. `the argument list for a step with no tools and no schema`: `toEqual` of the exact array above for `{ model: "haiku", sessionId: "11111111-1111-4111-8111-111111111111", tools: [], settingsPath: "/x y/settings.json", addDirs: [] }`. 3. `tools, further folders and a schema are added in order, and every long flag is one the help check covers`: tools `["Read","Glob","Grep"]` gives `Read,Glob,Grep`, two `addDirs` give two `--add-dir` pairs before `--json-schema`, and every element that starts with `--` is in `REQUIRED_FLAGS`, which equals the 14 flags above in that order (the fake's `FAKE_HELP` lists the same ones). 4. `each of the five refused flags is refused bare, as a value and as --flag=value`: for the five flags and the three forms `assertSafeArgs` throws `Refused flag: <flag>`, and `buildClaudeArgs` output passes.
   `run-capture.test.ts` (3): 5. `a process that outlives its time limit is killed`: fake `hang: ["version"]`, `timeoutMs: 300` gives `timedOut: true` and the promise settles within 5 s (that the group is gone is proved in test 8).
   6. `output over the cap is cut, the process is killed and truncated is true` (fake `mcp` of 2 MiB, `maxBytes` 1000). 7. `a missing binary gives code null and a sentence, and only the given environment reaches the child`: a path that does not exist gives `code: null` and a non-empty `stderr`; a call of the fake with `env: { HOME, PATH }` logs `env: ["HOME","PATH"]`.
   `child.test.ts` (3): 8. `stop() sends SIGTERM and then SIGKILL after the grace to a child that ignores SIGTERM`: fake play `[ignore_sigterm, pause 30000]`, `graceMs: 200`: `done` resolves within 3 s with `signal: "SIGKILL"`, and `process.kill(pid, 0)` then throws. 9. `kill() ends the group at once and stderrTail keeps only the last 65,536 bytes`: fake `exit` with a 100,000-byte `stderr` gives a tail of exactly 65,536 bytes; `kill()` on a running fake ends it with `signal: "SIGKILL"`. 10. `done resolves on close: every byte of standard output has arrived`: a reader that counts the bytes of `child.stdout` from the start, and a fake play `[raw of 300,000 characters, exit 0]` (the fake exits at once after the write): when `done` resolves the count is exactly 300,001.
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/runner/src/claude`. Expected: FAIL (modules missing).
-- [ ] **Step 3: Implement** by the interfaces and rules.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** by the interfaces and rules.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner/src/claude
 git commit -m "Add the child environment, the fixed argument list and the process helpers" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

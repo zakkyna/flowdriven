@@ -207,7 +207,8 @@ else if (command === "play") {
       emit({ type: "rate_limit_event", rate_limit_info: { status: action.status } });
     else if (action.do === "exit") {
       if (action.stderr !== undefined) process.stderr.write(String(action.stderr));
-      process.exit(Number(action.code));
+      process.exitCode = Number(action.code);
+      break;
     } else if (action.do === "auth_failure") {
       emit({
         type: "assistant",
