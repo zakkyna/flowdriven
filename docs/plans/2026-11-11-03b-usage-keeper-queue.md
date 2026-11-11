@@ -898,7 +898,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 - `Capture = (command: string, args: string[]) => Promise<{ code: number | null; stdout: string }>`; `parsePressure(stdout: string): number | undefined`; `parsePs(stdout: string, pgid: number): number | undefined` (the sum of the `rss` column, in KB, of the lines whose `pgid` column equals `pgid`, as MB; `undefined` when no line matches); `reserveMb(setting: number | null, totalMb: number): number` (the setting, else `max(1024, round(totalMb * 0.15))`); `createProbes(o: { capture: Capture; platform: NodeJS.Platform; availableMemory: () => number; totalMemory: () => number }): Probes & { totalMb(): number }`; `realCapture: Capture` (uses `runCapture` from `../claude/run-capture.ts` with `env: { PATH: "/usr/bin:/bin:/usr/sbin" }`, `timeoutMs: 3000`, `maxBytes: 1_000_000`, and returns `code: null` and empty output on any error).
 - Behaviour: `refresh()` reads `availableMemory()` (bytes) into MB and, on `darwin` only, runs `/usr/sbin/sysctl -n kern.memorystatus_vm_pressure_level` and `/bin/ps -axo pgid=,rss=` (kept as the last output); `groupRssMb(pid)` parses the last `ps` output for the group whose id is `pid` (the child is its own group leader, `claude/child.ts`). Any failure leaves that value `undefined`; `refresh()` never throws.
 
-- [ ] **Step 1: Write the failing test** `packages/runner/src/keeper/probes.test.ts`
+- [x] **Step 1: Write the failing test** `packages/runner/src/keeper/probes.test.ts`
 
 ```ts
 import { expect, test } from "vitest";
@@ -934,14 +934,17 @@ test("refresh reads the three values; a failing command leaves one value undefin
 });
 ```
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/keeper/probes.test.ts`. Expected: FAIL ("Cannot find module ./probes.ts").
-- [ ] **Step 3: Implement** as described (no `eval`, no shell). **Step 4: Run** the test. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/keeper/probes.test.ts`. Expected: FAIL ("Cannot find module ./probes.ts").
+- [x] **Step 3: Implement** as described (no `eval`, no shell). **Step 4: Run** the test. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/keeper/probes.ts packages/runner/src/keeper/probes.test.ts
 git commit -m "Add the keeper's memory, pressure and RSS probes" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
