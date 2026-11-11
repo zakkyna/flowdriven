@@ -1,7 +1,16 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { EngineError } from "./errors.ts";
-import { SCHEMA } from "./schema.ts";
-import type { ApprovalRow, AuditEntry, FlowRow, ItemRow, RunRow, StepRow, Store } from "./storage.ts";
+import { HARNESS_STATE_SCHEMA, SCHEMA } from "./schema.ts";
+import type {
+  ApprovalRow,
+  AuditEntry,
+  FlowRow,
+  HarnessStateRow,
+  ItemRow,
+  RunRow,
+  StepRow,
+  Store,
+} from "./storage.ts";
 
 export async function openSqliteStore(
   path: string,
@@ -38,10 +47,11 @@ export async function openSqliteStore(
     }
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     const version = db.prepare("PRAGMA user_version").get()?.user_version;
-    if (typeof version !== "number" || version > 1 || version < 0)
+    if (typeof version !== "number" || version > 2 || version < 0)
       throw new EngineError("unavailable", "Unsupported database version.");
     if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
-    if (version === 0) db.exec(`BEGIN; ${SCHEMA} PRAGMA user_version = 1; COMMIT;`);
+    if (version === 0) db.exec(`BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} PRAGMA user_version = 2; COMMIT;`);
+    if (version === 1) db.exec(`BEGIN; ${HARNESS_STATE_SCHEMA} PRAGMA user_version = 2; COMMIT;`);
   } catch (error) {
     db.close();
     throw error;
@@ -60,6 +70,18 @@ export async function openSqliteStore(
   };
   let depth = 0;
   const store: Store = {
+    getHarnessState(id) {
+      return decode<HarnessStateRow>(get("SELECT data FROM harness_state WHERE id = ?", id));
+    },
+    putHarnessState(row) {
+      let data: string;
+      try {
+        data = json(row);
+      } catch {
+        throw new EngineError("invalid_input", "Value is not JSON serializable.");
+      }
+      execute("INSERT OR REPLACE INTO harness_state (id, data) VALUES (?, ?)", row.id, data);
+    },
     transaction<T>(fn: () => T): T {
       const level = depth;
       const savepoint = `store_${level}`;

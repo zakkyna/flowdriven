@@ -251,21 +251,23 @@ Store gains:  getHarnessState(id: string): HarnessStateRow | undefined;  putHarn
 ```
 **Rules:** `openSqliteStore` accepts `user_version` 0, 1 and 2 and refuses anything else with `unavailable` "Unsupported database version." A new database runs `BEGIN; <SCHEMA> <HARNESS_STATE_SCHEMA> PRAGMA user_version = 2; COMMIT;`; a version 1 database runs `BEGIN; <HARNESS_STATE_SCHEMA> PRAGMA user_version = 2; COMMIT;` (all rows kept); the migration runs after the exclusive lock, in the same place the present schema runs. `SCHEMA` itself does not change. `put` stores `JSON` like the other tables (a value that is not JSON gives the present `invalid_input` "Value is not JSON serializable."). `wrapStore` marks `harnesses` and `settings` for `putHarnessState`.
 
-- [ ] **Step 1: Write the failing tests** (6)
+- [x] **Step 1: Write the failing tests** (6)
   `sqlite-store.test.ts` (5): 1. `a database made by the present code at version 1 opens, keeps every row and becomes version 2`: make the file with `new DatabaseSync(path)` and `db.exec("BEGIN; " + SCHEMA + " PRAGMA user_version = 1; COMMIT;")` (import `SCHEMA`), insert one audit row by SQL, open with `openSqliteStore`, expect `listAudit()` to hold it, `PRAGMA user_version` to be 2 and `getHarnessState("claude-code")` undefined. 2. `an exclusive open migrates a version 1 file too`: same file, `{ exclusive: true }`. 3. `a new database is created at version 2 with the table`. 4. `a database from version 3 is refused` (next to the present version 99 test, which stays). 5. `put replaces the row of the same id and get returns it with its nested scan`: put `{ id: "claude-code", consent: "given", consentAt: "2026-11-11T00:00:00.000Z", scan: { a: [1, { b: null }] }, scanAt: "x" }`, put the same id with `consent: "revoked"`, expect the second back and `getHarnessState("other")` undefined.
   `events.test.ts` (1): 6. `putHarnessState marks the harnesses and settings topics`: through `wrapStore` with a recording `mark`, one `putHarnessState` call marks `harnesses` and `settings`.
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/runner/src/sqlite-store.test.ts packages/runner/src/service/events.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the interfaces and rules.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** the interfaces and rules.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Store harness consent and the last scan, with a migration to version 2" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

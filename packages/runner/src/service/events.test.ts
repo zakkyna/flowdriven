@@ -113,3 +113,9 @@ test("writes in one turn make one event with sorted topics", async () => {
   await new Promise<void>((resolve) => setImmediate(resolve));
   expect(automatic).toEqual([{ type: "changed", topics: ["flows"] }]);
 });
+
+test("putHarnessState marks the harnesses and settings topics", async () => {
+  const { store, marks } = await setup();
+  store.putHarnessState({ id: "claude-code", consent: "given" });
+  expect(marks).toEqual(["harnesses", "settings"]);
+});

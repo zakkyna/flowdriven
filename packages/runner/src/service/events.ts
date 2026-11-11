@@ -21,6 +21,7 @@ export function createChangeEmitter(
 }
 export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Store {
   const topics: Partial<Record<keyof Store, RunnerTopic[]>> = {
+    putHarnessState: ["harnesses", "settings"],
     putFlow: ["flows"],
     createRun: ["runs"],
     updateRun: ["runs"],

@@ -1,13 +1,42 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { afterEach, expect, test } from "vitest";
+import { SCHEMA } from "./schema.ts";
 import { openSqliteStore } from "./sqlite-store.ts";
 import type { RunRow, StepRow, Store } from "./storage.ts";
 import { cleanup, tempPath } from "./test-helpers/tmp.ts";
 
 const stores: Store[] = [];
+const migrationDirs: string[] = [];
+function migrationPath(): string {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven- ")));
+  migrationDirs.push(dir);
+  return join(dir, "store.sqlite");
+}
+function makeVersionOne(path: string): void {
+  const db = new DatabaseSync(path);
+  db.exec(`BEGIN; ${SCHEMA} PRAGMA user_version = 1; COMMIT;`);
+  db.prepare("INSERT INTO audit_log (at, kind, run_id, detail) VALUES (?, ?, ?, ?)").run(
+    "2026",
+    "test",
+    "r1",
+    JSON.stringify({ value: 1 }),
+  );
+  db.close();
+}
+function version(path: string): unknown {
+  const db = new DatabaseSync(path);
+  try {
+    return db.prepare("PRAGMA user_version").get()?.user_version;
+  } finally {
+    db.close();
+  }
+}
 async function open(path = ":memory:") {
   const store = await openSqliteStore(path);
   stores.push(store);
@@ -37,6 +66,7 @@ const step: StepRow = {
 afterEach(() => {
   for (const store of stores.splice(0)) store.close();
   cleanup();
+  for (const dir of migrationDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 test("round-trips a flow, a run and its steps", async () => {
@@ -120,6 +150,55 @@ test("the audit log is append-only", async () => {
   } finally {
     db.close();
   }
+});
+test("a database made by the present code at version 1 opens, keeps every row and becomes version 2", async () => {
+  const path = migrationPath();
+  makeVersionOne(path);
+  const store = await open(path);
+  expect(store.listAudit()).toEqual([{ at: "2026", kind: "test", runId: "r1", detail: { value: 1 } }]);
+  expect(version(path)).toBe(2);
+  expect(store.getHarnessState("claude-code")).toBeUndefined();
+});
+test("an exclusive open migrates a version 1 file too", async () => {
+  const path = migrationPath();
+  makeVersionOne(path);
+  const store = await openSqliteStore(path, { exclusive: true });
+  expect(store.listAudit()).toEqual([{ at: "2026", kind: "test", runId: "r1", detail: { value: 1 } }]);
+  expect(store.getHarnessState("claude-code")).toBeUndefined();
+  store.close();
+  expect(version(path)).toBe(2);
+});
+test("a new database is created at version 2 with the table", async () => {
+  const path = migrationPath();
+  const store = await open(path);
+  expect(version(path)).toBe(2);
+  expect(store.getHarnessState("claude-code")).toBeUndefined();
+});
+test("a database from version 3 is refused", async () => {
+  const path = migrationPath();
+  const db = new DatabaseSync(path);
+  db.exec("PRAGMA user_version = 3");
+  db.close();
+  await expect(openSqliteStore(path)).rejects.toMatchObject({
+    code: "unavailable",
+    message: "Unsupported database version.",
+  });
+});
+test("put replaces the row of the same id and get returns it with its nested scan", async () => {
+  const store = await open();
+  const row = {
+    id: "claude-code",
+    consent: "given" as const,
+    consentAt: "2026-11-11T00:00:00.000Z",
+    scan: { a: [1, { b: null }] },
+    scanAt: "x",
+  };
+  store.putHarnessState(row);
+  expect(store.getHarnessState("claude-code")).toEqual(row);
+  const replacement = { id: "claude-code", consent: "revoked" as const };
+  store.putHarnessState(replacement);
+  expect(store.getHarnessState("claude-code")).toEqual(replacement);
+  expect(store.getHarnessState("other")).toBeUndefined();
 });
 test("refuses a database from a newer version", async () => {
   const path = tempPath();

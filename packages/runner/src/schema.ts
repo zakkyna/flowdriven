@@ -11,3 +11,5 @@ CREATE TABLE audit_log (id INTEGER PRIMARY KEY, at TEXT NOT NULL, kind TEXT NOT 
 CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
 CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
 `;
+
+export const HARNESS_STATE_SCHEMA = "CREATE TABLE harness_state (id TEXT PRIMARY KEY, data TEXT NOT NULL);";

@@ -76,7 +76,16 @@ export type ApprovalRow = {
   resolvedAt?: string;
 };
 export type AuditEntry = { at: string; kind: string; runId?: string; detail: Value };
+export type HarnessStateRow = {
+  id: string;
+  consent: "not_given" | "given" | "revoked";
+  consentAt?: string;
+  scan?: Value;
+  scanAt?: string;
+};
 export interface Store {
+  getHarnessState(id: string): HarnessStateRow | undefined;
+  putHarnessState(row: HarnessStateRow): void;
   transaction<T>(fn: () => T): T; // BEGIN and COMMIT, ROLLBACK on a throw; nested calls use savepoints
   putFlow(row: FlowRow): void;
   getFlow(id: string, hash?: string): FlowRow | undefined; // no hash: the newest registered (highest rowid, not time); the same id and hash replaces
