@@ -10,12 +10,14 @@ The owner set a new priority: build the engine that runs flows, with triggers, w
 | Plan | Content | Shows working |
 |---|---|---|
 | 02 | The SDK with format 1.1 (spec 20.4), the SQLite store, and the interpreter with `for_each`, `when`, `ask`, limits and the seen store, against a scripted fake harness, all as libraries (detailed: `2026-11-11-02-flow-format-and-engine-core.md`) | One command runs a sample looped flow with a condition and a choice twice and writes two run reports; the second run skips the items it has seen |
-| 02b | The runner process, the local socket, the contract for format 1.1, and the app reading the runner instead of sample data | The sample flow runs from the app; the pick appears in the Inbox |
+| 02b | The runner process, a link over its standard input and output, the contract for format 1.1, and the app reading the runner instead of sample data (detailed: `2026-11-11-02b-runner-process-and-app.md`) | The sample flow runs from the app; the pick appears in the Inbox |
 | 03 | The Claude Code adapter only: detection, the inventory of its skills and connectors, the scoped config, the pre-tool hook to the runner, and a fake `claude` | A real Claude Code step runs; an undeclared tool is denied; stopping the runner blocks the call |
-| 04 | The trigger service (`schedule`, `flow_done`, `file_change`), the limit keeper and notifications | The hourly trigger fires while the window is closed; a flood is capped |
+| 04 | The local socket (mode 0600) and the launch agent, so a runner that the app did not start can run, then the trigger service (`schedule`, `flow_done`, `file_change`), the limit keeper and notifications | The hourly trigger fires while the window is closed; a flood is capped |
 | 05 | The capability router, web access through the user's own browser, skill calls, native connectors, readiness for these, and the install-preview rows | M1 on real data: attended first, then on the schedule |
 | 06 | The agent core and the chat builder (was 03), one-time flows | The job-alert flow rebuilt by chat matches the hand-written one |
 | 07 onward | The Codex and Antigravity adapters (the rest of the old 04), the gateway and the managed browser (the old 05), Documents and reports (the old 06), then the old 07 to 11 | As outlined below |
+
+In plan 02b the app starts the runner as its child and talks to it over the runner's standard input and output, so only the app can reach it and no other process of the user can approve anything; the socket and the launch agent are needed only once a runner exists that the app did not start, which is plan 04.
 
 The outlines below were written before this change. Until each is re-outlined just in time, this section wins where they differ. Plan 01b (the simple look, spec section 5) is applied alongside and does not change this order.
 
