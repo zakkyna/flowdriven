@@ -16,6 +16,8 @@ export type RunProcessOptions = {
   now?: () => Date;
   newId?: (prefix: string) => string;
   sweepEveryMs?: number;
+  env?: Record<string, string | undefined>;
+  claudePath?: string;
 };
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 export function guardProcess(proc: Pick<NodeJS.Process, "on">, errors: (line: string) => void): void {
@@ -55,6 +57,8 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
       mode: options.demo ? "demo" : "live",
       now: options.now,
       newId: options.newId,
+      env: options.env,
+      claudePath: options.claudePath,
     });
     service.start();
     await new Promise<void>((resolve) => setImmediate(resolve));

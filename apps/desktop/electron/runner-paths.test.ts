@@ -15,11 +15,12 @@ test("the runner's environment is ELECTRON_RUN_AS_NODE and the five named variab
       ELECTRON_RUN_AS_NODE: "0",
       PATH: "p",
       HOME: "h",
+      USER: "u",
       TMPDIR: "t",
       LANG: "l",
       NODE_OPTIONS: "x",
     }),
-  ).toEqual({ ELECTRON_RUN_AS_NODE: "1", PATH: "p", HOME: "h", TMPDIR: "t", LANG: "l" });
+  ).toEqual({ ELECTRON_RUN_AS_NODE: "1", PATH: "p", HOME: "h", USER: "u", TMPDIR: "t", LANG: "l" });
   expect(runnerEnv({ PATH: undefined })).toEqual({ ELECTRON_RUN_AS_NODE: "1" });
 });
 test("the entry is found from the compiled folder", () => {

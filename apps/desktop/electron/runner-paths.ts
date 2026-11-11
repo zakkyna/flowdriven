@@ -13,7 +13,7 @@ export function runnerEntry(dirname: string): string {
 }
 export function runnerEnv(env: Record<string, string | undefined>): Record<string, string> {
   const result: Record<string, string> = { ELECTRON_RUN_AS_NODE: "1" };
-  for (const key of ["PATH", "HOME", "TMPDIR", "LANG"]) {
+  for (const key of ["PATH", "HOME", "USER", "TMPDIR", "LANG"]) {
     const value = env[key];
     if (value !== undefined) result[key] = value;
   }

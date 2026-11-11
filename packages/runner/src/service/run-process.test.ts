@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -6,6 +6,7 @@ import { CONTRACT_VERSION, type RunnerEvent } from "@flowdriven/contracts";
 import { afterEach, expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
+import { FAKE_CLAUDE_PATH, makeFakeHome } from "../test-helpers/fake-claude-script.ts";
 import { connectRpcClient } from "../test-helpers/rpc-client.ts";
 import { guardProcess, runProcess } from "./run-process.ts";
 import { DEMO_HASH } from "./service.ts";
@@ -13,7 +14,7 @@ import { DEMO_HASH } from "./service.ts";
 const dirs: string[] = [];
 const active: { input: PassThrough; done: Promise<number> }[] = [];
 function temp() {
-  const path = mkdtempSync(join(tmpdir(), "flowdriven-"));
+  const path = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven- ")));
   dirs.push(path);
   return path;
 }
@@ -162,4 +163,25 @@ test("the sweep runs on its timer and sends a changed event", { timeout: 20_000 
   expect(await p.client.call("approvals.list", { state: "expired" })).toEqual(
     expect.arrayContaining([expect.objectContaining({ id: approval.id, state: "expired" })]),
   );
+});
+
+test("runProcess in live mode takes its environment and claudePath", { timeout: 20_000 }, async () => {
+  const dataDir = temp();
+  const home = makeFakeHome();
+  dirs.push(home);
+  const input = new PassThrough(),
+    output = new PassThrough();
+  const client = connectRpcClient({ input: output, output: input });
+  const done = runProcess({
+    dataDir,
+    demo: false,
+    input,
+    output,
+    errors: () => {},
+    env: { HOME: home, PATH: process.env.PATH, USER: "u" },
+    claudePath: FAKE_CLAUDE_PATH,
+  });
+  active.push({ input, done });
+  await client.call("harnesses.rescan", {});
+  expect((await client.call("harnesses.list", {})).at(0)?.version).toBe("2.1.318");
 });

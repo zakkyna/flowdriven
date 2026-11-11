@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Approval, FlowDetail, RunDetail, RunSummary } from "@flowdriven/contracts";
@@ -14,7 +14,7 @@ const dirs: string[] = [];
 const services: { service: RunnerService; store: Store }[] = [];
 const fixed = () => new Date("2026-11-11T00:00:00.000Z");
 function dir() {
-  const p = mkdtempSync(join(tmpdir(), "flowdriven-"));
+  const p = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven- ")));
   dirs.push(p);
   return p;
 }
@@ -33,11 +33,12 @@ async function setup(mode: "demo" | "live" = "demo") {
     store,
     dataDir,
     mode,
+    claudePath: join(dataDir, "no-claude"),
     now: fixed,
     newId: (prefix) => `${prefix}-${++n}`,
   });
   services.push({ service, store });
-  service.start();
+  await service.start().settled;
   return { service, store, dataDir };
 }
 async function until<T>(check: () => Promise<T | undefined>): Promise<T> {
@@ -138,7 +139,7 @@ test("approvals.resolve refuses a choice, an edit and a batch, and approvals.ans
     s.call("approvals.resolve", { approvalId: sign.id, decision: "edit", editedText: "x" }),
   ).rejects.toMatchObject({ code: "invalid_input", message: "Only text can be edited." });
 });
-test("live mode blocks a run with No harness is connected yet. and resume checks again", async () => {
+test("live mode blocks a run when Claude Code is not found, and resume checks again", async () => {
   const { service: s, store } = await setup("live");
   const d = demoFlow();
   s.engine.registerFlow(d.manifest, DEMO_HASH, d.files);
@@ -147,7 +148,7 @@ test("live mode blocks a run with No harness is connected yet. and resume checks
     const v = RunDetail.parse(await s.call("runs.status", { runId: started.id }));
     return v.state === "blocked" ? v : undefined;
   });
-  expect(blocked.blockedReason).toBe("No harness is connected yet.");
+  expect(blocked.blockedReason).toBe("Claude Code was not found on this Mac. Install it, then scan again.");
   expect(RunSummary.parse(await s.call("runs.resume", { runId: started.id })).id).toBe(started.id);
   await until(async () =>
     ((await s.call("runs.status", { runId: started.id })) as { state: string }).state === "blocked"

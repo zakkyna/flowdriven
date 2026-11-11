@@ -14,6 +14,7 @@ import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
 import type { Engine } from "../engine.ts";
 import { renderRunReport, reportLines } from "../report.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
+import type { HarnessService } from "./claude-harness.ts";
 import { toApproval } from "./map-approval.ts";
 import { defaultSettings, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
 import { toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
@@ -25,6 +26,7 @@ export type HandlerContext = {
   projectDir: string;
   now: () => Date;
   harnessIdOf: (workerName: string) => string;
+  harnesses?: Pick<HarnessService, "list" | "rescan" | "setConsent">;
 };
 export type Handlers = {
   [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> | Promise<OperationOutput<N>>;
@@ -63,6 +65,7 @@ export function createHandlers({
   projectDir,
   now,
   harnessIdOf,
+  harnesses,
 }: HandlerContext): Handlers {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
@@ -190,9 +193,15 @@ export function createHandlers({
       return store.listAudit(runId).map(toAuditRecord);
     },
     "runner.info": () => ({ contractVersion: CONTRACT_VERSION, mode }),
-    "harnesses.list": () => [],
-    "harnesses.rescan": () => unavailable("Looking for harnesses arrives with the harness adapters."),
-    "harnesses.setConsent": () => unavailable("Harness consent arrives with the harness adapters."),
+    "harnesses.list": () => harnesses?.list() ?? [],
+    "harnesses.rescan": () =>
+      harnesses
+        ? harnesses.rescan()
+        : unavailable("Looking for harnesses arrives with the harness adapters."),
+    "harnesses.setConsent": ({ harnessId, consent }) =>
+      harnesses
+        ? harnesses.setConsent(harnessId, consent)
+        : unavailable("Harness consent arrives with the harness adapters."),
     "settings.get": () => defaultSettings(now().toISOString()),
     "settings.update": () => unavailable("Changing settings arrives with the agent."),
   };

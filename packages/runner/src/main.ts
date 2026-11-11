@@ -14,4 +14,12 @@ if (!args.ok) {
   errors(args.message);
   process.exit(2);
 }
-process.exit(await runProcess({ ...args.options, input: process.stdin, output: process.stdout, errors }));
+process.exit(
+  await runProcess({
+    ...args.options,
+    env: process.env,
+    input: process.stdin,
+    output: process.stdout,
+    errors,
+  }),
+);

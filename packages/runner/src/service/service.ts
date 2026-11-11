@@ -5,6 +5,7 @@ import { demoFlow } from "../demo/demo-flow.ts";
 import { createEngine, type Engine } from "../engine.ts";
 import type { HarnessAdapter } from "../harness.ts";
 import type { Store } from "../storage.ts";
+import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
 import { createDispatcher, createHandlers } from "./handlers.ts";
@@ -16,6 +17,9 @@ export type ServiceOptions = {
   now?: () => Date;
   newId?: (prefix: string) => string;
   harness?: HarnessAdapter;
+  env?: Record<string, string | undefined>;
+  claudePath?: string;
+  scanTimeoutMs?: number;
 };
 export type RunnerService = {
   engine: Engine;
@@ -29,31 +33,36 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
   const { store, mode } = options;
   const now = options.now ?? (() => new Date());
   const projectDir = join(options.dataDir, mode === "demo" ? "demo-project" : "project");
-  const noHarness = async (): Promise<never> => {
-    throw new Error("No harness is connected yet.");
-  };
+  const newId =
+    options.newId ?? ((prefix: string) => `${prefix}-${randomUUID().replaceAll("-", "").slice(0, 12)}`);
+  const hs =
+    mode === "live" && !options.harness
+      ? createHarnessService({
+          store,
+          dataDir: options.dataDir,
+          projectDir,
+          env: options.env ?? {},
+          claudePath: options.claudePath,
+          now,
+          newId,
+          scanTimeoutMs: options.scanTimeoutMs,
+        })
+      : undefined;
   const harness =
     options.harness ??
-    (mode === "demo"
-      ? createDemoHarness({
-          runIndex: (runId) =>
-            store.listRuns({ flowId: store.getRun(runId)?.flowId }).findIndex((run) => run.id === runId),
-        })
-      : {
-          id: "none",
-          name: "No harness",
-          runStep: noHarness,
-          replan: noHarness,
-          judge: noHarness,
-          probe: noHarness,
-        });
+    hs?.adapter ??
+    createDemoHarness({
+      runIndex: (runId) =>
+        store.listRuns({ flowId: store.getRun(runId)?.flowId }).findIndex((run) => run.id === runId),
+    });
   const engine = createEngine({
     store,
     now,
-    newId: options.newId ?? ((prefix) => `${prefix}-${randomUUID().replaceAll("-", "").slice(0, 12)}`),
+    newId,
     harness,
-    readiness:
-      mode === "demo"
+    readiness: hs
+      ? hs.readiness
+      : mode === "demo"
         ? () => ({ ready: true })
         : () => ({ ready: false, reason: "No harness is connected yet." }),
   });
@@ -63,6 +72,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     mode,
     projectDir,
     now,
+    harnesses: hs,
     harnessIdOf: (name) =>
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   });
@@ -76,13 +86,22 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     knows: (name) => Object.hasOwn(operations, name),
     start() {
       prepareDataDir(projectDir);
-      const { settled } = engine.beginRecover();
+      const settled = hs
+        ? hs.start().settled.then(async () => {
+            try {
+              await engine.beginRecover().settled;
+            } catch {}
+          })
+        : engine.beginRecover().settled;
       if (mode === "demo") {
         const demo = demoFlow();
         engine.registerFlow(demo.manifest, DEMO_HASH, demo.files);
       }
       return { settled };
     },
-    stop: () => engine.shutdown(),
+    stop: () => {
+      engine.shutdown();
+      hs?.stop();
+    },
   };
 }
