@@ -87,3 +87,38 @@ test("durations", () => {
   expect(durationMs("10s")).toBe(10_000);
   for (const text of ["1.5h", "30 min", "0m", ""]) expect(Duration.safeParse(text).success).toBe(false);
 });
+
+test("a duration that durationMs refuses is also refused at parse or validation time", () => {
+  const text = "99999999999999999d";
+  expect(() => durationMs(text)).toThrow();
+  expect(parseManifest({ ...min(), limits: { max_duration: text } }).ok).toBe(false);
+});
+test("duration fields have a 365 day maximum", () => {
+  expect(Duration.safeParse("365d").success).toBe(true);
+  for (const text of ["366d", "8761h", "99999999999999999d"]) {
+    expect(Duration.safeParse(text).success).toBe(false);
+    for (const raw of [
+      { ...min(), limits: { max_duration: text } },
+      withTrigger({ kind: "schedule", every: text }),
+      min({ do: "ask", ask: { question: "q", choose_from: "x", expires: text } }),
+    ])
+      expect(parseManifest(raw).ok).toBe(false);
+  }
+});
+test("M5 the version is a semantic version (spec 9.2)", () => {
+  for (const version of ["banana", "1.2", "01.2.3", "1.2.3-", "1.2.3-alpha..1", "1.2.3-01", "1.2.3+build..x"])
+    expect(parseManifest({ ...min(), version }).ok).toBe(false);
+  for (const version of ["1.2.3", "1.2.3-alpha.1+build.5"])
+    expect(parseManifest({ ...min(), version }).ok).toBe(true);
+});
+test("M6 retry has an upper bound (a flow with retry 1e9 and no max_attempts loops on a failing step for ever)", () => {
+  for (const retry of [-1, 11, 1e9]) expect(parseManifest(min({ retry })).ok).toBe(false);
+  for (const retry of [0, 10]) expect(parseManifest(min({ retry })).ok).toBe(true);
+  for (const max_attempts of [0, 13]) {
+    expect(parseManifest({ ...min(), limits: { max_attempts } }).ok).toBe(false);
+    expect(parseManifest(min({ limits: { max_attempts } })).ok).toBe(false);
+  }
+  expect(parseManifest({ ...min({ limits: { max_attempts: 12 } }), limits: { max_attempts: 1 } }).ok).toBe(
+    true,
+  );
+});

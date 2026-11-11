@@ -11,6 +11,7 @@ const sha256Hex = (bytes: Uint8Array) => createHash("sha256").update(bytes).dige
 export function canonicalListing(files: FlowFiles): string {
   const rows = [...files].map(([path, bytes]) => {
     if (
+      !(path as unknown as { isWellFormed(): boolean }).isWellFormed() ||
       path.length === 0 ||
       path.length > 512 ||
       path.startsWith("/") ||

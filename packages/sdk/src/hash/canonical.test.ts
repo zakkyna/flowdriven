@@ -62,3 +62,10 @@ test("a changed file or a renamed path changes the hash", () => {
   expect(contentHash(new Map([["a.md", enc("2")]]))).not.toBe(base);
   expect(contentHash(new Map([["b.md", enc("1")]]))).not.toBe(base);
 });
+
+test("two packages whose paths differ only in a lone surrogate do not share a hash (or the path is refused)", () => {
+  for (const code of [0xd800, 0xd801])
+    expect(() => contentHash(new Map([[`a${String.fromCharCode(code)}.md`, enc("x")]]))).toThrowError(
+      expect.objectContaining({ code: "invalid_path" }),
+    );
+});

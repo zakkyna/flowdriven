@@ -82,7 +82,21 @@ export const FlowManifest = z.strictObject({
   name: z.string(),
   summary: z.string().default(""),
   description: z.string().default(""),
-  version: z.string().default("0.1.0"),
+  version: z
+    .string()
+    .regex(/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/)
+    .refine((version) => {
+      const [coreAndPre, build] = version.split("+");
+      const pre = coreAndPre?.slice(coreAndPre.indexOf("-") + 1);
+      const hasPre = coreAndPre?.includes("-") ?? false;
+      const partsValid = (part: string) => part.split(".").every((item) => item.length > 0);
+      return (
+        (build === undefined || partsValid(build)) &&
+        (!hasPre ||
+          (pre !== undefined && partsValid(pre) && pre.split(".").every((item) => !/^0\d+$/.test(item))))
+      );
+    })
+    .default("0.1.0"),
   publisher: z.string().optional(),
   license: z.string().default("UNLICENSED"),
   kind: z.enum(["build", "light"]),

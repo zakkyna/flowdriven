@@ -17,6 +17,20 @@ export function checkRefs(
       for (const segments of references(parseExpression(source))) {
         const root = segments.at(0);
         const name = segments.at(1);
+        const stepId = root === "steps" ? name : root;
+        const step = manifest.steps
+          .flatMap((entry) => ("steps" in entry ? [entry, ...entry.steps] : [entry]))
+          .find((entry) => entry.id === stepId);
+        const member = segments.at(root === "steps" ? 2 : 1);
+        const output = member === "outputs" ? segments.at(root === "steps" ? 3 : 2) : member;
+        const memberValid =
+          member === undefined ||
+          ["status", "passed", "failed", "skipped"].includes(member) ||
+          (member === "items" && step !== undefined && "steps" in step) ||
+          (member === "outputs" && output === undefined) ||
+          (step !== undefined &&
+            "do" in step &&
+            ((step.do === "ask" && output === "choice") || step.outputs.some((item) => item.id === output)));
         const valid =
           root === "params"
             ? name !== undefined && Object.hasOwn(manifest.params, name)
@@ -25,7 +39,11 @@ export function checkRefs(
               : root === "steps"
                 ? name !== undefined && earlier.has(name)
                 : root === "trigger" || (root !== undefined && (root === variable || earlier.has(root)));
-        if (!valid)
+        const isStep =
+          stepId !== undefined &&
+          earlier.has(stepId) &&
+          (root === "steps" || (root !== variable && root === stepId));
+        if (!valid || (isStep && !memberValid))
           issues.push({
             severity: "error",
             code: "unknown_reference",

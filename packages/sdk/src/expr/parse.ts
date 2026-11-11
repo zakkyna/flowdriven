@@ -10,7 +10,7 @@ export class ExprError extends Error {
 }
 export type Expr =
   | { kind: "literal"; value: Value }
-  | { kind: "path"; path: string[] }
+  | { kind: "path"; path: string[]; indices?: boolean[] }
   | { kind: "list"; items: Expr[] }
   | { kind: "not"; operand: Expr }
   | { kind: "binary"; op: string; left: Expr; right: Expr };
@@ -90,23 +90,26 @@ export function parseExpression(source: string): Expr {
     if (!identifier(token)) throw new ExprError("syntax", `Unexpected token: ${token}`);
     checkName(token);
     const path = [token];
+    const indices = [false];
     while (peek() === "." || peek() === "[") {
       if (take() === ".") {
         const segment = take();
         if (!identifier(segment)) throw new ExprError("syntax", "Expected path name");
         checkName(segment);
         path.push(segment);
+        indices.push(false);
       } else {
         const segment = take();
         if (segment === undefined || !/^\d+$/.test(segment))
           throw new ExprError("syntax", "Expected array index");
         expect("]");
         path.push(segment);
+        indices.push(true);
       }
       if (path.length > 20) throw new ExprError("too_deep", "Expression is too deep");
     }
     if (peek() === "(") throw new ExprError("syntax", "function calls are not allowed");
-    return { kind: "path", path };
+    return { kind: "path", path, indices };
   };
   const cmp = (): Expr => {
     const left = primary();
@@ -143,6 +146,15 @@ export function parseExpression(source: string): Expr {
       "syntax",
       peek() === "(" ? "function calls are not allowed" : `Unexpected token: ${peek()}`,
     );
+  const checkWhere = (node: Expr, inPredicate: boolean): void => {
+    if (node.kind === "binary") {
+      if (node.op === "where" && inPredicate) throw new ExprError("too_deep", "Nested where predicate");
+      checkWhere(node.left, inPredicate);
+      checkWhere(node.right, inPredicate || node.op === "where");
+    } else if (node.kind === "not") checkWhere(node.operand, inPredicate);
+    else if (node.kind === "list") for (const item of node.items) checkWhere(item, inPredicate);
+  };
+  checkWhere(result, false);
   return result;
 }
 export function references(expr: Expr): string[][] {

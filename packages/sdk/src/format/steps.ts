@@ -1,11 +1,20 @@
 import "../config.ts";
 import { z } from "zod";
-export const Duration = z.string().regex(/^[1-9]\d*(s|m|h|d)$/);
+
+const durationFactors: Record<string, number> = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+export const Duration = z
+  .string()
+  .regex(/^[1-9]\d*(s|m|h|d)$/)
+  .refine((value) => {
+    const factor = durationFactors[value.slice(-1)];
+    const result = Number(value.slice(0, -1)) * (factor ?? NaN);
+    return Number.isSafeInteger(result) && result <= 365 * 86400000;
+  });
 export type Duration = z.infer<typeof Duration>;
 export function durationMs(text: string): number {
   const value = Duration.parse(text);
   const unit = value.slice(-1);
-  const factor = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[unit];
+  const factor = durationFactors[unit];
   if (factor === undefined) throw new Error("Invalid duration");
   const result = Number(value.slice(0, -1)) * factor;
   if (!Number.isSafeInteger(result)) throw new Error("Duration out of range");
@@ -23,7 +32,7 @@ export const Limits = z.strictObject({
   max_duration: Duration.optional(),
   max_items: z.number().int().positive().optional(),
   max_runs_per_day: z.number().int().positive().optional(),
-  max_attempts: z.number().int().positive().optional(),
+  max_attempts: z.number().int().min(1).max(12).optional(),
 });
 export type Limits = z.infer<typeof Limits>;
 const checkCommon = {
@@ -81,7 +90,7 @@ const leafBase = {
   uses: z.array(z.string()).default([]),
   outputs: z.array(OutputDecl).default([]),
   checks: z.array(Check).default([]),
-  retry: z.number().int().nonnegative().default(2),
+  retry: z.number().int().min(0).max(10).default(2),
   risky: z.array(z.string()).optional(),
   idempotent: z.boolean().optional(),
   skills: z.array(z.string()).optional(),

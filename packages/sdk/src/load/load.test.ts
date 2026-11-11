@@ -108,3 +108,25 @@ test("refuses invalid UTF-8 in flow.yaml as YAML", () => {
     expect.objectContaining({ code: "yaml" }),
   );
 });
+
+test("a flat map of 20,000 keys (189 KB) parses in linear time", () => {
+  let text = "";
+  for (let i = 0; i < 20000; i++) text += `k${i}: 1\n`;
+  const started = Date.now();
+  parseFlowYaml(text);
+  expect(Date.now() - started).toBeLessThan(2000);
+}, 60_000);
+test("YAML size is limited by UTF-8 bytes before parsing", () => {
+  expect(() => parseFlowYaml("é".repeat(131073))).toThrowError(
+    expect.objectContaining({ code: "too_large" }),
+  );
+});
+test("duplicate YAML keys are refused in top-level and nested maps", () => {
+  for (const text of ["a: 1\na: 2\n", "a:\n  b: 1\n  b: 2\n"])
+    expect(() => parseFlowYaml(text)).toThrowError(expect.objectContaining({ code: "yaml" }));
+});
+test("a folder with more than 2000 files is refused", () => {
+  const files: Record<string, string> = { "flow.yaml": upworkYaml, "README.md": "r" };
+  for (let i = 0; i < 1999; i++) files[`f${i}`] = "";
+  expect(() => loadFlowFolder(folder(files))).toThrowError(expect.objectContaining({ code: "too_large" }));
+});

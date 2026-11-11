@@ -211,3 +211,29 @@ test("M2 a builtin whose name is risky is refused before the first ask (spec 13.
   ]);
   expect(codes(validateManifest(manifest))).toContain("unattended_prefix@steps.0");
 });
+
+test("M4 a reference to an output the step does not declare is reported (plan Task 4 'references to unknown steps or outputs')", () => {
+  const manifest = sched([
+    step("a", { outputs: [{ id: "o", type: "text" }] }),
+    step("b", { instructions: "${a.nope} ${steps.a.outputs.nope}" }),
+    askStep("p"),
+    userStep("z"),
+  ]);
+  expect(codes(validateManifest(manifest))).toContain("unknown_reference@steps.1.instructions");
+  for (const instructions of ["${a.nope}", "${steps.a.outputs.nope}"]) {
+    const single = sched([
+      step("a", { outputs: [{ id: "o", type: "text" }] }),
+      step("b", { instructions }),
+      askStep("p"),
+      userStep("z"),
+    ]);
+    expect(codes(validateManifest(single))).toContain("unknown_reference@steps.1.instructions");
+  }
+  const valid = sched([
+    step("a", { outputs: [{ id: "o", type: "text" }] }),
+    step("b", { instructions: "${a.o.deep} ${steps.a.outputs.o.deep} ${a.passed}" }),
+    askStep("p"),
+    userStep("z"),
+  ]);
+  expect(codes(validateManifest(valid))).not.toContain("unknown_reference@steps.1.instructions");
+});

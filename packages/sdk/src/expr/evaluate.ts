@@ -21,6 +21,19 @@ export function stepView(status: StepStatus, outputs: Record<string, Value>): Va
     outputs,
   };
 }
+function readName(value: Value | Scope | undefined, key: string, index = false): Value | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) {
+    if (!index || !/^(0|[1-9]\d*)$/.test(key)) return undefined;
+  } else {
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return undefined;
+    if (index) return undefined;
+  }
+  return Object.prototype.propertyIsEnumerable.call(value, key)
+    ? (value as Record<string, Value>)[key]
+    : undefined;
+}
 export function evaluate(source: string | Expr, scope: Scope): Value | undefined {
   const expr = typeof source === "string" ? parseExpression(source) : source;
   function run(node: Expr, element?: Value): Value | undefined {
@@ -30,15 +43,12 @@ export function evaluate(source: string | Expr, scope: Scope): Value | undefined
       case "path": {
         const first = node.path.at(0);
         if (first === undefined) return undefined;
-        let value: Value | undefined =
-          element !== null && typeof element === "object" && Object.hasOwn(element, first)
-            ? (element as Record<string, Value>)[first]
-            : Object.hasOwn(scope, first)
-              ? scope[first]
-              : undefined;
-        for (const key of node.path.slice(1)) {
-          if (value === null || typeof value !== "object" || !Object.hasOwn(value, key)) return undefined;
-          value = (value as Record<string, Value>)[key];
+        const elementValue = readName(element, first);
+        let value = elementValue === undefined ? readName(scope, first) : elementValue;
+        for (let i = 1; i < node.path.length; i++) {
+          const key = node.path[i];
+          if (key === undefined) return undefined;
+          value = readName(value, key, node.indices?.[i] ?? false);
         }
         return value;
       }

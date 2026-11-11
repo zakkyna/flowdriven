@@ -91,3 +91,16 @@ test("refuses calls, assignment, ternaries and forbidden names", () => {
   ] as const)
     expect(() => parseExpression(src)).toThrowError(expect.objectContaining({ code }));
 });
+
+test("a nested where on a 10 item list is refused or cheap (84 characters, 8 levels)", () => {
+  let source = "true";
+  for (let i = 0; i < 8; i++) source = `x where (${source})`;
+  expect(() => parseExpression(source)).toThrowError(expect.objectContaining({ code: "too_deep" }));
+});
+test("M3 a path ends in an own property only: array length is not a data path (plan Task 3 attack surface)", () => {
+  expect(evaluate("job.tags.length", { job: { tags: ["a", "b"] } })).toBeUndefined();
+  expect(evaluate("job.tags[0]", { job: { tags: ["a", "b"] } })).toBe("a");
+  expect(evaluate("job.tags[0].length", { job: { tags: [["a"]] } })).toBeUndefined();
+  const hidden = Object.defineProperty({}, "secret", { value: "hidden", enumerable: false });
+  expect(evaluate("job.secret", { job: hidden })).toBeUndefined();
+});

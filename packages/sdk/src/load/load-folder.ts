@@ -20,6 +20,7 @@ export function loadFlowFolder(dir: string): LoadedFlow {
         walk(join(path, name), prefix ? `${prefix}/${name}` : name);
       }
     } else if (stat.isFile()) {
+      if (files.size >= 2000) throw new FlowFileError("too_large", "Too many files in flow folder");
       if (stat.size > 2_097_152 || total + stat.size > 10_485_760)
         throw new FlowFileError("too_large", `Flow folder is too large: ${prefix}`);
       const bytes = readFileSync(path);
