@@ -5,16 +5,20 @@ import {
   type OperationOutput,
   operations,
   RUNNER_ERROR_CODES,
+  RUNNER_MODES,
   type RunDetail,
   RunnerError,
 } from "./index";
 
-test("version 0 has exactly these operations", () => {
+test("version 1 has exactly these operations", () => {
   expect(Object.keys(operations).sort()).toEqual([
+    "approvals.answer",
     "approvals.list",
     "approvals.resolve",
+    "audit.list",
     "flows.build",
     "flows.get",
+    "flows.import",
     "flows.list",
     "flows.run",
     "flows.update",
@@ -23,6 +27,8 @@ test("version 0 has exactly these operations", () => {
     "harnesses.setConsent",
     "readiness.check",
     "readiness.install",
+    "runner.info",
+    "runs.export",
     "runs.list",
     "runs.report",
     "runs.resume",
@@ -37,6 +43,7 @@ test("only the operations in spec 8.7 are exposed over MCP, and the approval rul
     .map(([n]) => n)
     .sort();
   expect(mcp).toEqual([
+    "approvals.answer",
     "approvals.list",
     "approvals.resolve",
     "flows.build",
@@ -51,7 +58,7 @@ test("only the operations in spec 8.7 are exposed over MCP, and the approval rul
     Object.entries(operations)
       .filter(([, d]) => d.mcp === "restricted")
       .map(([n]) => n),
-  ).toEqual(["approvals.resolve"]);
+  ).toEqual(["approvals.resolve", "approvals.answer"]);
   expect(operations["approvals.resolve"].mcpRule).toBe(
     "Over MCP, risky actions only open the item in the app; only flow and result sign-offs resolve; applyToSimilar is refused.",
   );
@@ -73,4 +80,40 @@ test("runner errors carry a code", () => {
 });
 test("output types are inferred from the schemas", () => {
   expectTypeOf<OperationOutput<"runs.status">>().toEqualTypeOf<RunDetail>();
+});
+
+test("approvals.answer is restricted over MCP and its rule travels with the contract", () => {
+  expect(operations["approvals.answer"].mcp).toBe("restricted");
+  expect(operations["approvals.answer"].mcpRule).toBe(
+    "Over MCP, an answer only opens the item in the app; picks are never sent over MCP.",
+  );
+});
+test("operations the runner may refuse as not built list unavailable", () => {
+  for (const name of [
+    "flows.build",
+    "flows.update",
+    "readiness.install",
+    "harnesses.rescan",
+    "harnesses.setConsent",
+    "settings.update",
+  ] as const) {
+    expect(operations[name].errors).toContain("unavailable");
+  }
+});
+test("flows.run takes params next to inputs", () => {
+  expect(
+    operations["flows.run"].input.safeParse({
+      flowId: "flow",
+      inputs: { x: "y" },
+      params: { min_score: 8, fast: true, who: "Ana" },
+    }).success,
+  ).toBe(true);
+  expect(operations["flows.run"].input.safeParse({ flowId: "flow", params: { x: [1] } }).success).toBe(false);
+});
+test("runner.info names the contract version and one of three modes", () => {
+  expect(operations["runner.info"].output.safeParse({ contractVersion: 1, mode: "demo" }).success).toBe(true);
+  expect(operations["runner.info"].output.safeParse({ contractVersion: 1, mode: "other" }).success).toBe(
+    false,
+  );
+  expect(RUNNER_MODES).toEqual(["sample", "demo", "live"]);
 });

@@ -291,21 +291,23 @@ Fixtures client (the `Handlers` type is exhaustive, so all five must exist): `"r
 
 Present tests that change (3): `operations.test.ts` "version 0 has exactly these operations" (renamed "version 1 ...", sorted list gains `approvals.answer`, `audit.list`, `flows.import`, `runner.info`, `runs.export`), "only the operations in spec 8.7 are exposed over MCP, and the approval rule travels with the contract" (the sorted MCP list becomes `approvals.answer`, `approvals.list`, `approvals.resolve`, `flows.build`, and so on; the restricted list becomes `["approvals.resolve", "approvals.answer"]`); `version.test.ts` "runner API contract is version 0" (renamed "... version 1", expects 1).
 
-- [ ] **Step 1: Write the failing tests** (7 new, 3 changed = 10 named)
+- [x] **Step 1: Write the failing tests** (7 new, 3 changed = 10 named)
   `operations.test.ts` (4 new): (1) `approvals.answer is restricted over MCP and its rule travels with the contract`. (2) `operations the runner may refuse as not built list unavailable`: for the six of decision 6 (`flows.build`, `flows.update`, `readiness.install`, `harnesses.rescan`, `harnesses.setConsent`, `settings.update`) `operations[name].errors` contains `unavailable`. (3) `flows.run takes params next to inputs`: input with `params: {min_score: 8, fast: true, who: "Ana"}` parses; `params: {x: [1]}` does not. (4) `runner.info names the contract version and one of three modes`: the output schema accepts `{contractVersion: 1, mode: "demo"}` and refuses `mode: "other"`; `RUNNER_MODES` equals `["sample","demo","live"]`.
   `client.test.ts` (3 new): (5) `runner.info says sample data`. (6) `runs.export writes the steps and, for a looped step, its items`: export of `run-0006` contains `# Figma to Flutter: run run-0006` and `- Build the screens: failed`; after `c.state.runs[0]` gets a step with `items: [{key:"j1", label:"Job one", state:"passed", steps:[]}]` its export contains `  - j1: passed`. (7) `flows.import needs the engine, audit.list is empty and a decision that is not a choice cannot be answered`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/contracts/src/operations.test.ts packages/contracts/src/version.test.ts packages/fixtures/src/client.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the contract additions and the fixtures handlers.
-- [ ] **Step 4: Run the tests and the typecheck**
+- [x] **Step 3: Implement** the contract additions and the fixtures handlers.
+- [x] **Step 4: Run the tests and the typecheck**
   Run: `pnpm vitest run packages/contracts packages/fixtures && pnpm typecheck`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check && pnpm build:web`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/contracts packages/fixtures
 git commit -m "Add the runner operations of contract version 1" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

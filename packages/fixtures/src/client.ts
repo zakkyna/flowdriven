@@ -2,6 +2,7 @@ import {
   approvalExpiresAt,
   attentionCount,
   type ChatMessage,
+  CONTRACT_VERSION,
   type FlowDetail,
   type FlowEdit,
   type FlowSummary,
@@ -244,6 +245,31 @@ export function createFixtureRunnerClient(
     return detail(f);
   };
   const handlers: Handlers = {
+    "runner.info": () => ({ contractVersion: CONTRACT_VERSION, mode: "sample" }),
+    "audit.list": () => [],
+    "flows.import": () => {
+      throw new RunnerError("unavailable", "Importing a flow needs the engine.");
+    },
+    "approvals.answer": ({ approvalId }) => {
+      find(state.approvals, (a) => a.id === approvalId, "approval", approvalId);
+      throw new RunnerError("invalid_input", "This decision is not a choice.");
+    },
+    "runs.export": ({ runId }) => {
+      const r = run(runId);
+      const lines = [
+        `# ${r.flowName}: run ${r.id}`,
+        "",
+        `- State: ${r.state.replaceAll("_", " ")}`,
+        `- Started: ${r.startedAt}`,
+        "",
+        "## Steps",
+      ];
+      for (const step of r.steps) {
+        lines.push(`- ${step.title}: ${step.state}`);
+        for (const item of step.items ?? []) lines.push(`  - ${item.key}: ${item.state}`);
+      }
+      return { markdown: `${lines.join("\n")}\n` };
+    },
     "flows.list": () => state.flows.map(summary),
     "flows.get": ({ flowId }) => detail(flow(flowId)),
     "flows.build": ({ flowId, message }) => {

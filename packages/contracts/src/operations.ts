@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Approval, ApprovalDecision, ApprovalState } from "./approval.ts";
 import type { RunnerTopic } from "./client.ts";
-import { Id } from "./common.ts";
+import { ContentHash, Id, IsoDateTime } from "./common.ts";
 import { ChatMessage, FlowDetail, FlowEdit, FlowSummary } from "./flow.ts";
 import { HarnessCard } from "./harness.ts";
 import { ReadinessReport } from "./readiness.ts";
@@ -18,6 +18,24 @@ export class RunnerError extends Error {
     this.code = code;
   }
 }
+export const FlowIssue = z.object({
+  severity: z.enum(["error", "warning"]),
+  code: z.string(),
+  path: z.string(),
+  message: z.string(),
+});
+export type FlowIssue = z.infer<typeof FlowIssue>;
+export const AuditRecord = z.object({
+  at: IsoDateTime,
+  kind: z.string(),
+  runId: Id.optional(),
+  detail: z.string(),
+});
+export type AuditRecord = z.infer<typeof AuditRecord>;
+export const RUNNER_MODES = ["sample", "demo", "live"] as const;
+export const RunnerMode = z.enum(RUNNER_MODES);
+export type RunnerMode = z.infer<typeof RunnerMode>;
+export const RunParams = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
 export function isRunnerError(value: unknown): value is RunnerError {
   return value instanceof RunnerError;
 }
@@ -58,13 +76,17 @@ export const operations = {
     input: z.object({ flowId: Id, edit: FlowEdit }),
     output: FlowDetail,
     mcp: "no",
-    errors: ["invalid_input", "not_found", "not_allowed"],
+    errors: ["invalid_input", "not_found", "not_allowed", "unavailable"],
     reads: [],
     writes: ["flows", "approvals"],
   },
   "flows.run": {
     input: z.union([
-      z.object({ flowId: Id, inputs: z.record(z.string(), z.string()).optional() }),
+      z.object({
+        flowId: Id,
+        inputs: z.record(z.string(), z.string()).optional(),
+        params: RunParams.optional(),
+      }),
       z.object({ description: z.string().min(1) }),
     ]),
     output: RunSummary,
@@ -117,7 +139,7 @@ export const operations = {
     input: z.object({ flowId: Id, requirementId: Id }),
     output: ReadinessReport,
     mcp: "no",
-    errors: ["invalid_input", "not_found", "not_allowed"],
+    errors: ["invalid_input", "not_found", "not_allowed", "unavailable"],
     reads: [],
     writes: ["readiness"],
   },
@@ -144,6 +166,51 @@ export const operations = {
     reads: [],
     writes: ["approvals", "runs", "flows"],
   },
+  "approvals.answer": {
+    input: z.object({ approvalId: Id, picks: z.array(z.string()) }),
+    output: z.array(Approval),
+    mcp: "restricted",
+    mcpRule: "Over MCP, an answer only opens the item in the app; picks are never sent over MCP.",
+    errors: ["invalid_input", "not_found", "not_allowed"],
+    reads: [],
+    writes: ["approvals", "runs"],
+  },
+  "flows.import": {
+    input: z.object({ path: z.string().min(1) }),
+    output: z.object({
+      flow: FlowDetail.optional(),
+      issues: z.array(FlowIssue),
+      hash: ContentHash.optional(),
+    }),
+    mcp: "no",
+    errors: ["invalid_input", "not_found", "unavailable"],
+    reads: [],
+    writes: ["flows"],
+  },
+  "runs.export": {
+    input: z.object({ runId: Id }),
+    output: z.object({ markdown: z.string() }),
+    mcp: "no",
+    errors: ["invalid_input", "not_found", "unavailable"],
+    reads: ["runs"],
+    writes: [],
+  },
+  "audit.list": {
+    input: z.object({ runId: Id.optional() }),
+    output: z.array(AuditRecord),
+    mcp: "no",
+    errors: ["invalid_input", "not_found"],
+    reads: ["runs"],
+    writes: [],
+  },
+  "runner.info": {
+    input: z.object({}),
+    output: z.object({ contractVersion: z.number().int().min(0), mode: RunnerMode }),
+    mcp: "no",
+    errors: ["invalid_input"],
+    reads: ["settings"],
+    writes: [],
+  },
   "harnesses.list": {
     input: z.object({}),
     output: z.array(HarnessCard),
@@ -156,7 +223,7 @@ export const operations = {
     input: z.object({}),
     output: z.array(HarnessCard),
     mcp: "no",
-    errors: ["invalid_input"],
+    errors: ["invalid_input", "unavailable"],
     reads: [],
     writes: ["harnesses"],
   },
@@ -164,7 +231,7 @@ export const operations = {
     input: z.object({ harnessId: Id, consent: z.enum(["given", "revoked"]) }),
     output: HarnessCard,
     mcp: "no",
-    errors: ["invalid_input", "not_found", "not_allowed"],
+    errors: ["invalid_input", "not_found", "not_allowed", "unavailable"],
     reads: [],
     writes: ["harnesses", "settings"],
   },
@@ -180,7 +247,7 @@ export const operations = {
     input: z.object({ patch: SettingsPatch }),
     output: Settings,
     mcp: "no",
-    errors: ["invalid_input", "not_allowed"],
+    errors: ["invalid_input", "not_allowed", "unavailable"],
     reads: [],
     writes: ["settings"],
   },

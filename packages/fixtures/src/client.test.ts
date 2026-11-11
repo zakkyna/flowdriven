@@ -359,3 +359,44 @@ test("pending approval of a run that is no longer waiting is refused", async () 
     "This run is no longer waiting for approval.",
   );
 });
+
+test("runner.info says sample data", async () => {
+  expect(await createFixtureRunnerClient().call("runner.info", {})).toEqual({
+    contractVersion: 1,
+    mode: "sample",
+  });
+});
+test("runs.export writes the steps and, for a looped step, its items", async () => {
+  const c = createFixtureRunnerClient();
+  const initial = await c.call("runs.export", { runId: "run-0006" });
+  expect(initial.markdown).toContain("# Figma to Flutter: run run-0006");
+  expect(initial.markdown).toContain("- Build the screens: failed");
+  const r = c.state.runs.at(0);
+  if (!r) throw new Error("Missing run");
+  r.steps.push({
+    stepId: "loop",
+    title: "Loop",
+    do: "loop",
+    state: "passed",
+    attempts: [],
+    maxAttempts: 1,
+    checks: [],
+    items: [{ key: "j1", label: "Job one", state: "passed", steps: [] }],
+  });
+  expect((await c.call("runs.export", { runId: r.id })).markdown).toContain("  - j1: passed");
+});
+test("flows.import needs the engine, audit.list is empty and a decision that is not a choice cannot be answered", async () => {
+  const c = createFixtureRunnerClient();
+  await fails(c.call("flows.import", { path: "/flow" }), "unavailable", "Importing a flow needs the engine.");
+  expect(await c.call("audit.list", {})).toEqual([]);
+  await fails(
+    c.call("approvals.answer", { approvalId: "ap-0014", picks: [] }),
+    "invalid_input",
+    "This decision is not a choice.",
+  );
+  await fails(
+    c.call("approvals.answer", { approvalId: "missing", picks: [] }),
+    "not_found",
+    "There is no approval missing.",
+  );
+});
