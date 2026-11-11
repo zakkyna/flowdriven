@@ -1436,21 +1436,23 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `HandlerContext` gains `keeper?: Keeper`; `service.ts` passes `wired.keeper`. Handlers: `queue.list` (zeros and the configured ceiling when there is no keeper, i.e. demo mode); `queue.move({ runId })` is `not_found` for an unknown run, `not_allowed` ("This run waits for the earlier run of its flow.") for a flow-overlap run, `not_found` ("That run is not waiting.") when `keeper.move` is false, else the new view; `usage.summary`.
 - **The card gets its numbers in the handler layer** (`hs` is built before the keeper in `service.ts`, so `createHarnessService` is untouched): `harnesses.list`, `harnesses.rescan` and `harnesses.setConsent` pass the `claude-code` card through `withQuota(card)`, which sets `quota.state` (`exhausted` with `until` while refused, `available` when a window is known, else `unknown`), `today` and `week` (`calls`, `tokens` as decision 11) and `quota.windows` (each known live window: `name`, `utilization`, `resetsAt`). With no usage rows and no windows the card is exactly as before.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `map-queue.test.ts`: a snapshot with one running owner row, one waiting triggered row with `{ reason: "memory" }` and one overlap run gives `{ running: 1, waiting: 2, ceiling: 1, rows: [...] }` with classes `owner`, `triggered`, and the overlap row `{ runId, flowName, class: "owner", state: "waiting", waiting: { reason: "flow_overlap" }, queuedSeconds: 12 }`; a missing snapshot gives zeros.
 
 `usage-summary.test.ts`: three events for `claude-code` (two today, one 3 days ago) and one 10 days ago: `today.calls` is 2, `week.calls` is 3, tokens add up per category; `limit.status` is `warning` for a seven-day window at 0.92 with the line 0.9, `limited` after `rejectedUntil`, `unknown` with no quota data.
 
 In `usage-summary.test.ts` too, the card: a service in demo mode with a fake `harnesses` object answering one `claude-code` card, `store.addUsage` of two rows and a stored window gives `harnesses.list` `quota` `{ state: "available", today: { calls: 2, tokens: 8998 }, week: { calls: 2, tokens: 8998 }, windows: [{ name: "seven_day", utilization: 0.78, resetsAt: "2026-11-14T17:59:00.000Z" }] }` (the rows have 4+384+8454+156 tokens and all-zero counts); with neither, the card equals the original.
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/map-queue.test.ts packages/runner/src/service/usage-summary.test.ts`. Expected: FAIL (modules missing).
-- [ ] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner packages/contracts`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/map-queue.test.ts packages/runner/src/service/usage-summary.test.ts`. Expected: FAIL (modules missing).
+- [x] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner packages/contracts`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Serve the queue, the usage summary and the card's limit windows" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

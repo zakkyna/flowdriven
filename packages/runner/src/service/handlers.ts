@@ -1,6 +1,7 @@
 import { isAbsolute } from "node:path";
 import {
   CONTRACT_VERSION,
+  type HarnessCard,
   KeeperSettings,
   type OperationInput,
   type OperationName,
@@ -13,13 +14,16 @@ import {
 import { FlowManifest, hasErrors, type Value } from "@flowdriven/sdk";
 import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
 import type { Engine } from "../engine.ts";
+import type { HarnessQuota, Keeper } from "../keeper/types.ts";
 import { renderRunReport, reportLines } from "../report.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { HarnessService } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
 import { defaultSettings, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
+import { toQueueView } from "./map-queue.ts";
 import { toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
+import { liveWindow, summarizeUsage } from "./usage-summary.ts";
 import type { createWeekly } from "./weekly-limit.ts";
 
 export type HandlerContext = {
@@ -30,6 +34,7 @@ export type HandlerContext = {
   now: () => Date;
   harnessIdOf: (workerName: string) => string;
   harnesses?: Pick<HarnessService, "list" | "rescan" | "setConsent">;
+  keeper?: Keeper;
   weekly?: ReturnType<typeof createWeekly>;
 };
 export type Handlers = {
@@ -97,6 +102,7 @@ export function createHandlers({
   now,
   harnessIdOf,
   harnesses,
+  keeper,
   weekly,
 }: HandlerContext): Handlers {
   function flow(id: string): FlowRow {
@@ -138,6 +144,97 @@ export function createHandlers({
   }
   function settings() {
     return { ...defaultSettings(now().toISOString()), keeper: readKeeperSettings(store) };
+  }
+  function quotaOf(id: string): HarnessQuota {
+    if (keeper) return keeper.quotaOf(id);
+    const value = store.getSetting(`quota:${id}`);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const result: HarnessQuota = {};
+    for (const key of ["fiveHour", "sevenDay"] as const) {
+      const w = value[key];
+      if (!w || typeof w !== "object" || Array.isArray(w)) continue;
+      if (
+        typeof w.utilization !== "number" ||
+        !Number.isFinite(w.utilization) ||
+        w.utilization < 0 ||
+        w.utilization > 1
+      )
+        continue;
+      if (
+        w.resetsAt !== undefined &&
+        (typeof w.resetsAt !== "number" || !Number.isFinite(w.resetsAt) || w.resetsAt < 0)
+      )
+        continue;
+      result[key] = {
+        utilization: w.utilization,
+        ...(typeof w.resetsAt === "number" ? { resetsAt: w.resetsAt } : {}),
+      };
+    }
+    return result;
+  }
+  function summary() {
+    return summarizeUsage({ store, now: now(), quotaOf, lines: readKeeperSettings(store).quotaLines });
+  }
+  function withQuota(card: HarnessCard): HarnessCard {
+    if (card.id !== "claude-code") return card;
+    const quota = quotaOf(card.id);
+    const time = now().getTime();
+    const five = liveWindow(quota.fiveHour, time);
+    const seven = liveWindow(quota.sevenDay, time);
+    const usage = summary().harnesses.find((h) => h.harnessId === card.id);
+    const refused =
+      quota.rejectedUntil !== undefined &&
+      quota.rejectedUntil > time &&
+      Number.isFinite(new Date(quota.rejectedUntil).getTime());
+    if (!usage && !five && !seven && !refused) return card;
+    const count = (t: {
+      calls: number;
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+    }) => ({ calls: t.calls, tokens: t.input + t.output + t.cacheRead + t.cacheWrite });
+    const empty = { calls: 0, tokens: 0 };
+    const windows: NonNullable<HarnessCard["quota"]["windows"]> = [];
+    if (five) windows.push({ name: "five_hour", ...five });
+    if (seven) windows.push({ name: "seven_day", ...seven });
+    return {
+      ...card,
+      quota: {
+        ...card.quota,
+        state: refused ? "exhausted" : windows.length ? "available" : "unknown",
+        until: refused ? new Date(quota.rejectedUntil as number).toISOString() : undefined,
+        today: usage ? count(usage.today) : empty,
+        week: usage ? count(usage.week) : empty,
+        windows,
+      },
+    };
+  }
+  function queue() {
+    return toQueueView({
+      snapshot: keeper?.snapshot(),
+      ceiling: readKeeperSettings(store).ceiling,
+      flowName: (id) => flowName(run(id)),
+      stepTitle: (id, stepId) => {
+        const manifest = engine.getRun(id).manifest;
+        const find = (steps: typeof manifest.steps): string | undefined => {
+          for (const step of steps) {
+            if (step.id === stepId) return step.title ?? step.id;
+            if ("steps" in step) {
+              const title = find(step.steps);
+              if (title) return title;
+            }
+          }
+          return undefined;
+        };
+        return find(manifest.steps);
+      },
+      overlap: store
+        .listRuns({ state: "queued" })
+        .filter((r) => engine.waitingOf(r.id).run?.reason === "flow_overlap")
+        .map((r) => ({ runId: r.id, startedAt: r.startedAt })),
+      nowMs: now().getTime(),
+    });
   }
   return {
     "flows.list": () => store.listFlows().map((r) => toFlowSummary(r, store.listRuns({ flowId: r.id }))),
@@ -233,18 +330,24 @@ export function createHandlers({
       return store.listAudit(runId).map(toAuditRecord);
     },
     "runner.info": () => ({ contractVersion: CONTRACT_VERSION, mode }),
-    "harnesses.list": () => harnesses?.list() ?? [],
+    "harnesses.list": () => harnesses?.list().map(withQuota) ?? [],
     "harnesses.rescan": () =>
       harnesses
-        ? harnesses.rescan()
+        ? harnesses.rescan().then((cards) => cards.map(withQuota))
         : unavailable("Looking for harnesses arrives with the harness adapters."),
     "harnesses.setConsent": ({ harnessId, consent }) =>
       harnesses
-        ? harnesses.setConsent(harnessId, consent)
+        ? withQuota(harnesses.setConsent(harnessId, consent))
         : unavailable("Harness consent arrives with the harness adapters."),
-    "queue.list": () => ({ running: 0, waiting: 0, ceiling: 4, rows: [] }),
-    "queue.move": () => unavailable("The queue arrives in this plan's Task 15."),
-    "usage.summary": () => ({ harnesses: [] }),
+    "queue.list": queue,
+    "queue.move": ({ runId }) => {
+      run(runId);
+      if (engine.waitingOf(runId).run?.reason === "flow_overlap")
+        throw new RunnerError("not_allowed", "This run waits for the earlier run of its flow.");
+      if (!keeper?.move(runId)) throw new RunnerError("not_found", "That run is not waiting.");
+      return queue();
+    },
+    "usage.summary": summary,
     "settings.get": settings,
     "settings.update": ({ patch }) => {
       if (!patch.keeper || Object.keys(patch).some((key) => key !== "keeper"))

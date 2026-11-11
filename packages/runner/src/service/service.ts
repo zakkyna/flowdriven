@@ -84,6 +84,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     projectDir,
     now,
     harnesses: hs,
+    keeper: wired?.keeper,
     weekly,
     harnessIdOf: (name) =>
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
