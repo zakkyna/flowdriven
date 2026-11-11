@@ -3,6 +3,7 @@ import {
   FrameError,
   LineFramer,
   MAX_FRAME_BYTES,
+  type Notice,
   parseFrame,
   RPC_INVALID_REQUEST,
   RPC_METHOD_NOT_FOUND,
@@ -21,7 +22,11 @@ export type RpcServerOptions = {
   maxFrameBytes?: number;
   endWaitMs?: number;
 };
-export type RpcServer = { notify(event: RunnerEvent): void; done: Promise<"end" | "protocol_error"> };
+export type RpcServer = {
+  notice(notice: Notice): void;
+  notify(event: RunnerEvent): void;
+  done: Promise<"end" | "protocol_error">;
+};
 export function serveRpc(options: RpcServerOptions): RpcServer {
   const { input, output } = options;
   const max = options.maxFrameBytes ?? MAX_FRAME_BYTES;
@@ -30,6 +35,7 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
   let stopped = false;
   let resolved = false;
   let pendingEvent: RunnerEvent | undefined;
+  const pendingNotices: Notice[] = [];
   let finish: (reason: "end" | "protocol_error") => void = () => {};
   const done = new Promise<"end" | "protocol_error">((resolve) => {
     finish = (reason) => {
@@ -155,6 +161,10 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
     });
   });
   output.on("drain", () => {
+    while (!resolved && !output.writableNeedDrain && pendingNotices.length > 0) {
+      const notice = pendingNotices.shift();
+      if (notice) void write({ jsonrpc: "2.0", method: "notice", params: notice });
+    }
     if (pendingEvent && !resolved) {
       const event = pendingEvent;
       pendingEvent = undefined;
@@ -163,6 +173,12 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
   });
   return {
     done,
+    notice(notice) {
+      if (resolved) return;
+      if (output.writableNeedDrain || pendingNotices.length > 0) {
+        if (pendingNotices.length < 20) pendingNotices.push(notice);
+      } else void write({ jsonrpc: "2.0", method: "notice", params: notice });
+    },
     notify(event) {
       if (resolved) return;
       if (output.writableNeedDrain) {

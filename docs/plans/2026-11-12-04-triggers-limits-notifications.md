@@ -618,7 +618,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `server.ts`: `RpcServer` gains `notice(notice: Notice): void`: writes `{ jsonrpc: "2.0", method: "notice", params }` (an `encodeFrame` failure is dropped); under back-pressure (`output.writableNeedDrain`) up to 20 notices wait in a list and are written on `drain`, the 21st is dropped; after `done` it does nothing. The `event` path is not changed.
 - `run-process.ts`: `createNoticeSink(): { send(notice: Notice): void; attach(server: Pick<RpcServer, "notice">): void }` holds up to 20 notices raised before the server exists (the 21st is dropped) and writes them in order on `attach`; after `attach`, `send` goes straight to `server.notice`. `runProcess` creates one sink, passes `notify: sink.send` to `createRunnerService` and calls `sink.attach(server)` right after `serveRpc`. (A notice raised during `service.start()` is not lost, and the policy has already marked it sent, so it would never be repeated.)
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. (`notify-wiring.test.ts`, in-memory store, a fake `send`, a manual `await Promise.resolve()` for the microtask) "a pending approval made by the engine sends one approval notice with the flow's name"
   2. "an approval created inside a transaction that then throws sends nothing"
   3. "a run that ends blocked sends one blocked notice; running, checking, done and failed send none"
@@ -628,16 +628,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   7. "a putSetting of a new weekly window (`resetsAt` in seconds) sends one weekly notice naming the weekday; the same value again, the owner's answer (a value with `answer`), the `weekly-index` setting and a reset time that moves by a minute inside 24 hours send none"
   8. (`server.test.ts`) "a notice is written as a notice frame; under back-pressure 20 wait and are written on drain and the 21st is dropped; after the end nothing is written; event frames still coalesce"
   9. (`run-process.test.ts`) "a notice sink holds up to 20 notices raised before the server is attached, writes them in order on attach and sends later ones directly; the 21st early notice is dropped"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/notify-wiring.test.ts`. Expected: FAIL ("Cannot find module ./notify-wiring.ts").
-- [ ] **Step 3: Implement** the three source files.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/service`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/notify-wiring.test.ts`. Expected: FAIL ("Cannot find module ./notify-wiring.ts").
+- [x] **Step 3: Implement** the three source files.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/service`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Send notices for approvals, blocked runs, floods, pauses and the weekly limit through a notice frame" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

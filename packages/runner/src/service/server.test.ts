@@ -219,3 +219,43 @@ test("events merge their topics while output needs drain", async () => {
   input.end();
   await server.done;
 });
+
+test("a notice is written as a notice frame; under back-pressure 20 wait and are written on drain and the 21st is dropped; after the end nothing is written; event frames still coalesce", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough({ highWaterMark: 1 });
+  const server = serveRpc({ input, output, call: async () => ({}), knows: () => true });
+  const notice = {
+    id: "n",
+    kind: "run_blocked" as const,
+    title: "Run blocked",
+    body: "Blocked",
+    target: { screen: "run" as const, runId: "r" },
+  };
+  server.notice(notice);
+  for (let i = 0; i < 21; i++) server.notice({ ...notice, id: `n${i}` });
+  server.notify({ type: "changed", topics: ["runs"] });
+  server.notify({ type: "changed", topics: ["flows"] });
+  let text = "";
+  output.on("data", (chunk: Buffer) => {
+    text += chunk.toString();
+  });
+  await tick();
+  const frames = () =>
+    text
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { method: string; params: { id?: string; topics?: string[] } });
+  expect(
+    frames()
+      .filter((f) => f.method === "notice")
+      .map((f) => f.params.id),
+  ).toEqual(["n", ...Array.from({ length: 20 }, (_, i) => `n${i}`)]);
+  expect(frames().filter((f) => f.method === "event")).toEqual([
+    { jsonrpc: "2.0", method: "event", params: { type: "changed", topics: ["runs", "flows"] } },
+  ]);
+  input.end();
+  await server.done;
+  const before = text;
+  server.notice(notice);
+  expect(text).toBe(before);
+});

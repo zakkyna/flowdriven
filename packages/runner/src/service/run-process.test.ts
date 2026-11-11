@@ -8,7 +8,7 @@ import { demoFlow } from "../demo/demo-flow.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import { FAKE_CLAUDE_PATH, makeFakeHome } from "../test-helpers/fake-claude-script.ts";
 import { connectRpcClient } from "../test-helpers/rpc-client.ts";
-import { guardProcess, runProcess } from "./run-process.ts";
+import { createNoticeSink, guardProcess, runProcess } from "./run-process.ts";
 import { DEMO_HASH } from "./service.ts";
 
 const dirs: string[] = [];
@@ -184,4 +184,20 @@ test("runProcess in live mode takes its environment and claudePath", { timeout: 
   active.push({ input, done });
   await client.call("harnesses.rescan", {});
   expect((await client.call("harnesses.list", {})).at(0)?.version).toBe("2.1.318");
+});
+
+test("a notice sink holds up to 20 notices raised before the server is attached, writes them in order on attach and sends later ones directly; the 21st early notice is dropped", () => {
+  const sink = createNoticeSink();
+  const received: string[] = [];
+  const notice = {
+    id: "n",
+    kind: "run_blocked" as const,
+    title: "Run blocked",
+    body: "Blocked",
+    target: { screen: "run" as const, runId: "r" },
+  };
+  for (let i = 0; i < 21; i++) sink.send({ ...notice, id: `n${i}` });
+  sink.attach({ notice: (n) => received.push(n.id) });
+  sink.send({ ...notice, id: "later" });
+  expect(received).toEqual([...Array.from({ length: 20 }, (_, i) => `n${i}`), "later"]);
 });

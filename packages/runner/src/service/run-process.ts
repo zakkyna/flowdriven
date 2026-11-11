@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import type { Notice } from "@flowdriven/contracts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
 import { prepareDataDir } from "./data-dir.ts";
@@ -30,6 +31,23 @@ export function guardProcess(proc: Pick<NodeJS.Process, "on">, errors: (line: st
   proc.on("uncaughtException", report);
   proc.on("unhandledRejection", report);
 }
+export function createNoticeSink(): {
+  send(notice: Notice): void;
+  attach(server: Pick<RpcServer, "notice">): void;
+} {
+  const pending: Notice[] = [];
+  let server: Pick<RpcServer, "notice"> | undefined;
+  return {
+    send(notice) {
+      if (server) server.notice(notice);
+      else if (pending.length < 20) pending.push(notice);
+    },
+    attach(next) {
+      server = next;
+      for (const notice of pending.splice(0)) next.notice(notice);
+    },
+  };
+}
 export async function runProcess(options: RunProcessOptions): Promise<number> {
   let dir: string;
   try {
@@ -50,8 +68,10 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
   let service: RunnerService | undefined;
   try {
     let server: RpcServer | undefined;
+    const sink = createNoticeSink();
     const emitter = createChangeEmitter((event) => server?.notify(event));
     service = createRunnerService({
+      ...{ notify: sink.send },
       store: wrapStore(store, emitter.mark),
       markChanged: emitter.mark,
       dataDir: dir,
@@ -69,6 +89,7 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
       call: service.call,
       knows: service.knows,
     });
+    sink.attach(server);
     const engine = service.engine;
     timer = setInterval(() => {
       void engine
