@@ -143,6 +143,8 @@ docs/plans/ROADMAP.md                                             the 04 and 04b
 - macOS App Nap can delay the runner's 30 second timer while the window is closed. A tick that comes more than 2 minutes after a slot counts that slot as missed, and with the default `catch_up: none` it is dropped silently (only `Missed while FlowDriven was closed` on the screen). No keep-awake is added (Decision 1); Task 18 step 4 observes two real slots.
 - The debounce of `file_change` is rounded up to the 30 second tick (only the repeating job is injected; a watcher signal does not wake the service), so "10 seconds" means 10 to 40 seconds.
 - `LoopStep.parallel` is still not honoured by the runner; the R19 case for it waits for the plan that does.
+- The daily cap and `max_items` are the flow's own numbers; there is no owner ceiling above them (review finding 7). The cap is shown next to the switch.
+- A notice that arrives while an app window is focused is dropped, not kept for later. Floods and pauses have no Inbox item.
 - Not proven: behaviour across a real DST change in the running app (the pure functions are proven in two zones, the service is proven only under `TZ=UTC`), and macOS notification delivery (chair steps only).
 
 ### Task 1: Contract: trigger status, two operations, the notice and the trigger on a run
@@ -895,14 +897,50 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Files:** none in the repository except what the owner's review asks for. The executor skips this task and leaves it unticked. Results go to `.workflow/LEDGER-plan-04.md` and `.workflow/scratch/plan-04/` (git-ignored).
 
-- [ ] **Step 1: Chair step (GUI): the evidence.** `node packages/runner/src/test-helpers/trigger-demo.ts`. Expected: the six lines of Task 16. Paste them in the ledger.
-- [ ] **Step 2: Chair step (GUI): the pictures.** `pnpm build && pnpm capture`. Expected: `captured 22 screens`; look at `builder-triggers` in light and dark (icon plus words on every switch, the honest line, the reason line for the webhook), `runs` and `run-looped` (the trigger words).
-- [ ] **Step 3: Chair step (GUI): the real walk.** Put a copy of the check flow of `claude-walk` (see `claude-walk-steps.ts`) in `.workflow/scratch/plan-04/walk/flow/` and add `triggers: [{ kind: schedule, every: 1m, catch_up: none }]` and `limits: { max_runs_per_day: 3 }` to its manifest (three blocked runs in a row would pause the trigger, Task 9b; that is expected if the real harness is not ready). Allow notifications for "Electron" in System Settings (the owner does this once; the agent does not change system settings). Run `pnpm build && pnpm --filter @flowdriven/desktop exec electron dist-electron/trigger-walk.js`. Expected output: the trigger turns on, the window closes, `run <id> started by schedule: done` (or `blocked`) appears within 4 minutes with the window still closed, the window re-opens on the Runs screen and shows `Started by its schedule`. Make a run wait for approval (the walk flow's `user` check) and see a real macOS notification "Waiting for you"; click it with the window closed and see the window come back on the Inbox. Record what happened, including whether the click on an existing window changed its page without a reload (Known limits).
+- [x] **Step 1: Chair step (GUI): the evidence.** `node packages/runner/src/test-helpers/trigger-demo.ts`. Expected: the six lines of Task 16. Paste them in the ledger.
+- [x] **Step 2: Chair step (GUI): the pictures.** `pnpm build && pnpm capture`. Expected: `captured 22 screens`; look at `builder-triggers` in light and dark (icon plus words on every switch, the honest line, the reason line for the webhook), `runs` and `run-looped` (the trigger words).
+- [x] **Step 3: Chair step (GUI): the real walk.** Put a copy of the check flow of `claude-walk` (see `claude-walk-steps.ts`) in `.workflow/scratch/plan-04/walk/flow/` and add `triggers: [{ kind: schedule, every: 1m, catch_up: none }]` and `limits: { max_runs_per_day: 3 }` to its manifest (three blocked runs in a row would pause the trigger, Task 9b; that is expected if the real harness is not ready). Allow notifications for "Electron" in System Settings (the owner does this once; the agent does not change system settings). Run `pnpm build && pnpm --filter @flowdriven/desktop exec electron dist-electron/trigger-walk.js`. Expected output: the trigger turns on, the window closes, `run <id> started by schedule: done` (or `blocked`) appears within 4 minutes with the window still closed, the window re-opens on the Runs screen and shows `Started by its schedule`. Make a run wait for approval (the walk flow's `user` check) and see a real macOS notification "Waiting for you"; click it with the window closed and see the window come back on the Inbox. Record what happened, including whether the click on an existing window changed its page without a reload (Known limits).
 - [ ] **Step 4: Chair step (GUI): the long observation.** Leave the real app open with its window closed and an hourly schedule (`every: 1h`, `catch_up: none`, `limits.max_runs_per_day: 3`) on a flow that needs no approval, for two real slots (a little over two hours). Expected: two triggered runs, started within a minute or two of their slots; if a slot shows `Missed while FlowDriven was closed` instead, macOS App Nap delayed the runner's timer by more than 2 minutes (Known limits), and the owner decides about `catch_up: once` or a longer grace. Write the times in the ledger.
-- [ ] **Step 5: Chair step (GUI): the stop.** Quit the app from the menu and confirm no run starts afterwards (the honest line). Write the result in the ledger.
+- [x] **Step 5: Chair step (GUI): the stop.** Quit the app from the menu and confirm no run starts afterwards (the honest line). Write the result in the ledger.
 - [ ] **Step 6: Chair step (commit)** the review fixes, if any, and the ledger note.
 
+
+Chair's record (2026-11-12):
+- Step 1: the demo printed its six lines. After the review fixes the flood line reads `flood: 500 file changes (max_items 1), daily cap 24 -> 24 runs, 476 dropped, 1 notification`.
+- Step 2: `pnpm build && pnpm capture` gave `captured 22 screens`; `builder-triggers` shows each switch as icon plus words, the honest line and the reason line of the webhook.
+- Step 3, walk A (no harness consent in the scratch data folder): the trigger was switched on, the window closed, and one minute later the walk printed `notice run_blocked: notifications supported true, window focused false` and `run run-6ef22d796020 started by schedule: blocked`. Readiness refused the run, as it refuses a manual one.
+- Step 3, walk B (consent given through the runner's own `harnesses.setConsent` on the scratch data folder): `run run-8030643b0ef9 started by schedule: done`, with the real Claude Code 2.1.318 and the window closed. The slot was 23:13:32.279Z and its key was claimed at 23:13:32.946Z, 0.67 seconds later. The day counter was written for the local day 2026-11-12. Its three calls on `claude-haiku-5-5` (input, output, cache read, cache write): write 4, 157, 10,681, 3,338; read 4, 250, 7,037, 7,200; outside 4, 62, 12,388, 1,643.
+- Not checked by the chair: whether macOS showed the banner, and the click on it. Both need macOS to allow notifications for "Electron" and a person at the screen. The walk flow has no approval step, so the "Waiting for you" notice was not exercised in the real app; the notifier's tests cover the click path.
+- Step 5: after the walk's app exited no runner process was left (`pgrep -f packages/runner/src/main.ts` found none), so nothing can fire.
+- The walk script gained a line that prints each notice and the settings `TRIGGER_WALK_RUNS` and `TRIGGER_WALK_WAIT_MS` (commits `708d046` and `7cff62c`, chair's edits) so that Step 4 can watch two real slots.
+
 ---
+
+## Review of the finished plan (2026-11-12)
+
+One fresh reviewer, security first, read the whole change (`git diff 7221427 HEAD`). No blocker, 1 major and 8 minor findings; no present test was weakened, skipped or deleted. Findings 1 to 6, 8 and 9 were fixed in one round (commits `9ddb509` and `29dd934`), each with a test:
+
+1. (major) The trigger service did not know whether it had been started. A finished run "poked" it in demo mode and after `stop()`, so demo mode could fire a trigger and a stopped service re-created folder watchers. `poke()` now needs a started service, `tick()` does nothing after `stop()`, and the runner pokes only in live mode. The proof is kept as `service/review-04-demo-poke.test.ts`.
+2. A trigger that showed "Needs your OK again" could not be switched off. Switching off no longer checks the hash, and the panel offers "Turn off" in that state.
+3. A long flow id made a notice id too long and the notice was dropped. Notice ids are built from a digest of the flow id; a flow id that cannot be a target sends the owner to the Inbox. The proof is kept as `notify/review-04-long-id-notice.test.ts`.
+4. The run screen printed "Started by: Started by its schedule". The prefix is gone.
+5. The `file_change` fire key joined names without escaping, so a crafted file name could make a batch look like a duplicate. The key is now a hash of a JSON array.
+6. A reason or a detail longer than the contract allows made `triggers.list` fail for the flow. Both are cut where they are made.
+7. Not changed (chair's call, owner may override): the daily cap and `max_items` come from the flow's own manifest with no owner ceiling, so an imported flow could declare a very high cap. The cap is shown on the panel where the owner switches the trigger on, and the switch is bound to the flow's hash. Plan 05's install preview should show both numbers, and an owner ceiling can be added there.
+8. The evidence line printed a sum as the number of file changes. It now prints the number of files written and says `max_items 1`.
+9. `SUPPORTED_KINDS` is used, and a schedule that slept past the 8-day window says "more than <n> missed". The reviewer's remark that the proof "a flow, a worker's text ... change nothing" is true but narrow stands; it was not widened.
+
+There was no second review round (the owner's working rule); the gate and the proofs stand in for it.
+
+Gate on the code tip (`29dd934`): `pnpm format && pnpm check` exit 0, 184 test files and 1,180 tests, 109 check-tool tests, the hidden-character scan and the dependency gate OK. The change is 76 code files, 6,195 lines added and 35 removed (45 source files with 2,914 added lines, 31 test files with 3,281).
+
+Three tasks stopped with `Blocked:` and were settled by the chair, each with a note under the task: Task 5 (a present process test failed once in the executor's sandbox), Task 11 (one type error, a one-line fix) and Task 15 (a proof that never reached the fire path, then a type guard in the test file).
+
+Follow-ups, not part of this plan:
+- Two present process tests fail now and then under load: "S4b a tool that runs without the check after the abort still trips the wire and blocks" (`claude/review-03-s4.test.ts`) and `claude/adapter-limits.test.ts` with "Missing pid". They need their own fix.
+- The project folder is `<dataDir>/project`, so `flowdriven.sqlite` sits one level above the folder workers run in. A worker that got past the folder limit could edit trigger rows. That limit comes from plan 03; moving the store or the project folder is worth a look in plan 04b or 05.
+- A notice raised while an app window is focused is not shown later, and floods and pauses have no Inbox item; they show on the flow's screen only.
+- macOS notification delivery and the click on a real banner were not seen by the chair (Task 18).
 
 ## Handover to plan 04b (and later)
 
@@ -912,4 +950,5 @@ What it finds ready:
 - **Open decisions for the owner in 04b:** (1) the socket is mode 0600 but any process of the same user (including a harness the runner starts) could connect and call `approvals.resolve`, which spec 15.2 item 10 forbids for a model; that needs a decision before any socket exists; (2) installing a launch agent is a permanent change on the owner's Mac; (3) whether wake-from-sleep and keep-awake are wanted.
 - **The pause is the hook for plan 05.** A challenge page or a missing login (R5) ends the run `blocked`; plan 05 can switch the trigger off at once through the same `trigger_paused` path (`pausedAt`, audit line, notice) instead of waiting for three blocked runs.
 - **Gaps carried forward:** extra-folder grants (spec 9.4) for `file_change`; R1 taint marks for file names in a payload; `new_item`, `link` and `webhook` triggers; `LoopStep.parallel` and its R19 case; the macOS notification for a run that finishes with something that "needs a look" (spec 10.6 lists none, so none is built).
-- **Spec 21.2 rewording** (two sentences, from the 03b handover) is not part of this plan's tasks; the chair edits the spec.
+- **Spec 21.2 rewording** (two sentences, from the 03b handover) was done by the chair in the commit that added this plan.
+- **For plan 05:** the install preview shows `max_runs_per_day` and `max_items` (review finding 7), and R5 pauses the trigger at once.
