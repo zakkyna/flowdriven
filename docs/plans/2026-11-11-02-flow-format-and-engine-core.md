@@ -720,7 +720,7 @@ Chair's notes (2026-11-11, written after two executor calls stopped on these poi
 11. **Expiry sweep** (`ask` part). An expired `ask` with `on_expiry: end`: step `passed` with `choice: []` and note `nothing picked: the choice expired`; every later top-level step without a row gets a row `skipped` (`skipped: the run ended at an expired choice`); run `done` with `endedAt = expiresAt`. With `fail`: step `failed` with note `The approval expired.`, run `failed` with `endedAt = expiresAt`.
 12. **Resume.** Allowed for `blocked`, `failed`, `interrupted` (else `not_allowed`). Steps that are `failed` or `interrupted` and items that are `failed` or `running` go back to `pending` with no attempts, `blockedReason` is cleared, then `walk`. The run uses the manifest of its `flowHash`, never a newer registration.
 13. **Crash.** `recoverAfterCrash` sets every run in `queued`, `checking`, `running` or `retrying` to `interrupted` and its `running` or `retrying` steps to `interrupted`, appends audit `run_interrupted`, then resumes only runs whose interrupted steps all have `idempotent: true` (a `queued` run has none, so it resumes). Runs in `waiting_approval` are left alone.
-- [ ] **Step 1: Write the failing tests** (same helpers as Task 7)
+- [x] **Step 1: Write the failing tests** (same helpers as Task 7)
 ```ts
 // engine-loop.test.ts (flow: alerts -> review loop over ${steps.alerts.outputs.jobs} as job key ${job.id}: rough agent score, page worker when "rough.score.value >= params.min_score", full agent when "page.passed")
 test("runs the nested steps once per item and exposes the items", async () => {
@@ -768,19 +768,19 @@ test("after a crash only an idempotent step resumes", async () => {
   /* same with the step marked idempotent: true -> the run is resumed and done; a run left "queued" is resumed and done; audit has run_interrupted in every case */ });
 test("a run stays pinned to the flow version it started with", async () => { /* start and block run-1 on flow v1 (hash h1); register v2 (hash h2) with a different step list; resumeRun(run-1) runs v1's steps; a new run uses v2 */ });
 ```
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/engine-loop.test.ts packages/runner/src/engine-ask.test.ts packages/runner/src/engine-recovery.test.ts`. Expected: FAIL (the loop, `ask` and resume paths still say `not built yet`)
-- [ ] **Step 3: Implement** `loop.ts`, `ask.ts` and `recovery.ts` (each one exported function on the same context object as `leaf.ts`), extend `scope.ts` with the item scope, wire them in `engine.ts` and remove every `not built yet`.
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 3: Implement** `loop.ts`, `ask.ts` and `recovery.ts` (each one exported function on the same context object as `leaf.ts`), extend `scope.ts` with the item scope, wire them in `engine.ts` and remove every `not built yet`.
+- [x] **Step 4: Run the tests to verify they pass**
   Run: `pnpm vitest run packages/runner/src/engine`. Expected: PASS (Task 7's tests included)
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS
 - [ ] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add loops, choices, resume and crash recovery to the engine" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra in three calls (loops, choices, resume and crash), 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

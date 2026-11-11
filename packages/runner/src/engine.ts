@@ -5,6 +5,7 @@ import { EngineError } from "./errors.ts";
 import { runAsk } from "./exec/ask.ts";
 import { runLeaf } from "./exec/leaf.ts";
 import { runLoop } from "./exec/loop.ts";
+import { createRecovery } from "./exec/recovery.ts";
 import { makeScope } from "./exec/scope.ts";
 import type { HarnessAdapter } from "./harness.ts";
 import type { ApprovalState, RunState } from "./states.ts";
@@ -144,9 +145,7 @@ export function createEngine(input: EngineDeps): Engine {
     store.updateRun(run.id, { state: "done", endedAt: now().toISOString() });
     return runById(run.id);
   }
-  const unavailable = async (): Promise<never> => {
-    throw new EngineError("unavailable", "not built yet");
-  };
+  const recovery = createRecovery({ deps, walk, flowFor: (run) => flowFor(run).manifest as FlowManifest });
   return {
     registerFlow(manifest, hash, files = {}) {
       const issues = validateManifest(manifest, { files: new Set(Object.keys(files)) });
@@ -300,8 +299,7 @@ export function createEngine(input: EngineDeps): Engine {
       });
       return walk(runById(run.id));
     },
-    resumeRun: unavailable,
-    recoverAfterCrash: unavailable,
+    ...recovery,
     async decide(id, decision) {
       sweep();
       const a = store.getApproval(id);

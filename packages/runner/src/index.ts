@@ -4,6 +4,7 @@ export * from "./checks/run-checks.ts";
 export * from "./engine.ts";
 export * from "./entry.ts";
 export * from "./errors.ts";
+export * from "./exec/recovery.ts";
 export * from "./harness.ts";
 export * from "./scripted-harness.ts";
 export * from "./sqlite-store.ts";

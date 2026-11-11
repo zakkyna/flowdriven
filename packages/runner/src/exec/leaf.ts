@@ -46,7 +46,7 @@ export async function runLeaf(
     return "halt";
   }
   if (step.do === "ask") {
-    block("not built yet");
+    block("Ask steps cannot run as leaf steps.");
     return "halt";
   }
   if (step.do === "flow") {
