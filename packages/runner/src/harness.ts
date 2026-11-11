@@ -41,6 +41,7 @@ export type StepRequest = {
   skill?: string;
   outputs: { id: string; type: string }[];
   lastFailure?: string;
+  pauseLimit?: () => () => void;
   onStart?: (pid: number) => void;
   maxDurationMs: number;
   signal: AbortSignal;
@@ -64,6 +65,7 @@ export type JudgeRequest = {
   runId: string;
   stepId: string;
   itemKey?: string;
+  pauseLimit?: () => () => void;
   onStart?: (pid: number) => void;
   rubric: string;
   output: string;

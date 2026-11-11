@@ -79,7 +79,11 @@ export async function runLeaf(
     let timedOut = false;
     let remaining = duration;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let armedAt = 0;
+    let paused = false;
+    let ended = false;
     const arm = () => {
+      armedAt = Date.now();
       const chunk = Math.min(remaining, 2_147_483_647);
       timer = setTimeout(() => {
         remaining -= chunk;
@@ -89,6 +93,17 @@ export async function runLeaf(
           ctl.abort();
         }
       }, chunk);
+    };
+    const pauseLimit = () => {
+      if (paused || ended) return () => {};
+      paused = true;
+      clearTimeout(timer);
+      remaining = Math.max(1, remaining - (Date.now() - armedAt));
+      return () => {
+        if (ended || !paused) return;
+        paused = false;
+        arm();
+      };
     };
     arm();
     try {
@@ -142,6 +157,7 @@ export async function runLeaf(
             ...(step.do === "skill" ? { skill: step.skill } : {}),
             outputs: step.outputs.map(({ id, type }) => ({ id, type })),
             ...(failures.length ? { lastFailure: failures.at(-1) } : {}),
+            pauseLimit,
             maxDurationMs: duration,
             signal: ctl.signal,
           }),
@@ -186,7 +202,14 @@ export async function runLeaf(
             declaredOutputs: step.outputs.map((o) => o.id),
             output: { text: result.text, values: outputs },
             bind: (text) => interpolate(text, scope),
-            harness,
+            harness: {
+              id: harness.id,
+              name: harness.name,
+              runStep: (req) => harness.runStep(req),
+              replan: (req) => harness.replan(req),
+              judge: (req) => harness.judge({ ...req, pauseLimit }),
+              probe: (req) => harness.probe(req),
+            },
             signal: ctl.signal,
             runCommand: deps.runCommand ?? defaultCommandRunner(),
           });
@@ -229,6 +252,7 @@ export async function runLeaf(
     } catch (e) {
       failure = timedOut ? "time limit exceeded" : e instanceof Error ? e.message : "worker failed";
     } finally {
+      ended = true;
       clearTimeout(timer);
     }
     Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });

@@ -960,7 +960,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 - `exec/leaf.ts` (timer at `:82-93`, `finally` at `:231-233`): per attempt keep `armedAt` (set in `arm()`), `paused` and `ended` (set in the `finally`). `pauseLimit()` returns a no-op when already paused or ended; else it sets `paused`, clears the timer, sets `remaining = Math.max(1, remaining - (Date.now() - armedAt))` and returns a function that, unless `ended` or not `paused`, clears `paused` and calls `arm()`. The leaf passes `pauseLimit` in `runStep` and gives `runChecks` a harness object whose `judge` adds it (an object literal with `id`, `name`, `runStep`, `replan`, `judge`, `probe`; `stop` is not needed there).
 - `createKeptHarness(deps: { inner: HarnessAdapter; keeper: Keeper; nowMs: () => number; at: () => string; info: (runId: string) => { cls: 0 | 1 | 2; underWay: boolean; startedAt: string; flowId: string } | undefined; weight: (q: { flowId: string; stepId: string; kind: "worker" | "judge"; harnessId: string; connectors: number }) => number; record: (row: UsageEventRow) => void }): HarnessAdapter`, with the inner `id` and `name`. For `runStep` and `judge` (decision 1) it builds the `Ticket` (`connectors` = the step's requirements of type `mcp_server` or `plugin`; a run `info` does not know gets `cls: 1`), calls `keeper.acquire(ticket, signal, onWait)` where `onWait` calls the request's `pauseLimit` and keeps the resume function it returns, and after the acquire calls that resume. It runs the inner call with `onStart` that also attaches the pid to the slot. In a `finally` it releases the slot and, only when the inner result has `call` or `onStart` fired (decision 21), `record`s one `UsageEventRow` (`kind` `worker` or `judge`; `harness` = inner id; `stepId`, `itemKey` (`""` for a judge without one), `attempt` (0 for a judge); models, turns, cost and wall time from `call`, else measured with `nowMs`; `queuedMs = slot.waitedMs`; `memoryPeakMb` from the release; `exit` = the step result's exit, `ok` for a judge that returned, the `HarnessCallError`'s exit for a judge that threw it, else `failed`). It calls `keeper.noteLimits(harnessId, call.limits)` when there is a `call`, and on exit `quota` `keeper.noteRefused(harnessId, untilMs)` where `untilMs` is the `resetsAt * 1000` of a `rejected` limit when there is one (else `undefined`, so the back-off applies); on exit `ok` `keeper.noteSuccess`. A signal that aborts while the call waits gives `{ exit: "interrupted", text: "", outputs: {} }` (a `judge` throws `Error("aborted")`) and no row. `replan` and `probe` pass through; `stop` also calls `keeper.stop()`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `keeper/kept-harness.test.ts`
 
@@ -1067,15 +1067,20 @@ for (const [pause, state] of [[true, "done"], [false, "blocked"]] as const) {
 }
 ```
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/keeper/kept-harness.test.ts packages/runner/src/exec/leaf-pause.test.ts`. Expected: FAIL ("Cannot find module ./kept-harness.ts").
-- [ ] **Step 3: Implement** the helpers, the two edits and the wrapper. **Step 4: Run** the two tests and `pnpm vitest run packages/runner` (re-run "S4b" alone first if it fails: fact 12). Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/keeper/kept-harness.test.ts packages/runner/src/exec/leaf-pause.test.ts`. Expected: FAIL ("Cannot find module ./kept-harness.ts").
+- [x] **Step 3: Implement** the helpers, the two edits and the wrapper. **Step 4: Run** the two tests and `pnpm vitest run packages/runner` (re-run "S4b" alone first if it fails: fact 12). Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Wrap the harness in the keeper and pause a step's time limit while it waits" -m "Assisted-by: Codex"
 ```
+
+**Chair's note (2026-11-12), a run that cannot be found.** The first call stopped here. Decision: a call whose run the `info` lookup does not know is refused before a ticket is taken and before any process starts. `runStep` answers `{ exit: "failed", text: S, outputs: {}, block: S }` and `judge` throws `Error(S)`, with `S = "FlowDriven could not find the run of this step."`. The inner adapter is not called, the keeper is not asked and no usage row is written. This note wins over any other sentence of this task about such a run (the default of class 1 is withdrawn): a run that cannot be found has no flow to take a weight from, and a guess would admit a step on a guess. Tests, in `keeper/kept-harness.test.ts`: "a step of a run that cannot be found is refused and nothing starts" and "a judge of a run that cannot be found throws and nothing starts".
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
