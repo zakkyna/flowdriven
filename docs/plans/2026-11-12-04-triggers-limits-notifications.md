@@ -732,23 +732,25 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `story/triggers.ts`: `triggerStatuses(flow: FlowRecord, switches: Record<string, { hash: string } | undefined>, nowIso: string): TriggerStatus[]` (a trigger whose stored hash differs from `flow.hash` is `needs_ok` with the reason of the runner; manual entries left out; `schedule` and `file_change` and `flow_done` supported; `new_item`, `link`, `webhook` are `unavailable` with reason `Not available yet.`; an `on` schedule has `nextAt` one hour after `nowIso`; the `on` file change has `last: { at, outcome: "started", runId: "run-0008" }`; `dailyCap` 24; counts 0 except `firesToday: 3`, `droppedToday: 2` on the file change).
 - `client.ts`: `"triggers.list"` returns `triggerStatuses(...)` (an unknown flow is `not_found`); `"triggers.setEnabled"`: unknown flow or index `not_found`; a `hash` that differs from the flow's is `not_allowed` with the runner's words; an unavailable kind `not_allowed` ("Not available yet."); otherwise it stores `{ hash }` (or clears it when switching off) and returns the status. These replace the stubs of Task 1.
 
-- [ ] **Step 1: Write the failing tests** (`triggers.test.ts`, through `createFixtureRunnerClient({ scenario: "looped" })` as the other fixture tests do):
+- [x] **Step 1: Write the failing tests** (`triggers.test.ts`, through `createFixtureRunnerClient({ scenario: "looped" })` as the other fixture tests do):
   1. "the looped flow lists a schedule, a file change and a webhook, and no manual entry"
   2. "a webhook is unavailable with its reason and cannot be switched on"
   3. "switching the schedule on stores the switch, returns an on status with a next run, and a later list shows it"
   4. "a stale hash is not_allowed; an unknown flow and an unknown index are not_found"
   5. "every status and the triggered run still validate against the contracts"
   6. "a trigger switched on for an older hash shows needs_ok, and switching it on again with the current hash makes it on" (set `client.state.triggerSwitches` to a different hash)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/fixtures/src/triggers.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.** If a present fixture test asserts the looped flow's old `triggers` (one manual entry), change that line to the new list; it is the same assertion for the new data.
-- [ ] **Step 4: Run** `pnpm vitest run packages/fixtures packages/contracts`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/fixtures/src/triggers.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.** If a present fixture test asserts the looped flow's old `triggers` (one manual entry), change that line to the new list; it is the same assertion for the new data.
+- [x] **Step 4: Run** `pnpm vitest run packages/fixtures packages/contracts`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/fixtures
 git commit -m "Add sample triggers and a triggered run to the fixtures" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

@@ -43,6 +43,7 @@ export interface FixtureState {
   settings: Settings;
   queue: QueueView;
   usage: UsageSummary;
+  triggerSwitches: Record<string, { hash: string } | undefined>;
   nextRunNumber: number;
   nextHashNumber: number;
 }
@@ -57,6 +58,7 @@ export function buildStory(): FixtureState {
     settings: settings(),
     queue: queue(),
     usage: usage(),
+    triggerSwitches: {},
     nextRunNumber: 8,
     nextHashNumber: 6,
   };
@@ -71,6 +73,7 @@ export function buildEmpty(): FixtureState {
     settings: emptySettings(),
     queue: { running: 0, waiting: 0, ceiling: 1, rows: [] },
     usage: { harnesses: [] },
+    triggerSwitches: {},
     nextRunNumber: 1,
     nextHashNumber: 1,
   };

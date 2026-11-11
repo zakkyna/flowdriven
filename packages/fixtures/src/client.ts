@@ -30,6 +30,7 @@ import {
   type FlowRecord,
   type Scenario,
 } from "./state";
+import { triggerStatuses } from "./story/triggers";
 
 export const PREVIEW_AGENT_REPLY =
   "This preview runs on sample data, so I can't change the flow from chat yet. Use the step list for now.";
@@ -523,9 +524,24 @@ export function createFixtureRunnerClient(
     },
     "usage.summary": () => state.usage,
     "settings.get": () => state.settings,
-    "triggers.list": () => [],
-    "triggers.setEnabled": () => {
-      throw new RunnerError("unavailable", "Switching a trigger arrives in this plan.");
+    "triggers.list": ({ flowId }) => triggerStatuses(flow(flowId), state.triggerSwitches, now()),
+    "triggers.setEnabled": ({ flowId, index, enabled, hash }) => {
+      const f = flow(flowId);
+      const trigger = f.manifest.triggers?.at(index);
+      if (!trigger) throw new RunnerError("not_found", "There is no such trigger.");
+      if (hash !== f.hash)
+        throw new RunnerError(
+          "not_allowed",
+          "This flow changed since you looked at it. Reload and check it again.",
+        );
+      if (trigger.kind !== "schedule" && trigger.kind !== "file_change" && trigger.kind !== "flow_done")
+        throw new RunnerError("not_allowed", "Not available yet.");
+      const key = `${flowId}#${index}`;
+      if (enabled) state.triggerSwitches[key] = { hash };
+      else delete state.triggerSwitches[key];
+      const status = triggerStatuses(f, state.triggerSwitches, now()).find((item) => item.index === index);
+      if (!status) throw new RunnerError("not_found", "There is no such trigger.");
+      return status;
     },
     "settings.update": ({ patch }) => {
       const backend = (id: string) => {

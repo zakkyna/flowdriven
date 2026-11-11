@@ -119,7 +119,12 @@ export function addLooped(state: FixtureState): void {
     summary: "Review new job alerts, pick the best and draft proposals.",
     steps,
     params: { min_score: { type: "number", default: 7 } },
-    triggers: [{ kind: "manual", summary: "Run by hand" }],
+    triggers: [
+      { kind: "manual", summary: "Run by hand" },
+      { kind: "schedule", summary: "Every 1h" },
+      { kind: "file_change", summary: "Files change in inbox" },
+      { kind: "webhook", summary: "Called by a webhook" },
+    ],
   });
   const requirement = flow.manifest.requirements.at(0);
   if (requirement) requirement.why = "Does the scoring and the drafting.";
@@ -129,6 +134,7 @@ export function addLooped(state: FixtureState): void {
     asksApprovalFor: ["Each proposal before it counts as done"],
   };
   state.flows.push(flow);
+  state.triggerSwitches[`${flow.manifest.id}#2`] = { hash: flow.hash };
   Object.assign(state.readiness, readiness([flow]));
   const startedAt = "2026-11-10T09:10:00.000Z";
   const runStep = (step: LeafStep, status: StepRunState, note?: string): LeafStepRun => ({
@@ -156,6 +162,7 @@ export function addLooped(state: FixtureState): void {
   if (!review || !pick || !build) throw new Error("Missing looped scenario step");
   state.runs.push({
     id: "run-0008",
+    trigger: { kind: "schedule", words: "Started by its schedule" },
     flowId: flow.manifest.id,
     flowName: flow.manifest.name,
     flowVersion: flow.manifest.version,
