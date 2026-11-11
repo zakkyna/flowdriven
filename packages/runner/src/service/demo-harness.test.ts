@@ -13,6 +13,8 @@ function request(runId: string, stepId: string, instructions = ""): StepRequest 
     kind: "worker",
     title: "",
     uses: [],
+    project: "/tmp/p",
+    requirements: [],
     outputs: [],
     maxDurationMs: 1000,
     signal: new AbortController().signal,

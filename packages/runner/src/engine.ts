@@ -467,8 +467,12 @@ export function createEngine(input: EngineDeps): Engine {
       );
     },
     shutdown() {
+      if (stopping) return;
       stopping = true;
       chain.stop();
+      try {
+        deps.harness.stop?.();
+      } catch {}
     },
     isApproved(runId, tool, itemKey) {
       const state = store.getRun(runId)?.state;

@@ -43,6 +43,16 @@ export function validateManifest(
   const issues: Issue[] = [];
   const add = (code: string, path: string, severity: Issue["severity"] = "error") =>
     issues.push({ code, path, severity, message: code.replaceAll("_", " ") });
+  for (const [id, param] of Object.entries(manifest.params)) {
+    const value = param.default;
+    if (value === undefined) continue;
+    const valid =
+      (param.type === "number" && typeof value === "number" && Number.isFinite(value)) ||
+      (param.type === "text" && typeof value === "string") ||
+      (param.type === "bool" && typeof value === "boolean") ||
+      (param.type === "enum" && typeof value === "string" && (param.options ?? []).includes(value));
+    if (!valid) add("param_default_type", `params.${id}.default`);
+  }
   const ids = new Set<string>();
   const reqIds = new Set<string>();
   manifest.requirements.forEach((req, i) => {

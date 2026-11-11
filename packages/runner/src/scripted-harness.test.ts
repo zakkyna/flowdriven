@@ -12,6 +12,8 @@ const req = (overrides: Partial<StepRequest> = {}): StepRequest => ({
   title: "",
   instructions: "",
   uses: [],
+  project: "/tmp/p",
+  requirements: [],
   outputs: [],
   maxDurationMs: 1000,
   signal: new AbortController().signal,

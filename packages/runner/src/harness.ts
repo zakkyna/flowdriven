@@ -1,4 +1,4 @@
-import type { Value } from "@flowdriven/sdk";
+import type { Requirement, Value } from "@flowdriven/sdk";
 import type { ExitClass } from "./states.ts";
 export type StepRequest = {
   runId: string;
@@ -10,13 +10,16 @@ export type StepRequest = {
   title: string;
   instructions: string;
   uses: string[];
+  project: string;
+  requirements: Requirement[];
+  effort?: "low" | "medium" | "high";
   skill?: string;
   outputs: { id: string; type: string }[];
   lastFailure?: string;
   maxDurationMs: number;
   signal: AbortSignal;
 };
-export type StepResult = { exit: ExitClass; text: string; outputs: Record<string, Value> };
+export type StepResult = { exit: ExitClass; text: string; outputs: Record<string, Value>; block?: string };
 export type ReplanRequest = {
   runId: string;
   stepId: string;
@@ -38,6 +41,7 @@ export type ProbeResult = { ok: boolean; detail: string };
 export interface HarnessAdapter {
   readonly id: string;
   readonly name: string;
+  stop?(): void;
   runStep(req: StepRequest): Promise<StepResult>;
   replan(req: ReplanRequest): Promise<{ instructions: string } | undefined>;
   judge(req: JudgeRequest): Promise<JudgeResult>;

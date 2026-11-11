@@ -207,7 +207,7 @@ Reply gains `block?: string`; runStep returns `{ exit, text, outputs, ...(reply.
 - `engine.shutdown()` calls `deps.harness.stop?.()` once, after `chain.stop()`, inside `try { } catch { }`: a throwing `stop` never stops the shutdown. A second `shutdown()` does not call it again.
 - SDK validator: for every `manifest.params` entry whose `default` is not `undefined`, add the error `param_default_type` at path `params.<id>.default` unless: `number` and a finite number; `text` and a string; `bool` and a boolean; `enum` and a string that is in `options`. (The mapper's leave-out in `service/map-flow.ts` stays as a second guard.)
 
-- [ ] **Step 1: Write the failing tests** (7 new)
+- [x] **Step 1: Write the failing tests** (7 new)
   `engine-seam.test.ts` (5; use `setup` from `test-helpers/engine.ts` and `makeFlow` from `test-helpers/review-flow.ts` with `requirements: [{id:"notes",type:"path",ref:"notes",access:"read_write"},{id:"h",type:"harness"},{id:"host",type:"mcp_server",tools:["publish"]}]`; start with `engine.startRun("local.test", { project: "/tmp/p" })`; **every worker step in these tests has `checks: [{ type: "contains", pattern: "ok" }]` and its scripted reply text is `ok`, because `registerFlow` refuses a worker step without a required check (`EngineError: no required check`); in test 3 the pattern is `zzz` instead, so that a check that did run would fail and "checks not run" means something**):
   1. `a step request carries the project, the frozen requirements the step uses in order, and the effort`: step `a` has `uses: ["h","notes"]` and `worker: { effort: "high" }`; `harness.calls.at(0)` has `project: "/tmp/p"`, `requirements.map((r) => r.id)` equal to `["h","notes"]` and `effort: "high"`; step `b` (no `worker`, `uses: []`) has `requirements: []` and `Object.hasOwn(call, "effort")` false.
   2. `a block sentence ends the attempt as failed, blocks the run with it and does not retry`: reply `{ exit: "failed", block: "Stop here." }` with `retry: 2`; `harness.calls` has length 1; the run is `blocked` with `blockedReason` `"Stop here."`; the step row is `failed` with `note` `"Stop here."`; its one attempt has `exit: "failed"` and an `endedAt`.
@@ -215,18 +215,21 @@ Reply gains `block?: string`; runStep returns `{ exit, text, outputs, ...(reply.
   4. `shutdown calls the adapter's stop once, and a stop that throws does not stop the shutdown`: a harness object `{ ...scriptedHarness({}), stop }` with a spy; `shutdown()` twice gives one call; with `stop` throwing `new Error("boom")` `shutdown()` does not throw and `beginStart` then throws `"The engine is stopping."`.
   5. `a harness without stop shuts down as before`: `shutdown()` on the scripted harness does not throw.
   `validate.test.ts` (2): 6. `a param default of the wrong type is an error with the code param_default_type`: `number` with `"7"`, `text` with `5`, `bool` with `"true"`, `enum` with `"x"` and `options: ["a"]`, `enum` without `options`; each gives one issue with code `param_default_type` and path `params.p.default`. 7. `a fitting default and a param with no default give no such issue`: `number` 7, `text` "a", `bool` false, `enum` "a" in options, and a param with none.
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/runner/src/engine-seam.test.ts packages/sdk/src/validate`. Expected: FAIL (missing fields, `param_default_type` never raised).
-- [ ] **Step 3: Implement** the interfaces and rules above; add the two fields to the two request builders.
-- [ ] **Step 4: Run the tests and the typecheck**
+- [x] **Step 3: Implement** the interfaces and rules above; add the two fields to the two request builders.
+- [x] **Step 4: Run the tests and the typecheck**
   Run: `pnpm vitest run packages/runner packages/sdk && pnpm typecheck`. Expected: PASS (every present test unchanged).
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner packages/sdk
 git commit -m "Give the engine a block sentence, a stop call and the run's requirements" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

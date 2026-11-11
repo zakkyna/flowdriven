@@ -237,3 +237,32 @@ test("M4 a reference to an output the step does not declare is reported (plan Ta
   ]);
   expect(codes(validateManifest(valid))).not.toContain("unknown_reference@steps.1.instructions");
 });
+
+test("a param default of the wrong type is an error with the code param_default_type", () => {
+  for (const param of [
+    { type: "number", default: "7" },
+    { type: "text", default: 5 },
+    { type: "bool", default: "true" },
+    { type: "enum", default: "x", options: ["a"] },
+    { type: "enum", default: "a" },
+  ]) {
+    expect(
+      validateManifest(flow({ params: { p: param } })).filter((issue) => issue.code === "param_default_type"),
+    ).toEqual([
+      expect.objectContaining({ code: "param_default_type", path: "params.p.default", severity: "error" }),
+    ]);
+  }
+});
+test("a fitting default and a param with no default give no such issue", () => {
+  for (const param of [
+    { type: "number", default: 7 },
+    { type: "text", default: "a" },
+    { type: "bool", default: false },
+    { type: "enum", default: "a", options: ["a"] },
+    { type: "number" },
+  ]) {
+    expect(
+      validateManifest(flow({ params: { p: param } })).filter((issue) => issue.code === "param_default_type"),
+    ).toEqual([]);
+  }
+});

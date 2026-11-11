@@ -9,7 +9,13 @@ import type {
   StepRequest,
 } from "./harness.ts";
 import type { ExitClass } from "./states.ts";
-export type Reply = { exit?: ExitClass; text?: string; outputs?: Record<string, Value>; hang?: boolean };
+export type Reply = {
+  exit?: ExitClass;
+  text?: string;
+  outputs?: Record<string, Value>;
+  hang?: boolean;
+  block?: string;
+};
 export type Script = {
   steps?: Record<string, Reply | Reply[] | ((req: StepRequest) => Reply)>;
   replan?: (req: ReplanRequest) => { instructions: string } | undefined;
@@ -51,7 +57,12 @@ export function scriptedHarness(script: Script): ScriptedHarness {
           if (req.signal.aborted) abort();
           else req.signal.addEventListener("abort", abort, { once: true });
         });
-      return { exit: reply.exit ?? "ok", text: reply.text ?? "", outputs: reply.outputs ?? {} };
+      return {
+        exit: reply.exit ?? "ok",
+        text: reply.text ?? "",
+        outputs: reply.outputs ?? {},
+        ...(reply.block === undefined ? {} : { block: reply.block }),
+      };
     },
     async replan(req) {
       replanCalls.push(req);

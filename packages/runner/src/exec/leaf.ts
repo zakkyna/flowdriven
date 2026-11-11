@@ -114,6 +114,7 @@ export async function runLeaf(
         exit: "ok" | "failed" | "quota" | "auth" | "interrupted";
         text: string;
         outputs: Record<string, Value>;
+        block?: string;
       };
       if (step.do === "builtin") {
         const fn = deps.builtins[step.builtin];
@@ -135,6 +136,9 @@ export async function runLeaf(
             title: step.title ?? step.id,
             instructions,
             uses: step.uses,
+            project: run.project,
+            requirements: step.uses.flatMap((id) => run.requirements.filter((r) => r.id === id)),
+            ...(step.worker?.effort === undefined ? {} : { effort: step.worker.effort }),
             ...(step.do === "skill" ? { skill: step.skill } : {}),
             outputs: step.outputs.map(({ id, type }) => ({ id, type })),
             ...(failures.length ? { lastFailure: failures.at(-1) } : {}),
@@ -143,6 +147,11 @@ export async function runLeaf(
           }),
           ctl.signal,
         );
+      }
+      if (result.block !== undefined) {
+        Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+        block(result.block);
+        return "halt";
       }
       if (timedOut) failure = "time limit exceeded";
       else if (result.exit === "quota" || result.exit === "auth") {
