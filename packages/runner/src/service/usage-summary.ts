@@ -19,10 +19,10 @@ function totals(rows: UsageEventRow[]): Totals {
   const out: Totals = { calls: rows.length, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   for (const row of rows)
     for (const m of row.models) {
-      out.input += m.input;
-      out.output += m.output;
-      out.cacheRead += m.cacheRead;
-      out.cacheWrite += m.cacheWrite;
+      out.input = Math.min(Number.MAX_SAFE_INTEGER, out.input + m.input);
+      out.output = Math.min(Number.MAX_SAFE_INTEGER, out.output + m.output);
+      out.cacheRead = Math.min(Number.MAX_SAFE_INTEGER, out.cacheRead + m.cacheRead);
+      out.cacheWrite = Math.min(Number.MAX_SAFE_INTEGER, out.cacheWrite + m.cacheWrite);
     }
   return out;
 }

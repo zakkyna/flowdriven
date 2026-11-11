@@ -115,9 +115,7 @@ export function createTripwire(allowedIds: ReadonlySet<string>): Tripwire {
   };
 }
 const count = (v: unknown): number =>
-  typeof v === "number" && Number.isFinite(v) && v >= 0
-    ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(v))
-    : 0;
+  typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.min(1e12, Math.floor(v)) : 0;
 export function parseUsage(
   event: StreamEvent,
 ): { models: ModelUsage[]; turns: number; costUsd?: number } | undefined {

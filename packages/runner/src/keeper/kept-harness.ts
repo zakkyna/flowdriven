@@ -85,29 +85,41 @@ export function createKeptHarness(deps: Deps): HarnessAdapter {
       throw e;
     } finally {
       const { peakMb } = slot.release();
-      if (call) keeper.noteLimits(inner.id, call.limits);
-      const reset = call?.limits.find(
-        (limit) => limit.status === "rejected" && limit.resetsAt !== undefined,
-      )?.resetsAt;
-      if (exit === "quota") keeper.noteRefused(inner.id, reset === undefined ? undefined : reset * 1000);
-      else if (exit === "ok") keeper.noteSuccess(inner.id);
-      if (call || started)
-        deps.record({
-          at: deps.at(),
-          runId: req.runId,
-          stepId: req.stepId,
-          itemKey: req.itemKey ?? "",
-          attempt: "attempt" in req ? req.attempt : 0,
-          kind,
-          harness: inner.id,
-          models: call?.models ?? [],
-          turns: call?.turns ?? 0,
-          wallMs: call?.wallMs ?? Math.max(0, deps.nowMs() - startedAt),
-          queuedMs: slot.waitedMs,
-          ...(peakMb === undefined ? {} : { memoryPeakMb: peakMb }),
-          exit,
-          ...(call?.costUsd === undefined ? {} : { costUsd: call.costUsd }),
-        });
+      try {
+        if (call || started)
+          deps.record({
+            at: deps.at(),
+            runId: req.runId,
+            stepId: req.stepId,
+            itemKey: req.itemKey ?? "",
+            attempt: "attempt" in req ? req.attempt : 0,
+            kind,
+            harness: inner.id,
+            models: call?.models ?? [],
+            turns: call?.turns ?? 0,
+            wallMs: call?.wallMs ?? Math.max(0, deps.nowMs() - startedAt),
+            queuedMs: slot.waitedMs,
+            ...(peakMb === undefined ? {} : { memoryPeakMb: peakMb }),
+            exit,
+            ...(call?.costUsd === undefined ? {} : { costUsd: call.costUsd }),
+          });
+      } catch {
+        /* Recording must not replace the call result. */
+      }
+      try {
+        if (call) keeper.noteLimits(inner.id, call.limits);
+      } catch {
+        /* A note must not replace the call result. */
+      }
+      try {
+        const reset = call?.limits.find(
+          (limit) => limit.status === "rejected" && limit.resetsAt !== undefined,
+        )?.resetsAt;
+        if (exit === "quota") keeper.noteRefused(inner.id, reset === undefined ? undefined : reset * 1000);
+        else if (exit === "ok") keeper.noteSuccess(inner.id);
+      } catch {
+        /* A note must not replace the call result. */
+      }
     }
   }
   return {

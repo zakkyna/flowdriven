@@ -206,12 +206,11 @@ test("a failing evaluation never admits and never hangs the queue; onChange fire
   let changes = 0;
   const base = { ceiling: 4, reserveMb: 0, fiveHourLine: 0.9, sevenDayLine: 0.9 };
   const probes = {
-    refresh: async () => {},
-    availableMb: () => 8000,
-    pressureLevel: () => {
+    refresh: async () => {
       if (boom) throw new Error("unreadable");
-      return 1;
     },
+    availableMb: () => 8000,
+    pressureLevel: () => 1,
     groupRssMb: () => undefined,
     totalMb: () => 16000,
   };

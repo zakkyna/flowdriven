@@ -27,7 +27,7 @@ function deferred<T>() {
 const flush = async () => {
   for (let i = 0; i < 6; i++) await Promise.resolve();
 };
-function rig(known = true) {
+function rig(known = true, failRecord = false) {
   const clock = { now: 1_000_000 };
   const probes = {
     refresh: async () => {},
@@ -77,7 +77,10 @@ function rig(known = true) {
     info: () =>
       known ? { cls: 1, underWay: false, startedAt: "2026-11-11T09:00:00.000Z", flowId: "f" } : undefined,
     weight: () => 200,
-    record: (row) => rows.push(row),
+    record: (row) => {
+      if (failRecord) throw new Error("record failed");
+      rows.push(row);
+    },
   });
   const pause = (id: string) => () => {
     log.push(`pause:${id}`);
@@ -247,5 +250,39 @@ test("a judge of a run that cannot be found throws and nothing starts", async ()
   );
   expect(r.log).toEqual([]);
   expect(r.rows).toEqual([]);
+  expect(r.keeper.snapshot().rows).toEqual([]);
+});
+
+test("a note that throws does not lose the usage row or change the result", async () => {
+  const r = rig();
+  r.keeper.noteLimits = () => {
+    throw new Error("note failed");
+  };
+  const result = { exit: "ok" as const, text: "done", outputs: {}, call: call() };
+  const step = r.kept.runStep(r.req("a"));
+  await r.keeper.settled();
+  await flush();
+  r.finish("a", result);
+  await expect(step).resolves.toEqual(result);
+  expect(r.rows).toHaveLength(1);
+  expect(r.keeper.snapshot().rows).toEqual([]);
+});
+
+test("record and note failures preserve judge errors and release the ticket", async () => {
+  const r = rig(true, true);
+  let refused = false;
+  r.keeper.noteLimits = () => {
+    throw new Error("note failed");
+  };
+  r.keeper.noteRefused = () => {
+    refused = true;
+    throw new Error("refused failed");
+  };
+  const judge = r.kept.judge(r.judgeReq("a"));
+  await r.keeper.settled();
+  await flush();
+  r.failJudge("a", new HarnessCallError("original error", "quota", call()));
+  await expect(judge).rejects.toThrow("original error");
+  expect(refused).toBe(true);
   expect(r.keeper.snapshot().rows).toEqual([]);
 });

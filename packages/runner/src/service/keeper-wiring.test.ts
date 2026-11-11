@@ -79,11 +79,11 @@ async function rig() {
   return { store, wired, again, marks, gate: latch, req, run };
 }
 
-test("settings default, junk gives the defaults, and a stored change applies at the next decision", async () => {
+test("settings default, junk gives the floor, and a stored change applies at the next decision", async () => {
   const w = await rig();
   expect(readKeeperSettings(w.store)).toEqual(DEFAULT_KEEPER);
   w.store.putSetting("keeper", { ceiling: "many" });
-  expect(readKeeperSettings(w.store).ceiling).toBe(4);
+  expect(readKeeperSettings(w.store).ceiling).toBe(1);
   w.store.putSetting("keeper", { ceiling: 1 });
   expect(w.wired.keeper.snapshot().ceiling).toBe(1);
 });
@@ -147,4 +147,24 @@ test("a change of the queue marks the runs topic, and waiting changes no run sta
   expect(w.store.getRun("r2")?.state).toBe("running");
   w.gate.release();
   w.gate.release();
+});
+
+test("a stored keeper value that does not parse gives a ceiling of 1, never the default of 4", async () => {
+  const w = await rig();
+  w.store.putSetting("keeper", { ceiling: "many" });
+  expect(readKeeperSettings(w.store)).toEqual({
+    ...DEFAULT_KEEPER,
+    ceiling: 1,
+    quotaLines: { fiveHour: 0.9, sevenDay: 0.9 },
+  });
+  expect(w.wired.keeper.snapshot().ceiling).toBe(1);
+});
+
+test("invalid settings are audited once when the keeper starts", async () => {
+  const w = await rig();
+  w.store.putSetting("keeper", { ceiling: "bad" });
+  w.again();
+  expect(w.store.listAudit().filter((entry) => entry.kind === "keeper_settings_invalid")).toMatchObject([
+    { detail: "The stored keeper settings could not be read; the ceiling is 1 until they are saved again." },
+  ]);
 });

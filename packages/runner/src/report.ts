@@ -16,10 +16,10 @@ export function sumUsage(rows: UsageEventRow[]) {
     queuedMs += row.queuedMs;
     if (row.models.length) reported = true;
     for (const model of row.models) {
-      input += model.input;
-      output += model.output;
-      cacheRead += model.cacheRead;
-      cacheWrite += model.cacheWrite;
+      input = Math.min(Number.MAX_SAFE_INTEGER, input + model.input);
+      output = Math.min(Number.MAX_SAFE_INTEGER, output + model.output);
+      cacheRead = Math.min(Number.MAX_SAFE_INTEGER, cacheRead + model.cacheRead);
+      cacheWrite = Math.min(Number.MAX_SAFE_INTEGER, cacheWrite + model.cacheWrite);
     }
   }
   return {

@@ -11,8 +11,12 @@ import type { Store } from "../storage.ts";
 
 export type Every = (ms: number, fn: () => void) => () => void;
 export function readKeeperSettings(store: Pick<Store, "getSetting">): KeeperSettings {
-  const result = KeeperSettings.safeParse(store.getSetting("keeper"));
-  return result.success ? result.data : DEFAULT_KEEPER;
+  const value = store.getSetting("keeper");
+  if (value === undefined) return DEFAULT_KEEPER;
+  const result = KeeperSettings.safeParse(value);
+  return result.success
+    ? result.data
+    : { ...DEFAULT_KEEPER, ceiling: 1, quotaLines: { fiveHour: 0.9, sevenDay: 0.9 } };
 }
 export function wireKeeper(o: {
   store: Store;
@@ -27,6 +31,13 @@ export function wireKeeper(o: {
   markChanged?: (topic: RunnerTopic) => void;
 }): { harness: HarnessAdapter; keeper: Keeper; probes: Probes } {
   const { store } = o;
+  const stored = store.getSetting("keeper");
+  if (stored !== undefined && !KeeperSettings.safeParse(stored).success)
+    store.appendAudit({
+      at: o.now().toISOString(),
+      kind: "keeper_settings_invalid",
+      detail: "The stored keeper settings could not be read; the ceiling is 1 until they are saved again.",
+    });
   const probes =
     o.probes ??
     createProbes({

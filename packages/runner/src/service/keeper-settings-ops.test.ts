@@ -77,3 +77,13 @@ test("model patches keep other harnesses and mixed patches do not change setting
   ).rejects.toThrow();
   expect(readKeeperSettings(s.store).ceiling).toBe(4);
 });
+
+test("invalid stored settings are shown at the floor and a successful update replaces them", async () => {
+  const s = await rig();
+  s.store.putSetting("keeper", { ceiling: "bad" });
+  expect(((await s.call("settings.get", {})) as Settings).keeper).toEqual(readKeeperSettings(s.store));
+  expect(((await s.call("settings.get", {})) as Settings).keeper.ceiling).toBe(1);
+  const updated = (await s.call("settings.update", { patch: { keeper: { ceiling: 2 } } })) as Settings;
+  expect(updated.keeper.ceiling).toBe(2);
+  expect(readKeeperSettings(s.store)).toEqual(updated.keeper);
+});

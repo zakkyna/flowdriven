@@ -185,7 +185,10 @@ export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => 
       harnessId,
       name: harnessId === "claude-code" ? "Claude Code" : harnessId,
       calls: total.calls,
-      tokens: total.input + total.output + total.cacheRead + total.cacheWrite,
+      tokens: Math.min(
+        Number.MAX_SAFE_INTEGER,
+        total.input + total.output + total.cacheRead + total.cacheWrite,
+      ),
       wallSeconds: total.wallSeconds,
       ...(costs.length ? { estimatedCostUsd: costs.reduce((a, b) => a + b, 0) } : {}),
     };
@@ -199,6 +202,13 @@ export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => 
     usage: harnesses,
     calls: usageRows.map(({ harness, wallMs, queuedMs, ...row }) => ({
       ...row,
+      models: row.models.map((model) => ({
+        ...model,
+        input: Math.min(Number.MAX_SAFE_INTEGER, model.input),
+        output: Math.min(Number.MAX_SAFE_INTEGER, model.output),
+        cacheRead: Math.min(Number.MAX_SAFE_INTEGER, model.cacheRead),
+        cacheWrite: Math.min(Number.MAX_SAFE_INTEGER, model.cacheWrite),
+      })),
       harnessId: harness,
       wallSeconds: wallMs / 1000,
       queuedSeconds: queuedMs / 1000,

@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HarnessCard } from "@flowdriven/contracts";
+import type { HarnessCard, UsageSummary } from "@flowdriven/contracts";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store, UsageEventRow } from "../storage.ts";
@@ -115,4 +115,11 @@ test("the harness card shows usage and stored windows, and stays unchanged witho
       },
     },
   ]);
+  store.addUsage(row("2026-11-11T03:00:00.000Z", [{ ...model, input: 1e300, output: 1e300 }]));
+  expect(await call("harnesses.list", {})).toMatchObject([
+    { quota: { today: { tokens: Number.MAX_SAFE_INTEGER }, week: { tokens: Number.MAX_SAFE_INTEGER } } },
+  ]);
+  expect(((await call("usage.summary", {})) as UsageSummary).harnesses[0]?.today.input).toBe(
+    Number.MAX_SAFE_INTEGER,
+  );
 });

@@ -193,7 +193,10 @@ export function createHandlers({
       output: number;
       cacheRead: number;
       cacheWrite: number;
-    }) => ({ calls: t.calls, tokens: t.input + t.output + t.cacheRead + t.cacheWrite });
+    }) => ({
+      calls: t.calls,
+      tokens: Math.min(Number.MAX_SAFE_INTEGER, t.input + t.output + t.cacheRead + t.cacheWrite),
+    });
     const empty = { calls: 0, tokens: 0 };
     const windows: NonNullable<HarnessCard["quota"]["windows"]> = [];
     if (five) windows.push({ name: "five_hour", ...five });

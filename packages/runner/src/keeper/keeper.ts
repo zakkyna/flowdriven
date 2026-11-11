@@ -51,10 +51,21 @@ function windowOf(window: QuotaWindow): QuotaWindow {
   };
 }
 
+function safely<T>(fn: () => T, fallback: T): T {
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
+}
+
 export function createKeeper(deps: Deps): Keeper {
   const running: Running[] = [];
   const waiting: Pending[] = [];
-  const quotas = new Map<string, HarnessQuota>(Object.entries(deps.loadQuota?.() ?? {}));
+  let quotaLoadFailed = false;
+  const loaded = safely(() => deps.loadQuota?.() ?? {}, undefined);
+  if (!loaded) quotaLoadFailed = true;
+  const quotas = new Map<string, HarnessQuota>(Object.entries(loaded ?? {}));
   const refusals = new Map<string, number>();
   const front: string[] = [];
   let arrival = 0;
@@ -76,12 +87,14 @@ export function createKeeper(deps: Deps): Keeper {
         a.arrival - b.arrival
       );
     });
-  const change = () => deps.onChange?.();
+  const change = () => {
+    safely(() => deps.onChange?.(), undefined);
+  };
   const timer = () => {
     if (!stopped && (running.length || waiting.length)) {
-      if (!cancel) cancel = deps.every(SAMPLE_MS, pump);
+      if (!cancel) cancel = safely(() => deps.every(SAMPLE_MS, pump), undefined);
     } else if (cancel) {
-      cancel();
+      safely(cancel, undefined);
       cancel = undefined;
     }
   };
@@ -92,7 +105,7 @@ export function createKeeper(deps: Deps): Keeper {
     }
     if (!p.notified) {
       p.notified = true;
-      p.onWait?.();
+      safely(() => p.onWait?.(), undefined);
     }
   };
   const remove = (p: Pending) => {
@@ -101,99 +114,109 @@ export function createKeeper(deps: Deps): Keeper {
     p.signal.removeEventListener("abort", p.abort);
   };
   const evaluate = async () => {
-    let refreshFailed = false;
     try {
-      await deps.probes.refresh();
-    } catch {
-      refreshFailed = true;
-    }
-    for (const row of running) {
+      let refreshFailed = false;
       try {
-        if (row.pid !== undefined) {
-          const rss = deps.probes.groupRssMb(row.pid);
-          if (rss !== undefined && Number.isFinite(rss) && rss >= 0)
-            row.peakMb = Math.max(row.peakMb ?? 0, rss * CORRECTION);
-        }
+        await deps.probes.refresh();
       } catch {
-        /* A failed sample does not erase an earlier peak. */
+        refreshFailed = true;
       }
-    }
-    sort();
-    let global: Waiting | undefined;
-    for (const p of [...waiting]) {
-      if (!waiting.includes(p)) continue;
-      if (global) {
-        setWaiting(p, global);
-        continue;
+      for (const row of running) {
+        try {
+          if (row.pid !== undefined) {
+            const rss = deps.probes.groupRssMb(row.pid);
+            if (rss !== undefined && Number.isFinite(rss) && rss >= 0)
+              row.peakMb = Math.max(row.peakMb ?? 0, rss * CORRECTION);
+          }
+        } catch {
+          /* A failed sample does not erase an earlier peak. */
+        }
       }
-      try {
-        const config = deps.config();
-        if (
-          refreshFailed ||
-          !Number.isFinite(p.ticket.weightMb) ||
-          p.ticket.weightMb < 0 ||
-          !Number.isInteger(config.ceiling) ||
-          config.ceiling < 1 ||
-          !Number.isFinite(config.reserveMb) ||
-          config.reserveMb < 0 ||
-          !Number.isFinite(config.fiveHourLine) ||
-          !Number.isFinite(config.sevenDayLine)
-        )
-          throw new Error("invalid gate input");
-        const now = deps.nowMs();
-        const availableMb = deps.probes.availableMb();
-        const pressure = deps.probes.pressureLevel();
-        if (
-          (availableMb !== undefined && (!Number.isFinite(availableMb) || availableMb < 0)) ||
-          (pressure !== undefined && (!Number.isFinite(pressure) || pressure < 0))
-        )
-          throw new Error("invalid probe");
-        const verdict = admit({
-          ticket: p.ticket,
-          running,
-          claimedMb: running
-            .filter((r) => now - r.startedMs < CLAIM_MS)
-            .reduce((sum, r) => sum + r.ticket.weightMb, 0),
-          availableMb,
-          pressure,
-          quota: quotas.get(p.ticket.harnessId),
-          weeklyAnswer: deps.weeklyAnswer(p.ticket.harnessId),
-          config,
-          nowMs: now,
-        });
-        if (!verdict.ok) {
-          setWaiting(p, verdict.waiting);
-          if (verdict.waiting.reason === "memory" || verdict.waiting.reason === "ceiling")
-            global = verdict.waiting;
+      sort();
+      let global: Waiting | undefined;
+      for (const p of [...waiting]) {
+        if (!waiting.includes(p)) continue;
+        if (global) {
+          setWaiting(p, global);
           continue;
         }
-        remove(p);
-        const row: Running = { ticket: p.ticket, startedMs: now, queuedMs: Math.max(0, now - p.enqueuedMs) };
-        running.push(row);
-        let released = false;
-        p.resolve({
-          waitedMs: row.queuedMs,
-          attach(pid) {
-            if (!released) row.pid = pid;
-          },
-          release() {
-            if (!released) {
-              released = true;
-              const index = running.indexOf(row);
-              if (index >= 0) running.splice(index, 1);
-              change();
-              timer();
-              pump();
-            }
-            return row.peakMb === undefined ? {} : { peakMb: row.peakMb };
-          },
-        });
-        change();
-      } catch {
-        setWaiting(p, { reason: "memory" });
+        try {
+          const config = deps.config();
+          if (
+            refreshFailed ||
+            quotaLoadFailed ||
+            !Number.isFinite(p.ticket.weightMb) ||
+            p.ticket.weightMb < 0 ||
+            !Number.isInteger(config.ceiling) ||
+            config.ceiling < 1 ||
+            !Number.isFinite(config.reserveMb) ||
+            config.reserveMb < 0 ||
+            !Number.isFinite(config.fiveHourLine) ||
+            !Number.isFinite(config.sevenDayLine)
+          )
+            throw new Error("invalid gate input");
+          const now = deps.nowMs();
+          if (!Number.isFinite(now)) throw new Error("invalid clock");
+          const availableMb = safely(() => deps.probes.availableMb(), undefined);
+          const pressure = safely(() => deps.probes.pressureLevel(), undefined);
+          if (
+            (availableMb !== undefined && (!Number.isFinite(availableMb) || availableMb < 0)) ||
+            (pressure !== undefined && (!Number.isFinite(pressure) || pressure < 0))
+          )
+            throw new Error("invalid probe");
+          const verdict = admit({
+            ticket: p.ticket,
+            running,
+            claimedMb: running
+              .filter((r) => now - r.startedMs < CLAIM_MS)
+              .reduce((sum, r) => sum + r.ticket.weightMb, 0),
+            availableMb,
+            pressure,
+            quota: quotas.get(p.ticket.harnessId),
+            weeklyAnswer: deps.weeklyAnswer(p.ticket.harnessId),
+            config,
+            nowMs: now,
+          });
+          if (!verdict.ok) {
+            setWaiting(p, verdict.waiting);
+            if (verdict.waiting.reason === "memory" || verdict.waiting.reason === "ceiling")
+              global = verdict.waiting;
+            continue;
+          }
+          remove(p);
+          const row: Running = {
+            ticket: p.ticket,
+            startedMs: now,
+            queuedMs: Math.max(0, now - p.enqueuedMs),
+          };
+          running.push(row);
+          let released = false;
+          p.resolve({
+            waitedMs: row.queuedMs,
+            attach(pid) {
+              if (!released) row.pid = pid;
+            },
+            release() {
+              if (!released) {
+                released = true;
+                const index = running.indexOf(row);
+                if (index >= 0) running.splice(index, 1);
+                change();
+                timer();
+                pump();
+              }
+              return row.peakMb === undefined ? {} : { peakMb: row.peakMb };
+            },
+          });
+          change();
+        } catch {
+          setWaiting(p, { reason: "memory" });
+        }
       }
+      timer();
+    } catch {
+      /* Leave tickets waiting on an unexpected failure. */
     }
-    timer();
   };
   function pump() {
     if (stopped) return;
@@ -204,10 +227,12 @@ export function createKeeper(deps: Deps): Keeper {
         dirty = false;
         await evaluate();
       }
-    })().finally(() => {
-      current = undefined;
-      if (dirty && !stopped) pump();
-    });
+    })()
+      .catch(() => {})
+      .finally(() => {
+        current = undefined;
+        if (dirty && !stopped) pump();
+      });
   }
   return {
     acquire(ticket, signal, onWait) {
@@ -216,7 +241,7 @@ export function createKeeper(deps: Deps): Keeper {
         const p: Pending = {
           ticket,
           arrival: arrival++,
-          enqueuedMs: deps.nowMs(),
+          enqueuedMs: safely(deps.nowMs, 0),
           resolve,
           reject,
           signal,
@@ -253,16 +278,16 @@ export function createKeeper(deps: Deps): Keeper {
           };
         if (
           quota.sevenDay?.utilization !== undefined &&
-          quota.sevenDay.utilization >= deps.config().sevenDayLine &&
+          quota.sevenDay.utilization >= safely(() => deps.config().sevenDayLine, 0) &&
           (limit.windows.seven_day || limit.type === "seven_day")
         )
-          deps.onWeekly?.(harnessId, quota.sevenDay);
+          safely(() => deps.onWeekly?.(harnessId, quota.sevenDay as QuotaWindow), undefined);
       }
       quotas.set(harnessId, quota);
       const windows: Windows = {};
       if (quota.fiveHour) windows.fiveHour = quota.fiveHour;
       if (quota.sevenDay) windows.sevenDay = quota.sevenDay;
-      deps.saveQuota?.(harnessId, windows);
+      safely(() => deps.saveQuota?.(harnessId, windows), undefined);
       pump();
     },
     noteRefused(harnessId, untilMs) {
@@ -270,10 +295,9 @@ export function createKeeper(deps: Deps): Keeper {
       refusals.set(harnessId, count + 1);
       const minutes = BACKOFF_MINUTES.at(Math.min(count, BACKOFF_MINUTES.length - 1)) ?? 60;
       const quota = quotas.get(harnessId) ?? {};
+      const now = safely(deps.nowMs, Number.POSITIVE_INFINITY);
       quota.rejectedUntil =
-        untilMs !== undefined && Number.isFinite(untilMs) && untilMs > deps.nowMs()
-          ? untilMs
-          : deps.nowMs() + minutes * 60_000;
+        untilMs !== undefined && Number.isFinite(untilMs) && untilMs > now ? untilMs : now + minutes * 60_000;
       quotas.set(harnessId, quota);
       pump();
     },
@@ -298,9 +322,9 @@ export function createKeeper(deps: Deps): Keeper {
     },
     snapshot() {
       sort();
-      const now = deps.nowMs();
+      const now = safely(deps.nowMs, 0);
       return {
-        ceiling: deps.config().ceiling,
+        ceiling: safely(() => deps.config().ceiling, 1),
         rows: [
           ...running.map((r) => ({ ticket: r.ticket, state: "running" as const, queuedMs: r.queuedMs })),
           ...waiting.map((p) => ({

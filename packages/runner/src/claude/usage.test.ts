@@ -52,7 +52,7 @@ test("sanitises what the stream says", () => {
     '":{"inputTokens":1.9,"outputTokens":-4,"cacheReadInputTokens":1e30,"cacheCreationInputTokens":"x"}}}';
   const u = parseUsage(ev(big));
   expect(u?.models).toEqual([
-    { model: "m".repeat(100), input: 1, output: 0, cacheRead: Number.MAX_SAFE_INTEGER, cacheWrite: 0 },
+    { model: "m".repeat(100), input: 1, output: 0, cacheRead: 1e12, cacheWrite: 0 },
   ]);
   expect(u?.turns).toBe(2);
   expect(u?.costUsd).toBeUndefined();
