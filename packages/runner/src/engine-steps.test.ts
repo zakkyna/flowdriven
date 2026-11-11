@@ -274,11 +274,11 @@ test("an unknown builtin fails with its reason", async () => {
   expect(c.store.getStep(run.id, "a")).toMatchObject({ state: "failed", note: "unknown builtin" });
 });
 
-test("an unavailable ask decision still sweeps expired sign-offs", async () => {
+test("an ask decision for an unknown id still sweeps expired sign-offs", async () => {
   const c = await ready([worker({ checks: [{ type: "user" }] })], { steps: { a: {} } });
   const run = await c.start();
   c.clock.advance(86400001);
-  await expect(c.engine.answerAsk("missing", { picks: [] })).rejects.toMatchObject({ code: "unavailable" });
+  await expect(c.engine.answerAsk("missing", { picks: [] })).rejects.toMatchObject({ code: "not_found" });
   expect(c.store.getRun(run.id)?.state).toBe("failed");
 });
 

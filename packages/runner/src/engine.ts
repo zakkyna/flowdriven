@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type FlowManifest, hasErrors, type Value, validateManifest } from "@flowdriven/sdk";
 import type { CommandRunner } from "./checks/command.ts";
 import { EngineError } from "./errors.ts";
+import { runAsk } from "./exec/ask.ts";
 import { runLeaf } from "./exec/leaf.ts";
 import { runLoop } from "./exec/loop.ts";
 import { makeScope } from "./exec/scope.ts";
@@ -69,10 +70,40 @@ export function createEngine(input: EngineDeps): Engine {
   function sweep() {
     for (const a of store
       .listApprovals({ state: "pending" })
-      .filter((a) => a.kind === "result_sign_off" && a.expiresAt <= now().toISOString())
+      .filter((a) => a.expiresAt <= now().toISOString())
       .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))) {
       store.updateApproval(a.id, { state: "expired", resolvedAt: a.expiresAt });
       const row = store.getStep(a.runId, a.stepId, a.itemKey);
+      if (a.kind === "ask") {
+        if (row && a.onExpiry === "end") {
+          store.upsertStep({
+            ...row,
+            state: "passed",
+            outputs: { choice: [] },
+            note: "nothing picked: the choice expired",
+          });
+          const manifest = flowFor(runById(a.runId)).manifest as FlowManifest;
+          const index = manifest.steps.findIndex((step) => step.id === a.stepId);
+          for (const step of manifest.steps.slice(index + 1)) {
+            if (!store.getStep(a.runId, step.id))
+              store.upsertStep({
+                runId: a.runId,
+                stepId: step.id,
+                itemKey: "",
+                state: "skipped",
+                attempts: [],
+                outputs: {},
+                checks: [],
+                note: "skipped: the run ended at an expired choice",
+              });
+          }
+          store.updateRun(a.runId, { state: "done", endedAt: a.expiresAt });
+        } else {
+          if (row) store.upsertStep({ ...row, state: "failed", note: "The approval expired." });
+          store.updateRun(a.runId, { state: "failed", endedAt: a.expiresAt });
+        }
+        continue;
+      }
       if (row) store.upsertStep({ ...row, state: "failed", note: "The approval expired after 24 hours." });
       store.updateRun(a.runId, { state: "failed", endedAt: a.expiresAt });
     }
@@ -87,6 +118,15 @@ export function createEngine(input: EngineDeps): Engine {
           deps,
           run: runById(run.id),
           manifest,
+          scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
+        });
+        if (outcome === "halt") return runById(run.id);
+        continue;
+      }
+      if (step.do === "ask") {
+        const outcome = runAsk(step, {
+          deps,
+          run: runById(run.id),
           scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
         });
         if (outcome === "halt") return runById(run.id);
@@ -201,9 +241,64 @@ export function createEngine(input: EngineDeps): Engine {
       store.updateRun(run.id, { state: "running" });
       return walk(runById(run.id));
     },
-    async answerAsk() {
+    async answerAsk(id, answer) {
       sweep();
-      return unavailable();
+      const a = store.getApproval(id);
+      if (!a) throw new EngineError("not_found", "Approval not found.");
+      if (a.kind !== "ask") throw new EngineError("invalid_input", "Not a choice.");
+      if (a.state === "expired") throw new EngineError("not_allowed", "This approval expired.");
+      if (a.state !== "pending") throw new EngineError("not_allowed", "This decision was already made.");
+      const run = runById(a.runId);
+      if (run.state !== "waiting_approval")
+        throw new EngineError("not_allowed", "This run is no longer waiting for approval.");
+      const payload = a.payload;
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        Array.isArray(payload) ||
+        !Array.isArray(payload.options) ||
+        typeof a.maxPick !== "number"
+      )
+        throw new EngineError("invalid_input", "Invalid choice payload.");
+      const options = payload.options.map((option) => {
+        if (
+          !option ||
+          typeof option !== "object" ||
+          Array.isArray(option) ||
+          typeof option.key !== "string" ||
+          !Object.hasOwn(option, "item") ||
+          option.item === undefined
+        )
+          throw new EngineError("invalid_input", "Invalid choice option.");
+        return { key: option.key, item: option.item };
+      });
+      if (
+        !Array.isArray(answer.picks) ||
+        answer.picks.some((pick) => typeof pick !== "string" || !options.some((o) => o.key === pick)) ||
+        new Set(answer.picks).size !== answer.picks.length
+      )
+        throw new EngineError("invalid_input", "Invalid picks.");
+      if (answer.picks.length > a.maxPick) throw new EngineError("invalid_input", "Too many picks.");
+      const row = store.getStep(run.id, a.stepId);
+      if (!row) throw new EngineError("not_found", "Step not found.");
+      const at = now().toISOString();
+      store.transaction(() => {
+        store.updateApproval(id, { state: "approved", picks: answer.picks, resolvedAt: at });
+        for (const tool of a.approves) for (const pick of answer.picks) store.addGrant(run.id, tool, pick);
+        store.upsertStep({
+          ...row,
+          state: "passed",
+          outputs: { choice: options.filter((o) => answer.picks.includes(o.key)).map((o) => o.item) },
+        });
+        store.appendAudit({
+          at,
+          kind: "ask_answered",
+          runId: run.id,
+          detail: { approvalId: id, picks: answer.picks },
+        });
+        store.updateRun(run.id, { state: "running" });
+      });
+      return walk(runById(run.id));
     },
     resumeRun: unavailable,
     recoverAfterCrash: unavailable,
