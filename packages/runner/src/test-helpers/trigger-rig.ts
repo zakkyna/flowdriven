@@ -1,4 +1,5 @@
-import { dirname } from "node:path";
+import { mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { type FlowManifest, parseManifest } from "@flowdriven/sdk";
 import type { EngineDeps } from "../engine.ts";
 import { type Script, scriptedHarness } from "../scripted-harness.ts";
@@ -39,6 +40,7 @@ export async function triggerRig(
     readiness?: EngineDeps["readiness"];
     afterList?: () => void;
     hold?: { wait: () => Promise<void> };
+    noWatch?: boolean;
   } = {},
 ) {
   let dayOf = localDay;
@@ -76,6 +78,7 @@ export async function triggerRig(
   const floods: FloodEvent[] = [];
   const jobs: (() => void)[] = [];
   const watchers = new Map<string, () => void>();
+  const watchErrors = new Map<string, () => void>();
   const begun: ReturnType<typeof engine.beginStart>[] = [];
   const proxy = new Proxy(store, {
     get(target, key, receiver) {
@@ -105,10 +108,13 @@ export async function triggerRig(
         if (i >= 0) jobs.splice(i, 1);
       };
     },
-    watch: (path, fn) => {
+    watch: (path, fn, onError) => {
+      if (options.noWatch) return undefined;
       watchers.set(path, fn);
+      watchErrors.set(path, onError);
       return () => {
         watchers.delete(path);
+        watchErrors.delete(path);
       };
     },
     summaryOf: (t) => t.kind,
@@ -119,7 +125,22 @@ export async function triggerRig(
     if (!hash) throw new Error("missing hash");
     return hash;
   };
+  let mtime = 100_000;
   return {
+    watchError: () => {
+      for (const fn of watchErrors.values()) fn();
+    },
+    signal: (path?: string) => {
+      if (path) watchers.get(path)?.();
+      else for (const fn of watchers.values()) fn();
+    },
+    writeFile: (rel: string, text = "x", mtimeMs?: number) => {
+      const path = join(project, rel);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
+      const time = mtimeMs ?? ++mtime;
+      utimesSync(path, time / 1000, time / 1000);
+    },
     svc,
     engine,
     store,

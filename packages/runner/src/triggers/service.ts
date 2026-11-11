@@ -1,4 +1,7 @@
+import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import {
+  durationMs,
   type FlowManifest,
   parseManifest,
   type Trigger,
@@ -8,8 +11,18 @@ import {
 import type { Begun, StartOptions } from "../engine.ts";
 import { EngineError } from "../errors.ts";
 import type { FlowRow, Store, TriggerOutcome, TriggerRow } from "../storage.ts";
-import { DEFAULT_DAILY_CAP, GRACE_MS, OPEN_STATES, TICK_MS } from "./constants.ts";
-import { checkEnable, inputsFromDefaults, preflight } from "./rules.ts";
+import {
+  DEFAULT_DAILY_CAP,
+  DEFAULT_MAX_ITEMS,
+  GRACE_MS,
+  MAX_DEBOUNCE_WAIT_MS,
+  MAX_SCAN_ENTRIES,
+  OPEN_STATES,
+  RESCAN_MS,
+  TICK_MS,
+} from "./constants.ts";
+import { checkEnable, inputsFromDefaults, payloadFiles, preflight } from "./rules.ts";
+import { diffSnapshot, mergeHandled, parseSnapshot, resolveRoot, scanFolder } from "./scan.ts";
 import { dueSlots, nextSlot, scheduleOf, slotKey } from "./schedule.ts";
 
 export type TriggerView = {
@@ -35,7 +48,7 @@ export type TriggerDeps = {
   projectDir: string;
   begin: (flowId: string, options: StartOptions) => Begun;
   every: (ms: number, fn: () => void) => () => void;
-  watch: (path: string, onSignal: () => void) => (() => void) | undefined;
+  watch: (path: string, onSignal: () => void, onError: () => void) => (() => void) | undefined;
   summaryOf: (trigger: Trigger) => string;
   onFlood?: (event: FloodEvent) => void;
   onPaused?: (event: PausedEvent) => void;
@@ -54,12 +67,29 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
   let chain = Promise.resolve();
   let cancel: (() => void) | undefined;
   let poked = false;
-  const watchers = new Map<string, () => void>();
+  const watchers = new Map<
+    string,
+    {
+      root: string;
+      unwatch?: () => void;
+      watching: boolean;
+      capped?: boolean;
+      dirtyFirst?: number;
+      dirtyLast?: number;
+      lastScan?: number;
+    }
+  >();
   const close = (id: string, index: number) => {
     const key = `${id}:${index}`;
     const fn = watchers.get(key);
     watchers.delete(key);
-    if (fn) fn();
+    if (fn?.unwatch) {
+      try {
+        fn.unwatch();
+      } catch {
+        /* watcher already closed */
+      }
+    }
   };
   const flowOf = (id: string): { flow: FlowRow; manifest: FlowManifest } | undefined => {
     const flow = store.getFlow(id);
@@ -100,6 +130,10 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
             ? "Paused: the last 3 runs were blocked. Fix what blocks it, then turn it on."
             : undefined;
     if (!valid.ok && state !== "needs_ok") reason = valid.reason;
+    const watcher = watchers.get(`${flow.id}:${index}`);
+    if (!reason && state === "on" && watcher?.capped) reason = "Only the first 5,000 files are watched.";
+    if (!reason && state === "on" && watcher && !watcher.watching)
+      reason = "Watching is not available here; this folder is checked every 5 minutes.";
     const now = deps.now();
     const day = deps.dayOf(now);
     const next =
@@ -170,6 +204,27 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     if (old?.enabled && old.hash === hash) return view(flow, manifest, index, trigger);
     const result = checked(flow, manifest, index);
     if (!result.ok) throw new EngineError("not_allowed", result.reason);
+    if (trigger.kind === "file_change") {
+      const resolved = resolveRoot(deps.projectDir, trigger.path);
+      if (!resolved.ok) throw new EngineError("not_allowed", resolved.reason);
+      let scanned: ReturnType<typeof scanFolder>;
+      try {
+        scanned = scanFolder(resolved.root, {
+          glob: trigger.glob,
+          maxEntries: MAX_SCAN_ENTRIES,
+          within: realpathSync(deps.projectDir),
+        });
+      } catch {
+        throw new EngineError("not_allowed", "That folder does not exist.");
+      }
+      if (scanned.outside)
+        throw new EngineError(
+          "not_allowed",
+          "Only folders inside the project folder can be watched for now.",
+        );
+      store.putSetting(`snap:${id}:${index}`, scanned.files);
+      close(id, index);
+    }
     const now = deps.now();
     store.putTrigger({
       flowId: id,
@@ -280,8 +335,134 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       const { flow, manifest } = found;
       const trigger = manifest.triggers.at(row.index);
       if (!trigger || row.hash !== flow.hash || row.spec !== JSON.stringify(trigger)) {
+        close(row.flowId, row.index);
         const updated = record(row, "needs_ok");
         if (updated !== row) store.putTrigger(updated);
+        return;
+      }
+      if (trigger.kind === "file_change") {
+        const key = `${row.flowId}:${row.index}`;
+        const resolved = resolveRoot(deps.projectDir, trigger.path);
+        if (!resolved.ok) {
+          close(row.flowId, row.index);
+          const updated = record(row, "refused", resolved.reason);
+          if (updated !== row) store.putTrigger(updated);
+          return;
+        }
+        let state = watchers.get(key);
+        if (state && state.root !== resolved.root) {
+          close(row.flowId, row.index);
+          state = undefined;
+        }
+        if (!state) {
+          state = { root: resolved.root, watching: false };
+          const current = state;
+          watchers.set(key, state);
+          let failed = false;
+          try {
+            const unwatch = deps.watch(
+              resolved.root,
+              () => {
+                const now = deps.now().getTime();
+                current.dirtyFirst ??= now;
+                current.dirtyLast = now;
+              },
+              () => {
+                if (watchers.get(key) !== current) return;
+                failed = true;
+                current.watching = false;
+                const stop = current.unwatch;
+                delete current.unwatch;
+                try {
+                  stop?.();
+                } catch {
+                  /* periodic fallback */
+                }
+              },
+            );
+            if (unwatch && failed) unwatch();
+            else if (unwatch) {
+              state.unwatch = unwatch;
+              state.watching = true;
+            }
+          } catch {
+            /* periodic fallback */
+          }
+        }
+        const now = deps.now().getTime();
+        const debounce = durationMs(trigger.debounce);
+        if (
+          state.lastScan !== undefined &&
+          now - state.lastScan < RESCAN_MS &&
+          (state.dirtyLast === undefined ||
+            state.dirtyFirst === undefined ||
+            (now - state.dirtyLast < debounce &&
+              now - state.dirtyFirst < Math.max(6 * debounce, MAX_DEBOUNCE_WAIT_MS)))
+        )
+          return;
+        delete state.dirtyFirst;
+        delete state.dirtyLast;
+        state.lastScan = now;
+        const scanned = scanFolder(state.root, {
+          glob: trigger.glob,
+          maxEntries: MAX_SCAN_ENTRIES,
+          within: realpathSync(deps.projectDir),
+        });
+        state.capped = scanned.capped;
+        if (scanned.outside) {
+          const updated = record(
+            row,
+            "refused",
+            "Only folders inside the project folder can be watched for now.",
+          );
+          if (updated !== row) store.putTrigger(updated);
+          return;
+        }
+        const setting = `snap:${row.flowId}:${row.index}`;
+        const stored = parseSnapshot(store.getSetting(setting));
+        if (!stored) {
+          store.putSetting(setting, scanned.files);
+          return;
+        }
+        const { changed, removed } = diffSnapshot(stored, scanned.files);
+        if (!changed.length) {
+          if (removed.length) store.putSetting(setting, scanned.files);
+          return;
+        }
+        const max = manifest.limits?.max_items ?? DEFAULT_MAX_ITEMS;
+        const batch = changed.slice(0, max);
+        const lines = batch
+          .map((path) => {
+            const item = scanned.files[path];
+            if (!item) throw new Error("Missing scanned file");
+            return `${path}|${item[0]}|${item[1]}`;
+          })
+          .join("\n");
+        const fireKey = `files:${createHash("sha256").update(lines).digest("hex")}`;
+        const updated = fire(
+          row,
+          flow,
+          manifest,
+          trigger,
+          fireKey,
+          { count: batch.length, total: changed.length, files: payloadFiles(batch, max) },
+          "queue",
+        );
+        if (updated !== row) store.putTrigger(updated);
+        if (
+          ["started", "dropped_cap", "refused", "duplicate"].some(
+            (outcome) => outcome === updated.lastFire?.outcome,
+          )
+        )
+          store.putSetting(setting, mergeHandled(stored, scanned.files, batch));
+        if (
+          changed.length > batch.length ||
+          updated.lastFire?.outcome === "dropped_queue_full" ||
+          updated.lastFire?.outcome === "needs_ok"
+        ) {
+          state.dirtyFirst = now;
+          state.dirtyLast = now;
+        }
         return;
       }
       if (trigger.kind !== "schedule") return;
@@ -368,9 +549,9 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
         /* no throw */
       }
       cancel = undefined;
-      for (const fn of watchers.values())
+      for (const watcher of watchers.values())
         try {
-          fn();
+          watcher.unwatch?.();
         } catch {
           /* no throw */
         }

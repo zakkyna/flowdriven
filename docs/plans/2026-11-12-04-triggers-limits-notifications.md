@@ -498,7 +498,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 5. `diffSnapshot(stored, scanned)`; no `changed`: save the scan when anything was removed, no fire. Otherwise `max = limits.max_items ?? DEFAULT_MAX_ITEMS`, `batch = changed.slice(0, max)`, key `files:` + the SHA-256 (hex, `node:crypto`) of the lines `path|size|mtimeMs` of the batch, payload `{ count: batch.length, total: changed.length, files: payloadFiles(batch, max) }`. The fire path of Task 7 runs with `overlap: "queue"`. When the result is consumed (`started`, `dropped_cap`, `refused`, `duplicate`) the saved snapshot is `mergeHandled(stored, scanned, batch)`; when it is not (`dropped_queue_full`, `needs_ok`) the old snapshot stays and the scan repeats on a later tick. When files remain (`total > batch.length`) the dirty marks are set so that the next tick scans again.
 6. Switching a trigger off, `stop()` and a hash change close the watcher; a watcher that reports an error is closed and the trigger falls back to the periodic scan.
 
-- [ ] **Step 1: Write the failing tests** (`service-files.test.ts`, rig with a `file_change` flow on `inbox`; `r.writeFile("inbox/a.txt")` and `r.signal()`):
+- [x] **Step 1: Write the failing tests** (`service-files.test.ts`, rig with a `file_change` flow on `inbox`; `r.writeFile("inbox/a.txt")` and `r.signal()`):
   1. "enabling takes a baseline: files that already exist do not fire"
   2. "a signal and then the debounce fire one run with count, total and relative paths; before the debounce nothing fires"
   3. "signals that keep coming delay the scan, but at 6 times the debounce (or 60 seconds) it scans anyway"
@@ -511,16 +511,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "a watcher that cannot start falls back to the 5 minute scan and the view says so"
   11. "switching off, a hash change and stop() close the watcher"
   12. "an unreadable snapshot row becomes a new baseline and fires nothing"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-files.test.ts`. Expected: FAIL (the `file_change` branch does nothing).
-- [ ] **Step 3: Implement** the `file_change` branch and the rig helpers.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-files.test.ts`. Expected: FAIL (the `file_change` branch does nothing).
+- [x] **Step 3: Implement** the `file_change` branch and the rig helpers.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/triggers packages/runner/src/test-helpers
 git commit -m "Add file_change triggers: watch, debounce, snapshot compare and batches" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
