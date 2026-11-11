@@ -19,6 +19,10 @@ registerAppScheme();
 registerWebContentsSecurity();
 app.on("window-all-closed", () => {});
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const positive = (text: string | undefined, fallback: number) => {
+  const value = Number(text);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+};
 const preloadPath = path.join(__dirname, "preload.js");
 
 void app
@@ -119,37 +123,39 @@ void app
       if (clicked !== true) throw new Error("Could not turn on the schedule.");
       await capture(window, second, 1);
       window.close();
-      const until = Date.now() + 240_000;
-      let completed: { id: string; state: string } | undefined;
-      while (Date.now() < until) {
+      // TRIGGER_WALK_RUNS and TRIGGER_WALK_WAIT_MS let the chair watch several real slots (plan 04, Task 18, step 4).
+      const wanted = positive(process.env.TRIGGER_WALK_RUNS, 1);
+      const waitMs = positive(process.env.TRIGGER_WALK_WAIT_MS, 240_000);
+      const until = Date.now() + waitMs;
+      const finished = new Set<string>();
+      while (Date.now() < until && finished.size < wanted) {
         const result = await bridge.link.call("runs.list", {});
         if (!Array.isArray(result)) throw new Error("Invalid runs list.");
-        const fresh: unknown[] = result.filter(
-          (run: unknown) =>
+        const list: unknown[] = result;
+        for (const run of list) {
+          if (
             typeof run === "object" &&
             run !== null &&
             "id" in run &&
             typeof run.id === "string" &&
             !previous.has(run.id) &&
+            !finished.has(run.id) &&
             "flowId" in run &&
-            run.flowId === "local.claude-code-check",
-        );
-        const match = fresh.find((run) => isTriggeredRunDone([run]));
-        if (
-          typeof match === "object" &&
-          match !== null &&
-          "id" in match &&
-          typeof match.id === "string" &&
-          "state" in match &&
-          typeof match.state === "string"
-        ) {
-          completed = { id: match.id, state: match.state };
-          break;
+            run.flowId === "local.claude-code-check" &&
+            "state" in run &&
+            typeof run.state === "string" &&
+            isTriggeredRunDone([run])
+          ) {
+            finished.add(run.id);
+            process.stdout.write(`run ${run.id} started by schedule: ${run.state}\n`);
+            const started =
+              "startedAt" in run && typeof run.startedAt === "string" ? run.startedAt : "unknown";
+            process.stdout.write(`  started ${started}, seen ${new Date().toISOString()}\n`);
+          }
         }
-        await delay(1000);
+        if (finished.size < wanted) await delay(waitMs > 600_000 ? 5000 : 1000);
       }
-      if (!completed) throw new Error("Timed out waiting for a triggered run.");
-      process.stdout.write(`run ${completed.id} started by schedule: ${completed.state}\n`);
+      if (finished.size < wanted) throw new Error("Timed out waiting for a triggered run.");
       const runsWindow = createMainWindow({
         preloadPath,
         show: true,
