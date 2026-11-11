@@ -580,22 +580,24 @@ Rules:
 - **toRunDetail.** `RunSummary` fields (flow name from the manifest, `reportFirstLine` from `reportLines(view)[0]` of `report.ts`); `inputs`: the run's inputs then its params, `{ id, label: decl label or id, value }` with strings as they are and other values as compact JSON; `steps`: one `StepRun` per top-level manifest step in order (a missing row reads as `pending`): `title: title ?? id`, `do`, `state`, `worker` from the last attempt's worker name (`harnessIdOf(name)`), `attempts` as `{ number, replan, worker, startedAt, endedAt?, exit? }`, `maxAttempts` from `limits(step, manifest).attempts` of `exec/limits.ts` (1 for a loop), `checks` as `{ type, required, summary, verdict, evidence? }`, `note?`; an `ask` step has `picks` when its approval has `picks` or its row passed with `choice: []` (labels from the approval's options; `[]` when nothing was picked); a loop has `items`: the run's items of that loop in position order as `{ key, label: itemLabel(item.item, key), state: item.status, skip: skipReason(item.note), note?, steps }` where `steps` are the loop's nested steps that have a row for the item's key (none for an item whose note is `skipped: duplicate key`), mapped like leaf steps; `approvalIds`; `outputs`: for each top-level leaf step and each declared output that has a value `{ id: "<step>.<output>", type, value }` with the value as compact JSON cut to 200 characters plus `...`; `usage: []`; `estimatedCostUsd: 0`; `report: { runId, lines: reportLines(view), saveOffer: false }`; `blockedReason?`. `skipReason` maps the four notes of plan 02 (`skipped: seen in an earlier run` -> `seen`, `skipped: duplicate key` -> `duplicate`, `skipped: over the item cap` -> `capped`, `skipped: stopped after an item failed` -> `stopped`). `toAuditRecord`: `detail` is compact JSON.
 - **toApproval.** `kind` as the row's; `flowId` from the run, `flowName` from the manifest, `stepTitle` from the manifest (a nested step too), `itemKey` only when not `""`, `editable: false`, `picks` when present; payload of an `ask`: `{ kind: "choice", question, options: [{ key, label }], maxPick }` (the options of the stored payload without their `item`); payload of a `result_sign_off`: `{ kind: "text", text }` where `text` is the stored string. The result passes `Approval.parse`.
 
-- [ ] **Step 1: Write the failing tests** (12; each result is also parsed with its contract schema; build inputs by hand from `demoFlow()`; the `RunView` helper is a local `view(overrides)` like the one in `report.test.ts`)
+- [x] **Step 1: Write the failing tests** (12; each result is also parsed with its contract schema; build inputs by hand from `demoFlow()`; the `RunView` helper is a local `view(overrides)` like the one in `report.test.ts`)
   `map-flow.test.ts` (5): (1) `toFlowManifest maps loops, asks, when lines, params, triggers and requirement defaults`: the demo flow gives four steps with `do` `["worker","loop","ask","loop"]`, a nested `page` with `when`, `params.min_score.default` 7, a requirement without `ref` gets `ref` equal to its id; `FlowManifest.parse` passes. (2) `check summaries fall back to a description`: one test row per check type of `describeCheck`. (3) `toFlowSummary and toFlowDetail show the last run, the approved sign-off and the playback`. (4) `toReadinessReport gives one unchecked row per requirement and is ready only without required ones`. (5) `defaultSettings validates against Settings and names the month`.
   `map-run.test.ts` (5): (6) `toRunDetail maps top-level steps with limits, workers and attempts`: `maxAttempts` 4 for a worker step with `retry: 2`, worker `{ harnessId, name: "Scripted harness" }`, attempt `replan` false. (7) `loop items carry label, state, skip reason and their own steps; a duplicate has none`: hand-written item rows: `j1` passed with three step rows, `j3` and `j4` skipped with the note `skipped: seen in an earlier run` (`skip: "seen"`), a repeated `j1` skipped with `skipped: duplicate key` (`steps: []`). (8) `an ask step shows its picks, or an empty list when the choice expired`. (9) `inputs, params, outputs, report lines and the blocked reason are listed`: `outputs` has `alerts.jobs`, a long value ends with `...`; `report.lines[0]` starts with `Sample job review:`. (10) `toRunSummary and toAuditRecord`: version `1.2.3-beta+7` becomes `1.2.3`; audit detail is compact JSON.
   `map-approval.test.ts` (2): (11) `an ask becomes a choice approval without the items`. (12) `a sign-off becomes a text approval with its item key and the title of a nested step; resolved states keep picks and resolvedAt`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/service/map-flow.test.ts packages/runner/src/service/map-run.test.ts packages/runner/src/service/map-approval.test.ts`. Expected: FAIL (modules missing).
-- [ ] **Step 3: Implement** the three modules by the rules.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** the three modules by the rules.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner/src/service`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner/src/service
 git commit -m "Map engine rows to the contract read models" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
