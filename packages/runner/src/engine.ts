@@ -21,10 +21,12 @@ import type {
   Store,
   UsageEventRow,
 } from "./storage.ts";
+import { localDay } from "./triggers/schedule.ts";
 export type EngineDeps = {
   store: Store;
   harness: HarnessAdapter;
   now?: () => Date;
+  dayOf?: (date: Date) => string;
   newId?: (prefix: string) => string;
   builtins?: Record<string, (args: Record<string, Value>, run: RunRow) => Promise<Record<string, Value>>>;
   readiness?: (m: FlowManifest) => { ready: boolean; reason?: string };
@@ -33,6 +35,7 @@ export type EngineDeps = {
 };
 export type ResolvedDeps = EngineDeps & {
   now: () => Date;
+  dayOf: (date: Date) => string;
   newId: (prefix: string) => string;
   builtins: NonNullable<EngineDeps["builtins"]>;
 };
@@ -77,6 +80,7 @@ export function createEngine(input: EngineDeps): Engine {
   const deps: ResolvedDeps = {
     ...input,
     now: input.now ?? (() => new Date()),
+    dayOf: input.dayOf ?? localDay,
     newId: input.newId ?? ((prefix) => `${prefix}-${randomUUID()}`),
     builtins: input.builtins ?? {},
   };
@@ -319,7 +323,7 @@ export function createEngine(input: EngineDeps): Engine {
       requirements: structuredClone(manifest.requirements),
       startedAt: now().toISOString(),
     };
-    const day = now().toISOString().slice(0, 10);
+    const day = deps.dayOf(now());
     const key = `runs:${flowId}`;
     if (kind !== "manual" && store.counter(key, day) >= (manifest.limits?.max_runs_per_day ?? 24)) {
       store.appendAudit({ at: now().toISOString(), kind: "run_dropped", detail: { flowId, day } });

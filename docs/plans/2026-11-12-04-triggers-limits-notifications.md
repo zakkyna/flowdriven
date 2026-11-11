@@ -438,7 +438,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService;
 9. **Two triggers of one flow due in one tick** are handled in index order; the second sees the first one's run as open and follows its own overlap rule.
 10. **A fire is decided and started in one synchronous section** (the check of `enabled`, the hash, the claim and `begin` have no await between them). `setEnabled(false)` that comes before the section stops the fire; one that comes after it does not cancel the run that started (switching off stops new fires only).
 
-- [ ] **Step 1: Write the failing tests.** `service.test.ts` (rig; flows `local.hourly` with `{ kind: "schedule", every: "1h" }`; `const H = 3_600_000`; the clock starts at the rig's `2026-11-11T09:00:00.000Z`):
+- [x] **Step 1: Write the failing tests.** `service.test.ts` (rig; flows `local.hourly` with `{ kind: "schedule", every: "1h" }`; `const H = 3_600_000`; the clock starts at the rig's `2026-11-11T09:00:00.000Z`):
 
 ```ts
 test("an hourly schedule fires once an hour, as a triggered run with its slot, and not before it is enabled", async () => {
@@ -467,16 +467,18 @@ test("the daily cap: 30 fires of a flow capped at 3 start 3 runs, drop 27, notif
 ```
   Further tests: 3. "enabling stores the hash, the spec and the enable time, refuses a stale hash with not_allowed, refuses an R4 flow (`raw: true`) with the reason `This flow cannot run unattended: unattended prefix at steps.0`, and writes an audit line without payload text"; 4. "a tick that sees an old slot: catch_up none records missed and starts nothing; catch_up once starts one run for five missed slots with missed 5" (advance 5 hours 30 minutes, then tick: the newest slot is 30 minutes old, so it is not on time; at exactly 5 hours it would be on time and `missed` would be 4); 5. "after the flow's hash changes the trigger does not fire, the view says needs_ok, and re-registering the old hash resumes it" (`engine.registerFlow(changed, newHash)` then `registerFlow(original, oldHash)`: `getFlow` with no hash returns the newest registered, so register the original last); 6. "overlap skip drops the fire while a run is open and consumes the slot; overlap queue starts it behind the open run and stops at 2 queued; a second trigger of the same flow due in the same tick sees the first one's run as open" (a `gate()` holds the step); 7. "R4 at run start: an enabled row for a flow that fails the validator (stored with `raw: true`) starts nothing and records refused" (put the row with `store.putTrigger` directly); 8. "a clock that moves back fires nothing and does not replay slots when it returns; a cursor far in the future is reset to now and records missed"; 9. "a missing flow, an unreadable row and an error from begin, onFlood, watch or every fire nothing or are recorded or swallowed, tick never throws, and the other triggers still fire"; 10. "disabling stops new fires and leaves a run in progress; re-enabling does not catch up the time it was off"; 11. "a setEnabled(false) that lands between the list and the trigger's section is not overwritten: the row stays off and nothing fires" (the rig has an option `afterList?: () => void` that is called right after the store's `listTriggers()` returns inside a tick; the test sets it to call `setEnabled(false)` once, so the switch lands after the list and before the trigger's section, then checks that the row is still off and no run started).
   `engine-day.test.ts`: "the daily cap follows the injected day function, not the UTC day": an engine with `dayOf` returning a value a test changes, a flow with `max_runs_per_day: 1` and a schedule trigger, two `beginStart(..., { trigger: { kind: "schedule" } })` calls on one day (the second throws `Daily run limit reached.`), then the day changes and a third works.
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service.test.ts packages/runner/src/engine-day.test.ts`. Expected: FAIL ("Cannot find module ./service.ts").
-- [ ] **Step 3: Implement** the service (schedule kind, enabling, view, tick, fire path, drops) with `file_change` and `flow_done` handled as "not yet" branches that Tasks 8 and 9 fill (`switch` on kind, the other two `return`). Change the engine line.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service.test.ts packages/runner/src/engine-day.test.ts`. Expected: FAIL ("Cannot find module ./service.ts").
+- [x] **Step 3: Implement** the service (schedule kind, enabling, view, tick, fire path, drops) with `file_change` and `flow_done` handled as "not yet" branches that Tasks 8 and 9 fill (`switch` on kind, the other two `return`). Change the engine line.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Add the trigger service for schedules with overlap, the daily cap and floods" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
