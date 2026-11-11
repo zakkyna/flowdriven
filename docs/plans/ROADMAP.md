@@ -9,7 +9,8 @@ The owner set a new priority: build the engine that runs flows, with triggers, w
 
 | Plan | Content | Shows working |
 |---|---|---|
-| 02 | The SDK with format 1.1 (spec 20.4), the runner process, the SQLite stores, and the interpreter with `for_each`, `when`, `ask`, limits and the seen store, against the fake harness | A sample looped flow with a condition runs; the pick appears in the Inbox; a second run skips the items it has seen |
+| 02 | The SDK with format 1.1 (spec 20.4), the SQLite store, and the interpreter with `for_each`, `when`, `ask`, limits and the seen store, against a scripted fake harness, all as libraries (detailed: `2026-11-11-02-flow-format-and-engine-core.md`) | One command runs a sample looped flow with a condition and a choice twice and writes two run reports; the second run skips the items it has seen |
+| 02b | The runner process, the local socket, the contract for format 1.1, and the app reading the runner instead of sample data | The sample flow runs from the app; the pick appears in the Inbox |
 | 03 | The Claude Code adapter only: detection, the inventory of its skills and connectors, the scoped config, the pre-tool hook to the runner, and a fake `claude` | A real Claude Code step runs; an undeclared tool is denied; stopping the runner blocks the call |
 | 04 | The trigger service (`schedule`, `flow_done`, `file_change`), the limit keeper and notifications | The hourly trigger fires while the window is closed; a flood is capped |
 | 05 | The capability router, web access through the user's own browser, skill calls, native connectors, readiness for these, and the install-preview rows | M1 on real data: attended first, then on the schedule |
