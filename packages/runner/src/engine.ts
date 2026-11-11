@@ -9,6 +9,7 @@ import { runLoop } from "./exec/loop.ts";
 import { createRecovery } from "./exec/recovery.ts";
 import { makeScope } from "./exec/scope.ts";
 import type { HarnessAdapter } from "./harness.ts";
+import type { Waiting } from "./keeper/types.ts";
 import type { ApprovalState, RunState } from "./states.ts";
 import type { ApprovalRow, AuditEntry, FlowRow, ItemRow, RunRow, StepRow, Store } from "./storage.ts";
 export type EngineDeps = {
@@ -19,6 +20,7 @@ export type EngineDeps = {
   builtins?: Record<string, (args: Record<string, Value>, run: RunRow) => Promise<Record<string, Value>>>;
   readiness?: (m: FlowManifest) => { ready: boolean; reason?: string };
   runCommand?: CommandRunner;
+  queue?: { waitingOf(runId: string): { stepId: string; itemKey: string; waiting: Waiting }[] };
 };
 export type ResolvedDeps = EngineDeps & {
   now: () => Date;
@@ -38,6 +40,7 @@ export type RunView = {
   items: ItemRow[];
   approvals: ApprovalRow[];
   audit: AuditEntry[];
+  waiting?: ReturnType<Engine["waitingOf"]>;
 };
 export type Begun = { run: RunRow; settled: Promise<RunRow> };
 export interface Engine {
@@ -56,6 +59,7 @@ export interface Engine {
   recoverAfterCrash(): Promise<RunRow[]>;
   isApproved(runId: string, tool: string, itemKey: string): boolean;
   getRun(runId: string): RunView;
+  waitingOf(runId: string): { run?: Waiting; steps: { stepId: string; itemKey: string; waiting: Waiting }[] };
   listRuns(filter?: { flowId?: string; state?: RunState }): RunRow[];
   listApprovals(filter?: { state?: ApprovalState; runId?: string }): ApprovalRow[];
 }
@@ -68,21 +72,38 @@ export function createEngine(input: EngineDeps): Engine {
   };
   const { store, now } = deps;
   const chain = createChain();
+  const overlapping = new Set<string>();
   let stopping = false;
   function assertRunning() {
     if (stopping) throw new EngineError("unavailable", "The engine is stopping.");
   }
   function enqueue(run: RunRow, task: () => Promise<RunRow>): Begun {
+    if (chain.pending(run.flowId)) overlapping.add(run.id);
     return {
       run,
-      settled: chain.enqueue(run.flowId, task, () => {
-        try {
-          return store.getRun(run.id) ?? run;
-        } catch {
-          return run;
-        }
-      }),
+      settled: chain.enqueue(
+        run.flowId,
+        () => {
+          overlapping.delete(run.id);
+          return task();
+        },
+        () => {
+          overlapping.delete(run.id);
+          try {
+            return store.getRun(run.id) ?? run;
+          } catch {
+            return run;
+          }
+        },
+      ),
     };
+  }
+  function waitingOf(runId: string): ReturnType<Engine["waitingOf"]> {
+    const steps = deps.queue?.waitingOf(runId) ?? [];
+    const run: Waiting | undefined = overlapping.has(runId)
+      ? { reason: "flow_overlap" }
+      : steps.at(0)?.waiting;
+    return run ? { run, steps } : { steps };
   }
   const runById = (id: string) => {
     const run = store.getRun(id);
@@ -478,6 +499,7 @@ export function createEngine(input: EngineDeps): Engine {
       const state = store.getRun(runId)?.state;
       return (state === "running" || state === "retrying") && store.hasGrant(runId, tool, itemKey);
     },
+    waitingOf,
     getRun(id) {
       sweep();
       const run = runById(id);
@@ -488,6 +510,7 @@ export function createEngine(input: EngineDeps): Engine {
         items: store.listItems(id),
         approvals: store.listApprovals({ runId: id }),
         audit: store.listAudit(id),
+        waiting: waitingOf(id),
       };
     },
     listRuns(filter) {

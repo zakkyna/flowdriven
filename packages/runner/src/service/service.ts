@@ -59,14 +59,16 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       runIndex: (runId) =>
         store.listRuns({ flowId: store.getRun(runId)?.flowId }).findIndex((run) => run.id === runId),
     });
+  const wired =
+    mode === "live"
+      ? wireKeeper({ store, now, harness, ...options.keeper, markChanged: options.markChanged })
+      : undefined;
   const engine = createEngine({
     store,
     now,
     newId,
-    harness:
-      mode === "live"
-        ? wireKeeper({ store, now, harness, ...options.keeper, markChanged: options.markChanged }).harness
-        : harness,
+    harness: wired?.harness ?? harness,
+    queue: wired?.keeper,
     readiness: hs
       ? hs.readiness
       : mode === "demo"

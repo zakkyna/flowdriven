@@ -1156,7 +1156,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `engine.ts`: `EngineDeps.queue?: { waitingOf(runId: string): { stepId: string; itemKey: string; waiting: Waiting }[] }` (`Waiting` from `keeper/types.ts`); `Engine.waitingOf(runId: string): { run?: Waiting; steps: { stepId: string; itemKey: string; waiting: Waiting }[] }`: `steps` come from `deps.queue`; `run` is `{ reason: "flow_overlap" }` while the run sits behind an earlier run of its flow (`enqueue`, `engine.ts:75-85`, records `chain.pending(run.flowId)` before queuing and clears the mark when its task starts), else the `waiting` of the first step entry, else absent. `RunView` gains `waiting?: ReturnType<Engine["waitingOf"]>`, filled by `getRun` (`engine.ts:481`). No run state changes: a run behind another run of its flow is `queued` already (fact 1); a run whose step waits at the keeper keeps `running` (decision 2).
 - `service.ts` passes `queue: wired.keeper` to `createEngine` in live mode.
 
-- [ ] **Step 1: Write the failing test** `engine-waiting.test.ts`
+- [x] **Step 1: Write the failing test** `engine-waiting.test.ts`
 
 ```ts
 import { tmpdir } from "node:os";
@@ -1190,14 +1190,16 @@ test("a step that waits at the keeper is the reason of its run, which keeps its 
   g.release(); expect((await a.settled).state).toBe("done");
 });
 ```
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/engine-waiting.test.ts`. Expected: FAIL ("engine.waitingOf is not a function").
-- [ ] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/engine-waiting.test.ts`. Expected: FAIL ("engine.waitingOf is not a function").
+- [x] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Report why a run or a step is waiting from the engine" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
