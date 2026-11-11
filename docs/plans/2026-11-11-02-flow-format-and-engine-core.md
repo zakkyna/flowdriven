@@ -385,7 +385,7 @@ Rules (`Issue.code`, severity, path):
 - `expression_syntax` and `unknown_reference` (error): for `when`, `for_each`, `key`, `ask.question`, `ask.choose_from`, a string `ask.max_pick`, instructions, `files.paths` and the patterns of `contains` and `not_contains`: it must parse; `params.<x>` and `inputs.<x>` must be declared; `steps.<id>` and a bare name must be the `as` variable of the enclosing loop or an earlier step (top level, or an earlier sibling in the same loop). A reference to a later step is an error.
 - `missing_file` (error): only when `options.files` is given: `schema.file`, `judge.rubric` and a webhook `schema` must be in the set.
 - `unattended_prefix` (error): R4 as in Decision 9, only when some trigger has `kind` other than `manual`. A step's tools are those listed in `tools` of each requirement it `uses`, plus its own `risky` and `approvals.extra_risky`; a tool is risky when `classifyTool` returns a value or its name is listed in `risky` or `extra_risky`.
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 ```ts
 const codes = (issues: Issue[]) => issues.map((i) => `${i.code}@${i.path}`);
 test("the Upwork example has no errors", () => expect(validateManifest(ok(upworkJobReview)).filter((i) => i.severity === "error")).toEqual([]));
@@ -448,19 +448,19 @@ test("R4 allows the same steps after the ask, or with a manual trigger", () => {
 });
 ```
 (`flow(overrides)` merges the overrides into the base object and returns the result of `parseManifest` (it throws on issues, so defaults apply). The helpers `step(id, extra?)`, `userStep(id)`, `askStep(id, ask?)` (its `choose_from` is `"${['a','b']}"`), `loop`, `loopFlow` live in `test-data/flows.ts`; each returns a valid parsed object, `fileCheck` is `{ type: "files", paths: ["out.txt"] }`.)
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/sdk/src/validate`. Expected: FAIL with "Failed to resolve import"
-- [ ] **Step 3: Implement `validateManifest`** and its helpers. Walk the steps once with an "earlier ids" set and the current loop variable; collect issues in step order, rule order as listed above.
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 3: Implement `validateManifest`** and its helpers. Walk the steps once with an "earlier ids" set and the current loop variable; collect issues in step order, rule order as listed above.
+- [x] **Step 4: Run the tests to verify they pass**
   Run: `pnpm vitest run packages/sdk/src/validate`. Expected: PASS
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/sdk
 git commit -m "Add the flow validator with the unattended-prefix rule" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

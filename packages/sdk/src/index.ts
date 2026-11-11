@@ -8,4 +8,6 @@ export * from "./format/parse.ts";
 export * from "./format/requirements.ts";
 export * from "./format/steps.ts";
 export * from "./issues.ts";
+export * from "./validate/risky.ts";
+export * from "./validate/validate.ts";
 export * from "./vocab.ts";
