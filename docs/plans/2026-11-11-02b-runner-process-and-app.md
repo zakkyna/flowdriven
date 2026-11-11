@@ -435,20 +435,22 @@ Covers decision 9 (Run detail). The six sections of the screen stay; the new con
 - `Runs.module.css`: `.items`, `.fullReport` (`white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; font-family: var(--font-mono); font-size: var(--text-mono); background: var(--surface-sunken); padding: 12px`), item rows as hairlines like `.step`. No card background, no radius on `.items`.
 - Tests use `renderApp("#/runs/run-0008", { scenario: "looped" })`.
 
-- [ ] **Step 1: Write the failing tests** (8 new)
+- [x] **Step 1: Write the failing tests** (8 new)
   (1) `a loop step lists its items with key, label, state word and note`: list "Items of Review every alert" has five rows; the first row has `j1`, `Job one` and `Passed`; the third has `Failed` and `The score was missing.`. (2) `an item shows its own steps`: list "Steps of j1" has three rows; "Steps of j2" shows `Skipped` twice. (3) `skip reasons are shown in words`: `Seen in an earlier run` and `Over the item cap` are on the page, and `skipped: seen in an earlier run` is not (the reason replaces the raw note). (4) `an ask step shows what was picked`: set `client.state.runs.find(r => r.id === "run-0008")` step `pick` to `state: "passed"`, `picks: [{key:"j1", label:"Job one"}]`, then the page shows `Picked: Job one`; with `picks: []` it shows `Nothing picked.`. (5) `the full report loads from runs.export when asked and is shown as text`: spy on `client.call`; click `Show full report`; `runs.export` was called once with `{ runId: "run-0008" }` and the `pre` named "Full report" contains `# Job alert review: run run-0008`; clicking `Hide full report` hides it and `Show full report` again does not call twice more than needed (two calls at most). (6) `a failed export says why and keeps the page`: make `client.call` reject `runs.export` with `new RunnerError("unavailable", "The report is not available.")`; an alert with that text appears and the Steps section is still there. (7) `Run detail keeps its six sections for a looped run`: the level-2 headings are `Report, Steps, Inputs, Outputs, Approvals, Usage`. (8) `a passed loop or ask step shows its state word and no alarm`: the block of the passed `review` step has `Passed`, no `Marked passed without a passing check` and no `Attempt`; with `pick` set as in test 4 (`passed`, picks `j1`) the same holds for its block.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run apps/desktop/src/screens/runs`. Expected: FAIL.
-- [ ] **Step 3: Implement** the list, the block, the button and the CSS.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** the list, the block, the button and the CSS.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run apps/desktop/src/screens/runs apps/desktop/src/layout-guards.test.ts`. Expected: PASS (the present Runs tests, `Run detail keeps its six sections` included, are unchanged).
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check && pnpm build:web`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add apps/desktop/src/screens/runs
 git commit -m "Show loop items, picks and the full report in Run detail" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

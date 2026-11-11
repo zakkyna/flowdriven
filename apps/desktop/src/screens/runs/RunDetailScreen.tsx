@@ -20,6 +20,40 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
   const [actionError, setActionError] = useState<string>();
   const [resuming, setResuming] = useState(false);
   const resumeInFlight = useRef(false);
+  const [report, setReport] = useState<{
+    runId: string;
+    open: boolean;
+    loading: boolean;
+    markdown?: string;
+    error?: string;
+  }>();
+  const reportRequest = useRef({ runId, sequence: 0, loading: false });
+  if (reportRequest.current.runId !== runId)
+    reportRequest.current = { runId, sequence: reportRequest.current.sequence + 1, loading: false };
+  const currentReport = report?.runId === runId ? report : undefined;
+  function toggleReport(): void {
+    if (reportRequest.current.loading) return;
+    if (currentReport?.open) {
+      setReport({ ...currentReport, open: false });
+      return;
+    }
+    if (currentReport?.markdown !== undefined) {
+      setReport({ ...currentReport, open: true, error: undefined });
+      return;
+    }
+    reportRequest.current.loading = true;
+    const sequence = ++reportRequest.current.sequence;
+    setReport({ runId, open: false, loading: true });
+    void action("runs.export", { runId }).then((result) => {
+      if (reportRequest.current.sequence !== sequence || reportRequest.current.runId !== runId) return;
+      reportRequest.current.loading = false;
+      setReport(
+        result.ok
+          ? { runId, open: true, loading: false, markdown: result.data.markdown }
+          : { runId, open: false, loading: false, error: result.error.message },
+      );
+    });
+  }
   const loading = query.loading || approvals.loading;
   const error = query.error ?? approvals.error;
   if (!loading && query.error?.code === "not_found")
@@ -124,6 +158,15 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
             </>
           ) : (
             <p className={styles.muted}>The report appears when the run ends.</p>
+          )}
+          <Button size="small" disabled={currentReport?.loading} onClick={toggleReport}>
+            {currentReport?.open ? "Hide full report" : "Show full report"}
+          </Button>
+          {currentReport?.error && <p role="alert">{currentReport.error}</p>}
+          {currentReport?.open && (
+            <pre role="region" aria-label="Full report" className={styles.fullReport}>
+              {currentReport.markdown}
+            </pre>
           )}
           {run.steps.some((step) => isJudgedOnly(step.checks)) && (
             <p className={styles.muted}>Some steps were judged, not verified.</p>

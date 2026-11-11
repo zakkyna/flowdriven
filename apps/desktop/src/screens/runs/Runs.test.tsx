@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { RunnerError } from "@flowdriven/contracts";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
@@ -222,4 +223,103 @@ test("runs styles: hairline rows, 44 px table rows, steps as rows not cards", ()
   expect(css).not.toMatch(/\.step\s*\{[^}]*(border-radius|background)/s);
   expect(css).toMatch(/\.reason\s*\{[^}]*background:\s*var\(--bad-soft\)/s);
   expect(css).toMatch(/overflow-wrap:\s*anywhere/);
+});
+
+test("a loop step lists its items with key, label, state word and note", async () => {
+  renderApp("#/runs/run-0008", { scenario: "looped" });
+  const list = await screen.findByRole("list", { name: "Items of Review every alert" });
+  const rows = within(list)
+    .getAllByRole("listitem")
+    .filter((row) => row.parentElement === list);
+  expect(rows).toHaveLength(5);
+  expect(rows.at(0)?.textContent).toContain("j1");
+  expect(rows.at(0)?.textContent).toContain("Job one");
+  expect(rows.at(0)?.textContent).toContain("Passed");
+  expect(rows.at(2)?.textContent).toContain("Failed");
+  expect(rows.at(2)?.textContent).toContain("The score was missing.");
+});
+test("an item shows its own steps", async () => {
+  renderApp("#/runs/run-0008", { scenario: "looped" });
+  expect(
+    within(await screen.findByRole("list", { name: "Steps of j1" })).getAllByRole("listitem"),
+  ).toHaveLength(3);
+  expect(within(screen.getByRole("list", { name: "Steps of j2" })).getAllByText("Skipped")).toHaveLength(2);
+});
+test("skip reasons are shown in words", async () => {
+  renderApp("#/runs/run-0008", { scenario: "looped" });
+  expect(await screen.findByText("Seen in an earlier run")).toBeTruthy();
+  expect(screen.getByText("Over the item cap")).toBeTruthy();
+  expect(screen.queryByText("skipped: seen in an earlier run")).toBeNull();
+});
+test("an ask step shows what was picked", async () => {
+  const first = renderApp("#/runs/run-0008", { scenario: "looped" });
+  const pick = first.client.state.runs
+    .find((r) => r.id === "run-0008")
+    ?.steps.find((s) => s.stepId === "pick");
+  if (!pick) throw new Error("Missing pick");
+  pick.state = "passed";
+  pick.picks = [{ key: "j1", label: "Job one" }];
+  expect(await screen.findByText("Picked: Job one")).toBeTruthy();
+  first.unmount();
+  const second = renderApp("#/runs/run-0008", { scenario: "looped" });
+  const empty = second.client.state.runs
+    .find((r) => r.id === "run-0008")
+    ?.steps.find((s) => s.stepId === "pick");
+  if (!empty) throw new Error("Missing pick");
+  empty.state = "passed";
+  empty.picks = [];
+  expect(await screen.findByText("Nothing picked.")).toBeTruthy();
+});
+test("the full report loads from runs.export when asked and is shown as text", async () => {
+  const { client } = renderApp("#/runs/run-0008", { scenario: "looped" });
+  const spy = vi.spyOn(client, "call");
+  fireEvent.click(await screen.findByRole("button", { name: "Show full report" }));
+  expect((await screen.findByLabelText("Full report")).textContent).toContain(
+    "# Job alert review: run run-0008",
+  );
+  expect(spy.mock.calls.filter(([name]) => name === "runs.export")).toEqual([
+    ["runs.export", { runId: "run-0008" }],
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "Hide full report" }));
+  expect(screen.queryByLabelText("Full report")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Show full report" }));
+  await screen.findByLabelText("Full report");
+  expect(spy.mock.calls.filter(([name]) => name === "runs.export").length).toBeLessThanOrEqual(2);
+});
+test("a failed export says why and keeps the page", async () => {
+  const { client } = renderApp("#/runs/run-0008", { scenario: "looped" });
+  await screen.findByRole("button", { name: "Show full report" });
+  vi.spyOn(client, "call").mockRejectedValueOnce(
+    new RunnerError("unavailable", "The report is not available."),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Show full report" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("The report is not available.");
+  expect(screen.getByRole("heading", { name: "Steps" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Show full report" }).hasAttribute("disabled")).toBe(false);
+});
+test("Run detail keeps its six sections for a looped run", async () => {
+  renderApp("#/runs/run-0008", { scenario: "looped" });
+  await screen.findByRole("heading", { level: 1, name: "Job alert review" });
+  expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+    "Report",
+    "Steps",
+    "Inputs",
+    "Outputs",
+    "Approvals",
+    "Usage",
+  ]);
+});
+test("a passed loop or ask step shows its state word and no alarm", async () => {
+  const { client } = renderApp("#/runs/run-0008", { scenario: "looped" });
+  const pick = client.state.runs.find((r) => r.id === "run-0008")?.steps.find((s) => s.stepId === "pick");
+  if (!pick) throw new Error("Missing pick");
+  pick.state = "passed";
+  pick.picks = [{ key: "j1", label: "Job one" }];
+  const loop = await screen.findByRole("region", { name: "Review every alert" });
+  const ask = screen.getByRole("region", { name: "Pick jobs" });
+  for (const block of [loop, ask]) {
+    expect(within(block).getAllByText("Passed").length).toBeGreaterThan(0);
+    expect(within(block).queryByText("Marked passed without a passing check")).toBeNull();
+    expect(block.textContent).not.toMatch(/Attempt|attempt/);
+  }
 });
