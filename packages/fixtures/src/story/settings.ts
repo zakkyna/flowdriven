@@ -1,4 +1,4 @@
-import type { Settings } from "@flowdriven/contracts";
+import { DEFAULT_KEEPER, type Settings } from "@flowdriven/contracts";
 export function settings(): Settings {
   return {
     brain: {
@@ -62,6 +62,7 @@ export function settings(): Settings {
     ],
     budget: { month: "2026-11", capUsd: 20, perRunCapUsd: 5, spentUsd: 16.4 },
     offerSaveOneTime: true,
+    keeper: { ...structuredClone(DEFAULT_KEEPER), ceiling: 4 },
   };
 }
 export function emptySettings(): Settings {
@@ -70,5 +71,6 @@ export function emptySettings(): Settings {
     backends: [],
     budget: { month: "2026-11", capUsd: 0, perRunCapUsd: null, spentUsd: 0 },
     offerSaveOneTime: true,
+    keeper: { ...structuredClone(DEFAULT_KEEPER), ceiling: 4 },
   };
 }

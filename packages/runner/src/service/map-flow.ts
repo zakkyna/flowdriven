@@ -1,4 +1,5 @@
 import {
+  DEFAULT_KEEPER,
   FlowDetail,
   FlowManifest,
   FlowSummary,
@@ -203,5 +204,6 @@ export function defaultSettings(now: string): Settings {
     backends: [],
     budget: { month: now.slice(0, 7), capUsd: 0, perRunCapUsd: null, spentUsd: 0 },
     offerSaveOneTime: true,
+    keeper: DEFAULT_KEEPER,
   });
 }

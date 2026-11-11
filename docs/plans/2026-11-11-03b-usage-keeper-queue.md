@@ -386,7 +386,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 **Interfaces:**
 - Produces in `settings.ts`: `EffortModels = z.object({ low, medium, high: z.string().regex(/^[a-z][a-z0-9.-]{0,63}$/) })`; base fields without defaults: `ceilingField = z.number().int().min(1).max(64)`, `reserveField = z.number().int().min(0).nullable()`, `lineField = z.number().min(0.5).max(1)`, `effortField = z.record(Id, EffortModels)`; `KeeperSettings = z.object({ ceiling: ceilingField.default(4), reserveMb: reserveField.default(null), quotaLines: z.object({ fiveHour: lineField.default(0.9), sevenDay: lineField.default(0.9) }).default({ fiveHour: 0.9, sevenDay: 0.9 }), effortModels: effortField.default({ "claude-code": { low: "haiku", medium: "sonnet", high: "opus" } }) })`; `DEFAULT_KEEPER = KeeperSettings.parse({})`; `Settings.keeper: KeeperSettings`; `SettingsPatch.keeper` is built from the default-free fields only: `z.object({ ceiling: ceilingField.optional(), reserveMb: reserveField.optional(), quotaLines: z.object({ fiveHour: lineField.optional(), sevenDay: lineField.optional() }).optional(), effortModels: effortField.optional() }).optional()`, so that a patch that omits a field leaves it as stored (Zod 4 fills a default inside an optional key, which would reset the other fields). `reserveMb: null` means "15% of installed memory, at least 1 GB" (spec 21.2).
 
-- [ ] **Step 1: Write the failing test** (add to `settings.test.ts`)
+- [x] **Step 1: Write the failing test** (add to `settings.test.ts`)
 
 ```ts
 import { DEFAULT_KEEPER, KeeperSettings, Settings, SettingsPatch } from "./index";
@@ -409,15 +409,17 @@ test("settings carry the keeper", () => {
 });
 ```
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/contracts/src/settings.test.ts`. Expected: FAIL ("DEFAULT_KEEPER is not exported").
-- [ ] **Step 3: Implement.** `Settings.keeper` is required, so `defaultSettings` (`service/map-flow.ts:200`) and `fixtures/src/story/settings.ts` add `keeper: DEFAULT_KEEPER`; fixtures use `structuredClone(DEFAULT_KEEPER)` with `ceiling: 4`.
-- [ ] **Step 4: Run** `pnpm vitest run packages`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/contracts/src/settings.test.ts`. Expected: FAIL ("DEFAULT_KEEPER is not exported").
+- [x] **Step 3: Implement.** `Settings.keeper` is required, so `defaultSettings` (`service/map-flow.ts:200`) and `fixtures/src/story/settings.ts` add `keeper: DEFAULT_KEEPER`; fixtures use `structuredClone(DEFAULT_KEEPER)` with `ceiling: 4`.
+- [x] **Step 4: Run** `pnpm vitest run packages`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts packages/fixtures packages/runner/src/service/map-flow.ts
 git commit -m "Add the keeper settings to the contract" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
