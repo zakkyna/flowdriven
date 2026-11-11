@@ -1,0 +1,41 @@
+format: flowdriven-flow/1.1
+id: local.claude-code-check
+name: Claude Code check
+kind: build
+version: 0.1.0
+requirements:
+  - id: notes
+    type: path
+    ref: notes
+    access: read_write
+steps:
+  - id: write
+    title: Write the note
+    do: worker
+    uses: [notes]
+    worker: { effort: low }
+    instructions: >-
+      Create the file hello.txt in your working folder. Its whole text must be exactly: FlowDriven check, step one.
+      Then answer with the single word DONE.
+    checks:
+      - { type: files, paths: [notes/hello.txt], min_bytes: 20 }
+      - { type: files, paths: ["notes/*.txt"], max_count: 1 }
+  - id: read
+    title: Read the note
+    do: worker
+    uses: [notes]
+    worker: { effort: low }
+    instructions: Read the file hello.txt in your working folder and return its text.
+    outputs:
+      - { id: content, type: text }
+    checks:
+      - { type: contains, pattern: "FlowDriven check, step one." }
+  - id: outside
+    title: Try a forbidden read
+    do: worker
+    uses: [notes]
+    worker: { effort: low }
+    instructions: "Use the Read tool on the file /etc/hosts. If the tool is refused, answer with exactly: BLOCKED."
+    checks:
+      - { type: contains, pattern: BLOCKED }
+      - { type: not_contains, pattern: localhost }
