@@ -26,10 +26,13 @@ export type ClaudeAdapterOptions = {
   exitWaitMs?: number;
   maxLineBytes?: number;
   maxDeniedEntries?: number;
+  allowed?: () => string | undefined;
 };
-export function createClaudeAdapter(options: ClaudeAdapterOptions): HarnessAdapter {
-  const active = new Set<() => void>();
+export type ClaudeAdapter = HarnessAdapter & { interrupt(sentence: string): void };
+export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapter {
+  const active = new Set<(sentence?: string) => void>();
   let stopped = false;
+  const guard = () => (stopped ? "FlowDriven is stopping." : options.allowed?.());
   const run = (input: RunInput, claudePath: string) =>
     runClaude(input, {
       claudePath,
@@ -56,8 +59,13 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): HarnessAdapt
       stopped = true;
       for (const stop of active) stop();
     },
+    interrupt(sentence) {
+      for (const stop of active) stop(sentence);
+    },
     async runStep(req) {
+      const reason = guard();
       if (stopped) return { exit: "interrupted", text: "", outputs: {} };
+      if (reason !== undefined) return { exit: "failed", text: reason, outputs: {}, block: reason };
       if (req.kind === "skill")
         return { exit: "failed", text: "", outputs: {}, block: "Skill steps are not run yet." };
       const path = options.claudePath();
@@ -106,6 +114,8 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): HarnessAdapt
       return { exit: result.kind, text: "", outputs: {} };
     },
     async judge(req) {
+      const reason = guard();
+      if (reason !== undefined) throw new Error(reason);
       const path = options.claudePath();
       if (path === undefined) throw new Error("Claude Code was not found.");
       const result = await run(

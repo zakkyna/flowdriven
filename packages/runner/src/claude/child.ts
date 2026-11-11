@@ -23,7 +23,6 @@ export function startChild(
     stdio: ["pipe", "pipe", "pipe"],
   });
   let tail: Buffer = Buffer.alloc(0);
-  let ended = false;
   let spawnFailed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const append = (data: Buffer) => {
@@ -37,17 +36,15 @@ export function startChild(
   });
   const done = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
     child.on("close", (code, signal) => {
-      ended = true;
-      if (timer !== undefined) clearTimeout(timer);
       resolve({ code: spawnFailed ? null : code, signal });
     });
   });
   function signalGroup(signal: NodeJS.Signals) {
-    if (!ended && child.pid !== undefined) {
+    if (child.pid !== undefined) {
       try {
         process.kill(-child.pid, signal);
       } catch {
-        /* The process group has already ended. */
+        /* The process group could not be signalled. */
       }
     }
   }
@@ -64,8 +61,7 @@ export function startChild(
     },
     stop() {
       signalGroup("SIGTERM");
-      if (!ended && timer === undefined)
-        timer = setTimeout(() => signalGroup("SIGKILL"), options.graceMs ?? 2000);
+      if (timer === undefined) timer = setTimeout(() => signalGroup("SIGKILL"), options.graceMs ?? 2000);
     },
     kill() {
       signalGroup("SIGKILL");

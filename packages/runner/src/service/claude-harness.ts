@@ -31,16 +31,15 @@ export type StoredScan = {
   scan: ClaudeScan;
   inventory: { skills: InventoryEntry[]; plugins: InventoryEntry[]; mcpServers: InventoryEntry[] };
 };
-export function gate(input: {
+export function harnessGate(input: {
   platform: string;
   dataDir: string;
   scan: ClaudeScan | undefined;
   finished: boolean;
   fileExists: (path: string) => boolean;
   consent: "not_given" | "given" | "revoked";
-  manifest: FlowManifest;
-}): { ready: boolean; reason?: string } {
-  const { scan, manifest } = input;
+}): string | undefined {
+  const { scan } = input;
   let reason: string | undefined;
   if (input.platform === "win32") reason = GATE.windows;
   else if (!isSafeControlPath(controlRoot(input.dataDir))) reason = GATE.dataFolder;
@@ -50,7 +49,15 @@ export function gate(input: {
   else if (scan.login === "logged_out") reason = GATE.signedOut;
   else if (scan.login !== "logged_in") reason = GATE.unknownLogin;
   else if (input.consent !== "given") reason = GATE.noConsent;
-  if (reason) return { ready: false, reason };
+  return reason;
+}
+export function gate(input: Parameters<typeof harnessGate>[0] & { manifest: FlowManifest }): {
+  ready: boolean;
+  reason?: string;
+} {
+  const reason = harnessGate(input);
+  if (reason !== undefined) return { ready: false, reason };
+  const { manifest } = input;
   const cannot = new Set<string>(),
     sensitive = new Set<string>();
   for (const step of manifest.steps.flatMap((s) => ("steps" in s ? s.steps : [s]))) {
@@ -225,6 +232,15 @@ export function createHarnessService(options: {
     },
     newId: options.newId,
     ...options.adapter,
+    allowed: () =>
+      harnessGate({
+        platform: options.platform ?? process.platform,
+        dataDir: options.dataDir,
+        scan: cache?.scan,
+        finished,
+        fileExists: existsSync,
+        consent: state()?.consent ?? "not_given",
+      }),
   });
   return {
     adapter,
@@ -240,13 +256,15 @@ export function createHarnessService(options: {
     },
     setConsent(id, consent) {
       if (id !== CLAUDE_ID) throw new RunnerError("not_found", `There is no harness ${id}.`);
-      if (!cache?.scan.detected) throw new RunnerError("not_allowed", "This harness is not detected.");
+      if (consent === "given" && !cache?.scan.detected)
+        throw new RunnerError("not_allowed", "This harness is not detected.");
       options.store.putHarnessState({
         ...state(),
         id: CLAUDE_ID,
         consent,
         consentAt: options.now().toISOString(),
       });
+      if (consent === "revoked") adapter.interrupt(GATE.noConsent);
       options.store.appendAudit({
         at: options.now().toISOString(),
         kind: "harness_consent",

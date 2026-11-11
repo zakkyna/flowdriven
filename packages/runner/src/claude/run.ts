@@ -52,7 +52,7 @@ export type RunDeps = {
   exitWaitMs: number;
   maxLineBytes: number;
   maxDeniedEntries?: number;
-  register?: (stop: () => void) => () => void;
+  register?: (stop: (sentence?: string) => void) => () => void;
 };
 export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome> {
   const id = deps.newId("cc");
@@ -70,14 +70,16 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       deps.audit(kind, input.runId, data);
     } catch {}
   };
-  const unregister = deps.register?.(() => {
-    interrupted = true;
+  const unregister = deps.register?.((sentence) => {
+    if (sentence === undefined) interrupted = true;
+    else forced = { kind: "block", sentence };
     child?.kill();
     channel?.stop();
     removeControlDir(dir);
   });
   const onAbort = () => {
     abort = true;
+    channel?.stop();
     child?.stop();
   };
   try {
@@ -141,7 +143,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     input.signal.addEventListener("abort", onAbort, { once: true });
     if (input.signal.aborted) onAbort();
     child.stdout.on("data", (chunk: Buffer) => {
-      if (forced || interrupted || abort) return;
+      if (forced || interrupted) return;
       const read = reader.push(chunk);
       if (read.overflow) {
         forced = { kind: "failed", text: "Claude Code sent a line that was too long." };
@@ -200,8 +202,8 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     child.send(input.makePrompt(policy));
     const done = await child.done;
     if (interrupted) return { kind: "interrupted" };
-    if (abort) return { kind: "failed", text: "The step was aborted." };
     if (forced) return forced;
+    if (abort) return { kind: "failed", text: "The step was aborted." };
     if (auth || result?.authFailed) return { kind: "auth" };
     if (result?.ok && done.code === 0)
       return {

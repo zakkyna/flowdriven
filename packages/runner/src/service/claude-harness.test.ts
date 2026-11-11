@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HarnessCard } from "@flowdriven/contracts";
@@ -12,7 +20,14 @@ import {
   readFakeCalls,
   writeFakeScript,
 } from "../test-helpers/fake-claude-script.ts";
-import { CLAUDE_ID, CONSENT_TEXT, createHarnessService, gate, toHarnessCard } from "./claude-harness.ts";
+import {
+  CLAUDE_ID,
+  CONSENT_TEXT,
+  createHarnessService,
+  GATE,
+  gate,
+  toHarnessCard,
+} from "./claude-harness.ts";
 import { createRunnerService, DEMO_HASH, type RunnerService } from "./service.ts";
 
 const roots: string[] = [];
@@ -450,4 +465,44 @@ test("service.stop() ends a running step as interrupted", { timeout: 20_000 }, a
   service.stop();
   await until(() => (s.getRun(run.id)?.state === "interrupted" ? true : undefined));
   expect(() => process.kill(call.pid, 0)).toThrow();
+});
+test("a revoke stops a step that is running and blocks the run with the consent sentence", {
+  timeout: 20_000,
+}, async () => {
+  const h = home(),
+    dataDir = temp(),
+    s = await store();
+  writeFakeScript(h, { plays: [{ when: "", actions: [{ do: "pause", ms: 30000 }] }] });
+  const service = createRunnerService({
+    store: s,
+    dataDir,
+    mode: "live",
+    env: env(h),
+    claudePath: FAKE_CLAUDE_PATH,
+    now,
+    newId: ids(),
+  });
+  services.push(service);
+  await service.start().settled;
+  await service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "given" });
+  const m = manifest();
+  service.engine.registerFlow(m, DEMO_HASH, {});
+  const run = (await service.call("flows.run", { flowId: m.id })) as { id: string };
+  const call = await until(() => readFakeCalls(h).find((c) => c.kind === "call" && c.args.includes("-p")));
+  if (call.kind !== "call") throw Error("Missing call");
+  await service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "revoked" });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      until(() => (s.getRun(run.id)?.state === "blocked" ? true : undefined)),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("Revocation took more than five seconds")), 5000);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+  expect(s.getRun(run.id)?.blockedReason).toBe(GATE.noConsent);
+  expect(() => process.kill(call.pid, 0)).toThrow();
+  expect(readdirSync(join(dataDir, "control"))).toEqual([]);
 });
