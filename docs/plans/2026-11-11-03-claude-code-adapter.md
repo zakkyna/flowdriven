@@ -581,7 +581,7 @@ deny "FlowDriven did not answer in time, so this call is blocked."
 ```
 **Rules.** The first command is `PATH=/usr/bin:/bin`, so the script never depends on the inherited `PATH`; besides shell built-ins it runs `dirname`, `mktemp`, `rm`, `cat`, `mv` and `sleep` only. Exactly one path ends in exit 0 with the allow JSON: the answer's first line is exactly `allow`. Every other path ends in exit 2 with one sentence on standard error and nothing on standard output. A request the script has published is never removed by it (the runner deletes it after answering, and the removal of the control folder takes the rest); so a request that no one answered stays in `req/`, which is what the R12 script of Task 16 looks for. The script takes its folder from `$0` and never reads the tool input. `settingsJson` is exactly `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":<hookCommand(dir,true)>,"timeout":120}]}],"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":<hookCommand(dir,false)>,"timeout":120}]}]}}` (no other key). The `|| exit 2` turns "the script file is gone" (exit 127, which Claude Code treats like exit 1: the tool runs) and every other failure of `sh` itself into exit 2 (fact 18). Total time of one call: 50 rounds are 5 seconds plus start-up (each round takes a little more than 0.1 s, more on a loaded machine, fact 16), far below the 120 seconds after which Claude Code would let the tool run (fact 6). Facts 24 to 26 prove the wrapper with the real Claude Code. **The script text is built in `hook-script.ts` from plain string lines joined with `"\n"`, not as a template literal (it holds `${tmp##*/}` and `${name#.}`).**
 
-- [ ] **Step 1: Write the failing tests** (12; each runs `/bin/sh` with `env: {}` on a temp control folder with a space in its name that holds `req/` and `res/`; a helper `answerer(dir, reply)` polls `req/` every 5 ms for names that end in `.json` and do not start with a dot, calls `reply(body)` for the text to write, writes it under `res/.<name>.tmp`, renames it to `res/<name>` and deletes the request; rounds are 3 unless a test says otherwise)
+- [x] **Step 1: Write the failing tests** (12; each runs `/bin/sh` with `env: {}` on a temp control folder with a space in its name that holds `req/` and `res/`; a helper `answerer(dir, reply)` polls `req/` every 5 ms for names that end in `.json` and do not start with a dot, calls `reply(body)` for the text to write, writes it under `res/.<name>.tmp`, renames it to `res/<name>` and deletes the request; rounds are 3 unless a test says otherwise)
   1. `an answer allow prints the allow JSON and exits 0`: stdout is `ALLOW_JSON + "\n"`, stderr empty, exit 0, with `env: {}` and again with `env: { PATH: "/nonexistent" }`.
   2. `an answer deny with a reason exits 2 with the reason on standard error and prints nothing`: reply `deny\nThis path is outside the folders this step declares.\n`.
   3. `every other answer exits 2 with the generic sentence`: `deny\n` (no reason), `yes\n`, `ALLOW\n`, ` allow\n`, `allowed\n`, `\n`, an empty file: stderr `FlowDriven did not allow this call.\n`, exit 2; `allow` without a trailing newline is allow.
@@ -594,18 +594,20 @@ deny "FlowDriven did not answer in time, so this call is blocked."
   10. `a signal while waiting exits 2 with the stop sentence`: start with 50 rounds, wait for the request to appear, send SIGTERM to the `sh` process: exit 2, stderr `FlowDriven stopped this check, so this call is blocked.\n`, nothing on standard output.
   11. `the script text`: its first line is `PATH=/usr/bin:/bin`; `hookScript({ rounds: 3 })` contains `-lt 3`; rounds `0`, `1.5`, `601` and `Number.NaN` throw `The number of rounds is not valid.`; the text contains no `exec` and no `eval`.
   12. `the settings quote the path, hold only the two hooks and refuse an unsafe path`: for a dir `/tmp/a b/$x` with a backtick, `JSON.parse(settingsJson(dir))` equals the exact object of the rule (`"timeout": 120` in both hooks, `HOOK_TIMEOUT_SECONDS` is 120) with the commands `/bin/sh '/tmp/a b/$x...hook.sh' || exit 2` and `... start || exit 2`; `isSafeControlPath` is false for a path with `'`, a newline, a tab, the code point 0x7f, a NUL (all built with `String.fromCodePoint`) and for `"relative/x"`, and `settingsJson` throws `The control folder path is not safe.` for them.
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/runner/src/claude/hook-script.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** by the text and rules.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** by the text and rules.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner/src/claude/hook-script.test.ts`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner/src/claude
 git commit -m "Add the fail-closed hook script and its settings file" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
