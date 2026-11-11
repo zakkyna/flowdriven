@@ -497,7 +497,7 @@ export interface Store {
 }
 ```
 `itemKey` is `""` for a top-level step. Schema (`schema.ts`, one DDL string run when `PRAGMA user_version` is 0, then set to 1): tables `flows` (primary key `id, hash`), `runs`, `steps` (key `run_id, step_id, item_key`), `items` (key `run_id, loop_id, key`), `seen` (key `flow_id, loop_id, key`), `approvals`, `grants` (key `run_id, tool, item_key`), `counters` (key `name, day`), `audit_log` (integer id, `at`, `kind`, `run_id`, `detail`) with `BEFORE UPDATE` and `BEFORE DELETE` triggers that `RAISE(ABORT, 'audit_log is append-only')` (single-quoted). JSON columns hold objects. Open with `PRAGMA foreign_keys = ON`, `PRAGMA busy_timeout = 5000`, and `journal_mode = WAL` for files. A `user_version` above 1 throws `EngineError("unavailable", ...)`. Rows are mapped into plain objects (node:sqlite returns null-prototype rows).
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 ```ts
 test("round-trips a flow, a run and its steps", async () => { /* put a flow twice (hashes h1, h2); getFlow(id) is h2, getFlow(id, "h1") is h1; createRun, updateRun({ state: "blocked", blockedReason: "x" }), listRuns({ state: "blocked" }) has it; upsertStep twice with the same key keeps one row; getStep(run, "a") and getStep(run, "a", "k1") are different rows */ });
 test("returns plain objects", async () => expect(Object.getPrototypeOf(store.getRun("r1"))).toBe(Object.prototype));
@@ -523,19 +523,19 @@ test("silences only the SQLite warning", () => {
 });
 test("without the silencer the warning is printed (the check can see it)", () => { /* plain-child.ts: stderr contains "SQLite is an experimental feature" */ });
 ```
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/sqlite-store.test.ts packages/runner/src/entry.test.ts`. Expected: FAIL with "Failed to resolve import"
-- [ ] **Step 3: Implement.** `silenceSqliteWarning` replaces `process.emitWarning` with a wrapper that drops a call only when its type (second argument, or `options.type`) is `ExperimentalWarning` and its message starts with `SQLite is an experimental feature`, and forwards every other call unchanged; the returned function restores the original. `openSqliteStore` does `await import("node:sqlite")` inside the function (a static import would warn before any code runs). Checked on Node 24.14.0 in a scratch copy: this wrapper hides that warning and keeps others.
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 3: Implement.** `silenceSqliteWarning` replaces `process.emitWarning` with a wrapper that drops a call only when its type (second argument, or `options.type`) is `ExperimentalWarning` and its message starts with `SQLite is an experimental feature`, and forwards every other call unchanged; the returned function restores the original. `openSqliteStore` does `await import("node:sqlite")` inside the function (a static import would warn before any code runs). Checked on Node 24.14.0 in a scratch copy: this wrapper hides that warning and keeps others.
+- [x] **Step 4: Run the tests to verify they pass**
   Run: `pnpm vitest run packages/runner/src/sqlite-store.test.ts packages/runner/src/entry.test.ts`. Expected: PASS (an ExperimentalWarning line from Node is printed and is expected)
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add the runner storage on node:sqlite" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
