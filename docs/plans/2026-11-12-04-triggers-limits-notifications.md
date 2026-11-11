@@ -875,17 +875,19 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `trigger-walk-steps.ts` (pure, in the style of `claude-walk-steps.ts`): `triggerWalkPaths(root: string): { output: string; dataDir: string; flowDir: string }` (under `.workflow/scratch/plan-04/walk/`), `TRIGGER_WALK_STEPS: { name: string; hash: string; waitFor: string[]; shot: boolean }[]` (the builder with the trigger off, the builder with it on, the Runs screen with `Started by its schedule`), `isTriggeredRunDone(runs: unknown): boolean` (true when `runs` is an array that holds an object with `trigger.kind === "schedule"` and a `state` of `done`, `blocked` or `failed`).
 - `trigger-walk.ts` (run by the chair, not by a test; it mirrors `claude-walk.ts`): starts the runner bridge on the scratch data folder with the real runner (`FLOWDRIVEN_DEMO` removed), passes `onNotice: electronNoticeHandler({ Notification, windows, open })` (the handler of Task 12), imports the flow in `flowDir`, opens a window on the flow, clicks "Turn on" for the schedule, takes a picture, **closes the window**, polls `link.call("runs.list", {})` with `isTriggeredRunDone` for at most 4 minutes (a `setTimeout` loop is allowed here: it is a chair script, not a test), prints `run <id> started by schedule: <state>`, re-opens a window on `#/runs`, takes a picture and prints where the files are. It exits non-zero on a timeout.
 
-- [ ] **Step 1: Write the failing test** (`trigger-walk-steps.test.ts`): `triggerWalkPaths` returns three distinct paths under the scratch folder; `TRIGGER_WALK_STEPS` names are unique and every `hash` parses with `parseRoute`; `isTriggeredRunDone` is true for a done schedule run, true for a blocked one, false for a manual run, for a running schedule run, for `[]`, for `null` and for a non-array.
-- [ ] **Step 2: Run:** `pnpm vitest run apps/desktop/electron/trigger-walk-steps.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** both files. `pnpm build:electron` (inside the gate through `tsc -p apps/desktop/tsconfig.electron.json --noEmit`) must type-check `trigger-walk.ts`; the executor does not run it.
-- [ ] **Step 4: Run** `pnpm vitest run apps/desktop/electron`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 1: Write the failing test** (`trigger-walk-steps.test.ts`): `triggerWalkPaths` returns three distinct paths under the scratch folder; `TRIGGER_WALK_STEPS` names are unique and every `hash` parses with `parseRoute`; `isTriggeredRunDone` is true for a done schedule run, true for a blocked one, false for a manual run, for a running schedule run, for `[]`, for `null` and for a non-array.
+- [x] **Step 2: Run:** `pnpm vitest run apps/desktop/electron/trigger-walk-steps.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** both files. `pnpm build:electron` (inside the gate through `tsc -p apps/desktop/tsconfig.electron.json --noEmit`) must type-check `trigger-walk.ts`; the executor does not run it.
+- [x] **Step 4: Run** `pnpm vitest run apps/desktop/electron`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/electron
 git commit -m "Add the trigger walk script for the real app" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
