@@ -10,6 +10,19 @@ const setup = () => {
   return { client, flow };
 };
 
+test("disabling with a stale hash turns the trigger off", async () => {
+  const { client } = setup();
+  expect(
+    await client.call("triggers.setEnabled", {
+      flowId,
+      index: 2,
+      enabled: false,
+      hash: `sha256:${"0".repeat(64)}`,
+    }),
+  ).toMatchObject({ state: "off" });
+  expect(client.state.triggerSwitches[`${flowId}#2`]).toBeUndefined();
+});
+
 test("the looped flow lists a schedule, a file change and a webhook, and no manual entry", async () => {
   const { client } = setup();
   const statuses = await client.call("triggers.list", { flowId });

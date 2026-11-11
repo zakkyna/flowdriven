@@ -67,6 +67,26 @@ test("a trigger that needs its OK again says so and offers to turn it on again",
   fireEvent.click(item.getByRole("switch"));
   await waitFor(() => expect(item.getByRole("switch").getAttribute("aria-checked")).toBe("true"));
 });
+test("a trigger that needs its OK again offers Turn off and sends the current hash", async () => {
+  const { client } = renderApp(builder, { scenario: "looped" });
+  client.state.triggerSwitches["dev.example.job-review#2"] = { hash: `sha256:${"1".repeat(64)}` };
+  const flow = client.state.flows.find((f) => f.manifest.id === "dev.example.job-review");
+  if (!flow) throw new Error("Missing flow");
+  const item = await row("File change");
+  const button = item.getByRole("button", { name: "Turn off" });
+  expect(button.querySelector("svg")).not.toBeNull();
+  const spy = vi.spyOn(client, "call");
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(spy).toHaveBeenCalledWith("triggers.setEnabled", {
+      flowId: flow.manifest.id,
+      index: 2,
+      enabled: false,
+      hash: flow.hash,
+    }),
+  );
+  await waitFor(() => expect(item.getByRole("switch").textContent).toContain("Off"));
+});
 test("the honest line about FlowDriven being open is on the screen", async () => {
   renderApp(builder, { scenario: "looped" });
   expect(
@@ -92,5 +112,5 @@ test("the Runs table shows the trigger in words for a triggered run and nothing 
   expect(within(manual).queryByText(/Started by/)).toBeNull();
   view.unmount();
   renderApp("#/runs/run-0008", { scenario: "looped" });
-  expect(await screen.findByText("Started by: Started by its schedule")).toBeTruthy();
+  expect(await screen.findByText("Started by its schedule", { exact: true })).toBeTruthy();
 });

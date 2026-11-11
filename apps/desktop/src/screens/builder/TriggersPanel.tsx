@@ -61,7 +61,7 @@ export function TriggersPanel({
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [error, setError] = useState<string>();
-  async function toggle(trigger: TriggerStatus) {
+  async function toggle(trigger: TriggerStatus, enabled = trigger.state !== "on") {
     if (
       inFlight.current ||
       trigger.kind === "manual" ||
@@ -74,7 +74,7 @@ export function TriggersPanel({
     const result = await action("triggers.setEnabled", {
       flowId,
       index: trigger.index,
-      enabled: trigger.state !== "on",
+      enabled,
       hash,
     });
     if (result.ok) {
@@ -122,6 +122,16 @@ export function TriggersPanel({
                 >
                   {state.words}
                 </Button>
+                {trigger.state === "needs_ok" && (
+                  <Button
+                    size="small"
+                    icon="dash"
+                    disabled={busy}
+                    onClick={() => void toggle(trigger, false)}
+                  >
+                    Turn off
+                  </Button>
+                )}
               </div>
               {trigger.state === "on" && trigger.nextAt && <p>Next run: {formatDateTime(trigger.nextAt)}</p>}
               {trigger.last && (

@@ -529,12 +529,17 @@ export function createFixtureRunnerClient(
       const f = flow(flowId);
       const trigger = f.manifest.triggers?.at(index);
       if (!trigger) throw new RunnerError("not_found", "There is no such trigger.");
-      if (hash !== f.hash)
+      if (enabled && hash !== f.hash)
         throw new RunnerError(
           "not_allowed",
           "This flow changed since you looked at it. Reload and check it again.",
         );
-      if (trigger.kind !== "schedule" && trigger.kind !== "file_change" && trigger.kind !== "flow_done")
+      if (
+        enabled &&
+        trigger.kind !== "schedule" &&
+        trigger.kind !== "file_change" &&
+        trigger.kind !== "flow_done"
+      )
         throw new RunnerError("not_allowed", "Not available yet.");
       const key = `${flowId}#${index}`;
       if (enabled) state.triggerSwitches[key] = { hash };

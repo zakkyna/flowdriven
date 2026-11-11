@@ -27,6 +27,22 @@ async function scan(r: Awaited<ReturnType<typeof rig>>) {
   await r.svc.tick();
   await r.idle();
 }
+test("disabling with a stale hash closes the watcher and the old version does not fire when it returns", async () => {
+  const r = await rig();
+  const flow = triggerFlow(id, [{ kind: "file_change", path: "inbox" }], { limits: { max_items: 20 } });
+  r.enable(id, 0);
+  await r.svc.tick();
+  expect(r.watchers.size).toBe(1);
+  r.engine.registerFlow({ ...flow, name: "Changed" }, `sha256:${"f".repeat(64)}`);
+  r.svc.setEnabled(id, 0, false, r.hashOf(id));
+  expect(r.store.getTrigger(id, 0)?.enabled).toBe(false);
+  expect(r.watchers.size).toBe(0);
+  r.writeFile("inbox/a.txt");
+  r.engine.registerFlow(flow, r.hashOf(id));
+  await scan(r);
+  expect(r.runsOf(id)).toHaveLength(0);
+  expect(r.watchers.size).toBe(0);
+});
 test("enabling takes a baseline: files that already exist do not fire", async () => {
   const r = await rig();
   r.writeFile("inbox/a.txt");

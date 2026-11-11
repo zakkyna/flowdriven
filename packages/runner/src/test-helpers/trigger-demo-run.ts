@@ -150,7 +150,11 @@ export async function runTriggerDemo(): Promise<string[]> {
     lines.push(
       `slept 5 hours 30 minutes: catch_up once started ${allHourly.length - 2} run for ${payload.missed} missed fires, ${latest.id} ${latest.state}`,
     );
-    for (let i = 0; i < 500; i++) writeFileSync(join(inbox, `${String(i).padStart(3, "0")}.txt`), "x");
+    let filesWritten = 0;
+    for (let i = 0; i < 500; i++) {
+      writeFileSync(join(inbox, `${String(i).padStart(3, "0")}.txt`), "x");
+      filesWritten++;
+    }
     for (let i = 0; i < 500; i++) {
       if (!signal) throw new Error("Missing watcher");
       signal();
@@ -166,7 +170,7 @@ export async function runTriggerDemo(): Promise<string[]> {
     if (!status || !notice || floodRuns.some((run) => run.state !== "done"))
       throw new Error("Flood did not finish");
     lines.push(
-      `flood: ${floodRuns.length + status.droppedToday} file changes, daily cap ${status.dailyCap} -> ${floodRuns.length} runs, ${status.droppedToday} dropped, ${floodNotices.length} notification`,
+      `flood: ${filesWritten} file changes (max_items 1), daily cap ${status.dailyCap} -> ${floodRuns.length} runs, ${status.droppedToday} dropped, ${floodNotices.length} notification`,
     );
     lines.push(`notification: ${notice.title} - ${notice.body}`);
     return lines;

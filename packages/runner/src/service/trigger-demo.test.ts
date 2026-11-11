@@ -9,7 +9,9 @@ test("an hourly trigger fires with no window and a flood is capped", { timeout: 
   expect(lines[3]).toMatch(
     /^slept 5 hours 30 minutes: catch_up once started 1 run for 5 missed fires, run-\d+ done$/,
   );
-  expect(lines[4]).toBe("flood: 500 file changes, daily cap 24 -> 24 runs, 476 dropped, 1 notification");
+  expect(lines[4]).toBe(
+    "flood: 500 file changes (max_items 1), daily cap 24 -> 24 runs, 476 dropped, 1 notification",
+  );
   expect(lines[5]).toBe(
     "notification: Too many runs - Flood flow reached its limit of 24 runs today. More fires are dropped until tomorrow.",
   );

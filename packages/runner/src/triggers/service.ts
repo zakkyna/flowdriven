@@ -185,11 +185,6 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     const { flow, manifest } = found;
     const trigger = Number.isInteger(index) && index >= 0 ? manifest.triggers.at(index) : undefined;
     if (!trigger) throw new EngineError("not_found", "There is no such trigger.");
-    if (hash !== flow.hash)
-      throw new EngineError(
-        "not_allowed",
-        "This flow changed since you looked at it. Reload and check it again.",
-      );
     const old = store.getTrigger(id, index);
     if (!enabled) {
       store.putTrigger(
@@ -208,6 +203,11 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       audit("trigger_disabled", { flowId: id, index });
       return view(flow, manifest, index, trigger);
     }
+    if (hash !== flow.hash)
+      throw new EngineError(
+        "not_allowed",
+        "This flow changed since you looked at it. Reload and check it again.",
+      );
     if (old?.enabled && old.hash === hash) return view(flow, manifest, index, trigger);
     const result = checked(flow, manifest, index);
     if (!result.ok) throw new EngineError("not_allowed", result.reason);
