@@ -670,7 +670,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 - `gate.ts`: `admit(input: { ticket; running: { ticket: Ticket }[]; claimedMb: number; availableMb?: number; pressure?: number; quota?: HarnessQuota; weeklyAnswer?: "keep" | "hold"; config: KeeperConfig; nowMs: number }): { ok: true } | { ok: false; waiting: Waiting }`; `weightFromPeaks(peaks: number[], fallbackMb: number): number` (the largest peak times `WEIGHT_MARGIN`, or the fallback); `defaultWeightMb(input: { harnessId: string; connectors: number }): number`.
 - `keeper.ts`: `createKeeper(deps: { config: () => KeeperConfig; probes: Probes; nowMs: () => number; every: (ms: number, fn: () => void) => () => void; weeklyAnswer: (harnessId: string) => "keep" | "hold" | undefined; onWeekly?: (harnessId: string, window: QuotaWindow) => void; onChange?: () => void; loadQuota?: () => Record<string, { fiveHour?: QuotaWindow; sevenDay?: QuotaWindow }>; saveQuota?: (harnessId: string, windows: { fiveHour?: QuotaWindow; sevenDay?: QuotaWindow }) => void }): Keeper` with `acquire(ticket: Ticket, signal: AbortSignal, onWait?: () => void): Promise<Slot>` (`onWait` is called once, the first time the ticket is found waiting; the promise rejects with `KeeperAbortError`, message `aborted`, when the signal fires while it waits), `noteLimits(harnessId: string, limits: RateLimit[]): void` (records windows only; it never sets a refusal), `noteRefused(harnessId: string, untilMs?: number): void`, `noteSuccess(harnessId: string): void`, `quotaOf(harnessId: string): HarnessQuota`, `move(runId: string): boolean`, `snapshot(): KeeperSnapshot`, `waitingOf(runId: string): { stepId: string; itemKey: string; waiting: Waiting }[]`, `recheck(): void`, `settled(): Promise<void>`, `stop(): void`. `RateLimit` is from `../harness.ts` (Task 8).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `keeper/gate.test.ts`
 
@@ -850,8 +850,8 @@ test("a failing evaluation never admits and never hangs the queue; onChange fire
 });
 ```
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/keeper`. Expected: FAIL ("Cannot find module ./gate.ts").
-- [ ] **Step 3: Implement.** `admit` is the function below; the rest follows the decisions 4 to 7 and 16.
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/keeper`. Expected: FAIL ("Cannot find module ./gate.ts").
+- [x] **Step 3: Implement.** `admit` is the function below; the rest follows the decisions 4 to 7 and 16.
 
 ```ts
 export function admit(i: GateInput): { ok: true } | { ok: false; waiting: Waiting } {
@@ -877,13 +877,15 @@ export function admit(i: GateInput): { ok: true } | { ok: false; waiting: Waitin
 ```
 
 `keeper.ts` keeps `running` (id, ticket, `startedMs`, `peakMb`, `pid?`), `waiting` (ticket, arrival number, `enqueuedMs`, resolve and reject, last `Waiting`), a `Map` of `HarnessQuota` plus a refusal count per harness, and `front: string[]` of run ids moved by the owner (newest first). One serialised `pump()` (a promise; a call during a pump sets a dirty flag and the loop runs again) does `await probes.refresh()`, samples `groupRssMb(pid) * CORRECTION` into each running slot's peak, sorts the waiting tickets (front, then `cls`, then `underWay` first, then `runStartedAt`, then arrival), and walks them with `admit` using `claimedMb = sum of weightMb of running slots started less than CLAIM_MS ago`; the first ticket that waits for `memory` or `ceiling` makes every later ticket show the same reason and stops the walk, a `quota` wait does not; the first time a ticket gets a waiting verdict its `onWait` is called. It asks `deps.every(SAMPLE_MS, tick)` for a job only while something runs or waits and cancels it otherwise; `tick` is `pump`. `acquire`, `release`, `noteLimits`, `noteRefused`, `noteSuccess`, `move` and `recheck` call `pump`. `noteLimits` copies `windows.five_hour` and `windows.seven_day` and, when `type` and `utilization` are given, the same for that type; it calls `saveQuota` with the windows and `onWeekly(harnessId, window)` when the seven-day utilization is at or above `config().sevenDayLine`; it never sets `rejectedUntil` (decision 6: only `noteRefused` does, with its `untilMs` or the back-off). At creation the keeper reads `loadQuota()` into its windows (decision 20). Each ticket is evaluated, its probe reads included, inside its own `try`: an error makes that ticket wait with `{ reason: "memory" }` and the walk goes on, so a failing evaluation never admits and never hangs the queue. `onChange` is called after an evaluation that changed a row's state or a waiting reason (the service turns it into a change event for the Runs screen, Task 12). `settled()` returns the current pump or a resolved promise; `stop()` rejects every waiting ticket with `KeeperAbortError` and cancels the job.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/keeper`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/keeper`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/keeper
 git commit -m "Add the keeper core: memory, quota and ceiling gates, order and claims" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
