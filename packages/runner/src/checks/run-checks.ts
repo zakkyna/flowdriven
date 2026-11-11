@@ -48,6 +48,11 @@ export async function runChecks(checks: Check[], ctx: CheckContext): Promise<Che
           if (!patterns.length) throw new Error("missing patterns");
           for (const pattern of patterns) {
             const p = ctx.bind(pattern);
+            if (p.length === 0) {
+              verdict = "failed";
+              base.summary = "empty pattern";
+              break;
+            }
             const offset = (c.ignore_case ? value.toLowerCase() : value).indexOf(
               c.ignore_case ? p.toLowerCase() : p,
             );
@@ -63,7 +68,7 @@ export async function runChecks(checks: Check[], ctx: CheckContext): Promise<Che
             }
           }
         } else if (c.type === "files") {
-          const files = matchFiles(ctx.folder, c.paths.map(ctx.bind));
+          const files = matchFiles(ctx.folder, c.paths, ctx.bind);
           if (
             (c.min_count !== undefined && files.length < c.min_count) ||
             (c.max_count !== undefined && files.length > c.max_count) ||
