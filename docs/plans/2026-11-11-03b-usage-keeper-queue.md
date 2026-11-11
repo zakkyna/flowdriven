@@ -1394,7 +1394,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 **Interfaces:**
 - `settings.get` returns `defaultSettings(...)` with `keeper: readKeeperSettings(store)`. `settings.update` merges a `keeper` patch over the stored value (`quotaLines` field by field, `effortModels` per harness key; the patch has no defaults, Task 5), parses the result with `KeeperSettings`, and writes it with `store.putSetting("keeper", ...)` **directly in `service/handlers.ts`, not in a helper in another file** (the source scan of Task 20 names that file); it returns `settings.get`. A patch with any other key still answers `unavailable("Changing settings arrives with the agent.")`.
 
-- [ ] **Step 1: Write the failing test** `keeper-settings-ops.test.ts` (a demo-mode `createRunnerService` on an in-memory store, as `service/handlers.test.ts` builds it)
+- [x] **Step 1: Write the failing test** `keeper-settings-ops.test.ts` (a demo-mode `createRunnerService` on an in-memory store, as `service/handlers.test.ts` builds it)
 
 ```ts
 test("the ceiling is set through settings.update, takes effect at once, keeps the other fields, and survives a restart", async () => {
@@ -1411,14 +1411,16 @@ test("the ceiling is set through settings.update, takes effect at once, keeps th
 ```
 
 (`rigOver(store)` builds a second service over the same store.)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/keeper-settings-ops.test.ts`. Expected: FAIL ("Changing settings arrives with the agent." for the keeper patch).
-- [ ] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner packages/contracts`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/keeper-settings-ops.test.ts`. Expected: FAIL ("Changing settings arrives with the agent." for the keeper patch).
+- [x] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner packages/contracts`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Store the keeper's settings through settings.update" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

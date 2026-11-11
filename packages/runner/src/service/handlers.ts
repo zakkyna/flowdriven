@@ -1,6 +1,7 @@
 import { isAbsolute } from "node:path";
 import {
   CONTRACT_VERSION,
+  KeeperSettings,
   type OperationInput,
   type OperationName,
   type OperationOutput,
@@ -15,6 +16,7 @@ import type { Engine } from "../engine.ts";
 import { renderRunReport, reportLines } from "../report.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { HarnessService } from "./claude-harness.ts";
+import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
 import { defaultSettings, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
 import { toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
@@ -40,6 +42,33 @@ export function createDispatcher(
   return async (name, input) => {
     if (!Object.hasOwn(operations, name))
       throw new RunnerError("not_found", `There is no operation ${name}.`);
+    if (name === "settings.update" && typeof input === "object" && input !== null && "patch" in input) {
+      const patch = input.patch;
+      if (typeof patch === "object" && patch !== null && !Array.isArray(patch)) {
+        if (Object.keys(patch).some((key) => key !== "keeper"))
+          throw new RunnerError("unavailable", "Changing settings arrives with the agent.");
+        if ("keeper" in patch && typeof patch.keeper === "object" && patch.keeper !== null) {
+          const keeper = patch.keeper;
+          const extra = (value: object, allowed: string[]) =>
+            Object.keys(value).some((key) => !allowed.includes(key));
+          if (
+            extra(keeper, ["ceiling", "reserveMb", "quotaLines", "effortModels"]) ||
+            ("quotaLines" in keeper &&
+              typeof keeper.quotaLines === "object" &&
+              keeper.quotaLines !== null &&
+              extra(keeper.quotaLines, ["fiveHour", "sevenDay"])) ||
+            ("effortModels" in keeper &&
+              typeof keeper.effortModels === "object" &&
+              keeper.effortModels !== null &&
+              Object.values(keeper.effortModels).some(
+                (model: unknown) =>
+                  typeof model === "object" && model !== null && extra(model, ["low", "medium", "high"]),
+              ))
+          )
+            throw new RunnerError("invalid_input", "Invalid keeper settings.");
+        }
+      }
+    }
     const key = name as OperationName;
     const parsed = operations[key].input.safeParse(input);
     if (!parsed.success)
@@ -106,6 +135,9 @@ export function createHandlers({
   }
   function unavailable(message: string): never {
     throw new RunnerError("unavailable", message);
+  }
+  function settings() {
+    return { ...defaultSettings(now().toISOString()), keeper: readKeeperSettings(store) };
   }
   return {
     "flows.list": () => store.listFlows().map((r) => toFlowSummary(r, store.listRuns({ flowId: r.id }))),
@@ -213,7 +245,19 @@ export function createHandlers({
     "queue.list": () => ({ running: 0, waiting: 0, ceiling: 4, rows: [] }),
     "queue.move": () => unavailable("The queue arrives in this plan's Task 15."),
     "usage.summary": () => ({ harnesses: [] }),
-    "settings.get": () => defaultSettings(now().toISOString()),
-    "settings.update": () => unavailable("Changing settings arrives with the agent."),
+    "settings.get": settings,
+    "settings.update": ({ patch }) => {
+      if (!patch.keeper || Object.keys(patch).some((key) => key !== "keeper"))
+        return unavailable("Changing settings arrives with the agent.");
+      const current = readKeeperSettings(store);
+      const keeper = KeeperSettings.parse({
+        ...current,
+        ...patch.keeper,
+        quotaLines: { ...current.quotaLines, ...patch.keeper.quotaLines },
+        effortModels: { ...current.effortModels, ...patch.keeper.effortModels },
+      });
+      store.putSetting("keeper", keeper);
+      return settings();
+    },
   };
 }
