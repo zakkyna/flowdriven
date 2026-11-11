@@ -165,3 +165,57 @@ test("an answer over the limit becomes unavailable", async () => {
     },
   ]);
 });
+
+test("unencodable results receive an internal error", async () => {
+  for (const result of [undefined, 1n, () => {}, Symbol("result")]) {
+    const s = setup(async () => result);
+    s.toServer.end(request(1));
+    await s.server.done;
+    expect(s.frames()).toEqual([
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: -32003, message: "Internal error", data: { code: "unavailable" } },
+      },
+    ]);
+  }
+});
+
+test("an oversized answer with an oversized id uses a null id", async () => {
+  const s = setup(async () => "x".repeat(200));
+  const id = "i".repeat(1_048_576 - 60);
+  s.toServer.end(`${JSON.stringify({ jsonrpc: "2.0", id, method: "ok" })}\n`);
+  await s.server.done;
+  expect(s.frames()).toEqual([
+    {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32003, message: "The answer is too large.", data: { code: "unavailable" } },
+    },
+  ]);
+});
+
+test("events merge their topics while output needs drain", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough({ highWaterMark: 1 });
+  const server = serveRpc({ input, output, call: async () => ({}), knows: () => true });
+  server.notify({ type: "changed", topics: ["runs"] });
+  server.notify({ type: "changed", topics: ["flows"] });
+  server.notify({ type: "changed", topics: ["runs", "approvals"] });
+  let text = "";
+  output.on("data", (chunk: Buffer) => {
+    text += chunk.toString();
+  });
+  await tick();
+  expect(
+    text
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line)),
+  ).toEqual([
+    { jsonrpc: "2.0", method: "event", params: { type: "changed", topics: ["runs"] } },
+    { jsonrpc: "2.0", method: "event", params: { type: "changed", topics: ["flows", "runs", "approvals"] } },
+  ]);
+  input.end();
+  await server.done;
+});

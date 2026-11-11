@@ -5,6 +5,25 @@ export type WalkAction =
   | { kind: "firstRun" };
 export type WalkStep = { name: string; action: WalkAction; waitFor: string[]; shot: boolean };
 
+export function waitForLoad(
+  contents: { once(event: string, listener: (...args: unknown[]) => void): unknown },
+  timeoutMs: number,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("The page did not load in time.")), timeoutMs);
+    contents.once("did-finish-load", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    contents.once("did-fail-load", (...args) => {
+      clearTimeout(timer);
+      reject(
+        new Error(`The page failed to load: ${typeof args[2] === "string" ? args[2] : "unknown error"}`),
+      );
+    });
+  });
+}
+
 export const WALK_STEPS: WalkStep[] = [
   {
     name: "sidebar",

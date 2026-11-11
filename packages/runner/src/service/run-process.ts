@@ -20,7 +20,10 @@ export type RunProcessOptions = {
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 export function guardProcess(proc: Pick<NodeJS.Process, "on">, errors: (line: string) => void): void {
   const report = (error: unknown) => {
-    errors(`Internal error: ${message(error).slice(0, 200)}`);
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "EPIPE") return;
+    try {
+      errors(`Internal error: ${message(error).slice(0, 200)}`);
+    } catch {}
   };
   proc.on("uncaughtException", report);
   proc.on("unhandledRejection", report);

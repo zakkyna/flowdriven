@@ -7,6 +7,7 @@ scrubEnvironment(process.env);
 const errors = (line: string) => {
   process.stderr.write(`${line}\n`);
 };
+process.stderr.on("error", () => {});
 guardProcess(process, errors);
 const args = parseArguments(process.argv.slice(2));
 if (!args.ok) {

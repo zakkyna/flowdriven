@@ -1,6 +1,40 @@
-import { expect, test } from "vitest";
+import { EventEmitter } from "node:events";
+import { expect, test, vi } from "vitest";
 import { parseRoute } from "../src/nav/route";
-import { actionScript, formatStepFailure, pageHasAll, stepFileName, WALK_STEPS } from "./demo-walk-steps";
+import {
+  actionScript,
+  formatStepFailure,
+  pageHasAll,
+  stepFileName,
+  WALK_STEPS,
+  waitForLoad,
+} from "./demo-walk-steps";
+
+test("waitForLoad resolves when the page has loaded", async () => {
+  const contents = new EventEmitter();
+  const result = waitForLoad(contents, 1000);
+  contents.emit("did-finish-load");
+  await expect(result).resolves.toBeUndefined();
+});
+
+test("waitForLoad rejects when the page fails to load", async () => {
+  const contents = new EventEmitter();
+  const result = waitForLoad(contents, 1000);
+  contents.emit("did-fail-load", {}, -1, "failed");
+  await expect(result).rejects.toThrow("The page failed to load: failed");
+});
+
+test("waitForLoad rejects when the page does not load in time", async () => {
+  vi.useFakeTimers();
+  try {
+    const result = waitForLoad(new EventEmitter(), 1000);
+    const assertion = expect(result).rejects.toThrow("The page did not load in time.");
+    await vi.advanceTimersByTimeAsync(1000);
+    await assertion;
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 test("the walk steps have unique names, at least one wait each and routes that exist", () => {
   expect(new Set(WALK_STEPS.map((step) => step.name)).size).toBe(WALK_STEPS.length);

@@ -15,7 +15,7 @@ import {
 } from "@flowdriven/contracts";
 export type RpcServerOptions = {
   input: NodeJS.ReadableStream;
-  output: NodeJS.WritableStream;
+  output: NodeJS.WritableStream & { readonly writableNeedDrain?: boolean };
   call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
   knows: (method: string) => boolean;
   maxFrameBytes?: number;
@@ -29,6 +29,7 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
   const pending = new Set<Promise<void>>();
   let stopped = false;
   let resolved = false;
+  let pendingEvent: RunnerEvent | undefined;
   let finish: (reason: "end" | "protocol_error") => void = () => {};
   const done = new Promise<"end" | "protocol_error">((resolve) => {
     finish = (reason) => {
@@ -43,10 +44,28 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
     let frame: string;
     try {
       frame = encodeFrame(value, fixed ? MAX_FRAME_BYTES : max);
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        Object.hasOwn(value, "result") &&
+        !Object.hasOwn(JSON.parse(frame) as object, "result")
+      )
+        throw new Error("Result cannot be encoded");
     } catch (error) {
-      if (!(error instanceof FrameError) || error.code !== "too_long" || fallbackId === undefined)
-        return Promise.resolve();
-      frame = encodeFrame(rpcFailure(fallbackId, "unavailable", "The answer is too large."));
+      if (fallbackId === undefined) return Promise.resolve();
+      const message =
+        error instanceof FrameError && error.code === "too_long"
+          ? "The answer is too large."
+          : "Internal error";
+      try {
+        frame = encodeFrame(rpcFailure(fallbackId, "unavailable", message));
+      } catch {
+        try {
+          frame = encodeFrame(rpcFailure(null, "unavailable", "The answer is too large."));
+        } catch {
+          return Promise.resolve();
+        }
+      }
     }
     return new Promise((resolve) => {
       try {
@@ -86,7 +105,11 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
     const task = Promise.resolve()
       .then(() => options.call(method, params ?? {}))
       .then(
-        (result) => write(rpcResult(id, result), id),
+        (result) =>
+          write(
+            result === undefined ? rpcFailure(id, "unavailable", "Internal error") : rpcResult(id, result),
+            id,
+          ),
         (error: unknown) => {
           const candidate = error as { code?: unknown; message?: unknown } | null;
           const code = candidate?.code;
@@ -122,7 +145,7 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
     input.removeListener("data", onData);
     let timer: ReturnType<typeof setTimeout>;
     void Promise.race([
-      Promise.all([...pending]),
+      Promise.allSettled([...pending]),
       new Promise<void>((resolve) => {
         timer = setTimeout(resolve, options.endWaitMs ?? 2000);
       }),
@@ -131,10 +154,25 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
       finish("end");
     });
   });
+  output.on("drain", () => {
+    if (pendingEvent && !resolved) {
+      const event = pendingEvent;
+      pendingEvent = undefined;
+      void write({ jsonrpc: "2.0", method: "event", params: event });
+    }
+  });
   return {
     done,
     notify(event) {
-      if (!resolved) void write({ jsonrpc: "2.0", method: "event", params: event });
+      if (resolved) return;
+      if (output.writableNeedDrain) {
+        pendingEvent = {
+          type: "changed",
+          topics: [...new Set([...(pendingEvent?.topics ?? []), ...event.topics])],
+        };
+      } else {
+        void write({ jsonrpc: "2.0", method: "event", params: event });
+      }
     },
   };
 }

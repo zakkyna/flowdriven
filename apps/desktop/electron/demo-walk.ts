@@ -3,7 +3,14 @@ import { appendFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { formatConsoleErrors, recordConsoleError } from "./capture-diagnostics";
-import { actionScript, formatStepFailure, pageHasAll, stepFileName, WALK_STEPS } from "./demo-walk-steps";
+import {
+  actionScript,
+  formatStepFailure,
+  pageHasAll,
+  stepFileName,
+  WALK_STEPS,
+  waitForLoad,
+} from "./demo-walk-steps";
 import { startRunnerBridge } from "./runner-bridge";
 import {
   createMainWindow,
@@ -44,7 +51,14 @@ void app
       const errors: { screen: string; message: string }[] = [];
       let currentStep = "sidebar";
       window.webContents.on("console-message", (event) => recordConsoleError(errors, currentStep, event));
-      await new Promise<void>((resolve) => window.webContents.once("did-finish-load", () => resolve()));
+      try {
+        await waitForLoad(window.webContents, 10_000);
+      } catch (error) {
+        await appendFile(log, `${error instanceof Error ? error.message : String(error)}\n`);
+        await bridge.stop();
+        app.exit(1);
+        return;
+      }
       for (const [index, step] of WALK_STEPS.entries()) {
         currentStep = step.name;
         let acted = false;

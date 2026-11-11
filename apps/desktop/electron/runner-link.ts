@@ -156,14 +156,22 @@ export class RunnerLink {
       }
     });
     let stderr = Buffer.alloc(0);
+    let dropping = false;
     child.stderr.on("data", (chunk: Buffer | string) => {
       stderr = Buffer.concat([stderr, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
       for (;;) {
         const index = stderr.indexOf(10);
-        if (index < 0) break;
-        const line = stderr.subarray(0, Math.min(index, 4096)).toString("utf8");
+        if (!dropping && (index >= 0 || stderr.length > 4096)) {
+          const line = stderr.subarray(0, Math.min(index < 0 ? stderr.length : index, 4096)).toString("utf8");
+          (this.options.log ?? ((text) => process.stderr.write(`${text}\n`)))(`[runner] ${line}`);
+          dropping = true;
+        }
+        if (index < 0) {
+          if (dropping) stderr = Buffer.alloc(0);
+          break;
+        }
         stderr = stderr.subarray(index + 1);
-        (this.options.log ?? ((text) => process.stderr.write(`${text}\n`)))(`[runner] ${line}`);
+        dropping = false;
       }
     });
   }
