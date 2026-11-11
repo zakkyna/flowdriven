@@ -806,23 +806,25 @@ export class RunnerLink { constructor(options: RunnerLinkOptions); start(): void
 - stderr is split into lines; each goes to `log` (default: write to the app's stderr) as `[runner] ` plus the line cut to 4,096 bytes.
 - `stop()`: no child resolves at once; otherwise end the child's stdin, wait up to `stopWaitMs` (default 3,000) for its exit, then `kill("SIGKILL")` and resolve after the exit (or at once after the kill when no exit comes within a further 1,000 ms). After `stop()` no start happens. `stop()` never rejects: a throw of `end()` or `kill()` is caught and it still resolves.
 
-- [ ] **Step 1: Write the failing tests** (12 named; link tests 1 and 2 spawn the real runner: `spawn` from `node:child_process`, `execPath: process.execPath`, `entry` from `new URL("../../../packages/runner/src/main.ts", import.meta.url)`, a temp data folder, `demo: true`, and stop the link in `afterEach`; the others use a fake child made of three `PassThrough` streams, a recorded `kill`, and listeners the test triggers)
+- [x] **Step 1: Write the failing tests** (12 named; link tests 1 and 2 spawn the real runner: `spawn` from `node:child_process`, `execPath: process.execPath`, `entry` from `new URL("../../../packages/runner/src/main.ts", import.meta.url)`, a temp data folder, `demo: true`, and stop the link in `afterEach`; the others use a fake child made of three `PassThrough` streams, a recorded `kill`, and listeners the test triggers)
   `runner-paths.test.ts` (3): (1) `the data folder is FLOWDRIVEN_DATA_DIR, else FlowDriven, else FlowDriven-demo with FLOWDRIVEN_DEMO=1`: a relative `FLOWDRIVEN_DATA_DIR` of `"rel/data"` gives `path.resolve("rel/data")`, which is absolute. (2) `the runner's environment is ELECTRON_RUN_AS_NODE and the five named variables only`: a parent env with `SECRET`, `ELECTRON_RUN_AS_NODE: "0"`, `PATH`, `HOME`, `TMPDIR`, `LANG`, `NODE_OPTIONS` gives exactly `{ ELECTRON_RUN_AS_NODE: "1", PATH, HOME, TMPDIR, LANG }`; undefined ones are left out. (3) `the entry is found from the compiled folder`: `runnerEntry("/r/apps/desktop/dist-electron")` is `/r/packages/runner/src/main.ts`; `isDemo` is true only for `"1"`.
   `runner-link.test.ts` (9): (4) `a call round-trips to the real runner and a failure keeps its code`: `flows.list` has the demo flow; `runs.status` with `{ runId: "nope" }` rejects with `{ code: "not_found" }`; `MAX_FRAME_BYTES` equals the contract's. (5) `events from the runner reach onEvent`: after `flows.run` of the demo flow an event with topic `runs` arrives. (6) `a start passes the entry, the flags and the exact environment to spawn`. (7) `when the runner exits, waiting calls fail with The engine stopped. and the next call starts it again`: also one all-topics event; and an `error` emitted on the fake child's stdin while a call waits does not throw, fails that call with `unavailable` and calls `kill`. (8) `at most three starts in 60 seconds, then unavailable until the app restarts`: with an injected clock, children that exit at once. (9) `stderr lines are prefixed and cut at 4,096 bytes`. (10) `a line over the limit ends the connection and fails the waiting calls`: 1,048,577 bytes without a newline; the fake child's `kill` was called. Outgoing: a fresh link whose `call` has params with a string of 1,048,576 characters rejects `{ code: "invalid_input", message: "The request is too large." }`, `spawn` was never called and nothing was written. (11) `a frame that is not a JSON-RPC object ends the connection`: `[1]\n` and `{"id":1}\n`. (12) `stop ends stdin, waits for the exit and kills a runner that does not leave in 3 seconds`: fake timers; a second case where the child exits after the stdin end resolves without `kill`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run apps/desktop/electron/runner-paths.test.ts apps/desktop/electron/runner-link.test.ts`. Expected: FAIL (modules missing).
-- [ ] **Step 3: Implement** by the rules. The wrapper `(command, args, options) => spawn(command, args, options)` is what the callers pass as `SpawnFn`; if it does not compile, adjust `ChildLike`, not the callers.
-- [ ] **Step 4: Run the tests and the electron program**
+- [x] **Step 3: Implement** by the rules. The wrapper `(command, args, options) => spawn(command, args, options)` is what the callers pass as `SpawnFn`; if it does not compile, adjust `ChildLike`, not the callers.
+- [x] **Step 4: Run the tests and the electron program**
   Run: `pnpm vitest run apps/desktop/electron && pnpm typecheck && pnpm build:electron`. Expected: PASS (`dist-electron/runner-link.js` exists; it is git-ignored).
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
 - [ ] **Step 6: Chair step (GUI)**
   Run: `pnpm capture`. Expected: `captured 16 screens to .workflow/scratch/screens`, exit 0 (the new files are not wired yet).
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 ```bash
 git add apps/desktop/electron
 git commit -m "Add the link between the app and the runner process" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
