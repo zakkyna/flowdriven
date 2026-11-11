@@ -908,23 +908,25 @@ export function runnerNote(mode: RunnerMode): string | undefined;   // sample ->
 
 Present test that changes (1): `App.test.tsx` "the rail lists five destinations, New flow and the inbox count" ends with `expect(await screen.findByText("Sample data. Nothing here runs yet.")).toBeTruthy();` (the notice now arrives with a query).
 
-- [ ] **Step 1: Write the failing tests** (12 named: 11 new, 1 changed)
+- [x] **Step 1: Write the failing tests** (12 named: 11 new, 1 changed)
   `ipc-client.test.ts` (5; a fake bridge records calls and returns what the test says): (1) `a valid input is sent and the parsed answer is returned`: `runner.info` round-trip. (2) `an invalid input never leaves the renderer`: `runs.status` with `{}` rejects `invalid_input` and the bridge is not called. (3) `a failure keeps its code and message, and an unreadable answer becomes unavailable`: `{ ok: false, error: { code: "not_found", message: "x" } }`, an `ok: true` result that fails the schema, a reply `42`, and an error with an unknown code. (4) `a bridge that rejects or throws is unavailable`. (5) `events are validated and unsubscribe reaches the bridge`: a malformed event is dropped, `{ type: "changed", topics: ["runs"] }` is delivered.
   `create-client.test.ts` (2 new): (6) `createRunnerClient uses the bridge when flowdrivenShell.runner exists`: set `window.flowdrivenShell = { kind: "electron", runner: fakeBridge }` (removed in `afterEach`); `call("runner.info", {})` reaches the bridge. (7) `without a bridge it is the sample data`: `runner.info` says `sample`.
   `App.test.tsx` (1 changed, 1 new): (8) the changed test above. (9) `the notice follows runner.info`: a `RunnerProvider` with the fixtures client wrapped so `runner.info` answers `demo` shows "Demo engine. A script plays the steps."; answering `live` shows neither note and still the "Browser preview" line.
   `not-built.test.tsx` (3; a local `render` helper wraps `createFixtureRunnerClient({ scenario: "empty" })` so that `harnesses.list` answers `[]`, `settings.get` answers the defaults of `defaultSettings`-shaped data written inline, and `flows.build` rejects `RunnerError("unavailable", "Building a flow from chat arrives with the agent.")`): (10) `Harnesses shows its empty state for an empty list`. (11) `Settings shows the defaults without breaking`: the heading renders and no alert is present. (12) `the Builder chat shows the not-built sentence and keeps the draft`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run apps/desktop/src/runner apps/desktop/src/App.test.tsx apps/desktop/src/screens/not-built.test.tsx`. Expected: FAIL.
-- [ ] **Step 3: Implement** by the rules.
-- [ ] **Step 4: Run the tests and the web build**
+- [x] **Step 3: Implement** by the rules.
+- [x] **Step 4: Run the tests and the web build**
   Run: `pnpm vitest run apps/desktop/src && pnpm build:web`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add apps/desktop/src
 git commit -m "Read the runner through IpcRunnerClient and show which engine runs" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

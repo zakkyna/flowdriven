@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { renderApp } from "./test/render";
 
 const flowIds = [
@@ -26,7 +26,7 @@ test("the rail lists five destinations, New flow and the inbox count", async () 
   expect(screen.getByRole("link", { name: "New flow" }).getAttribute("href")).toBe("#/builder/new");
   const stops = Array.from(document.querySelectorAll("a[href], button")).slice(0, 3);
   expect(stops.map((el) => el.getAttribute("href"))).toEqual(["#main-content", "#/builder/new", "#/inbox"]);
-  expect(screen.getByText("Sample data. Nothing here runs yet.")).toBeTruthy();
+  expect(await screen.findByText("Sample data. Nothing here runs yet.")).toBeTruthy();
   expect(screen.getByText("Browser preview")).toBeTruthy();
 });
 test("every flow in the sidebar has an icon and a state word", async () => {
@@ -152,4 +152,28 @@ test("skip link is first and targets the main content without an extra landmark"
   expect(link.getAttribute("href")).toBe("#main-content");
   expect(screen.getByRole("main").id).toBe("main-content");
   expect(screen.queryByRole("complementary")).toBeNull();
+});
+
+test("the notice follows runner.info", async () => {
+  const first = renderApp("#/runs");
+  const original = first.client.call.bind(first.client);
+  vi.spyOn(first.client, "call").mockImplementation((name, input) =>
+    name === "runner.info"
+      ? Promise.resolve({ contractVersion: 1, mode: "demo" } as never)
+      : original(name, input as never),
+  );
+  expect(await screen.findByText("Demo engine. A script plays the steps.")).toBeTruthy();
+  first.unmount();
+  const second = renderApp("#/runs");
+  const other = second.client.call.bind(second.client);
+  vi.spyOn(second.client, "call").mockImplementation((name, input) =>
+    name === "runner.info"
+      ? Promise.resolve({ contractVersion: 1, mode: "live" } as never)
+      : other(name, input as never),
+  );
+  await waitFor(() => expect(second.client.call).toHaveBeenCalledWith("runner.info", {}));
+  await screen.findByRole("link", { name: "Inbox, 5 waiting" });
+  expect(screen.queryByText("Demo engine. A script plays the steps.")).toBeNull();
+  expect(screen.queryByText("Sample data. Nothing here runs yet.")).toBeNull();
+  expect(screen.getByText("Browser preview")).toBeTruthy();
 });

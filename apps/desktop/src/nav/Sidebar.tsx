@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { APP_NAME, SAMPLE_DATA_NOTE } from "../app-info";
+import { APP_NAME, runnerNote } from "../app-info";
 import { useRunnerQuery } from "../runner/runner-context";
 import { shellKind } from "../shell";
 import { flowState } from "../ui/flow-state";
@@ -18,6 +18,8 @@ const links: { label: string; icon: IconName; to: Route }[] = [
 ];
 
 export function Sidebar({ route }: { route: Route }): ReactElement {
+  const info = useRunnerQuery("runner.info", {});
+  const note = info.data && !info.error && !info.loading ? runnerNote(info.data.mode) : undefined;
   const approvals = useRunnerQuery("approvals.list", { state: "pending" });
   const flows = useRunnerQuery("flows.list", {});
   const count = approvals.data?.length ?? 0;
@@ -97,7 +99,7 @@ export function Sidebar({ route }: { route: Route }): ReactElement {
         )}
       </nav>
       <footer className={styles.footer}>
-        <div>{SAMPLE_DATA_NOTE}</div>
+        {note && <div>{note}</div>}
         <div>{shellKind() === "electron" ? "Desktop app" : "Browser preview"}</div>
       </footer>
     </div>
