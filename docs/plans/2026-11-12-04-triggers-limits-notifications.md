@@ -849,17 +849,20 @@ notification: Too many runs - Flood flow reached its limit of 24 runs today. Mor
   The run ids come from the injected `newId`; the numbers in the lines are read from `runs.list`, `triggers.list` (`droppedToday`) and the collected notices, never typed in. Hours print as UTC `HH:MM`. The `local.flood` flow is named `Flood flow`.
 - `trigger-demo.ts`: the executable (`#!/usr/bin/env node`), prints each line with `process.stdout.write`, like `keeper-demo.ts`.
 
-- [ ] **Step 1: Write the failing test** (`trigger-demo.test.ts`, timeout 60,000 ms, as `keeper-demo.test.ts`): `lines[0]` equals the first line exactly; `lines[1]` and `lines[2]` match `/^no window open: 0[12]:00 fired, run-\d+ done$/`; `lines[3]` matches `/^slept 5 hours 30 minutes: catch_up once started 1 run for 5 missed fires, run-\d+ done$/`; `lines[4]` equals the flood line; `lines[5]` equals the notification line; and `lines` has length 6.
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/trigger-demo.test.ts`. Expected: FAIL ("Cannot find module").
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command and `node packages/runner/src/test-helpers/trigger-demo.ts`. Expected: PASS; the script prints the six lines and exits 0.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 1: Write the failing test** (`trigger-demo.test.ts`, timeout 60,000 ms, as `keeper-demo.test.ts`): `lines[0]` equals the first line exactly; `lines[1]` and `lines[2]` match `/^no window open: 0[12]:00 fired, run-\d+ done$/`; `lines[3]` matches `/^slept 5 hours 30 minutes: catch_up once started 1 run for 5 missed fires, run-\d+ done$/`; `lines[4]` equals the flood line; `lines[5]` equals the notification line; and `lines` has length 6.
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/trigger-demo.test.ts`. Expected: FAIL ("Cannot find module").
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command and `node packages/runner/src/test-helpers/trigger-demo.ts`. Expected: PASS; the script prints the six lines and exits 0.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Add the trigger evidence script: an hourly fire with no window and a capped flood" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
