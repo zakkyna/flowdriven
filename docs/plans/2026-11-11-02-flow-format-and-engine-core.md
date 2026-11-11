@@ -775,7 +775,7 @@ test("a run stays pinned to the flow version it started with", async () => { /* 
   Run: `pnpm vitest run packages/runner/src/engine`. Expected: PASS (Task 7's tests included)
 - [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add loops, choices, resume and crash recovery to the engine" -m "Assisted-by: Codex"
@@ -850,6 +850,8 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 Asked first: the owner said yes on 2026-11-11 to the change in item 2 of "Needs the owner's yes", and to nothing more.
 
+Chair's note (2026-11-11): the chair did Step 4 before Steps 1 to 3, so that the executor can read the package's type declarations and run the tests. The chair added `"yaml": "2.9.1"` to `packages/sdk/package.json` and the allowlist entry, ran the install and set `lockfileSha256`. The executor adds nothing to a `package.json`, the allowlist or the lockfile. What the install did: one package downloaded (`yaml@2.9.1`, ISC, no dependencies, no install script; its integrity equals the registry's). The lockfile gained `yaml` under `packages/sdk` and the package entry, and, not foreseen in Step 4, the keys of `vite`, `vitest`, `@vitejs/plugin-react` and `@vitest/mocker` now end in `(yaml@2.9.1)`: Vite lists `yaml` as an optional peer and pnpm resolves it to the copy in the workspace. No other package changed.
+
 **Files:**
 - Modify: `packages/sdk/package.json` (dependency `"yaml": "2.9.1"`), `tools/checks/allowlist.json` (the `yaml` entry and `lockfileSha256`, as named under "Needs the owner's yes", item 2), `pnpm-lock.yaml` (chair), `packages/sdk/src/node.ts`
 - Create: `packages/sdk/src/load/parse-yaml.ts`, `load/load-folder.ts`, `load/load.test.ts`, `test-data/upwork-yaml.ts`
@@ -859,7 +861,7 @@ Asked first: the owner said yes on 2026-11-11 to the change in item 2 of "Needs 
 - Produces (from `"./node"`): `parseFlowYaml(text: string): unknown` (throws `FlowFileError` code `yaml`); `type LoadedFlow = { manifest: FlowManifest; files: FlowFiles; hash: string; issues: Issue[] }`; `loadFlowFolder(dir: string): LoadedFlow`. `test-data/upwork-yaml.ts` exports `upworkYaml: string`: the YAML of spec 20.4 as it stands. Its `ask` line reads `ask: {question: "Which jobs get a prototype?", max_pick: "${params.daily_builds}", expires: 24h,`; the quotes matter, because an unquoted `${` inside a flow mapping is a YAML error. It is a plain template literal with every `${` written `\${` (not `String.raw`, which keeps the backslash).
 
 Rules. `parseFlowYaml` uses `parseDocument(text, { schema: "core", uniqueKeys: true, version: "1.2" })` (YAML 1.2 core schema, so `yes` and dates stay strings) and refuses, as `FlowFileError("yaml")`: any entry in `doc.errors` or `doc.warnings` (an unknown tag such as `!custom` is only a warning); any tag, anchor or alias token in the source, found with `new Lexer().lex(text)` and `CST.tokenType(token)` equal to `tag`, `anchor` or `alias` (the core schema still resolves `!!binary`, `!!set` and `!!timestamp`); then it returns `doc.toJS({ maxAliasCount: 0 })`. Every error thrown by the package, a `ReferenceError` included, is mapped to `FlowFileError("yaml")` with the package's message. The executor checks these names against the installed type declarations; if one does not exist, stop and write `Blocked` (do not guess). `loadFlowFolder` reads every regular file below `dir` (skipping `.git`, `node_modules` and `.DS_Store`), refuses a symbolic link (`symlink`), a file over 2 MB or a package over 10 MB (`too_large`), requires `flow.yaml` and `README.md` (`missing_file`), builds `FlowFiles` (paths with `/`), hashes it, parses `flow.yaml` (a parse failure is returned as issues, a YAML failure throws), and validates with `files` set to the listing. Problems with the flow's content are `issues`; problems with the folder throw.
-- [ ] **Step 1: Write the failing tests** (folders are made in `mkdtempSync(join(tmpdir(), "flowdriven-"))`)
+- [x] **Step 1: Write the failing tests** (folders are made in `mkdtempSync(join(tmpdir(), "flowdriven-"))`)
 ```ts
 test("loads the Upwork example from YAML", () => {
   const dir = folder({ "flow.yaml": upworkYaml, "README.md": "r\n", "checks/alerts.schema.json": "{}", "checks/score.schema.json": "{}", "checks/verdict.schema.json": "{}", "checks/human.md": "rubric\n" });
@@ -876,19 +878,19 @@ test("YAML: no aliases, no duplicate keys, no tags; yes and dates stay strings",
   expect(parseFlowYaml("on: yes\nd: 2026-11-11\nn: 1.0\nt: 'a !b'\n")).toEqual({ on: "yes", d: "2026-11-11", n: 1, t: "a !b" });
 });
 ```
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/sdk/src/load`. Expected: FAIL with "Failed to resolve import" (and, until the install, `yaml` cannot be resolved)
-- [ ] **Step 3: Add the dependency and the allowlist entry, then implement** `parseFlowYaml` and `loadFlowFolder`. The executor stops here and reports.
-- [ ] **Step 4: Chair step (network): install and hash**
+- [x] **Step 3: Add the dependency and the allowlist entry, then implement** `parseFlowYaml` and `loadFlowFolder`. The executor stops here and reports.
+- [x] **Step 4: Chair step (network): install and hash**
   Run (with `CI` unset): `pnpm install --no-frozen-lockfile`, then `shasum -a 256 pnpm-lock.yaml`; put the hash in `lockfileSha256`; run `pnpm why yaml` and record that it has no dependencies. Expected: the lockfile gains `yaml@2.9.1` under `packages/sdk` only.
-- [ ] **Step 5: Run the tests, then the gate**
+- [x] **Step 5: Run the tests, then the gate**
   Run: `pnpm vitest run packages/sdk/src/load`, then `pnpm format && pnpm check`. Expected: PASS; the last line starts with `dependency-gate: OK`
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/sdk pnpm-lock.yaml tools/checks/allowlist.json
 git commit -m "Load flow folders with YAML" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

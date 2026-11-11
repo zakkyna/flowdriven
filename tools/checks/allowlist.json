@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "fe3f514af5a2d2d4cdde8596555f0d69214783e8160f993e5d15f5b2803f29b8",
+  "lockfileSha256": "59e2f6e833a39f55246da746c2edc43019582f5fe4a3a5e5a1b3fb92f442b0d5",
   "registry": "https://registry.npmjs.org/",
   "packageManager": "pnpm@10.9.0",
   "engines": {
@@ -130,6 +130,12 @@
       "range": "^24.19.2",
       "packages": ["flowdriven-workspace"],
       "why": "Node types for the Electron main process, matching the Node 24 floor."
+    },
+    {
+      "name": "yaml",
+      "range": "^2.9.1",
+      "packages": ["@flowdriven/sdk"],
+      "why": "Parses flow.yaml (spec 9.1)."
     }
   ]
 }
