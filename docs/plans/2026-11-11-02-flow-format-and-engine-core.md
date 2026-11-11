@@ -797,7 +797,7 @@ Done by: Codex/gpt-6.1-terra in three calls (loops, choices, resume and crash), 
 Report format (13.4). `reportLines`: line 1 `<flow name>: <state with _ as spaces>. <p> of <t> steps passed.` where `t` is the number of top-level steps and `p` those whose row is `passed`; line 2 `Items: <P> processed, <S> skipped as seen, <F> failed.` over all loops (`P` = items `passed`, `S` = items whose note is `skipped: seen in an earlier run`, `F` = items `failed`); line 3 by state: `done` `Nothing needs your attention.`; `waiting_approval` `Waiting for you: <summary of the first pending approval>` (for an `ask` the summary is its question); `blocked` `Blocked: <blockedReason>`; `failed` `Failed: <note of the first failed step, else blockedReason, else see the steps>`; anything else `Not finished: <state with spaces>.` The report is Markdown, sections in this order: `# <name>: run <id>`; a list with state, flow id and version, hash, trigger kind, started and ended times; `## Summary` with the three lines; `## Inputs` one bullet `<id>: <value as compact JSON>` per input, then per param (`- none` when both are empty); `## Steps` a table `| Step | State | Worker | Attempts | Checks |` for the top-level steps (Worker = `worker` of the last attempt, else `-`; checks as `<type>: <verdict>`, and ` (judged, not verified)` when every required check is `judge`), then `### Evidence` with one bullet `<step>[@<item key>] <type>: <evidence>` for every check of any row whose verdict is `failed` or whose type is `judge` (`- none` when there is none); for each loop `## Items: <loop id>` a table `| Key | Status | Steps | Note |` (steps as `<id> <state>` joined by `, `); `## Choices` one bullet per approval of kind `ask` (question, option keys, picked keys, state); `## Outputs` one bullet `<step>.<id>: <compact JSON>` per declared output of a top-level leaf step that has a value (`- none` otherwise); `## Usage` the line `Usage and cost are not tracked yet (plan 03).`; `## Audit` one bullet per audit entry (`<at> <kind> <detail as compact JSON>`). Every piece of text that came from the flow, the worker or the store (the H1, the list, the three lines, every cell and every bullet) goes through `escapeText`: `|` becomes `\|`, line breaks become a space, backticks become `'`, a control or format character (categories Cc, Cf) becomes `<U+XXXX>`, and text over `max` (default 200) characters is cut with `...`.
 
 Demo flow (an object, valid by `validateManifest`, `kind: "light"`, param `min_score` 7): `alerts` (worker `List the new job alerts as JSON.`, outputs `jobs`, `schema` check on `checks/alerts.schema.json`) then `review` (loop over `${steps.alerts.outputs.jobs}` as `job`, key `${job.id}`, max 20: `rough` agent `Score ${job} 0-10.`, outputs `score`, `schema` check on `checks/score.schema.json`; `page` worker `Open the post for ${job}; return the full text.`, `when: "rough.score.value >= params.min_score"`, check `contains` `${job.title}`; `full` agent `Decide fit for ${job}.`, `when: "page.passed"`, outputs `verdict`, `schema` check on `checks/verdict.schema.json`), then `pick` (ask, question `Which jobs get a prototype?`, `max_pick: 1`, `choose_from: "${steps.review.items where steps.full.outputs.verdict.fit}"`), then `build` (loop over `${steps.pick.outputs.choice}` as `job`, key `${job.id}`: `proto` worker `Build and publish the prototype for ${job}.` with `contains` `/p/`; `proposal` worker `Draft the proposal for ${job}, at most 150 words.` with `not_contains` `@` and a `user` check). `files` holds the three schema files: alerts `{"type":"array","items":{"type":"object","required":["id","title"]}}`, score `{"type":"object","required":["value"],"properties":{"value":{"type":"number"}}}`, verdict `{"type":"object","required":["fit"],"properties":{"fit":{"type":"boolean"}}}`. Jobs are `{ id: "j<n>", title: "Job <n in words>" }`. Every item instruction embeds `${job}`, so the scripted harness reads the id with `/"id":"(j\d)"/` and replies: `alerts` outputs `{ jobs }` and text `""`; `rough` outputs `{ score: { value } }`; `page` text `Full post: <title>`; `full` outputs `{ verdict: { fit } }`; `proto` text `Published at /p/<id>`; `proposal` text `Hello, here is my plan for <title>.` Run 1 jobs j1 to j4 with scores 9, 4, 8, 6; `full` says fit for j1 and j3; the demo answers the choice with `j1`, then approves the sign-off of `proposal@j1`. Run 2 (a new store opened on the same database file, a new harness) lists j3, j4, j5, with j5 scored 8 and fit, picks `j5` and approves.
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 ```ts
 // `view(overrides)` builds a RunView from demoFlow() with four passed top-level rows (last attempt worker "Scripted harness"), five passed items, params { min_score: 7 }, alerts outputs { jobs: [...] } and one pending ask approval whose summary is "Which jobs get a prototype?"; `state`, `blockedReason`, `itemKey` and `checks` overrides apply to the run, the first item and the `alerts` row
 test("the three report lines for each state", () => {
@@ -830,19 +830,19 @@ test("the demo writes two reports and the second skips what the first saw", asyn
 });
 test("the demo flow is valid", () => expect(validateManifest(demoFlow().manifest, { files: new Set(Object.keys(demoFlow().files)) })).toEqual([]));
 ```
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/report.test.ts packages/runner/src/demo`. Expected: FAIL with "Failed to resolve import"
-- [ ] **Step 3: Implement** the report, the demo flow, `runDemo` and `main.ts` as described. `runDemo` opens the file store, runs and answers, closes it, opens it again for run 2.
-- [ ] **Step 4: Run the tests, then the demo**
+- [x] **Step 3: Implement** the report, the demo flow, `runDemo` and `main.ts` as described. `runDemo` opens the file store, runs and answers, closes it, opens it again for run 2.
+- [x] **Step 4: Run the tests, then the demo**
   Run: `pnpm vitest run packages/runner/src/report.test.ts packages/runner/src/demo`, then `pnpm --filter @flowdriven/runner exec node src/demo/main.ts`. Expected: PASS; the command prints two paths under `.workflow/scratch/engine-demo/` and no ExperimentalWarning; `grep -c "skipped: seen in an earlier run" .workflow/scratch/engine-demo/run-2.md` prints `2`.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add the run report and the engine demo" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
