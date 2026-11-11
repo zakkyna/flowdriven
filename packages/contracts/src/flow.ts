@@ -126,7 +126,17 @@ function needsChecks(step: { do: StepDo; checks: Check[] }, ctx: z.RefinementCtx
     ctx.addIssue({ code: "custom", path: ["checks"], message: "A step needs at least one check." });
   }
 }
-export const LeafStep = z.object(stepFields).superRefine(needsChecks);
+export const LeafStep = z.object(stepFields).superRefine((step, ctx) => {
+  needsChecks(step, ctx);
+  if (step.do === "loop")
+    ctx.addIssue({ code: "custom", path: ["do"], message: "A nested step cannot be a loop." });
+  if ((step.do === "ask") !== (step.ask !== undefined))
+    ctx.addIssue({
+      code: "custom",
+      path: ["ask"],
+      message: "An ask object is required exactly for an ask step.",
+    });
+});
 export type LeafStep = z.infer<typeof LeafStep>;
 export const LoopDecl = z.object({
   for_each: z.string(),

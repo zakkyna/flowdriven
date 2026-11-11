@@ -35,6 +35,7 @@ export const Payload = z.discriminatedUnion("kind", [
     question: z.string(),
     options: z.array(z.object({ key: z.string(), label: z.string() })),
     maxPick: z.number().int().min(1),
+    approves: z.array(z.string().min(1)).default([]),
   }),
 ]);
 export type Payload = z.infer<typeof Payload>;
@@ -60,6 +61,13 @@ export const Approval = z
     picks: z.array(z.string()).optional(),
   })
   .superRefine((approval, ctx) => {
+    if ((approval.kind === "ask") !== (approval.payload.kind === "choice")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["payload"],
+        message: "A choice payload is required exactly for ask approvals.",
+      });
+    }
     if ((approval.kind === "risky_action") !== (approval.riskyAction !== undefined)) {
       ctx.addIssue({
         code: "custom",

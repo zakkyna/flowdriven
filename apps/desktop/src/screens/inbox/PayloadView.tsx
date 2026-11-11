@@ -118,15 +118,29 @@ export function PayloadView({
                       setPicks(checked ? picks.filter((pick) => pick !== option.key) : [...picks, option.key])
                     }
                   />
-                  <Revealed text={option.label} />{" "}
-                  <code>
-                    <Revealed text={option.key} />
-                  </code>{" "}
-                  {!pickable && checked && <span>Picked</span>}
+                  <span>
+                    <Revealed text={option.label} />{" "}
+                    <code>
+                      <Revealed text={option.key} />
+                    </code>{" "}
+                    {!pickable && checked && <span>Picked</span>}
+                  </span>
                 </label>
               );
             })}
           </fieldset>
+          {payload.approves.length > 0 && (
+            <>
+              <p>Choosing releases these tools for the items you pick, in this run only:</p>
+              <ul className={styles.mono}>
+                {keyed(payload.approves, (tool) => tool).map(({ value: tool, key }) => (
+                  <li key={key}>
+                    <Revealed text={tool} singleLine />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
       {payload.kind === "email" && (

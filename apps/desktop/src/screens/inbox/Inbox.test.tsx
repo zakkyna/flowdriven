@@ -564,3 +564,14 @@ test("a resolved choice lists what was picked and offers no button", async () =>
   expect(screen.getByRole("checkbox", { name: /Job one/ })).toHaveProperty("checked", true);
   expect(screen.queryByRole("button", { name: "Send choice" })).toBeNull();
 });
+
+test("a choice that releases tools names them before it is sent", async () => {
+  const sentence = "Choosing releases these tools for the items you pick, in this run only:";
+  const view = renderApp("#/inbox/ap-0017", { scenario: "looped" });
+  expect(await screen.findByText(sentence)).toBeTruthy();
+  expect(screen.getByText("host.prototype_publish")).toBeTruthy();
+  view.unmount();
+  renderChoice();
+  await screen.findByRole("checkbox", { name: /Job one/ });
+  expect(screen.queryByText(sentence)).toBeNull();
+});

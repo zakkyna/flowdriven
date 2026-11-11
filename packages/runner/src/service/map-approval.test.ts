@@ -40,6 +40,7 @@ test("an ask becomes a choice approval without the items", () => {
     question: "Pick",
     options: [{ key: "j1", label: "Job one" }],
     maxPick: 1,
+    approves: [],
   });
   expect(a.itemKey).toBeUndefined();
   expect(a.editable).toBe(false);

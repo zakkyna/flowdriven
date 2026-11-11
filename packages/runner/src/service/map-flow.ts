@@ -116,6 +116,17 @@ export function toFlowManifest(manifest: SdkManifest): FlowManifest {
         ? { ...rest, default: value }
         : rest;
     }),
+    params: Object.fromEntries(
+      Object.entries(manifest.params).map(([key, param]) => {
+        const { default: value, ...rest } = param;
+        return [
+          key,
+          typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+            ? { ...rest, default: value }
+            : rest,
+        ];
+      }),
+    ),
     triggers: manifest.triggers.map((t) => ({ kind: t.kind, summary: triggerSummary(t) })),
     steps: manifest.steps.map(stepModel),
   });

@@ -26,6 +26,7 @@ export function toApproval(row: ApprovalRow, run: RunRow, manifest: FlowManifest
         return { key: option.key, label: option.label };
       }),
       maxPick,
+      approves: row.approves,
     });
   } else {
     if (typeof row.payload !== "string") throw new Error("Invalid sign-off payload");

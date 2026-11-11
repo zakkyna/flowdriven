@@ -43,6 +43,7 @@ test("its choice validates and is the newest waiting decision", async () => {
       { key: "j2", label: "Job two" },
     ],
     maxPick: 2,
+    approves: ["host.prototype_publish"],
   });
 });
 
