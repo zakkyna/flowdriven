@@ -53,6 +53,13 @@ Claude Code is 2.1.318 at `~/.local/bin/claude`. Every call below used `-p`, the
 30. `Glob` with the pattern `{/etc/hosts,note.txt}` returned only `note.txt`, and with `../outside/*.txt` it found nothing, although the hook allowed both calls. So Claude Code's own confinement holds for patterns; the pattern rule of Task 7 is the second layer.
 31. (Found while checking the plan on this Mac.) A Node process on macOS adds `__CF_USER_TEXT_ENCODING` to its own `process.env` at start-up, whatever its parent passed: the fake (a Node script) sees one name more than `env` lists. Also `os.tmpdir()` is under `/var/...` while `process.cwd()` of a child started there is under `/private/var/...`. So the fake leaves that name out of the names it logs, and tests build their temp folders as real paths (Global Constraints).
 
+**Facts proved while running the finished code against the real Claude Code** (Task 17; same environment, model `haiku`):
+32. With a `SessionStart` hook in the settings the real stream begins with two events BEFORE `system/init`, also without `--include-hook-events`: `{"type":"system","subtype":"hook_started","hook_event":"SessionStart",...}` and `{"type":"system","subtype":"hook_response","hook_event":"SessionStart","exit_code":0,"outcome":"success",...}`. Fact 7 was seen with `--include-hook-events` and the brief wrongly took the init event to be the first line.
+33. `claude auth status --json` exits with code 1 when signed out (it still prints `"loggedIn":false`) and with 0 when signed in.
+34. A link inside the working folder that points out of it: `Grep` found nothing through a linked folder, `Glob **/*.txt` returned only the real file, and `Read` of a linked file was refused by Claude Code itself ("resolves through a symlink ... which is outside").
+35. A model does what the fixed head says: told to work only inside its folder it answered that a read outside was blocked without calling the tool, and it wrote a sentence without its final full stop. So the check flow names the call it wants made and uses a marker without punctuation.
+36. The button "Run now" moves the app to the run's page by itself.
+
 ## Global Constraints
 
 - Node `>=24.14.0`, pnpm `10.9.0`; English everywhere, ASCII only in this plan and in any file it creates; branch `work/plan-03`, cut from the tip of `work/plan-02b`.
@@ -1016,26 +1023,63 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 Not an executor task: no file of the code changes except the two documents and, only with the owner's yes, the dependency part. The chair runs everything here; the runs spend a little of the owner's Claude plan (a few `haiku` calls, under 0.01 USD) and need the owner at the Mac.
 
-- [ ] **Step 1: Chair step (GUI): capture and build**
+- [x] **Step 1: Chair step (GUI): capture and build**
   Run: `pnpm capture && pnpm build`. Expected: `captured 20 screens`; the build exits 0.
-- [ ] **Step 2: Chair step (network): the evidence walk**
+- [x] **Step 2: Chair step (network): the evidence walk**
   Run: `pnpm build && TZ=UTC pnpm --filter @flowdriven/desktop exec electron dist-electron/claude-walk.js`. Expected: exit 0; one PNG per shot step and `walk.log` in `.workflow/scratch/claude-walk/`; the last PNG shows the Run screen with the three steps Passed and "Blocked calls" with a `Read` row. This repeats fact 24 inside the app (the settings command with a quoted path that holds a space runs; the data folder is `app data`). If the model does not try the forbidden read the walk fails at the last step; read the transcript in `walk.log` before judging.
-- [ ] **Step 3: Chair step (network): R12 with the real Claude Code**
+- [x] **Step 3: Chair step (network): R12 with the real Claude Code**
   Run: `node packages/runner/src/test-helpers/r12-check.ts kill`. Expected, after about 80 seconds: `request left unanswered: yes`, `notes/hello.txt exists: no`, `claude process still alive: yes` or `no`, `R12 (kill): PASS`, exit 0. Then `node packages/runner/src/test-helpers/r12-check.ts remove`. Expected: `notes/hello.txt exists: no` and `R12 (remove): PASS`; this repeats facts 25 and 26 with the real script and is the regression check for any later change of the hook (a missing script file ends as exit 2, not 127 treated as exit 1). A FAIL in either mode is a blocker for the plan: stop and report.
-- [ ] **Step 4: Chair step: ROADMAP**
+- [x] **Step 4: Chair step: ROADMAP**
   Edit `docs/plans/ROADMAP.md`: row 03 becomes `| 03 | The Claude Code adapter only (detailed: `2026-11-11-03-claude-code-adapter.md`): detection and inventory, consent, the scoped call with the pre-tool hook answered through a file channel, the start proof and the tripwire, a fake `claude`, and blocked calls in the run | A real Claude Code step runs from the app on the owner's plan; an undeclared tool is denied and the Run screen shows it; stopping the runner blocks the call |`.
-- [ ] **Step 5: Chair step (commit)**
+- [x] **Step 5: Chair step (commit)**
 ```bash
 git add docs/plans/ROADMAP.md docs/plans/2026-11-11-03-claude-code-adapter.md
 git commit -m "Record plan 03" -m "Assisted-by: Claude"
 ```
 - [ ] **Step 6: Optional, needs the owner's yes; the chair asks. Move `@flowdriven/contracts` to `dependencies` of the runner.** Ask first (it changes `pnpm-lock.yaml` and a pinned hash in `tools/checks/allowlist.json`, both on the "Ask first" list of AGENTS.md). With the yes: in `packages/runner/package.json` move `"@flowdriven/contracts": "workspace:*"` from `devDependencies` to `dependencies`; run `pnpm install --frozen-lockfile=false` (network); read the new sha256 of `pnpm-lock.yaml`, write it into `tools/checks/allowlist.json` where the lockfile hash is pinned; run `pnpm check:deps` and `pnpm format && pnpm check`; then `git add packages/runner/package.json pnpm-lock.yaml tools/checks/allowlist.json` and `git commit -m "Make the contracts a runtime dependency of the runner" -m "Assisted-by: Claude"`. Nothing else in this plan depends on it.
 
+Done by: the chair, 2026-11-11. Evidence: the walk and both modes of the R12 script passed against the real Claude Code (see the review below). Step 6 was not asked of the owner and stays open.
+
 ---
 
 ## Review of the finished plan
 
-(to be written by the chair after the evidence runs, in the form of plan 02b: who reviewed which part, what was found, what changed against the tasks above)
+One fresh reviewer per part read the code of Tasks 1 to 16 at commit `54ef01b` and proved each finding with a test that failed on that code. Neither part had a blocker. The security reviewer found no way for a tool call to run, or for a path outside the declared folders to be reached, without an allow from the runner. Every finding was fixed in four groups, each with its own gate, capture and commit. The reviewers' proofs now sit in the tree as `review-03-*.test.ts` and `review-03-*.test.tsx` (A6 is evidence code and has none).
+
+| Part | Found | Fixed in the commits |
+|---|---|---|
+| Security: hook script, channel, decision function, policy and paths, start proof, tripwire, arguments and environment, the gate | 3 major (S1 to S3), 4 minor (S4 to S7) | `Check consent at every attempt and stop Claude Code for good`; `Close gaps in the name fold, the patterns, the judge prompt and the channel` |
+| Everything else: engine seam, SDK, store, detection and inventory, harness service, blocked calls and the card, the fake, the evidence code | 3 major (A1, A2, A6), 3 minor (A3 to A5) | `Tighten the gate and make the scan honest about sign-out, time limits and lists`; `Check param ranges, key the inventory rows and make the evidence code prove what it claims` |
+
+Found by running the finished code against the real Claude Code, not by a reviewer:
+- The start proof blocked every real run, because the real stream begins with the start hook's own two events (fact 32). It failed closed: no tool ran. Fixed in `Let the start proof pass over the start hook's own events`; the fake now writes the same two events.
+- The check flow's sentence lost its full stop in the model's hands, and its third step never made the forbidden call (fact 35). Fixed in `Give the check flow a marker a model cannot misread` and in the last fix commit.
+- The walk set a route that "Run now" overwrote (fact 36). Fixed in the last fix commit.
+
+What changed against the tasks above:
+- Task 12 and Task 13: the adapter asks the harness gate before every attempt, of a step and of a judge, and a revoke of consent kills the steps that are running and blocks their runs with the consent sentence (S1). A revoke is always stored, also while Claude Code is not detected (S7).
+- Task 11 and Task 12: a judge that starts after `stop()` starts nothing (S3). An abort stops the channel at once, and the proof and the tripwire keep watching after it (S4). The process group is signalled also after its leader has closed (S5). The audit entry `tool_calls` carries `refused`, the number of calls Claude Code itself reports as refused.
+- Task 7: a protected name is compared after `normalize("NFKC")`, upper-casing, lower-casing and `normalize("NFKC")` again (S2). A pattern that holds `(` or `)`, or a `/` inside square brackets, is denied.
+- Task 9: a request name is decided and counted once, also when its file cannot be removed.
+- Task 10 and Task 12: before the init event up to eight start hook events are passed over; a start hook that reports another exit code than 0 fails the proof.
+- Task 11: the judge's marker lines carry a code of 16 hex characters made for each call (S6).
+- Task 13: the gate counts a skill step's `skill` id (A1) and blocks a flow with a `command` check (`command:<cmd>`) until the install preview exists, because such a check runs a program on this Mac outside Claude Code. Scan and inventory commands run in the data folder.
+- Task 5: the login answer is read whatever the exit code (A2, fact 33); `runCapture` settles at its limit plus one second (A3); a failed `mcp list` keeps the list of the scan before; a plugin's own scope is used.
+- Task 1: a new issue code `param_default_range` for a default outside `min`, `max` or `options` (A4).
+- Task 15: the rows of the inventory lists have keys that hold their index (A5).
+- Task 16: the R12 script waits for the start hook, and its `remove` mode passes only when the runner allowed nothing and Claude Code reports at least one refused call (A6). The walk has six steps; the last two are `run-now` and `run-done`.
+- Task 11 stopped once on a fixture the plan had not given; the chair's note under the task says how it was settled.
+
+Settled by a fact, with no change: a search through a link that leaves the folder (fact 34).
+
+Evidence with the real Claude Code 2.1.318 on 2026-11-11, at the last fix commit:
+- The walk (`claude-walk.js`) exits 0 in 17 seconds. Its pictures show the Harnesses card (path, version, "Logged in", "Gray", "No sandbox", consent given) and the Run screen: "Claude Code check: done. 3 of 3 steps passed.", the output `read.content` "FLOWDRIVEN-CHECK-ONE", and under the third step "Blocked calls: Read, This path is outside the folders this step declares. (1 time)". The audit of that run holds `tool_denied` with the tool `Read` and the target `/etc/hosts`.
+- `r12-check.ts kill`: `start hook ran: yes`, `request left unanswered: yes`, `notes/hello.txt exists: no`, `R12 (kill): PASS`. The runner was killed with SIGKILL in the middle of the step; Claude Code went on, its hook got no answer, and nothing was written.
+- `r12-check.ts remove`: `start hook ran: yes`, `calls the runner allowed: 0`, `calls Claude Code reports as refused: 2`, `notes/hello.txt exists: no`, `R12 (remove): PASS`.
+
+No second review round was run. The evidence is the gate (894 tests), the reviewers' proofs passing on the fixed code, the 20 captures, the walk and the two R12 runs.
+
+Seen and left for a later plan: the row under "Blocked calls" shows the tool and the sentence with no separator between them; with no stored scan the Harnesses card says "not found" for the few seconds of the first scan; "Re-scan" shows no progress for up to 40 seconds; the audit keeps the refused path of a denied call; Step 6 of Task 17 (the runtime dependency) was not asked of the owner.
 
 ---
 
