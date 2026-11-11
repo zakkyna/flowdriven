@@ -1,5 +1,6 @@
 import { visible } from "./text.ts";
 
+export const MAX_START_HOOK_EVENTS = 8;
 export const MAX_LINE_BYTES = 8 * 1024 * 1024;
 export const LIMITS_NOT_APPLIED =
   "Claude Code did not apply the limits FlowDriven asked for. The step was stopped before it could act.";
@@ -38,6 +39,15 @@ export class LineReader {
 }
 
 export type StreamEvent = { type: string; [key: string]: unknown };
+export function startHookEvent(event: StreamEvent): { is: false } | { is: true; failed: boolean } {
+  if (
+    event.type !== "system" ||
+    (event.subtype !== "hook_started" && event.subtype !== "hook_response") ||
+    event.hook_event !== "SessionStart"
+  )
+    return { is: false };
+  return { is: true, failed: event.subtype === "hook_response" && event.exit_code !== 0 };
+}
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

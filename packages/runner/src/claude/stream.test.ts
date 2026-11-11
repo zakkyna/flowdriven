@@ -9,6 +9,7 @@ import {
   parseEvent,
   parseResult,
   type StreamEvent,
+  startHookEvent,
   tripSentence,
 } from "./stream.ts";
 
@@ -172,4 +173,39 @@ test("the sentences", () => {
     false,
   );
   expect(isRateLimited({ type: "assistant", rate_limit_info: { status: "rejected" } })).toBe(false);
+});
+
+test("a start hook event is recognised and a failed one is told apart", () => {
+  const started = {
+    type: "system",
+    subtype: "hook_started",
+    hook_id: "hook",
+    hook_name: "SessionStart:startup",
+    hook_event: "SessionStart",
+    uuid: "started",
+    session_id: "session",
+  };
+  const response = {
+    ...started,
+    subtype: "hook_response",
+    output: "",
+    stdout: "",
+    stderr: "",
+    exit_code: 0,
+    outcome: "success",
+    uuid: "response",
+  };
+  expect(startHookEvent(started)).toEqual({ is: true, failed: false });
+  expect(startHookEvent(response)).toEqual({ is: true, failed: false });
+  for (const exit_code of [2, "0", undefined])
+    expect(startHookEvent({ ...response, exit_code })).toEqual({ is: true, failed: true });
+  const { exit_code: _exitCode, ...withoutExitCode } = response;
+  expect(startHookEvent(withoutExitCode)).toEqual({ is: true, failed: true });
+  for (const event of [
+    { ...started, hook_event: "PreToolUse" },
+    init,
+    { type: "assistant" },
+    { type: "system", subtype: "hook_started" },
+  ])
+    expect(startHookEvent(event)).toEqual({ is: false });
 });

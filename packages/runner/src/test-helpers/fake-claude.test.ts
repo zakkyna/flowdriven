@@ -111,7 +111,7 @@ test("the init event is built from its arguments", () => {
     "--json-schema",
     "{}",
   ];
-  expect(events(run(h, args, "x").stdout).at(0)).toMatchObject({
+  expect(events(run(h, args, "x").stdout).at(2)).toMatchObject({
     type: "system",
     subtype: "init",
     tools: ["Read", "Glob", "StructuredOutput"],
@@ -124,7 +124,9 @@ test("the init event is built from its arguments", () => {
   });
   expect(readFakeCalls(h)).toContainEqual({ kind: "init" });
   const h2 = home({ plays: [{ when: "", init: false, actions: [] }] });
-  expect(run(h2, ["-p", "--settings", settings(h2)], "x").stdout).toBe("");
+  expect(
+    events(run(h2, ["-p", "--settings", settings(h2)], "x").stdout).map((event) => event.subtype),
+  ).toEqual(["hook_started", "hook_response"]);
   expect(readFakeCalls(h2)).not.toContainEqual({ kind: "init" });
 });
 test("it runs the SessionStart hook before the init event, and not when told not to", () => {
@@ -212,6 +214,7 @@ test("a play is chosen by the prompt; no match exits 3; exit and raw actions do 
       {
         when: "one",
         init: false,
+        startHook: false,
         actions: [
           { do: "raw", line: "raw", newline: false },
           { do: "exit", code: 7, stderr: "bad" },
@@ -229,4 +232,52 @@ test("a play is chosen by the prompt; no match exits 3; exit and raw actions do 
   const none = run(h, args, "unmatched");
   expect(none.status).toBe(3);
   expect(none.stderr).toContain("fake-claude: no play for this prompt");
+});
+
+test("the start hook's two events come before the init event, and not when the hook is off", {
+  timeout: 20_000,
+}, () => {
+  const h = home({ plays: [{ when: "", actions: [] }] });
+  const args = ["-p", "--settings", settings(h, "true"), "--session-id", "session-1"];
+  const read = () => events(run(h, args, "x").stdout);
+  let lines = read();
+  expect(lines.slice(0, 3)).toMatchObject([
+    {
+      type: "system",
+      subtype: "hook_started",
+      hook_event: "SessionStart",
+      session_id: "session-1",
+      hook_id: expect.any(String),
+      hook_name: "SessionStart:startup",
+      uuid: expect.any(String),
+    },
+    {
+      type: "system",
+      subtype: "hook_response",
+      hook_event: "SessionStart",
+      session_id: "session-1",
+      exit_code: 0,
+      outcome: "success",
+      stdout: "",
+      stderr: "",
+      output: "",
+    },
+    { type: "system", subtype: "init" },
+  ]);
+  settings(h, "exit 3");
+  expect(read().at(1)).toMatchObject({ exit_code: 3, outcome: "error" });
+  settings(h, "true");
+  writeFakeScript(h, { plays: [{ when: "", startHook: false, actions: [] }] });
+  expect(read().at(0)).toMatchObject({ subtype: "init" });
+  writeFakeScript(h, { plays: [{ when: "", startEvents: 2, actions: [] }] });
+  lines = read();
+  expect(lines.slice(0, 5).map((event) => event.subtype)).toEqual([
+    "hook_started",
+    "hook_response",
+    "hook_started",
+    "hook_response",
+    "init",
+  ]);
+  writeFakeScript(h, { plays: [{ when: "", startExitCode: 2, actions: [] }] });
+  expect(read().at(1)).toMatchObject({ exit_code: 2, outcome: "error" });
 });

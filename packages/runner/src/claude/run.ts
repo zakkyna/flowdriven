@@ -13,9 +13,11 @@ import {
   isRateLimited,
   LIMITS_NOT_APPLIED,
   LineReader,
+  MAX_START_HOOK_EVENTS,
   parseEvent,
   parseResult,
   type ResultInfo,
+  startHookEvent,
   tripSentence,
 } from "./stream.ts";
 export const MAX_DENIED_ENTRIES = 50;
@@ -132,6 +134,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     const reader = new LineReader(deps.maxLineBytes);
     const tripwire = createTripwire(channel.allowedIds);
     let first = true;
+    let startEvents = 0;
     let result: ResultInfo | undefined;
     let auth = false;
     let quota = false;
@@ -149,13 +152,20 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         if (line.trim() === "") continue;
         const event = parseEvent(line);
         if (first) {
+          const hook = event ? startHookEvent(event) : { is: false as const };
+          if (hook.is && !hook.failed && ++startEvents <= MAX_START_HOOK_EVENTS) continue;
           first = false;
-          const proof = checkFirstEvent(event, {
-            tools: policy.tools,
-            schema: input.schema !== undefined,
-            sessionId,
-            started: channel?.started() ?? false,
-          });
+          const proof = hook.is
+            ? {
+                ok: false as const,
+                why: hook.failed ? "The start hook failed." : "Too many events before init.",
+              }
+            : checkFirstEvent(event, {
+                tools: policy.tools,
+                schema: input.schema !== undefined,
+                sessionId,
+                started: channel?.started() ?? false,
+              });
           if (!proof.ok) {
             audit("limits_not_applied", {
               ...detail,

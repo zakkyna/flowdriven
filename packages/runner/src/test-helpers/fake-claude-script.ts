@@ -30,6 +30,8 @@ export type FakeAction =
 export type FakePlay = {
   when: string;
   startHook?: boolean;
+  startEvents?: number;
+  startExitCode?: number;
   init?: false | Record<string, unknown>;
   actions: FakeAction[];
 };

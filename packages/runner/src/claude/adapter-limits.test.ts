@@ -434,3 +434,48 @@ test("two steps at the same time use their own folders, sessions and decisions",
     reason: "This path is outside the folders this step declares.",
   });
 });
+
+test("the start proof passes over the start hook's own events", { timeout: 20_000 }, async () => {
+  const originalStart = childModule.startChild;
+  let output = "";
+  vi.spyOn(childModule, "startChild").mockImplementation((...args) => {
+    const child = originalStart(...args);
+    child.stdout.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    return child;
+  });
+  const t = setup(play([]));
+  writeFakeScript(t.home, { plays: [play([tool("read", join(t.notes, "note.txt")), { do: "result" }])] });
+  expect((await t.adapter.runStep(t.request)).exit).toBe("ok");
+  expect(
+    output
+      .trim()
+      .split("\n")
+      .slice(0, 2)
+      .map((line) => (JSON.parse(line) as { subtype: string }).subtype),
+  ).toEqual(["hook_started", "hook_response"]);
+  expect(t.audits.some((audit) => audit.kind === "limits_not_applied")).toBe(false);
+  expect(t.audits.find((audit) => audit.kind === "tool_calls")?.detail).toMatchObject({ allowed: 1 });
+});
+
+test("a failed start hook, and more than eight start hook events, fail the proof", {
+  timeout: 20_000,
+}, async () => {
+  const t = setup(play([]));
+  for (const [change, why] of [
+    [{ startExitCode: 2 }, "The start hook failed."],
+    [{ startEvents: 5 }, "Too many events before init."],
+  ] as const) {
+    writeFakeScript(t.home, { plays: [{ when: "", ...change, actions: [{ do: "pause", ms: 1500 }] }] });
+    expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "failed", block: LIMITS_NOT_APPLIED });
+    expect(t.audits).toContainEqual({
+      kind: "limits_not_applied",
+      runId: "r1",
+      detail: { stepId: "s", itemKey: "", attempt: 1, why },
+    });
+    await gone(pid(t.home));
+  }
+  writeFakeScript(t.home, { plays: [{ when: "", startEvents: 4, actions: [{ do: "result" }] }] });
+  expect((await t.adapter.runStep(t.request)).exit).toBe("ok");
+});

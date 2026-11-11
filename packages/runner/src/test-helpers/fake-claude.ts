@@ -4,7 +4,14 @@ import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 type Action = { do: string; [key: string]: unknown };
-type Play = { when: string; startHook?: boolean; init?: false | Record<string, unknown>; actions: Action[] };
+type Play = {
+  when: string;
+  startHook?: boolean;
+  startEvents?: number;
+  startExitCode?: number;
+  init?: false | Record<string, unknown>;
+  actions: Action[];
+};
 type Script = {
   version?: string;
   help?: string;
@@ -153,8 +160,31 @@ else if (command === "play") {
       child.stdin.end(input);
     });
   }
-  if (play.startHook !== false) await hook(start, "{}");
   const session = arg("--session-id");
+  if (play.startHook !== false) {
+    const reply = await hook(start, "{}");
+    const code = play.startExitCode ?? reply.code;
+    const common = {
+      type: "system",
+      hook_id: "fake-hook",
+      hook_name: "SessionStart:startup",
+      hook_event: "SessionStart",
+      session_id: session,
+    };
+    for (let i = 0; i < (play.startEvents ?? 1); i++) {
+      emit({ ...common, subtype: "hook_started", uuid: "fake-started" });
+      emit({
+        ...common,
+        subtype: "hook_response",
+        uuid: "fake-response",
+        exit_code: code,
+        outcome: code === 0 ? "success" : "error",
+        stdout: reply.stdout,
+        stderr: reply.stderr,
+        output: reply.stdout + reply.stderr,
+      });
+    }
+  }
   if (play.init !== false) {
     const dirs = args.flatMap((value, index) =>
       value === "--add-dir" ? [args.at(index + 1)].filter((item): item is string => item !== undefined) : [],
