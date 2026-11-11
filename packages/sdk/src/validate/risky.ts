@@ -1,9 +1,11 @@
 import type { RiskyAction } from "../vocab.ts";
+// Joined lowercase words such as sendmessage remain a classifier limit until the tool catalog.
 export function classifyTool(name: string): RiskyAction | undefined {
   const words = name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, "$1 $2")
+    .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, "$1 $2")
     .toLowerCase()
-    .split(/[_.\-\s]+/);
+    .split(/[^\p{L}\p{N}]+/u);
   const groups: [RiskyAction, string[]][] = [
     ["send", ["send", "reply", "forward"]],
     ["post", ["post", "publish"]],
@@ -12,6 +14,21 @@ export function classifyTool(name: string): RiskyAction | undefined {
     ["merge", ["merge"]],
   ];
   return groups.find(([, names]) => names.some((word) => words.includes(word)))?.[0];
+}
+export function classifyCommand(pattern: string): RiskyAction | undefined {
+  const words = pattern.trim().split(/\s+/);
+  const program = words[0]?.split(/[\\/]/).at(-1) ?? "";
+  if (!program || program.includes("*") || ["rm", "rmdir", "unlink", "shred", "trash"].includes(program))
+    return "delete";
+  if (words.includes("merge")) return "merge";
+  if (
+    words.includes("push") &&
+    words.some((word) => ["--force", "-f", "--force-with-lease"].includes(word) || word.startsWith("+"))
+  )
+    return "delete";
+  if (words.includes("delete")) return "delete";
+  if (words.includes("publish")) return "post";
+  return undefined;
 }
 export function commandAllowed(entry: string, cmd: string, args: string[]): boolean {
   const words = entry.split(" ");

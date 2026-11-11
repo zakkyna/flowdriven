@@ -25,8 +25,13 @@ const connected = {
 export const Requirement = z.discriminatedUnion("type", [
   z.strictObject({ ...common, type: z.literal("harness") }),
   z.strictObject({ ...common, type: z.literal("skill"), ...connected }),
-  z.strictObject({ ...common, type: z.literal("plugin"), ...connected }),
-  z.strictObject({ ...common, type: z.literal("mcp_server"), ...connected }),
+  z.strictObject({ ...common, type: z.literal("plugin"), ...connected, tools: z.array(z.string()).min(1) }),
+  z.strictObject({
+    ...common,
+    type: z.literal("mcp_server"),
+    ...connected,
+    tools: z.array(z.string()).min(1),
+  }),
   z.strictObject({
     ...common,
     type: z.literal("cli_tool"),

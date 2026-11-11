@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
 import { parseManifest } from "../format/parse.ts";
-import { classifyTool, validateManifest } from "../index.ts";
+import { classifyCommand, classifyTool, validateManifest } from "../index.ts";
 import type { Issue } from "../issues.ts";
-import { askStep, flow, loopFlow, step, userStep } from "../test-data/flows.ts";
+import { askStep, flow, loopFlow, sched, step, userStep } from "../test-data/flows.ts";
 import { upworkJobReview } from "../test-data/upwork.ts";
 
 const codes = (issues: Issue[]) => issues.map((i) => `${i.code}@${i.path}`);
@@ -128,4 +128,86 @@ test("classifyTool", () => {
   expect(classifyTool("deleteThread")).toBe("delete");
   expect(classifyTool("label_thread")).toBeUndefined();
   expect(classifyTool("search_threads")).toBeUndefined();
+});
+
+test("classifyTool splits camelCase after an acronym and on any non-letter separator", () => {
+  expect(classifyTool("SMSSend")).toBe("send");
+  expect(classifyTool("HTTPPost")).toBe("post");
+  expect(classifyTool("APIDelete")).toBe("delete");
+  expect(classifyTool("send:message")).toBe("send");
+  expect(classifyTool("mail/send")).toBe("send");
+  for (const name of ["list_posts", "get_sender", "list_payments", "sendmessage"])
+    expect(classifyTool(name)).toBeUndefined();
+});
+
+test("R4 refuses an acronym-camel send tool before the first ask", () => {
+  const manifest = sched(
+    [step("a", { uses: ["mail"] }), askStep("p"), userStep("z")],
+    [{ id: "mail", type: "mcp_server", tools: ["SMSSend"] }],
+  );
+  expect(validateManifest(manifest).map((i) => i.code)).toContain("unattended_prefix");
+});
+
+test("classifyCommand identifies risky commands and permits read-only commands", () => {
+  for (const command of ["git push origin main", "git status", "pnpm test"])
+    expect(classifyCommand(command)).toBeUndefined();
+  for (const [command, action] of [
+    ["npm publish", "post"],
+    ["git push -f origin main", "delete"],
+    ["* --version", "delete"],
+    ["/bin/rm file", "delete"],
+    ["git push origin +main", "delete"],
+    ["gh pr merge 1", "merge"],
+    ["tool delete", "delete"],
+  ])
+    expect(classifyCommand(command ?? "")).toBe(action);
+});
+
+test("M1 an mcp_server with no tools list is not invisible to R4 (spec 9.4: tools are the exact names the flow may call)", () => {
+  const manifest = sched([step("a", { uses: ["mail"] }), askStep("p"), userStep("z")]);
+  const malformed = {
+    ...manifest,
+    requirements: [{ id: "mail", type: "mcp_server" }],
+  } as unknown as typeof manifest;
+  expect(codes(validateManifest(malformed))).toContain("unattended_prefix@steps.0");
+  const empty = {
+    ...manifest,
+    requirements: [{ id: "mail", type: "plugin", tools: [] }],
+  } as unknown as typeof manifest;
+  expect(codes(validateManifest(empty))).toContain("unattended_prefix@steps.0");
+});
+
+test("connected requirements require nonempty tools except skills", () => {
+  for (const type of ["mcp_server", "plugin"]) {
+    for (const tools of [undefined, []]) {
+      const manifest = {
+        format: "flowdriven-flow/1.1",
+        id: "local.test",
+        name: "Test",
+        kind: "build",
+        requirements: [{ id: "x", type, ...(tools === undefined ? {} : { tools }) }],
+        steps: [step("a")],
+      };
+      expect(parseManifest(manifest).ok).toBe(false);
+    }
+  }
+  expect(
+    parseManifest({
+      format: "flowdriven-flow/1.1",
+      id: "local.test",
+      name: "Test",
+      kind: "build",
+      requirements: [{ id: "x", type: "skill" }],
+      steps: [step("a")],
+    }).ok,
+  ).toBe(true);
+});
+
+test("M2 a builtin whose name is risky is refused before the first ask (spec 13.3 does a risky CLI as a builtin that asks first)", () => {
+  const manifest = sched([
+    { id: "a", do: "builtin", builtin: "send_email", checks: [{ type: "user" }] },
+    askStep("p"),
+    userStep("z"),
+  ]);
+  expect(codes(validateManifest(manifest))).toContain("unattended_prefix@steps.0");
 });

@@ -156,8 +156,9 @@ export function validateManifest(
           if (check.type === "schema") checkFile(check.file, `${path}.${cp}.file`);
           if (check.type === "judge") checkFile(check.rubric, `${path}.${cp}.rubric`);
         });
-        if (leaf.do === "ask") beforeAsk = false;
-        else if (beforeAsk && unattendedRisk(leaf, manifest)) add("unattended_prefix", path);
+        if (leaf.do === "ask") {
+          if (leaf.when === undefined) beforeAsk = false;
+        } else if (beforeAsk && unattendedRisk(leaf, manifest)) add("unattended_prefix", path);
       }
       earlier.add(step.id);
     });
