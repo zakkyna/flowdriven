@@ -356,6 +356,21 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       const found = flowOf(row.flowId);
       if (!found) return;
       const { flow, manifest } = found;
+      if (
+        row.recentRuns?.length === 3 &&
+        row.recentRuns.every((id) => store.getRun(id)?.state === "blocked")
+      ) {
+        const pausedAt = deps.now().toISOString();
+        store.putTrigger({ ...row, enabled: false, pausedAt, recentRuns: [] });
+        close(row.flowId, row.index);
+        audit("trigger_paused", { flowId: row.flowId, index: row.index });
+        try {
+          deps.onPaused?.({ flowId: row.flowId, index: row.index, flowName: manifest.name, pausedAt });
+        } catch {
+          /* notification is optional */
+        }
+        return;
+      }
       const trigger = manifest.triggers.at(row.index);
       if (!trigger || row.hash !== flow.hash || row.spec !== JSON.stringify(trigger)) {
         close(row.flowId, row.index);

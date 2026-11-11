@@ -4,7 +4,7 @@ import { type FlowManifest, parseManifest } from "@flowdriven/sdk";
 import type { EngineDeps } from "../engine.ts";
 import { type Script, scriptedHarness } from "../scripted-harness.ts";
 import { localDay } from "../triggers/schedule.ts";
-import { createTriggerService, type FloodEvent } from "../triggers/service.ts";
+import { createTriggerService, type FloodEvent, type PausedEvent } from "../triggers/service.ts";
 import { setup } from "./engine.ts";
 import { oneStepFlow } from "./flows.ts";
 import { tempPath } from "./tmp.ts";
@@ -41,6 +41,7 @@ export async function triggerRig(
     afterList?: () => void;
     hold?: { wait: () => Promise<void> };
     noWatch?: boolean;
+    onPaused?: (event: PausedEvent) => void;
   } = {},
 ) {
   let dayOf = localDay;
@@ -76,6 +77,7 @@ export async function triggerRig(
   });
   const project = options.project ?? dirname(tempPath());
   const floods: FloodEvent[] = [];
+  const pauses: PausedEvent[] = [];
   const jobs: (() => void)[] = [];
   const watchers = new Map<string, () => void>();
   const watchErrors = new Map<string, () => void>();
@@ -119,6 +121,10 @@ export async function triggerRig(
     },
     summaryOf: (t) => t.kind,
     onFlood: (event) => floods.push(event),
+    onPaused: (event) => {
+      pauses.push(event);
+      options.onPaused?.(event);
+    },
   });
   const hashOf = (id: string) => {
     const hash = hashes.get(id);
@@ -147,6 +153,7 @@ export async function triggerRig(
     clock,
     project,
     floods,
+    pauses,
     jobs,
     watchers,
     hashOf,

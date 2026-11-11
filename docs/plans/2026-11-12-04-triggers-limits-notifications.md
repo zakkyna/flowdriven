@@ -581,7 +581,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 5. A paused row is `off` for every purpose: no fires, no catch-up, the cap and the cursor are not touched; `list` gives state `off` and the reason of Task 7 rule 2. Only `setEnabled(true)` brings it back, and that clears `pausedAt` and `recentRuns` and resets the cursor (Task 7 rule 1). Nothing else writes `enabled: true`.
 6. The pause runs inside `tick()`, and `poke()` (Task 11 calls it when a run becomes `blocked`) makes a tick soon, so the trigger pauses within a tick of the third block, not after the next slot.
 
-- [ ] **Step 1: Write the failing tests** (`service-pause.test.ts`; rig with `readiness: () => ({ ready: false, reason: "No harness is connected yet." })`, a `schedule every 1m` flow, ticks one minute apart):
+- [x] **Step 1: Write the failing tests** (`service-pause.test.ts`; rig with `readiness: () => ({ ready: false, reason: "No harness is connected yet." })`, a `schedule every 1m` flow, ticks one minute apart):
   1. "three blocked runs in a row from one trigger pause it: the row is off with `pausedAt` and empty `recentRuns`, the watcher is closed, one `trigger_paused` audit line is written and `onPaused` is called once"
   2. "a run that ended done or failed, one that is still open and a run row that is missing each keep the trigger from pausing" (table over the three, using a rig whose third run differs)
   3. "a paused trigger fires nothing on later ticks, its view is `off` with the Paused reason, and the daily counters and the cursor do not change"
@@ -590,16 +590,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   6. "the pause applies to file_change and to flow_done"
   7. "a flow with two triggers: pausing the schedule leaves the file_change on"
   8. "an error thrown by onPaused is swallowed and the trigger is still paused"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-pause.test.ts`. Expected: FAIL (nothing pauses).
-- [ ] **Step 3: Implement** the pause section in `service.ts`.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-pause.test.ts`. Expected: FAIL (nothing pauses).
+- [x] **Step 3: Implement** the pause section in `service.ts`.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/triggers packages/runner/src/test-helpers
 git commit -m "Pause a trigger after three blocked runs in a row" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
