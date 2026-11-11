@@ -320,6 +320,40 @@ test("a passed loop or ask step shows its state word and no alarm", async () => 
   for (const block of [loop, ask]) {
     expect(within(block).getAllByText("Passed").length).toBeGreaterThan(0);
     expect(within(block).queryByText("Marked passed without a passing check")).toBeNull();
-    expect(block.textContent).not.toMatch(/Attempt|attempt/);
+    expect(
+      Array.from(block.children[1]?.children ?? []).some((child) =>
+        /^(Worker:|Attempt )/.test(child.textContent ?? ""),
+      ),
+    ).toBe(false);
   }
+});
+
+test("a step row inside an item keeps its name, its worker line and its state apart", async () => {
+  const { client } = renderApp("#/runs/run-0008", { scenario: "looped" });
+  const step = client.state.runs.find((run) => run.id === "run-0008")?.steps.find((item) => item.items)
+    ?.items?.[0]?.steps[0];
+  if (!step) throw new Error("Missing item step");
+  step.title = "rough";
+  if (!step.worker) throw new Error("Missing worker");
+  step.worker.name = "Scripted harness";
+  const list = await screen.findByRole("list", { name: "Steps of j1" });
+  const name = within(list).getByText("rough", { exact: true });
+  const row = name.closest("li");
+  if (!row) throw new Error("Missing step row");
+  expect(within(row).getByText(/Worker: Scripted harness/).parentElement?.textContent).toContain(
+    "Worker: Scripted harness, attempt 1 of 3",
+  );
+  const state = within(row)
+    .getAllByText("Passed")
+    .find((element) => element.parentElement?.querySelector("svg"))?.parentElement;
+  expect(state?.querySelector("svg")).not.toBeNull();
+  expect(state?.contains(name)).toBe(false);
+});
+test("a check whose label equals its type shows the word once", async () => {
+  const { client } = renderApp("#/runs/run-0006");
+  const step = client.state.runs.find((run) => run.id === "run-0006")?.steps[0];
+  if (!step) throw new Error("Missing fixture step");
+  step.checks = [{ type: "schema", summary: "schema", required: true, verdict: "passed" }];
+  const region = await screen.findByRole("region", { name: step.title });
+  expect(within(region).getAllByText("schema")).toHaveLength(1);
 });

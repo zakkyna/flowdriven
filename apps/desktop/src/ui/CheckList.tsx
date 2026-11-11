@@ -17,7 +17,7 @@ function CheckRow({ check }: { check: Check | CheckResult }): ReactElement {
       <ToneIcon icon={icon} tone={tone} size={14} />
       <div className={styles.content}>
         <span className={styles.summary}>{check.summary}</span>
-        <span className={styles.type}>{check.type}</span>
+        {check.summary !== check.type && <span className={styles.type}>{check.type}</span>}
         {!check.required && <span className={styles.optional}>(optional)</span>}
       </div>
       <span className={styles.result}>{label}</span>

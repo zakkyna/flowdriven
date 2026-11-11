@@ -14,16 +14,47 @@ const reasons: Record<SkipReason, string> = {
 export function ItemList({ title, items }: { title: string; items: RunItem[] }): ReactElement {
   return (
     <ul aria-label={`Items of ${title}`} className={styles.items}>
-      {items.map((item) => (
-        <li key={item.key}>
-          <span className={styles.mono}>{item.key}</span> <span>{item.label}</span>{" "}
-          <StateIcon domain="step" value={item.state} /> <span>{statusOf("step", item.state).label}</span>
-          {item.skip ? <p>{reasons[item.skip]}</p> : item.note && <p>{item.note}</p>}
-          <ul aria-label={`Steps of ${item.key}`}>
+      {items.map((item, index) => (
+        // The position distinguishes items with the same key.
+        // biome-ignore lint/suspicious/noArrayIndexKey: duplicate item keys require the position.
+        <li key={`${index}-${item.key}`}>
+          <div className={styles.itemHeader}>
+            <div>
+              <div>
+                <span className={styles.mono}>{item.key}</span> <span>{item.label}</span>
+              </div>
+              {item.skip ? (
+                <p className={styles.muted}>{reasons[item.skip]}</p>
+              ) : (
+                item.note && <p className={styles.muted}>{item.note}</p>
+              )}
+            </div>
+            <span className={styles.itemState}>
+              <StateIcon domain="step" value={item.state} /> <span>{statusOf("step", item.state).label}</span>
+            </span>
+          </div>
+          <ul
+            aria-label={`Steps of ${item.key}${items.filter((other) => other.key === item.key).length > 1 ? `, item ${index + 1}` : ""}`}
+          >
             {item.steps.map((step) => (
               <li key={step.stepId}>
-                <span>{step.title}</span> {step.worker && <span>{step.worker.name} </span>}
-                <span>{statusOf("step", step.state).label}</span>
+                <div className={styles.itemHeader}>
+                  <div>
+                    <div>{step.title}</div>
+                    {step.do !== "loop" && step.do !== "ask" && (
+                      <div className={styles.muted}>
+                        {step.worker && <span>Worker: {step.worker.name}, </span>}
+                        <span>
+                          {step.worker ? "attempt" : "Attempt"} {step.attempts.length} of {step.maxAttempts}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <span className={styles.itemState}>
+                    <StateIcon domain="step" value={step.state} />{" "}
+                    <span>{statusOf("step", step.state).label}</span>
+                  </span>
+                </div>
                 {step.checks.length > 0 && <CheckList checks={step.checks} />}
               </li>
             ))}

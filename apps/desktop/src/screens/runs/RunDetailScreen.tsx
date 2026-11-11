@@ -30,15 +30,12 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
   const reportRequest = useRef({ runId, sequence: 0, loading: false });
   if (reportRequest.current.runId !== runId)
     reportRequest.current = { runId, sequence: reportRequest.current.sequence + 1, loading: false };
-  const currentReport = report?.runId === runId ? report : undefined;
+  const currentReport =
+    report?.runId === runId && (!report.loading || reportRequest.current.loading) ? report : undefined;
   function toggleReport(): void {
     if (reportRequest.current.loading) return;
     if (currentReport?.open) {
-      setReport({ ...currentReport, open: false });
-      return;
-    }
-    if (currentReport?.markdown !== undefined) {
-      setReport({ ...currentReport, open: true, error: undefined });
+      setReport({ runId, open: false, loading: false });
       return;
     }
     reportRequest.current.loading = true;
