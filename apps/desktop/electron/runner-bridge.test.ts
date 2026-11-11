@@ -4,7 +4,7 @@ import { expect, test, vi } from "vitest";
 import { startRunnerBridge } from "./runner-bridge";
 import type { ChildLike } from "./runner-link";
 
-function setup() {
+function setup(onNotice?: (value: unknown) => void) {
   const child = Object.assign(new EventEmitter(), {
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -16,6 +16,7 @@ function setup() {
   const send = vi.fn();
   const bridge = startRunnerBridge({
     ipc: { handle },
+    onNotice,
     spawn,
     env: { FLOWDRIVEN_DEMO: "1" },
     appData: "/a",
@@ -47,4 +48,12 @@ test("stop ends the runner", async () => {
   expect(child.stdin.writableEnded).toBe(true);
   child.emit("exit", 0, null);
   await expect(stop).resolves.toBeUndefined();
+});
+
+test("a notice frame goes to onNotice and is not sent to the windows", () => {
+  const onNotice = vi.fn();
+  const { child, send } = setup(onNotice);
+  child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notice", params: { id: "n" } })}\n`);
+  expect(onNotice).toHaveBeenCalledExactlyOnceWith({ id: "n" });
+  expect(send).not.toHaveBeenCalled();
 });

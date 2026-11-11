@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Notification } from "electron";
+import { electronNoticeHandler } from "./notifier";
 import { startRunnerBridge } from "./runner-bridge";
+import { APP_ORIGIN } from "./security";
 import {
   createMainWindow,
   lockDownSession,
@@ -27,8 +29,24 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     lockDownSession();
     serveApp(path.join(__dirname, "../dist"));
+    const onNotice = electronNoticeHandler({
+      Notification,
+      windows: () => BrowserWindow.getAllWindows(),
+      open: (hash) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        if (!window) {
+          createMainWindow({ preloadPath, show: true, runner: true, hash });
+          return;
+        }
+        if (window.isMinimized()) window.restore();
+        window.show();
+        window.focus();
+        void window.loadURL(`${APP_ORIGIN}/index.html#${hash}`);
+      },
+    });
     const bridge = startRunnerBridge({
       ipc: ipcMain,
+      onNotice,
       spawn: (command, args, options) => spawn(command, args, options),
       env: process.env,
       appData: app.getPath("appData"),

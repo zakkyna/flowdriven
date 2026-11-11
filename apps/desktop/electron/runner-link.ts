@@ -34,6 +34,7 @@ export type RunnerLinkOptions = {
   demo: boolean;
   env: Record<string, string | undefined>;
   onEvent: (event: unknown) => void;
+  onNotice?: (params: Record<string, unknown>) => void;
   log?: (line: string) => void;
   now?: () => number;
   stopWaitMs?: number;
@@ -149,6 +150,8 @@ export class RunnerLink {
             pending.reject(new LinkError(value.error.data.code, value.error.message));
         } else if (!Object.hasOwn(value, "id") && value.method === "event" && object(value.params))
           this.options.onEvent(value.params);
+        else if (!Object.hasOwn(value, "id") && value.method === "notice" && object(value.params))
+          this.options.onNotice?.(value.params);
         else {
           fail(true);
           return;

@@ -203,3 +203,25 @@ test("stop ends stdin, waits for the exit and kills a runner that does not leave
   await stopped2;
   expect(other.kill).not.toHaveBeenCalled();
 });
+
+test("a notice frame reaches onNotice and an event frame still reaches onEvent; a notice with no handler is ignored; a notification with any other method still fails the link", async () => {
+  const child = new FakeChild();
+  const onNotice = vi.fn();
+  const onEvent = vi.fn();
+  const link = make({ spawn: () => child, onNotice, onEvent });
+  const pending = link.call("x", {});
+  const rejected = expect(pending).rejects.toMatchObject({ code: "unavailable" });
+  child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notice", params: { id: "n" } })}\n`);
+  child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: "event", params: { type: "changed" } })}\n`);
+  expect(onNotice).toHaveBeenCalledExactlyOnceWith({ id: "n" });
+  expect(onEvent).toHaveBeenCalledExactlyOnceWith({ type: "changed" });
+  child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: "unknown", params: {} })}\n`);
+  await rejected;
+  expect(child.kill).toHaveBeenCalled();
+  const other = new FakeChild();
+  const without = make({ spawn: () => other });
+  without.start();
+  other.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notice", params: {} })}\n`);
+  expect(other.kill).not.toHaveBeenCalled();
+  other.emit("exit", 0, null);
+});

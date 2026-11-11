@@ -8,6 +8,7 @@ export type RunnerBridgeOptions = {
   appData: string;
   dirname: string;
   windows: () => WindowLike[];
+  onNotice?: (value: unknown) => void;
   execPath?: string;
   log?: (line: string) => void;
   now?: () => number;
@@ -26,6 +27,7 @@ export function startRunnerBridge(options: RunnerBridgeOptions): {
     demo: isDemo(options.env),
     env: options.env,
     onEvent: (event) => broadcastRunnerEvent(options.windows(), event),
+    onNotice: options.onNotice,
     log: options.log,
     now: options.now,
   });

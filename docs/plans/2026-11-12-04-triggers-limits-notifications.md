@@ -689,7 +689,7 @@ git commit -m "Wire the trigger service, the trigger operations and the notices 
 - `notifier.ts` (no import of `@flowdriven/contracts`; the shape is mirrored on purpose, because main does not trust the runner's text): `type ParsedNotice = { id: string; kind: "approval_waiting" | "run_blocked" | "weekly_limit" | "flood_cap" | "trigger_paused"; title: string; body: string; target: { screen: "inbox"; approvalId?: string } | { screen: "run"; runId: string } | { screen: "builder"; flowId: string } }`; `parseNotice(value: unknown): ParsedNotice | undefined` (exact keys; `id` 1 to 200 characters; `title` 1 to 80 and `body` 1 to 240 with no control characters; `kind` from the list; target ids match `^[A-Za-z0-9:._-]{1,100}$`; anything else is `undefined`); `hashFor(target: ParsedNotice["target"]): string` (`/inbox`, `/inbox/<encodeURIComponent(id)>`, `/runs/<id>`, `/builder/<id>`, no leading `#`); `createNoticeHandler(o: { show: (notice: { title: string; body: string }, onClick: () => void) => void; windowFocused: () => boolean; open: (hash: string) => void }): (value: unknown) => void` (invalid values are ignored; a notice is not shown while `windowFocused()` is true; the same `id` is shown once per app run, remembering the last 200; a throwing `show` is swallowed; the click calls `open(hashFor(target))`); `electronNoticeHandler(o: { Notification: NotificationCtor; windows: () => { isFocused(): boolean }[]; open: (hash: string) => void }): (value: unknown) => void` where `NotificationCtor` is the minimal structural type of Electron's `Notification` (`isSupported()`, a constructor taking `{ title, body }`, `on("click", fn)`, `show()`); it keeps a reference to each shown notification until it is clicked or closed, so it is not collected early.
 - `main.ts`: build the handler with the real `Notification` and `BrowserWindow`, with `open(hash)`: take the first window; if there is one, restore it when minimised, `show()` and `focus()` it and call `loadURL(`${APP_ORIGIN}/index.html#${hash}`)` (a change of the fragment only, so no reload); if there is none, `createMainWindow({ preloadPath, show: true, runner: true, hash })`. Pass the handler as `onNotice` to `startRunnerBridge`. The preload is not changed.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. (`notifier.test.ts`) "parseNotice accepts a notice of each of the five kinds with its target"
   2. "parseNotice refuses an extra key, a 300 character body, an unknown kind, a screen that is not allowed, a target id with a slash, a title with a control character and a non-object"
   3. "hashFor gives the route of each target and encodes the colon of a weekly item"
@@ -700,11 +700,11 @@ git commit -m "Wire the trigger service, the trigger operations and the notices 
   8. "electronNoticeHandler does nothing when notifications are not supported, and keeps the notification alive until it is clicked" (fake `Notification`)
   9. (`runner-link.test.ts`) "a notice frame reaches onNotice and an event frame still reaches onEvent; a notice with no handler is ignored; a notification with any other method still fails the link"
   10. (`runner-bridge.test.ts`) "a notice frame goes to onNotice and is not sent to the windows"
-- [ ] **Step 2: Run:** `pnpm vitest run apps/desktop/electron/notifier.test.ts`. Expected: FAIL ("Cannot find module ./notifier").
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run apps/desktop/electron`. Expected: PASS (the `preload` tests are unchanged and still pass).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS (this includes `tsc -p apps/desktop/tsconfig.electron.json --noEmit`, which type-checks `main.ts`).
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run apps/desktop/electron/notifier.test.ts`. Expected: FAIL ("Cannot find module ./notifier").
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run apps/desktop/electron`. Expected: PASS (the `preload` tests are unchanged and still pass).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS (this includes `tsc -p apps/desktop/tsconfig.electron.json --noEmit`, which type-checks `main.ts`).
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/electron
@@ -714,6 +714,9 @@ git commit -m "Show a macOS notification for a runner notice and open its item o
 Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check (run by the chair: 176 test files, 1,128 tests).
 
 Chair's note (2026-11-12): the executor stopped with `Blocked:` on one type error (`handlers.ts`: the stored manifest is `unknown`, so `manifest.name` did not compile after the object check). The chair changed that one line to `"name" in manifest ? manifest.name : undefined`, ran the gate and it passed. Nothing else of the executor's work was changed.
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
