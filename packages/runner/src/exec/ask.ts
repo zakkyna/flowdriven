@@ -19,7 +19,7 @@ const record = (value: Value | undefined): value is { [key: string]: Value } =>
 export function runAsk(
   step: AskStep,
   ctx: { deps: ResolvedDeps; run: RunRow; scope: Scope },
-): "passed" | "skipped" | "halt" {
+): "passed" | "skipped" | "halt" | "end" {
   const {
     deps: { store, now, newId },
     run,
@@ -34,8 +34,10 @@ export function runAsk(
     outputs: {},
     checks: [],
   };
+  let writing = false;
   try {
     if (step.when && !truthy(evaluate(step.when, scope))) {
+      writing = true;
       store.upsertStep({ ...row, state: "skipped", note: "skipped: condition false" });
       return "skipped";
     }
@@ -64,7 +66,17 @@ export function runAsk(
     });
     if (new Set(options.map((o) => o.key)).size !== options.length)
       throw new Error("Choice option keys must be unique.");
+    writing = true;
     if (!options.length) {
+      if (run.trigger && run.trigger.kind !== "manual") {
+        store.upsertStep({
+          ...row,
+          state: "passed",
+          outputs: { choice: [] },
+          note: "nothing to choose: the run ended here",
+        });
+        return "end";
+      }
       store.upsertStep({ ...row, state: "passed", outputs: { choice: [] } });
       return "passed";
     }
@@ -93,6 +105,7 @@ export function runAsk(
     store.updateRun(run.id, { state: "waiting_approval" });
     return "halt";
   } catch (error) {
+    if (writing) throw error;
     const note = error instanceof Error ? error.message : "Invalid choice.";
     store.upsertStep({ ...row, state: "failed", note });
     store.updateRun(run.id, { state: "blocked", blockedReason: note });

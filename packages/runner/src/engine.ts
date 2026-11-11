@@ -109,43 +109,92 @@ export function createEngine(input: EngineDeps): Engine {
       store.updateRun(a.runId, { state: "failed", endedAt: a.expiresAt });
     }
   }
+  function blockError(runId: string, error: unknown): RunRow {
+    const message = (error instanceof Error ? error.message : String(error)).slice(0, 200);
+    store.updateRun(runId, { state: "blocked", blockedReason: `Internal error: ${message}` });
+    store.appendAudit({ at: now().toISOString(), kind: "run_error", runId, detail: { message } });
+    return runById(runId);
+  }
   async function walk(run: RunRow): Promise<RunRow> {
-    const manifest = flowFor(run).manifest as FlowManifest;
-    for (const step of manifest.steps) {
-      const row = store.getStep(run.id, step.id);
-      if (row?.state === "passed" || row?.state === "skipped") continue;
-      if ("for_each" in step) {
-        const outcome = await runLoop(step, {
+    try {
+      const manifest = flowFor(run).manifest as FlowManifest;
+      for (const step of manifest.steps) {
+        const row = store.getStep(run.id, step.id);
+        if (row?.state === "passed" || row?.state === "skipped") continue;
+        if ("for_each" in step) {
+          const outcome = await runLoop(step, {
+            deps,
+            run: runById(run.id),
+            manifest,
+            scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
+          });
+          if (outcome === "halt") return runById(run.id);
+          continue;
+        }
+        if (step.do === "ask") {
+          const outcome = runAsk(step, {
+            deps,
+            run: runById(run.id),
+            scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
+          });
+          if (outcome === "halt" || outcome === "end") {
+            if (outcome === "end") {
+              const index = manifest.steps.findIndex((candidate) => candidate.id === step.id);
+              for (const later of manifest.steps.slice(index + 1)) {
+                if (!store.getStep(run.id, later.id))
+                  store.upsertStep({
+                    runId: run.id,
+                    stepId: later.id,
+                    itemKey: "",
+                    state: "skipped",
+                    attempts: [],
+                    outputs: {},
+                    checks: [],
+                    note: "skipped: the run ended at a choice with no options",
+                  });
+              }
+              store.updateRun(run.id, { state: "done", endedAt: now().toISOString() });
+            }
+            return runById(run.id);
+          }
+          continue;
+        }
+        const outcome = await runLeaf(step, {
           deps,
           run: runById(run.id),
           manifest,
           scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
+          itemKey: "",
         });
-        if (outcome === "halt") return runById(run.id);
-        continue;
+        if (outcome === "halt" || outcome === "failed") return runById(run.id);
       }
-      if (step.do === "ask") {
-        const outcome = runAsk(step, {
-          deps,
-          run: runById(run.id),
-          scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
-        });
-        if (outcome === "halt") return runById(run.id);
-        continue;
-      }
-      const outcome = await runLeaf(step, {
-        deps,
-        run: runById(run.id),
-        manifest,
-        scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
-        itemKey: "",
-      });
-      if (outcome === "halt" || outcome === "failed") return runById(run.id);
+      store.updateRun(run.id, { state: "done", endedAt: now().toISOString() });
+      return runById(run.id);
+    } catch (error) {
+      return blockError(run.id, error);
     }
-    store.updateRun(run.id, { state: "done", endedAt: now().toISOString() });
-    return runById(run.id);
   }
-  const recovery = createRecovery({ deps, walk, flowFor: (run) => flowFor(run).manifest as FlowManifest });
+  async function checkAndWalk(run: RunRow): Promise<RunRow> {
+    try {
+      store.updateRun(run.id, { state: "checking" });
+      const ready = deps.readiness?.(flowFor(run).manifest as FlowManifest);
+      if (ready && !ready.ready) {
+        store.updateRun(run.id, { state: "blocked", blockedReason: ready.reason ?? "Not ready." });
+        return runById(run.id);
+      }
+      store.updateRun(run.id, { state: "running" });
+      return await walk(runById(run.id));
+    } catch (error) {
+      return blockError(run.id, error);
+    }
+  }
+  const recovery = createRecovery({
+    deps,
+    checkAndWalk,
+    sweep,
+    blockError,
+    flowFor: (run) => flowFor(run).manifest as FlowManifest,
+  });
   return {
     registerFlow(manifest, hash, files = {}) {
       const issues = validateManifest(manifest, { files: new Set(Object.keys(files)) });
@@ -231,14 +280,7 @@ export function createEngine(input: EngineDeps): Engine {
         startedAt: now().toISOString(),
       };
       store.createRun(run);
-      store.updateRun(run.id, { state: "checking" });
-      const ready = deps.readiness?.(manifest);
-      if (ready && !ready.ready) {
-        store.updateRun(run.id, { state: "blocked", blockedReason: ready.reason ?? "Not ready." });
-        return runById(run.id);
-      }
-      store.updateRun(run.id, { state: "running" });
-      return walk(runById(run.id));
+      return checkAndWalk(run);
     },
     async answerAsk(id, answer) {
       sweep();

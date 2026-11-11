@@ -138,7 +138,7 @@ export async function runLeaf(
         save();
         store.updateRun(run.id, { state: "interrupted" });
         return "halt";
-      } else if (result.exit === "failed") failure = "worker failed";
+      } else if (result.exit !== "ok") failure = "worker failed";
       else {
         const missing = step.outputs.find((o) => !Object.hasOwn(result.outputs, o.id));
         if (missing) failure = `missing output ${missing.id}`;
