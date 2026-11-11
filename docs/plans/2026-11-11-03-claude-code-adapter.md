@@ -303,7 +303,7 @@ export function readFakeCalls(home: string): FakeCall[];           // <home>/fak
 - `tool`: writes the assistant `tool_use` event, runs the `PreToolUse` command through `/bin/sh -c` with the request object of fact 5 on standard input (`timeout` of the settings file enforced), and decides like Claude Code (fact 6): exit 0 with the allow JSON runs the tool; exit 0 with the deny JSON blocks it (content `PreToolUse:<name> hook error: <reason>`); exit 2 blocks it (content `PreToolUse:<name> hook error: [<command>]: <stderr>`); **any other outcome (exit 1, 127, a timeout, output that is not that JSON) runs it, except `Write`, `Edit` and `NotebookEdit`, which are refused with the content `Permission denied: no approval surface`**. A tool that runs performs `write` (writes the file) and answers with a `user` event (`tool_result`, `is_error` false, content `result` or `ok`); a blocked one answers with `is_error: true` and is listed in the result's `permission_denials`. Each call appends a `kind: "tool"` line. `ungated` runs at once with no hook and no log line besides the same `user` event.
 - `result` writes the result event (`subtype: "success"`, `is_error` false unless given, `result` default the last text, `permission_denials`, `session_id`, `api_error_status` null, `terminal_reason: "completed"`) and exits 0. `auth_failure` (after the init event, as in fact 27; a play can pass `init: { apiKeySource: "none" }`) writes an assistant event with `error: "authentication_failed"` and text `Not logged in - Please run /login`, a result event with `is_error: true` and `terminal_reason: "api_error"`, and exits 1. `exit` writes `stderr` and exits with `code`. When the actions end without `result` or `exit`, the process exits 0 with no result event. `ignore_sigterm` installs a SIGTERM handler that does nothing.
 
-- [ ] **Step 1: Write the failing tests** (`fake-claude.test.ts`, 10; each test makes a home with `makeFakeHome`, runs the fake by its path with `spawnSync`/`spawn`, the environment `{ HOME, PATH: process.env.PATH }`)
+- [x] **Step 1: Write the failing tests** (`fake-claude.test.ts`, 10; each test makes a home with `makeFakeHome`, runs the fake by its path with `spawnSync`/`spawn`, the environment `{ HOME, PATH: process.env.PATH }`)
   1. `the fake is executable, and the failure says how to fix it`: `accessSync(FAKE_CLAUDE_PATH, constants.X_OK)` with the message `run: chmod 755 packages/runner/src/test-helpers/fake-claude.ts`.
   2. `it answers --version, --help and auth status`: stdout `2.1.318 (Claude Code)\n`; the help holds `--restricted` and `--permission-prompts`; the auth line parses with `loggedIn: true`; with `auth: { loggedIn: false }` it prints `"loggedIn":false`.
   3. `it answers plugin list and mcp list, and a hang never ends until it is killed`: the plugin array has two entries; the mcp output has three lines; with `hang: ["mcp"]` the process is still alive after 300 ms and `child.kill()` ends it.
@@ -314,18 +314,20 @@ export function readFakeCalls(home: string): FakeCall[];           // <home>/fak
   8. `an ungated tool runs without asking`: the `write` effect happens and the hook command's marker file does not exist.
   9. `auth_failure ends with exit 1, the event text and a result with is_error true`.
   10. `a play is chosen by the prompt; no match exits 3; exit and raw actions do what they say`.
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/runner/src/test-helpers/fake-claude.test.ts`. Expected: FAIL (modules missing).
-- [ ] **Step 3: Implement** both files; then run `chmod 755 packages/runner/src/test-helpers/fake-claude.ts`.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** both files; then run `chmod 755 packages/runner/src/test-helpers/fake-claude.ts`.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner/src/test-helpers/fake-claude.test.ts`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS (Biome keeps the shebang; `tsc` and the hidden-character scan accept it, fact 20).
-- [ ] **Step 6: Chair step (commit)** (the chair checks `git ls-files -s` shows `100755` for the fake)
+- [x] **Step 6: Chair step (commit)** (the chair checks `git ls-files -s` shows `100755` for the fake)
 ```bash
 git add packages/runner/src/test-helpers
 git commit -m "Add a fake claude that replays the recorded outcomes" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
