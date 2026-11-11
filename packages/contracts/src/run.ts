@@ -92,6 +92,17 @@ export const StepUsage = z.object({
   reported: z.boolean(),
 });
 export type StepUsage = z.infer<typeof StepUsage>;
+export const WAITING_REASONS = ["memory", "quota", "ceiling", "flow_overlap"] as const;
+export const WaitingReason = z.enum(WAITING_REASONS);
+export type WaitingReason = z.infer<typeof WaitingReason>;
+export const Waiting = z.object({
+  reason: WaitingReason,
+  until: IsoDateTime.optional(),
+  running: z.number().int().min(0).optional(),
+  ceiling: z.number().int().min(1).optional(),
+  harnessId: Id.optional(),
+});
+export type Waiting = z.infer<typeof Waiting>;
 export const LeafStepRun = z.object({
   stepId: Id,
   title: z.string(),
@@ -105,6 +116,7 @@ export const LeafStepRun = z.object({
   note: z.string().optional(),
   picks: z.array(z.object({ key: z.string(), label: z.string() })).optional(),
   usage: StepUsage.optional(),
+  waiting: Waiting.optional(),
 });
 export type LeafStepRun = z.infer<typeof LeafStepRun>;
 export const RunItem = z.object({
@@ -132,6 +144,7 @@ export const RunSummary = z.object({
   oneTime: z.boolean(),
   project: z.string(),
   state: RunState,
+  waiting: Waiting.optional(),
   startedAt: IsoDateTime,
   endedAt: IsoDateTime.optional(),
   reportFirstLine: z.string().optional(),

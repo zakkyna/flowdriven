@@ -283,7 +283,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 **Interfaces:**
 - Produces: `WAITING_REASONS = ["memory", "quota", "ceiling", "flow_overlap"] as const`, `WaitingReason`, `Waiting = z.object({ reason: WaitingReason, until: IsoDateTime.optional(), running: z.number().int().min(0).optional(), ceiling: z.number().int().min(1).optional(), harnessId: Id.optional() })`, `LeafStepRun.waiting: Waiting.optional()`, `RunSummary.waiting: Waiting.optional()` (so `RunDetail` has it too). `RunState` is not changed: a run that waits before its first step is `queued`, one that waits between steps stays `running` (spec 21.2).
 
-- [ ] **Step 1: Write the failing test** `packages/contracts/src/waiting.test.ts`
+- [x] **Step 1: Write the failing test** `packages/contracts/src/waiting.test.ts`
 
 ```ts
 import { expect, test } from "vitest";
@@ -304,15 +304,17 @@ test("a run summary may carry a waiting reason", () => {
 });
 ```
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/contracts/src/waiting.test.ts`. Expected: FAIL ("Waiting is not exported").
-- [ ] **Step 3: Implement** in `run.ts`; place `Waiting` before `LeafStepRun`.
-- [ ] **Step 4: Run** the test. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/contracts/src/waiting.test.ts`. Expected: FAIL ("Waiting is not exported").
+- [x] **Step 3: Implement** in `run.ts`; place `Waiting` before `LeafStepRun`.
+- [x] **Step 4: Run** the test. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts/src/run.ts packages/contracts/src/waiting.test.ts
 git commit -m "Add a waiting reason to runs and steps in the contract" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
