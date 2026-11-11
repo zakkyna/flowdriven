@@ -94,3 +94,13 @@ test("allows only known content types, regardless of extension case", () => {
   expect(contentTypeFor("file.bin")).toBeNull();
   expect(contentTypeFor("file")).toBeNull();
 });
+
+test("web preferences carry the runner flag only when asked", () => {
+  const original = secureWebPreferences("/x/preload.js");
+  expect(secureWebPreferences("/x/preload.js", { runner: true })).toEqual({
+    ...original,
+    additionalArguments: ["--flowdriven-runner=on"],
+  });
+  expect(secureWebPreferences("/x/preload.js", { runner: false })).toEqual(original);
+  expect(original).toMatchObject({ contextIsolation: true, nodeIntegration: false, sandbox: true });
+});

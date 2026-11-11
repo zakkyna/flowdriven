@@ -75,6 +75,7 @@ export function registerWebContentsSecurity(): void {
 }
 export function createMainWindow(options: {
   preloadPath: string;
+  runner?: boolean;
   show: boolean;
   theme?: "light" | "dark";
   scenario?: string;
@@ -89,7 +90,7 @@ export function createMainWindow(options: {
     title: "FlowDriven",
     backgroundColor: windowBackground(dark),
     show: options.show,
-    webPreferences: secureWebPreferences(options.preloadPath),
+    webPreferences: secureWebPreferences(options.preloadPath, { runner: options.runner }),
   });
   const query = new URLSearchParams();
   if (options.theme) query.set("theme", options.theme);

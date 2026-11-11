@@ -860,25 +860,27 @@ export function startRunnerBridge(options: RunnerBridgeOptions): { link: RunnerL
 **Preload (a single self-contained file; the sandbox cannot load a sibling).** `preload.ts` defines the two channel names as literals equal to `runner-ipc.ts`'s, and exposes `flowdrivenShell` as `Object.freeze({ kind: "electron" })` when `process.argv` lacks `--flowdriven-runner=on`, else `Object.freeze({ kind: "electron", runner })` where `runner = Object.freeze({ call: (method, input) => ipcRenderer.invoke(CALL, method, input), subscribe: (listener) => { const handler = (_event, event) => listener(event); ipcRenderer.on(EVENT, handler); return () => { ipcRenderer.removeListener(EVENT, handler); }; } })`. The Electron event object never reaches the page.
 **Main.** `main.ts` keeps its present code and in `whenReady` adds: `const bridge = startRunnerBridge({ ipc: ipcMain, spawn: (command, args, options) => spawn(command, args, options), env: process.env, appData: app.getPath("appData"), dirname: __dirname, windows: () => BrowserWindow.getAllWindows() })` before the first window, and `createMainWindow({ preloadPath, show: true, runner: true })` in both places that open a window. A `before-quit` listener uses one module-level flag `stopping`: when it is set the listener returns at once (the quit goes on); otherwise it sets it, calls `event.preventDefault()`, then `void bridge.stop().then(() => app.quit())` (end stdin, wait up to 3 seconds, kill; `stop()` never rejects, Task 14), so the second `before-quit` passes through and the handler cannot loop. The size of an outgoing frame is checked in the link (Task 14), so the relay checks shape only. `capture.ts` is not changed and does not pass `runner`.
 
-- [ ] **Step 1: Write the failing tests** (11 named; the fake `ipc` records the handler, the fake `link` is `{ call: vi.fn() }`, windows are plain objects; `preload.test.ts` mocks `electron` with `vi.mock`, sets `process.argv` and imports the module with `vi.resetModules()` and a dynamic `import("./preload")`)
+- [x] **Step 1: Write the failing tests** (11 named; the fake `ipc` records the handler, the fake `link` is `{ call: vi.fn() }`, windows are plain objects; `preload.test.ts` mocks `electron` with `vi.mock`, sets `process.argv` and imports the module with `vi.resetModules()` and a dynamic `import("./preload")`)
   `runner-ipc.test.ts` (4): (1) `a call from the app's own main frame is forwarded and answered with its result`: `isOwnMainFrame({ url: "app://flowdriven/index.html#/runs", parent: null })` is true. (2) `refuses a call from a foreign frame, a sub-frame, a bad method name or a non-object input`: frames `https://example.com`, `{ url: app url, parent: {} }`, `null`; methods `"flows.list; x"`, `"../x"`, `42`, `"Flows.list"`; inputs `[]`, `null`, `"x"`, a class instance; extra or missing arguments; `link.call` is never called. (3) `a failure keeps its code and message and anything else becomes unavailable`. (4) `events go only to live windows on the app origin`: a destroyed window and a window on another origin get nothing.
   `runner-bridge.test.ts` (3): (5) `uses the data folder, the demo flag and the runner entry of its environment`: with `FLOWDRIVEN_DEMO: "1"` and `appData: "/a"` the fake `spawn` got `--data-dir /a/FlowDriven-demo` and `--demo`, and the entry ends in `packages/runner/src/main.ts`. (6) `registers the call handler and forwards runner events to the windows`. (7) `stop ends the runner`.
   `preload.test.ts` (3): (8) `the bridge exists only with the runner flag and exposes only call and subscribe`: `Object.keys` of the exposed object are `["kind", "runner"]` and of `runner` `["call", "subscribe"]`, both frozen; without the flag only `["kind"]`. (9) `call invokes the channel with the method and the input and subscribe returns an unsubscribe`: the listener gets the event payload and not the Electron event. (10) `the channel names equal those of runner-ipc.ts`: read the source text of `preload.ts` and compare the two literals.
   `security.test.ts` (1): (11) `web preferences carry the runner flag only when asked`: `secureWebPreferences("/x/preload.js", { runner: true })` equals the present object plus `additionalArguments: ["--flowdriven-runner=on"]`; `contextIsolation`, `nodeIntegration`, `sandbox` unchanged. The present test "web preferences keep the secure defaults" passes unchanged.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run apps/desktop/electron`. Expected: FAIL.
-- [ ] **Step 3: Implement** by the rules.
-- [ ] **Step 4: Run the tests and the electron program**
+- [x] **Step 3: Implement** by the rules.
+- [x] **Step 4: Run the tests and the electron program**
   Run: `pnpm vitest run apps/desktop/electron && pnpm typecheck && pnpm build:electron`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
 - [ ] **Step 6: Chair step (GUI)**
   Run: `pnpm capture`. Expected: `captured 16 screens`, exit 0, the screenshots still on sample data (no flag is passed). Then `FLOWDRIVEN_DEMO=1 pnpm start`: the window opens; open the developer tools only if the sidebar still says "Sample data" (the bridge did not arrive: see open point 4 of the handover) and quit with Cmd+Q; `pgrep -f packages/runner/src/main.ts` prints nothing afterwards.
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 ```bash
 git add apps/desktop/electron
 git commit -m "Wire the runner into the app through a relay and a preload bridge" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
