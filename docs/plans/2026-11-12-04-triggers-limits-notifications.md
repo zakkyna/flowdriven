@@ -160,23 +160,25 @@ docs/plans/ROADMAP.md                                             the 04 and 04b
 - Stubs: runner `"triggers.list": () => []`, `"triggers.setEnabled": () => unavailable("Switching a trigger arrives in this plan.")`; fixtures `"triggers.list": () => []`, `"triggers.setEnabled": () => { throw new RunnerError("unavailable", "Switching a trigger arrives in this plan."); }`.
 - **Present assertion that changes** (`operations.test.ts`, the sorted list of operation names): old: `... "settings.update", "usage.summary"]`; new: `... "settings.update", "triggers.list", "triggers.setEnabled", "usage.summary"]`. The MCP list in the next test is not changed, which proves both new operations are off MCP.
 
-- [ ] **Step 1: Write the failing tests** in `trigger.test.ts`:
+- [x] **Step 1: Write the failing tests** in `trigger.test.ts`:
   1. "a trigger status has a switch state, a reason, the next run, the last fire and today's counts" (parse a full and a minimal value; refuse a negative `firesToday` and a `dailyCap` of 0)
   2. "setEnabled needs an index, a boolean and a content hash" (refuse `hash: "abc"`, `index: -1`, a missing `enabled`)
   3. "both trigger operations are off MCP and are the only writers of the flows topic from this plan" (`operations["triggers.setEnabled"].mcp === "no"`, same for list)
   4. "a run summary carries its trigger in words and is still valid without it" (parse both; refuse empty `words`)
   5. "a notice has a kind, a short title and body, and an allow-listed target" (parse one of each target; refuse screen `"settings"`, a 300-character body, a `runId` with a slash, an extra key)
   6. "the notice frame is a `notice` notification and an `event` frame is not one" (`RpcNoticeFrame.safeParse` on both)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/contracts/src/trigger.test.ts`. Expected: FAIL ("Cannot find module ./trigger.ts").
-- [ ] **Step 3: Implement** the files above and the stubs; update `operations.test.ts` as named. Export `trigger.ts` and `notice.ts` from `index.ts`.
-- [ ] **Step 4: Run** `pnpm vitest run packages/contracts packages/fixtures`. Expected: PASS (fixtures still validate; the new fields are optional).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/contracts/src/trigger.test.ts`. Expected: FAIL ("Cannot find module ./trigger.ts").
+- [x] **Step 3: Implement** the files above and the stubs; update `operations.test.ts` as named. Export `trigger.ts` and `notice.ts` from `index.ts`.
+- [x] **Step 4: Run** `pnpm vitest run packages/contracts packages/fixtures`. Expected: PASS (fixtures still validate; the new fields are optional).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts packages/runner/src/service/handlers.ts packages/fixtures/src/client.ts
 git commit -m "Add the trigger status, the trigger operations, the notice and the run's trigger to the contract" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

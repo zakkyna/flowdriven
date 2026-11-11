@@ -8,6 +8,7 @@ import { QueueView, UsageSummary } from "./queue.ts";
 import { ReadinessReport } from "./readiness.ts";
 import { RunDetail, RunReport, RunState, RunSummary } from "./run.ts";
 import { Settings, SettingsPatch } from "./settings.ts";
+import { TriggerStatus } from "./trigger.ts";
 
 export const RUNNER_ERROR_CODES = ["not_found", "invalid_input", "not_allowed", "unavailable"] as const;
 export type RunnerErrorCode = (typeof RUNNER_ERROR_CODES)[number];
@@ -251,6 +252,22 @@ export const operations = {
     errors: ["invalid_input", "not_found", "not_allowed"],
     reads: [],
     writes: ["runs"],
+  },
+  "triggers.list": {
+    input: z.object({ flowId: Id }),
+    output: z.array(TriggerStatus),
+    mcp: "no",
+    errors: ["invalid_input", "not_found"],
+    reads: ["flows", "runs"],
+    writes: [],
+  },
+  "triggers.setEnabled": {
+    input: z.object({ flowId: Id, index: z.number().int().min(0), enabled: z.boolean(), hash: ContentHash }),
+    output: TriggerStatus,
+    mcp: "no",
+    errors: ["invalid_input", "not_found", "not_allowed", "unavailable"],
+    reads: [],
+    writes: ["flows"],
   },
   "usage.summary": {
     input: z.object({}),

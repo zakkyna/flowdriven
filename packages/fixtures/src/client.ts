@@ -523,6 +523,10 @@ export function createFixtureRunnerClient(
     },
     "usage.summary": () => state.usage,
     "settings.get": () => state.settings,
+    "triggers.list": () => [],
+    "triggers.setEnabled": () => {
+      throw new RunnerError("unavailable", "Switching a trigger arrives in this plan.");
+    },
     "settings.update": ({ patch }) => {
       const backend = (id: string) => {
         const b = state.settings.backends.find((item) => item.id === id);

@@ -37,6 +37,8 @@ test("version 1 has exactly these operations", () => {
     "runs.status",
     "settings.get",
     "settings.update",
+    "triggers.list",
+    "triggers.setEnabled",
     "usage.summary",
   ]);
 });

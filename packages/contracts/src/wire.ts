@@ -1,6 +1,7 @@
 import { z } from "zod";
 import "./config.ts";
 import { RunnerEvent } from "./client.ts";
+import { Notice } from "./notice.ts";
 import { RUNNER_ERROR_CODES, type RunnerErrorCode } from "./operations.ts";
 
 export const MAX_FRAME_BYTES = 1_048_576;
@@ -29,6 +30,12 @@ export const RpcNotification = z.object({
   params: RunnerEvent,
 });
 export type RpcNotification = z.infer<typeof RpcNotification>;
+export const RpcNoticeFrame = z.object({
+  jsonrpc: z.literal("2.0"),
+  method: z.literal("notice"),
+  params: Notice,
+});
+export type RpcNoticeFrame = z.infer<typeof RpcNoticeFrame>;
 export const RPC_INVALID_REQUEST = -32600;
 export const RPC_METHOD_NOT_FOUND = -32601;
 export const RPC_ERROR_NUMBERS: Record<RunnerErrorCode, number> = {

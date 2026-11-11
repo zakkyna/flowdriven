@@ -352,6 +352,8 @@ export function createHandlers({
     },
     "usage.summary": summary,
     "settings.get": settings,
+    "triggers.list": () => [],
+    "triggers.setEnabled": () => unavailable("Switching a trigger arrives in this plan."),
     "settings.update": ({ patch }) => {
       if (!patch.keeper || Object.keys(patch).some((key) => key !== "keeper"))
         return unavailable("Changing settings arrives with the agent.");

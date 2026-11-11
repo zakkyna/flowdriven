@@ -136,6 +136,11 @@ export const RunReport = z.object({
   saveOffer: z.boolean(),
 });
 export type RunReport = z.infer<typeof RunReport>;
+export const RunTrigger = z.object({
+  kind: z.string().regex(/^[a-z_]{1,20}$/),
+  words: z.string().min(1).max(200),
+});
+export type RunTrigger = z.infer<typeof RunTrigger>;
 export const RunSummary = z.object({
   id: Id,
   flowId: Id,
@@ -148,6 +153,7 @@ export const RunSummary = z.object({
   startedAt: IsoDateTime,
   endedAt: IsoDateTime.optional(),
   reportFirstLine: z.string().optional(),
+  trigger: RunTrigger.optional(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;
 export const UsageRow = z.object({
