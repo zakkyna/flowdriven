@@ -644,21 +644,24 @@ export function createRunnerService(options: ServiceOptions): RunnerService;
 
 **Chair's note (2026-11-11).** The first call for this task stopped on a conflict in the plan: test (2) asked that a run with `inputs: { project: "/etc" }` be created, but the demo flow declares no input and the engine refuses an undeclared one. Settled: that call is refused (test (2) says so now), `demo-flow.ts` is not changed, and the handler passes `inputs` to the engine as they are.
 
-- [ ] **Step 1: Write the failing tests** (12 named; `handlers.test.ts` builds a service on `openSqliteStore(":memory:")`, a temp data folder, a fixed clock and counter ids, and polls with a small helper `until(check)` that retries every 5 ms for up to 2 s; `demo-harness.test.ts` has no store)
+- [x] **Step 1: Write the failing tests** (12 named; `handlers.test.ts` builds a service on `openSqliteStore(":memory:")`, a temp data folder, a fixed clock and counter ids, and polls with a small helper `until(check)` that retries every 5 ms for up to 2 s; `demo-harness.test.ts` has no store)
   `handlers.test.ts` (10): (1) `flows.list and flows.get show the demo flow as approved, with four steps and no run yet`. (2) `flows.run answers at once with a queued run and the run reaches the choice`: the answer's `state` is `queued`; soon `approvals.list` has one pending `ask` approval whose `payload.options` hold the fit jobs `j1` and `j3`; a second `flows.run` with `inputs: { project: "/etc" }` is refused with `invalid_input` "Unknown input project." (the demo flow declares no input and the engine refuses an undeclared one), `runs.list` still holds one run, and its `project` is `<dataDir>/demo-project`. (3) `the demo story end to end`: run 1: answer `["j1"]`, wait for the pending `result_sign_off`, `approvals.resolve` approve, `runs.status` is `done`, its `review` step has four passed items (`j1` to `j4`) and its `build` step one (`j1`); run 2 picks `["j5"]`, approves, is `done`, and its `review` items `j3` and `j4` have `skip: "seen"`; `runs.report` line 2 of run 2 is `Items: 2 processed, 2 skipped as seen, 0 failed.`. (4) `approvals.resolve refuses a choice, an edit and a batch, and approvals.answer shows the engine's refusals`: `invalid_input` "This is a choice. Pick from its options.", `invalid_input` "Only text can be edited.", `not_allowed` "Nothing here can be approved as a batch."; picks outside the options `invalid_input`; a second answer `not_allowed` "This decision was already made.". (5) `live mode blocks a run with No harness is connected yet. and resume checks again`: a live service with the demo flow registered by hand; `runs.status.blockedReason` is that sentence, `runs.resume` answers a summary and the run is blocked again; in demo mode `runs.resume` of a `done` run is `not_allowed` "This run cannot be resumed."; a run written to the store by hand as `blocked` with no `blockedReason` still appears in `runs.list`, without `reportFirstLine`. (6) `the six not-built operations answer unavailable with their sentences`: a table of the six. (7) `harnesses.list is empty, settings.get has the defaults and readiness.check has one unchecked row per requirement`: a flow with one `mcp_server` requirement registered by hand. (8) `input that does not validate is invalid_input and an unknown operation is not_found`: `runs.status` with `{}`; `call("nope.x", {})`; `service.knows("runs.status")` true, `knows("nope.x")` false. (9) `an output that does not parse becomes Internal error and an audit entry`: `createDispatcher` over a handler table cast from `{ "runner.info": () => ({ mode: "other" }) }` rejects with `{ code: "unavailable", message: "Internal error" }` and the fake `audit` got `internal_error`; a handler that throws `new Error("boom")` gives the same. (10) `flows.import registers a valid folder, reports the issues of an invalid one and refuses a relative path`: write `flow.yaml` (format `flowdriven-flow/1.1`, id `local.import-test`, kind `build`, one worker step `a` with a `contains` check) and `README.md` into a temp folder; a second folder whose step carries an unknown field gives `issues` with an error and no `flow`; `flows.list` has the imported flow only after the first.
   `demo-harness.test.ts` (2): (11) `the first run uses the first batch, the next the second, and then it starts over`: with `runIndex` answers 0, 1, 2 the `alerts` outputs list `j1..j4`, `j3..j5`, `j1..j4`. (12) `replies like the engine demo`: for `j1` `rough` gives `{ score: { value: 9 } }`, `page` the text `Full post: Job one`, `full` `{ verdict: { fit: true } }`, `proto` `Published at /p/j1`, `proposal` `Hello, here is my plan for Job one.`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/service packages/runner/src/demo`. Expected: FAIL (modules missing).
-- [ ] **Step 3: Implement** by the rules. Extract `demoScript` first and re-run `packages/runner/src/demo` to see `demo.test.ts` still pass.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** by the rules. Extract `demoScript` first and re-run `packages/runner/src/demo` to see `demo.test.ts` still pass.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add the runner's handlers, dispatcher, demo harness and service" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
