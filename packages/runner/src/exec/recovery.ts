@@ -59,9 +59,16 @@ export function createRecovery(ctx: {
       .filter((r) => ["queued", "checking", "running", "retrying"].includes(r.state))) {
       try {
         const manifest = ctx.flowFor(run);
+        const pending = store.listApprovals({ runId: run.id, state: "pending" });
         const interrupted = store
           .listSteps(run.id)
-          .filter((row) => row.state === "running" || row.state === "retrying");
+          .filter(
+            (row) =>
+              row.state === "running" ||
+              row.state === "retrying" ||
+              (row.state === "waiting_approval" &&
+                !pending.some((a) => a.stepId === row.stepId && a.itemKey === row.itemKey)),
+          );
         const previouslyInterrupted = store.listSteps(run.id).filter((row) => row.state === "interrupted");
         const safe = [...interrupted, ...previouslyInterrupted].every((row) => isIdempotent(row, manifest));
         store.transaction(() => {

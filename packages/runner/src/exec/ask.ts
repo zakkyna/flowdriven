@@ -83,26 +83,28 @@ export function runAsk(
     const pending = store
       .listApprovals({ runId: run.id, state: "pending" })
       .find((a) => a.kind === "ask" && a.stepId === step.id);
-    if (!pending) {
-      const createdAt = now();
-      store.createApproval({
-        id: newId("ap"),
-        kind: "ask",
-        runId: run.id,
-        stepId: step.id,
-        itemKey: "",
-        summary: question,
-        payload: { question, options, maxPick },
-        maxPick,
-        approves: step.ask.approves,
-        onExpiry: step.ask.on_expiry,
-        createdAt: createdAt.toISOString(),
-        expiresAt: new Date(createdAt.getTime() + durationMs(step.ask.expires)).toISOString(),
-        state: "pending",
-      });
-    }
-    store.upsertStep({ ...row, state: "waiting_approval" });
-    store.updateRun(run.id, { state: "waiting_approval" });
+    store.transaction(() => {
+      if (!pending) {
+        const createdAt = now();
+        store.createApproval({
+          id: newId("ap"),
+          kind: "ask",
+          runId: run.id,
+          stepId: step.id,
+          itemKey: "",
+          summary: question,
+          payload: { question, options, maxPick },
+          maxPick,
+          approves: step.ask.approves,
+          onExpiry: step.ask.on_expiry,
+          createdAt: createdAt.toISOString(),
+          expiresAt: new Date(createdAt.getTime() + durationMs(step.ask.expires)).toISOString(),
+          state: "pending",
+        });
+      }
+      store.upsertStep({ ...row, state: "waiting_approval" });
+      store.updateRun(run.id, { state: "waiting_approval" });
+    });
     return "halt";
   } catch (error) {
     if (writing) throw error;

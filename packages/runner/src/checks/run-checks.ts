@@ -1,4 +1,5 @@
 import type { Check, Value } from "@flowdriven/sdk";
+import { raceAbort } from "../exec/timeout.ts";
 import type { HarnessAdapter } from "../harness.ts";
 import type { CheckOutcome } from "../storage.ts";
 import type { CommandRunner } from "./command.ts";
@@ -89,11 +90,14 @@ export async function runChecks(checks: Check[], ctx: CheckContext): Promise<Che
             evidence = problems.join("; ");
           }
         } else if (c.type === "command") {
-          const result = await ctx.runCommand(c.cmd, c.args, {
-            cwd: ctx.folder,
-            timeoutMs: 30 * 60 * 1000,
-            signal: ctx.signal,
-          });
+          const result = await raceAbort(
+            ctx.runCommand(c.cmd, c.args, {
+              cwd: ctx.folder,
+              timeoutMs: 30 * 60 * 1000,
+              signal: ctx.signal,
+            }),
+            ctx.signal,
+          );
           if (result.code !== 0) {
             verdict = "failed";
             evidence = result.stderr.slice(-2000);
@@ -101,27 +105,34 @@ export async function runChecks(checks: Check[], ctx: CheckContext): Promise<Che
         } else if (c.type === "judge") {
           const rubric = ctx.files.get(c.rubric);
           if (rubric === undefined) throw new Error(`missing rubric ${c.rubric}`);
-          const result = await ctx.harness.judge({
-            runId: ctx.runId,
-            stepId: ctx.stepId,
-            rubric,
-            output: typeof value === "string" ? value : JSON.stringify(value),
-            signal: ctx.signal,
-          });
+          const result = await raceAbort(
+            ctx.harness.judge({
+              runId: ctx.runId,
+              stepId: ctx.stepId,
+              rubric,
+              output: typeof value === "string" ? value : JSON.stringify(value),
+              signal: ctx.signal,
+            }),
+            ctx.signal,
+          );
           verdict = result.evidence ? result.verdict : "failed";
           evidence = result.evidence || "the judge quoted no evidence";
         } else if (c.type === "probe") {
-          const result = await ctx.harness.probe({
-            runId: ctx.runId,
-            stepId: ctx.stepId,
-            tool: c.tool,
-            args: c.args as Record<string, Value>,
-          });
+          const result = await raceAbort(
+            ctx.harness.probe({
+              runId: ctx.runId,
+              stepId: ctx.stepId,
+              tool: c.tool,
+              args: c.args as Record<string, Value>,
+            }),
+            ctx.signal,
+          );
           verdict = result.ok ? "passed" : "failed";
           evidence = result.detail;
         } else if (c.type === "user") verdict = "pending";
         else throw new Error("unsupported check");
       } catch (error) {
+        if (ctx.signal.aborted) throw error;
         verdict = "failed";
         evidence = error instanceof Error ? error.message : "check failed";
       }

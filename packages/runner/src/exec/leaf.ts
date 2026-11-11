@@ -12,6 +12,7 @@ import { runChecks } from "../checks/run-checks.ts";
 import type { ResolvedDeps } from "../engine.ts";
 import type { RunRow, StepRow } from "../storage.ts";
 import { limits } from "./limits.ts";
+import { raceAbort } from "./timeout.ts";
 export async function runLeaf(
   step: LeafStep,
   ctx: { deps: ResolvedDeps; run: RunRow; manifest: FlowManifest; scope: Scope; itemKey: string },
@@ -28,9 +29,9 @@ export async function runLeaf(
     checks: [],
   };
   const save = () => store.upsertStep(row);
-  const block = (note: string) => {
+  const block = (note: string, stepNote = note) => {
     row.state = "failed";
-    row.note = note;
+    row.note = stepNote;
     save();
     store.updateRun(run.id, { state: "blocked", blockedReason: note });
   };
@@ -69,23 +70,6 @@ export async function runLeaf(
   for (let n = 1; n <= attempts; n++) {
     const replan = n === step.retry + 2;
     const ctl = new AbortController();
-    if (replan && step.do !== "builtin") {
-      try {
-        const plan = await harness.replan({
-          runId: run.id,
-          stepId: step.id,
-          itemKey,
-          instructions,
-          failures,
-          signal: ctl.signal,
-        });
-        if (!plan) break;
-        instructions = plan.instructions;
-      } catch (e) {
-        failures.push(e instanceof Error ? e.message : "replan failed");
-        break;
-      }
-    }
     row.state = "running";
     store.updateRun(run.id, { state: "running" });
     const attempt = { number: n, replan, worker: harness.name, startedAt: now().toISOString() };
@@ -93,11 +77,39 @@ export async function runLeaf(
     save();
     let failure = "";
     let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      ctl.abort();
-    }, duration);
+    let remaining = duration;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      const chunk = Math.min(remaining, 2_147_483_647);
+      timer = setTimeout(() => {
+        remaining -= chunk;
+        if (remaining > 0) arm();
+        else {
+          timedOut = true;
+          ctl.abort();
+        }
+      }, chunk);
+    };
+    arm();
     try {
+      if (replan && step.do !== "builtin") {
+        const plan = await raceAbort(
+          harness.replan({
+            runId: run.id,
+            stepId: step.id,
+            itemKey,
+            instructions,
+            failures,
+            signal: ctl.signal,
+          }),
+          ctl.signal,
+        );
+        if (!plan) {
+          row.attempts.pop();
+          break;
+        }
+        instructions = plan.instructions;
+      }
       let result: {
         exit: "ok" | "failed" | "quota" | "auth" | "interrupted";
         text: string;
@@ -106,24 +118,31 @@ export async function runLeaf(
       if (step.do === "builtin") {
         const fn = deps.builtins[step.builtin];
         if (!fn) throw new Error("unknown builtin");
-        result = { exit: "ok", text: "", outputs: await fn((step.with ?? {}) as Record<string, Value>, run) };
+        result = {
+          exit: "ok",
+          text: "",
+          outputs: await raceAbort(fn((step.with ?? {}) as Record<string, Value>, run), ctl.signal),
+        };
       } else {
-        result = await harness.runStep({
-          runId: run.id,
-          stepId: step.id,
-          itemKey,
-          attempt: n,
-          replan,
-          kind: step.do,
-          title: step.title ?? step.id,
-          instructions,
-          uses: step.uses,
-          ...(step.do === "skill" ? { skill: step.skill } : {}),
-          outputs: step.outputs.map(({ id, type }) => ({ id, type })),
-          ...(failures.length ? { lastFailure: failures.at(-1) } : {}),
-          maxDurationMs: duration,
-          signal: ctl.signal,
-        });
+        result = await raceAbort(
+          harness.runStep({
+            runId: run.id,
+            stepId: step.id,
+            itemKey,
+            attempt: n,
+            replan,
+            kind: step.do,
+            title: step.title ?? step.id,
+            instructions,
+            uses: step.uses,
+            ...(step.do === "skill" ? { skill: step.skill } : {}),
+            outputs: step.outputs.map(({ id, type }) => ({ id, type })),
+            ...(failures.length ? { lastFailure: failures.at(-1) } : {}),
+            maxDurationMs: duration,
+            signal: ctl.signal,
+          }),
+          ctl.signal,
+        );
       }
       if (timedOut) failure = "time limit exceeded";
       else if (result.exit === "quota" || result.exit === "auth") {
@@ -171,22 +190,24 @@ export async function runLeaf(
             if (row.checks.some((c) => c.required && c.verdict === "pending")) {
               const createdAt = now().toISOString();
               row.state = "waiting_approval";
-              save();
-              store.createApproval({
-                id: newId("ap"),
-                kind: "result_sign_off",
-                runId: run.id,
-                stepId: step.id,
-                itemKey,
-                summary: `Approve the result of "${step.title ?? step.id}"`,
-                payload: result.text.slice(0, 4000),
-                approves: [],
-                onExpiry: "fail",
-                createdAt,
-                expiresAt: new Date(Date.parse(createdAt) + 86400000).toISOString(),
-                state: "pending",
+              store.transaction(() => {
+                save();
+                store.createApproval({
+                  id: newId("ap"),
+                  kind: "result_sign_off",
+                  runId: run.id,
+                  stepId: step.id,
+                  itemKey,
+                  summary: `Approve the result of "${step.title ?? step.id}"`,
+                  payload: result.text.slice(0, 4000),
+                  approves: [],
+                  onExpiry: "fail",
+                  createdAt,
+                  expiresAt: new Date(Date.parse(createdAt) + 86400000).toISOString(),
+                  state: "pending",
+                });
+                store.updateRun(run.id, { state: "waiting_approval" });
               });
-              store.updateRun(run.id, { state: "waiting_approval" });
               return "halt";
             }
             Object.assign(attempt, { exit: "ok" });
@@ -210,6 +231,7 @@ export async function runLeaf(
   }
   block(
     `Blocked at step "${step.title ?? step.id}": checks still failing after ${row.attempts.length} attempts.`,
+    failures.at(-1) === "time limit exceeded" ? "time limit exceeded" : undefined,
   );
   return "failed";
 }

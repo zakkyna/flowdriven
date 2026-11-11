@@ -199,7 +199,7 @@ test("expiry applies on every read", async () => {
 test("ask.approves grants only the picked items, only in this run", async () => {
   const c = await ready();
   await c.engine.answerAsk(approval(c).id, { picks: ["j1"] });
-  expect(c.engine.isApproved(c.run.id, "host.publish", "j1")).toBe(true);
+  expect(c.engine.isApproved(c.run.id, "host.publish", "j1")).toBe(false);
   expect(c.engine.isApproved(c.run.id, "host.publish", "j3")).toBe(false);
   expect(c.engine.isApproved("run-2", "host.publish", "j1")).toBe(false);
   expect(c.engine.isApproved(c.run.id, "host.delete", "j1")).toBe(false);

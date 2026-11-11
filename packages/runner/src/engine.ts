@@ -357,33 +357,36 @@ export function createEngine(input: EngineDeps): Engine {
       const row = store.getStep(a.runId, a.stepId, a.itemKey);
       if (!row) throw new EngineError("not_found", "Step not found.");
       const at = now().toISOString();
-      store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
-      if (decision === "approve") {
-        const attempt = row.attempts.at(-1);
-        if (attempt) attempt.exit = "ok";
-        row.state = "passed";
-        row.checks = row.checks.map((c) =>
-          c.type === "user" && c.verdict === "pending" ? { ...c, verdict: "passed" } : c,
-        );
-        store.upsertStep(row);
-        store.updateRun(run.id, { state: "running" });
-        return walk(runById(run.id));
-      }
-      const attempt = row.attempts.at(-1);
-      if (attempt) attempt.exit = "failed";
-      row.state = "failed";
-      store.upsertStep(row);
-      if (a.itemKey) {
-        const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
-        if (item) store.upsertItem({ ...item, status: "failed" });
-      }
-      store.updateRun(run.id, { state: "failed", endedAt: at });
-      for (const pending of store.listApprovals({ runId: run.id, state: "pending" }))
-        store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
-      return runById(run.id);
+      store.transaction(() => {
+        store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
+        if (decision === "approve") {
+          const attempt = row.attempts.at(-1);
+          if (attempt) attempt.exit = "ok";
+          row.state = "passed";
+          row.checks = row.checks.map((c) =>
+            c.type === "user" && c.verdict === "pending" ? { ...c, verdict: "passed" } : c,
+          );
+          store.upsertStep(row);
+          store.updateRun(run.id, { state: "running" });
+        } else {
+          const attempt = row.attempts.at(-1);
+          if (attempt) attempt.exit = "failed";
+          row.state = "failed";
+          store.upsertStep(row);
+          if (a.itemKey) {
+            const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
+            if (item) store.upsertItem({ ...item, status: "failed" });
+          }
+          store.updateRun(run.id, { state: "failed", endedAt: at });
+          for (const pending of store.listApprovals({ runId: run.id, state: "pending" }))
+            store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
+        }
+      });
+      return decision === "approve" ? walk(runById(run.id)) : runById(run.id);
     },
     isApproved(runId, tool, itemKey) {
-      return store.hasGrant(runId, tool, itemKey);
+      const state = store.getRun(runId)?.state;
+      return (state === "running" || state === "retrying") && store.hasGrant(runId, tool, itemKey);
     },
     getRun(id) {
       sweep();
