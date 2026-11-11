@@ -119,3 +119,26 @@ test("putHarnessState marks the harnesses and settings topics", async () => {
   store.putHarnessState({ id: "claude-code", consent: "given" });
   expect(marks).toEqual(["harnesses", "settings"]);
 });
+
+test("usage and settings mark their topics", async () => {
+  const { store, marks } = await setup();
+  store.putSetting("weekly:claude-code", {});
+  expect(marks.splice(0)).toEqual(["settings", "approvals"]);
+  store.putSetting("keeper", {});
+  expect(marks.splice(0)).toEqual(["settings"]);
+  store.addUsage({
+    at: "2026",
+    runId: "r",
+    stepId: "s",
+    itemKey: "",
+    attempt: 1,
+    kind: "worker",
+    harness: "claude-code",
+    models: [],
+    turns: 0,
+    wallMs: 0,
+    queuedMs: 0,
+    exit: "ok",
+  });
+  expect(marks).toEqual(["runs"]);
+});

@@ -21,6 +21,8 @@ export function createChangeEmitter(
 }
 export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Store {
   const topics: Partial<Record<keyof Store, RunnerTopic[]>> = {
+    addUsage: ["runs"],
+    putSetting: ["settings"],
     putHarnessState: ["harnesses", "settings"],
     putFlow: ["flows"],
     createRun: ["runs"],
@@ -37,6 +39,8 @@ export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Sto
       return (...args: unknown[]) => {
         const result: unknown = Reflect.apply(value, target, args);
         for (const topic of topics[key as keyof Store] ?? []) mark(topic);
+        if (key === "putSetting" && typeof args[0] === "string" && args[0].startsWith("weekly:"))
+          mark("approvals");
         return result;
       };
     },

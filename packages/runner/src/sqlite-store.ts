@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { EngineError } from "./errors.ts";
-import { HARNESS_STATE_SCHEMA, SCHEMA } from "./schema.ts";
+import { HARNESS_STATE_SCHEMA, SCHEMA, USAGE_SCHEMA } from "./schema.ts";
 import type {
   ApprovalRow,
   AuditEntry,
@@ -10,6 +10,7 @@ import type {
   RunRow,
   StepRow,
   Store,
+  UsageEventRow,
 } from "./storage.ts";
 
 export async function openSqliteStore(
@@ -47,11 +48,14 @@ export async function openSqliteStore(
     }
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     const version = db.prepare("PRAGMA user_version").get()?.user_version;
-    if (typeof version !== "number" || version > 2 || version < 0)
+    if (typeof version !== "number" || version > 3 || version < 0)
       throw new EngineError("unavailable", "Unsupported database version.");
     if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
-    if (version === 0) db.exec(`BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} PRAGMA user_version = 2; COMMIT;`);
-    if (version === 1) db.exec(`BEGIN; ${HARNESS_STATE_SCHEMA} PRAGMA user_version = 2; COMMIT;`);
+    if (version === 0)
+      db.exec(`BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} PRAGMA user_version = 3; COMMIT;`);
+    if (version === 1)
+      db.exec(`BEGIN; ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} PRAGMA user_version = 3; COMMIT;`);
+    if (version === 2) db.exec(`BEGIN; ${USAGE_SCHEMA} PRAGMA user_version = 3; COMMIT;`);
   } catch (error) {
     db.close();
     throw error;
@@ -70,6 +74,67 @@ export async function openSqliteStore(
   };
   let depth = 0;
   const store: Store = {
+    addUsage(row) {
+      execute(
+        "INSERT INTO usage_events (at, run_id, step_id, item_key, attempt, kind, harness, models, turns, wall_ms, queued_ms, memory_peak_mb, exit, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        row.at,
+        row.runId,
+        row.stepId,
+        row.itemKey,
+        row.attempt,
+        row.kind,
+        row.harness,
+        json(row.models),
+        row.turns,
+        row.wallMs,
+        row.queuedMs,
+        row.memoryPeakMb ?? null,
+        row.exit,
+        row.costUsd ?? null,
+      );
+    },
+    listUsage(filter) {
+      return all(
+        "SELECT * FROM usage_events WHERE (? IS NULL OR run_id = ?) AND (? IS NULL OR at >= ?) ORDER BY id",
+        filter?.runId ?? null,
+        filter?.runId ?? null,
+        filter?.since ?? null,
+        filter?.since ?? null,
+      ).map((row) => ({
+        at: String(row.at),
+        runId: String(row.run_id),
+        stepId: String(row.step_id),
+        itemKey: String(row.item_key),
+        attempt: Number(row.attempt),
+        kind: row.kind as UsageEventRow["kind"],
+        harness: String(row.harness),
+        models: JSON.parse(String(row.models)) as UsageEventRow["models"],
+        turns: Number(row.turns),
+        wallMs: Number(row.wall_ms),
+        queuedMs: Number(row.queued_ms),
+        ...(row.memory_peak_mb === null ? {} : { memoryPeakMb: Number(row.memory_peak_mb) }),
+        exit: row.exit as UsageEventRow["exit"],
+        ...(row.cost_usd === null ? {} : { costUsd: Number(row.cost_usd) }),
+      }));
+    },
+    recentPeaks(q) {
+      if (!Number.isSafeInteger(q.runs) || q.runs < 0)
+        throw new EngineError("invalid_input", "Run count must be a non-negative integer.");
+      return all(
+        "SELECT MAX(u.memory_peak_mb) AS peak FROM usage_events u JOIN runs r ON r.id = u.run_id WHERE r.flow_id = ? AND u.step_id = ? AND u.kind = ? AND u.harness = ? AND u.memory_peak_mb IS NOT NULL GROUP BY u.run_id ORDER BY MIN(u.id) DESC LIMIT ?",
+        q.flowId,
+        q.stepId,
+        q.kind,
+        q.harness,
+        q.runs,
+      ).map((row) => Number(row.peak));
+    },
+    getSetting(name) {
+      return decode(get("SELECT data FROM settings WHERE name = ?", name));
+    },
+    putSetting(name, value) {
+      execute("INSERT OR REPLACE INTO settings (name, data) VALUES (?, ?)", name, json(value));
+    },
     getHarnessState(id) {
       return decode<HarnessStateRow>(get("SELECT data FROM harness_state WHERE id = ?", id));
     },

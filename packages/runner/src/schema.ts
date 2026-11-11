@@ -13,3 +13,9 @@ CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABO
 `;
 
 export const HARNESS_STATE_SCHEMA = "CREATE TABLE harness_state (id TEXT PRIMARY KEY, data TEXT NOT NULL);";
+
+export const USAGE_SCHEMA = `
+CREATE TABLE usage_events (id INTEGER PRIMARY KEY, at TEXT NOT NULL, run_id TEXT NOT NULL, step_id TEXT NOT NULL, item_key TEXT NOT NULL, attempt INTEGER NOT NULL, kind TEXT NOT NULL, harness TEXT NOT NULL, models TEXT NOT NULL, turns INTEGER NOT NULL, wall_ms INTEGER NOT NULL, queued_ms INTEGER NOT NULL, memory_peak_mb REAL, exit TEXT NOT NULL, cost_usd REAL);
+CREATE INDEX usage_events_run ON usage_events (run_id);
+CREATE TABLE settings (name TEXT PRIMARY KEY, data TEXT NOT NULL);
+`;

@@ -478,7 +478,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 - `wrapStore` (`service/events.ts:20-29`) maps `addUsage` to `["runs"]` and `putSetting` to `["settings"]`, and also to `"approvals"` when the name starts with `weekly:` (the weekly item is an approval, Task 15). Add a case to `service/events.test.ts`: `putSetting("weekly:claude-code", {})` marks `settings` and `approvals`, `putSetting("keeper", {})` only `settings`, `addUsage` marks `runs`.
 - **Present assertions changed (owned by this task), old line then new line:** in `sqlite-store.test.ts` the titles and `expect(version(path)).toBe(2)` at lines 154-159 ("... becomes version 2"), 162-169 and 171-174 ("a new database is created at version 2 with the table") become `toBe(3)` with "version 3" (and "with the tables") in the titles; the case at 177-185, "a database from version 3 is refused" with `db.exec("PRAGMA user_version = 3")`, becomes "a database from version 4 is refused" with `PRAGMA user_version = 4` (the version 99 case at 203 stays). These edits replace an assertion with the equally strict one for the new behaviour; no test is removed, skipped or loosened.
 
-- [ ] **Step 1: Write the failing test** `packages/runner/src/sqlite-store-usage.test.ts`
+- [x] **Step 1: Write the failing test** `packages/runner/src/sqlite-store-usage.test.ts`
 
 ```ts
 import { DatabaseSync } from "node:sqlite";
@@ -538,15 +538,17 @@ test("a version 2 database migrates to 3 and keeps its rows; version 99 is still
 });
 ```
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/sqlite-store-usage.test.ts`. Expected: FAIL ("store.addUsage is not a function").
-- [ ] **Step 3: Implement.** In `sqlite-store.ts`: allow `version <= 3`; `version === 0` creates `SCHEMA`, `HARNESS_STATE_SCHEMA`, `USAGE_SCHEMA` and sets 3; `version === 1` adds the harness state and the usage tables; `version === 2` adds `USAGE_SCHEMA`; each in one `BEGIN ... COMMIT`. `addUsage` inserts with `JSON.stringify(models)`; `listUsage` orders by `id`; `recentPeaks` runs the SQL `SELECT MAX(u.memory_peak_mb) AS peak FROM usage_events u JOIN runs r ON r.id = u.run_id WHERE r.flow_id = ? AND u.step_id = ? AND u.kind = ? AND u.harness = ? AND u.memory_peak_mb IS NOT NULL GROUP BY u.run_id ORDER BY MIN(u.id) DESC LIMIT ?`. `putSetting` uses `INSERT OR REPLACE` and the module's `json()`.
-- [ ] **Step 4: Run** the test and `pnpm vitest run packages/runner/src/sqlite-store.test.ts`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/sqlite-store-usage.test.ts`. Expected: FAIL ("store.addUsage is not a function").
+- [x] **Step 3: Implement.** In `sqlite-store.ts`: allow `version <= 3`; `version === 0` creates `SCHEMA`, `HARNESS_STATE_SCHEMA`, `USAGE_SCHEMA` and sets 3; `version === 1` adds the harness state and the usage tables; `version === 2` adds `USAGE_SCHEMA`; each in one `BEGIN ... COMMIT`. `addUsage` inserts with `JSON.stringify(models)`; `listUsage` orders by `id`; `recentPeaks` runs the SQL `SELECT MAX(u.memory_peak_mb) AS peak FROM usage_events u JOIN runs r ON r.id = u.run_id WHERE r.flow_id = ? AND u.step_id = ? AND u.kind = ? AND u.harness = ? AND u.memory_peak_mb IS NOT NULL GROUP BY u.run_id ORDER BY MIN(u.id) DESC LIMIT ?`. `putSetting` uses `INSERT OR REPLACE` and the module's `json()`.
+- [x] **Step 4: Run** the test and `pnpm vitest run packages/runner/src/sqlite-store.test.ts`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Store usage events and settings, migrate the database to version 3" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

@@ -83,7 +83,36 @@ export type HarnessStateRow = {
   scan?: Value;
   scanAt?: string;
 };
+export type ModelUsage = {
+  model: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+};
+export type CallKind = "worker" | "judge" | "brain" | "poll";
+export type UsageEventRow = {
+  at: string;
+  runId: string;
+  stepId: string;
+  itemKey: string;
+  attempt: number;
+  kind: CallKind;
+  harness: string;
+  models: ModelUsage[];
+  turns: number;
+  wallMs: number;
+  queuedMs: number;
+  memoryPeakMb?: number;
+  exit: ExitClass;
+  costUsd?: number;
+};
 export interface Store {
+  addUsage(row: UsageEventRow): void;
+  listUsage(filter?: { runId?: string; since?: string }): UsageEventRow[];
+  recentPeaks(q: { flowId: string; stepId: string; kind: CallKind; harness: string; runs: number }): number[];
+  getSetting(name: string): Value | undefined;
+  putSetting(name: string, value: Value): void;
   getHarnessState(id: string): HarnessStateRow | undefined;
   putHarnessState(row: HarnessStateRow): void;
   transaction<T>(fn: () => T): T; // BEGIN and COMMIT, ROLLBACK on a throw; nested calls use savepoints
