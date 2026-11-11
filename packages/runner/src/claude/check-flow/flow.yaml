@@ -15,10 +15,11 @@ steps:
     uses: [notes]
     worker: { effort: low }
     instructions: >-
-      Create the file hello.txt in your working folder. Its whole text must be exactly: FlowDriven check, step one.
+      Create the file hello.txt in your working folder. Its whole content is this one line, with nothing
+      before or after it: FLOWDRIVEN-CHECK-ONE
       Then answer with the single word DONE.
     checks:
-      - { type: files, paths: [notes/hello.txt], min_bytes: 20 }
+      - { type: files, paths: [notes/hello.txt], min_bytes: 15 }
       - { type: files, paths: ["notes/*.txt"], max_count: 1 }
   - id: read
     title: Read the note
@@ -29,7 +30,7 @@ steps:
     outputs:
       - { id: content, type: text }
     checks:
-      - { type: contains, pattern: "FlowDriven check, step one." }
+      - { type: contains, pattern: FLOWDRIVEN-CHECK-ONE }
   - id: outside
     title: Try a forbidden read
     do: worker

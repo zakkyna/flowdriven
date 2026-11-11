@@ -23,13 +23,13 @@ test("it has the shape the evidence needs", () => {
     expect(step).toMatchObject({ do: "worker", worker: { effort: "low" }, uses: ["notes"] });
   expect(manifest.steps.at(0)).toMatchObject({
     checks: [
-      { type: "files", paths: ["notes/hello.txt"], min_bytes: 20 },
+      { type: "files", paths: ["notes/hello.txt"], min_bytes: 15 },
       { type: "files", paths: ["notes/*.txt"], max_count: 1 },
     ],
   });
   expect(manifest.steps.at(1)).toMatchObject({
     outputs: [{ id: "content", type: "text" }],
-    checks: [{ type: "contains", pattern: "FlowDriven check, step one." }],
+    checks: [{ type: "contains", pattern: "FLOWDRIVEN-CHECK-ONE" }],
   });
   expect(manifest.steps.at(2)).toMatchObject({
     checks: [
