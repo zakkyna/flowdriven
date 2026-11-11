@@ -3,6 +3,7 @@ import { RunnerError } from "@flowdriven/contracts";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { readyState, renderApp } from "../../test/render";
+import { waitingLabel } from "./WaitingLine";
 
 const bodyRows = () =>
   within(screen.getByRole("table", { name: "Runs" }))
@@ -380,4 +381,44 @@ test("an item lists its blocked calls too, and a hidden character in a tool name
   const list = await screen.findByRole("list", { name: "Steps of j1" });
   expect(within(list).getByText("<U+202E>")).toBeTruthy();
   expect(within(list).getByText("(1 time)")).toBeTruthy();
+});
+
+test("waiting labels use the spec's words", () => {
+  expect(waitingLabel({ reason: "ceiling", running: 4, ceiling: 4 })).toBe("Waiting: 4 of 4 running");
+  expect(waitingLabel({ reason: "memory" })).toBe("Waiting for memory");
+  expect(waitingLabel({ reason: "flow_overlap" })).toBe("Waiting for the earlier run of this flow");
+  expect(waitingLabel({ reason: "quota", until: "2026-11-11T14:05:00.000Z", harnessId: "claude-code" })).toBe(
+    "Waiting for Claude Code's limit (resets 14:05)",
+  );
+});
+test("the Runs screen shows how many steps run and wait, each reason as icon plus words, and moves a run to the front", async () => {
+  renderApp("#/runs");
+  expect(await screen.findByText("1 step running, 2 waiting")).toBeTruthy();
+  const queue = () => within(screen.getByRole("list", { name: "Queue" }));
+  expect(queue().getByText("Waiting: 1 of 1 running")).toBeTruthy();
+  expect(queue().getByText("Waiting for Claude Code's limit (resets 14:05)")).toBeTruthy();
+  const button = queue().getAllByRole("button", { name: "Move to front" }).at(1);
+  if (!button) throw new Error("Missing queue button");
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(queue().getAllByRole("listitem").at(1)?.textContent).toContain("Waiting for Claude Code's limit"),
+  );
+});
+test("a run that has a waiting reason shows the waiting words in place of its state words", async () => {
+  const { client } = renderApp("#/runs");
+  const run = client.state.runs.find((item) => item.id === "run-0005");
+  if (!run) throw new Error("Missing run fixture");
+  run.waiting = { reason: "flow_overlap" };
+  run.state = "queued";
+  const row = (await screen.findByText("run-0005")).closest("tr");
+  if (!row) throw new Error("Missing run row");
+  expect(within(row).getByText("Waiting for the earlier run of this flow")).toBeTruthy();
+  expect(within(row).queryByText("Queued")).toBeNull();
+});
+test("the run screen shows tokens per step, or says they are not reported", async () => {
+  renderApp("#/runs/run-0006");
+  expect(
+    await screen.findByText("Tokens: 4 in, 384 out, 8,454 cache read, 156 cache write (2 turns, 4.8 s)"),
+  ).toBeTruthy();
+  expect(screen.getAllByText("Tokens: not reported").length).toBeGreaterThan(0);
 });

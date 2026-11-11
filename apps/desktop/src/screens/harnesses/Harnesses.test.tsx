@@ -186,3 +186,8 @@ test("a line break or a tab in a name is shown as a hidden character too", () =>
   expect(screen.getByRole("img", { name: "hidden character U+000A" }).textContent).toBe("<U+000A>");
   expect(screen.getByRole("img", { name: "hidden character U+0009" }).textContent).toBe("<U+0009>");
 });
+
+test("shows the weekly limit window", async () => {
+  renderApp("#/harnesses");
+  expect(await screen.findByText("Weekly limit: 78% used, resets Sat 17:59")).toBeTruthy();
+});

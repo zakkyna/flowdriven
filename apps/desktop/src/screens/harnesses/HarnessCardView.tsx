@@ -115,6 +115,12 @@ export function HarnessCardView({
         <dt>Adapter</dt>
         <dd>{card.adapter === "full" ? "Full adapter" : "Detection only"}</dd>
       </dl>
+      {card.quota.windows?.map((window) => (
+        <p className={styles.small} key={window.name}>
+          <Icon name="clock" />
+          <span>{`${window.name === "seven_day" ? "Weekly" : "5-hour"} limit: ${Math.round(window.utilization * 100)}% used${window.resetsAt ? `, resets ${window.name === "seven_day" ? `${new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(new Date(window.resetsAt))} ` : ""}${formatTime(window.resetsAt)}` : ""}`}</span>
+        </p>
+      ))}
       {card.quota.note && <p className={styles.small}>{card.quota.note}</p>}
       {(card.consent === "not_given" || card.consent === "revoked") && (
         <Button disabled={busy} onClick={onGive}>

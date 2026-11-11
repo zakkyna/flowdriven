@@ -5,6 +5,8 @@ import { StateIcon } from "../../ui/StatusBadge";
 import { statusOf } from "../../ui/status";
 import { BlockedCalls } from "./BlockedCalls";
 import styles from "./Runs.module.css";
+import { StepUsageLine } from "./StepUsageLine";
+import { WaitingLine } from "./WaitingLine";
 
 const reasons: Record<SkipReason, string> = {
   seen: "Seen in an earlier run",
@@ -51,11 +53,16 @@ export function ItemList({ title, items }: { title: string; items: RunItem[] }):
                       </div>
                     )}
                   </div>
-                  <span className={styles.itemState}>
-                    <StateIcon domain="step" value={step.state} />{" "}
-                    <span>{statusOf("step", step.state).label}</span>
-                  </span>
+                  {step.waiting ? (
+                    <WaitingLine waiting={step.waiting} />
+                  ) : (
+                    <span className={styles.itemState}>
+                      <StateIcon domain="step" value={step.state} />{" "}
+                      <span>{statusOf("step", step.state).label}</span>
+                    </span>
+                  )}
                 </div>
+                {step.usage && <StepUsageLine usage={step.usage} />}
                 {step.checks.length > 0 && <CheckList checks={step.checks} />}
                 {step.blocked && <BlockedCalls calls={step.blocked} />}
               </li>

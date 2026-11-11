@@ -5,6 +5,7 @@ import { Button } from "../../ui/Button";
 import { Page } from "../../ui/Page";
 import { ScreenState } from "../../ui/ScreenState";
 import { statusOf } from "../../ui/status";
+import { QueuePanel } from "./QueuePanel";
 import styles from "./Runs.module.css";
 import { RunsTable } from "./RunsTable";
 
@@ -59,6 +60,7 @@ export function RunsScreen(): ReactElement {
   );
   return (
     <Page screen="runs" ready size="wide" title="Runs" description={description}>
+      <QueuePanel />
       <div className={styles.filters}>
         <label>
           Flow

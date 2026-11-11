@@ -1470,7 +1470,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - Fixtures: on `run-0006` one leaf step has `usage` `{ calls: 2, input: 4, output: 384, cacheRead: 8454, cacheWrite: 156, turns: 2, wallSeconds: 4.8, queuedSeconds: 0, reported: true }` and another has `usage` with `reported: false` (a `StepUsageLine` shows only for a step that has a `usage` object); `story/queue.ts` has a running row, a waiting `ceiling` row `{ running: 1, ceiling: 1 }` and a waiting `quota` row `{ until: "2026-11-11T14:05:00.000Z", harnessId: "claude-code" }`, in that order; the Claude Code card of `story/harnesses.ts` has `quota.windows` of one `seven_day` window at 0.78 resetting `2026-11-14T17:59:00.000Z`.
 - `HarnessCardView` shows each window in words, icon `clock`: "Weekly limit: 78% used, resets Sat 17:59" and "5-hour limit: 29% used, resets 14:00" (`weekday: "short"` and 24-hour time, local time); a window at or above the keeper's line is the same text, since the badge below the line is the whole of the spec's wording for it.
 
-- [ ] **Step 1: Write the failing tests** (the render helper is `renderApp("#/runs")` of `src/test/render.tsx`, `@testing-library/react` only: no `userEvent`)
+- [x] **Step 1: Write the failing tests** (the render helper is `renderApp("#/runs")` of `src/test/render.tsx`, `@testing-library/react` only: no `userEvent`)
 
 ```ts
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -1504,15 +1504,18 @@ test("the run screen shows tokens per step, or says they are not reported", asyn
 ```
 
 In `Harnesses.test.tsx` (its present render of the Harnesses screen): `expect(await screen.findByText("Weekly limit: 78% used, resets Sat 17:59")).toBeTruthy()`. The assertions of the present tests that count rows or text on `run-0006` are not loosened; the new lines add text only.
-- [ ] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens`. Expected: FAIL ("waitingLabel is not exported").
-- [ ] **Step 3: Implement** the components, the CSS module rules (tokens only) and the fixture data. **Step 4: Run** `pnpm vitest run apps packages/fixtures`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`; `pnpm build:web`. Expected: PASS.
+- [x] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens`. Expected: FAIL ("waitingLabel is not exported").
+- [x] **Step 3: Implement** the components, the CSS module rules (tokens only) and the fixture data. **Step 4: Run** `pnpm vitest run apps packages/fixtures`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`; `pnpm build:web`. Expected: PASS.
 - [ ] **Step 6: Chair step (GUI):** `pnpm capture` (must print `captured 20 screens`); look at `runs`, `run-detail` and `harnesses` in light and dark.
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add apps packages/fixtures
 git commit -m "Show tokens per step, the queue with its reasons and the card's limit windows" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

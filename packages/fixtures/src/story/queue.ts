@@ -22,7 +22,7 @@ export function queue(): QueueView {
         state: "waiting",
         queuedSeconds: 5,
         harnessId: "claude-code",
-        waiting: { reason: "quota", harnessId: "claude-code" },
+        waiting: { reason: "quota", harnessId: "claude-code", until: "2026-11-11T14:05:00.000Z" },
       },
     ],
   };

@@ -4,6 +4,7 @@ import { AppLink } from "../../nav/AppLink";
 import { formatDateTime } from "../../ui/format";
 import { Badge, StatusBadge } from "../../ui/StatusBadge";
 import styles from "./Runs.module.css";
+import { WaitingLine } from "./WaitingLine";
 export function RunsTable({ runs }: { runs: RunSummary[] }): ReactElement {
   return (
     <table aria-label="Runs" className={styles.table}>
@@ -24,7 +25,11 @@ export function RunsTable({ runs }: { runs: RunSummary[] }): ReactElement {
               {run.flowName} {run.oneTime && <Badge tone="neutral">One-time</Badge>}
             </td>
             <td>
-              <StatusBadge domain="run" value={run.state} />
+              {run.waiting ? (
+                <WaitingLine waiting={run.waiting} />
+              ) : (
+                <StatusBadge domain="run" value={run.state} />
+              )}
             </td>
             <td>{formatDateTime(run.startedAt)}</td>
             <td className={`${styles.mono} ${styles.truncate}`} title={run.project}>

@@ -118,6 +118,32 @@ export function runs(flows: FlowRecord[]): RunDetail[] {
     "pending",
     "pending",
   ]);
+  const first = figma.steps.at(0);
+  const second = figma.steps.at(1);
+  if (first)
+    first.usage = {
+      calls: 2,
+      input: 4,
+      output: 384,
+      cacheRead: 8454,
+      cacheWrite: 156,
+      turns: 2,
+      wallSeconds: 4.8,
+      queuedSeconds: 0,
+      reported: true,
+    };
+  if (second)
+    second.usage = {
+      calls: 0,
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      turns: 0,
+      wallSeconds: 0,
+      queuedSeconds: 0,
+      reported: false,
+    };
   figma.blockedReason =
     "Build the screens: flutter analyze still fails after 4 attempts and one re-plan. Fix the errors or change the step, then resume.";
   const build = figma.steps[2];

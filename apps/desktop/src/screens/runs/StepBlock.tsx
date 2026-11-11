@@ -6,6 +6,8 @@ import { statusOf } from "../../ui/status";
 import { BlockedCalls } from "./BlockedCalls";
 import { ItemList } from "./ItemList";
 import styles from "./Runs.module.css";
+import { StepUsageLine } from "./StepUsageLine";
+import { WaitingLine } from "./WaitingLine";
 export function StepBlock({ step, index }: { step: StepRun; index: number }): ReactElement {
   const id = useId();
   const required = step.checks.filter((check) => check.required);
@@ -20,7 +22,9 @@ export function StepBlock({ step, index }: { step: StepRun; index: number }): Re
         <span className={styles.stepNumber}>{index}</span>
         <StateIcon domain="step" value={step.state} />
         <h3 id={id}>{step.title}</h3>
-        {contradiction ? (
+        {step.waiting ? (
+          <WaitingLine waiting={step.waiting} />
+        ) : contradiction ? (
           <Badge tone="bad" icon="alert">
             Marked passed without a passing check
           </Badge>
@@ -42,6 +46,7 @@ export function StepBlock({ step, index }: { step: StepRun; index: number }): Re
             </span>
           </div>
         )}
+        {step.usage && <StepUsageLine usage={step.usage} />}
         {step.note && <p>{step.note}</p>}
         <CheckList checks={step.checks} />
         {step.blocked && <BlockedCalls calls={step.blocked} />}
