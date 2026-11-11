@@ -56,11 +56,17 @@ export function PayloadView({
   editing,
   text,
   setText,
+  picks,
+  setPicks,
+  pickable,
 }: {
   payload: Payload;
   editing: boolean;
   text: string;
   setText: (value: string) => void;
+  picks: string[];
+  setPicks: (picks: string[]) => void;
+  pickable: boolean;
 }): ReactElement {
   const title = {
     email: "This is the email that would be sent",
@@ -68,6 +74,7 @@ export function PayloadView({
     diff: "These are the changes you are approving",
     amount: "This is the amount you are approving",
     text: "This is the text you are approving",
+    choice: "These are the options to choose from",
   }[payload.kind];
   const editor = (
     <>
@@ -85,16 +92,43 @@ export function PayloadView({
       <h3 className={styles.strip}>
         <Icon
           name={
-            { email: "send", post: "post", diff: "builder", amount: "coin", text: "list" }[payload.kind] as
-              | "send"
-              | "post"
-              | "builder"
-              | "coin"
-              | "list"
+            { email: "send", post: "post", diff: "builder", amount: "coin", text: "list", choice: "list" }[
+              payload.kind
+            ] as "send" | "post" | "builder" | "coin" | "list"
           }
         />
         {title}
       </h3>
+      {payload.kind === "choice" && (
+        <div className={styles.choice}>
+          <p>
+            <Revealed text={payload.question} />
+          </p>
+          <fieldset>
+            <legend>Choose up to {payload.maxPick}. Pick none to skip them all.</legend>
+            {keyed(payload.options, (option) => option.key).map(({ value: option, key }) => {
+              const checked = picks.includes(option.key);
+              return (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={!pickable || (!checked && picks.length >= payload.maxPick)}
+                    onChange={() =>
+                      setPicks(checked ? picks.filter((pick) => pick !== option.key) : [...picks, option.key])
+                    }
+                  />
+                  <Revealed text={option.label} />{" "}
+                  <code>
+                    <Revealed text={option.key} />
+                  </code>{" "}
+                  {!pickable && checked && <span>Picked</span>}
+                </label>
+              );
+            })}
+          </fieldset>
+        </div>
+      )}
       {payload.kind === "email" && (
         <>
           <dl className={styles.payloadRows}>

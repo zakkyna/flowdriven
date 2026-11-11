@@ -250,9 +250,40 @@ export function createFixtureRunnerClient(
     "flows.import": () => {
       throw new RunnerError("unavailable", "Importing a flow needs the engine.");
     },
-    "approvals.answer": ({ approvalId }) => {
-      find(state.approvals, (a) => a.id === approvalId, "approval", approvalId);
-      throw new RunnerError("invalid_input", "This decision is not a choice.");
+    "approvals.answer": ({ approvalId, picks }) => {
+      const approval = find(state.approvals, (a) => a.id === approvalId, "approval", approvalId);
+      if (approval.kind !== "ask") throw new RunnerError("invalid_input", "This decision is not a choice.");
+      expireApprovals();
+      if (approval.state === "expired") throw new RunnerError("not_allowed", "This approval expired.");
+      if (approval.state !== "pending")
+        throw new RunnerError("not_allowed", "This decision was already made.");
+      if (!approval.runId || !approval.stepId || approval.payload.kind !== "choice")
+        throw new RunnerError("invalid_input", "This decision is not a choice.");
+      const r = run(approval.runId);
+      if (r.state !== "waiting_approval")
+        throw new RunnerError("not_allowed", "This run is no longer waiting for approval.");
+      const payload = approval.payload;
+      if (
+        new Set(payload.options.map((option) => option.key)).size !== payload.options.length ||
+        picks.length > payload.maxPick ||
+        new Set(picks).size !== picks.length ||
+        picks.some((key) => !payload.options.some((option) => option.key === key))
+      )
+        throw new RunnerError("invalid_input", "Those picks are not allowed.");
+      const step = r.steps.find((s) => s.stepId === approval.stepId);
+      if (!step) throw new RunnerError("not_found", `There is no step ${approval.stepId}.`);
+      const chosen = picks.map((key) => {
+        const option = payload.options.find((item) => item.key === key);
+        if (!option) throw new RunnerError("invalid_input", "Those picks are not allowed.");
+        return option;
+      });
+      approval.state = "approved";
+      approval.picks = [...picks];
+      approval.resolvedAt = now();
+      step.state = "passed";
+      step.picks = chosen;
+      if (!state.approvals.some((a) => a.runId === r.id && a.state === "pending")) r.state = "running";
+      return [approval];
     },
     "runs.export": ({ runId }) => {
       const r = run(runId);
@@ -390,6 +421,7 @@ export function createFixtureRunnerClient(
     "approvals.resolve": ({ approvalId, decision, editedText, applyToSimilar }) => {
       expireApprovals();
       const approval = find(state.approvals, (a) => a.id === approvalId, "approval", approvalId);
+      if (approval.kind === "ask") throw new RunnerError("invalid_input", "This decision is a choice.");
       if (approval.state === "expired") throw new RunnerError("not_allowed", "This approval expired.");
       if (decision === "edit" && applyToSimilar)
         throw new RunnerError("not_allowed", "Edits apply to one approval only.");

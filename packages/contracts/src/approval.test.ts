@@ -30,3 +30,34 @@ test("a risky approval names its action and only then", () => {
 test("an email payload needs a recipient", () => {
   expect(Approval.safeParse({ ...base, payload: { ...base.payload, to: [] } }).success).toBe(false);
 });
+
+test("a choice approval carries its question, options and limit", () => {
+  const payload = {
+    kind: "choice",
+    question: "Which jobs?",
+    options: [{ key: "j1", label: "Job one" }],
+    maxPick: 1,
+  };
+  const choice = { ...base, kind: "ask", riskyAction: undefined, payload };
+  expect(Approval.safeParse(choice).success).toBe(true);
+  expect(Approval.safeParse({ ...choice, payload: { ...payload, maxPick: 0 } }).success).toBe(false);
+  expect(Approval.safeParse({ ...choice, payload: { ...payload, question: undefined } }).success).toBe(false);
+});
+test("an ask approval is not a risky action and may name an item and its picks", () => {
+  const parsed = Approval.parse({
+    ...base,
+    kind: "ask",
+    riskyAction: undefined,
+    itemKey: "j1",
+    picks: ["j1"],
+    payload: {
+      kind: "choice",
+      question: "Which jobs?",
+      options: [{ key: "j1", label: "Job one" }],
+      maxPick: 1,
+    },
+  });
+  expect(parsed.riskyAction).toBeUndefined();
+  expect(parsed.itemKey).toBe("j1");
+  expect(parsed.picks).toEqual(["j1"]);
+});

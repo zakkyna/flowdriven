@@ -328,3 +328,19 @@
   max-height: 12em;
   overflow: auto;
 }
+
+.choice {
+  padding: var(--space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.choice fieldset {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.choice label {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

@@ -329,22 +329,24 @@ Approval gains itemKey: z.string().optional() (after stepTitle) and picks: z.arr
 ```
 `ApprovalList.tsx`: `actionName` gives `ask: "Choice"`, `noun` gives `ask: "choice"`, `icon` gives `ask: "list"`. `PayloadView.tsx`: its title record gains `choice: "These are the options to choose from"` and its icon record `choice: "list"`; a new prop group `picks: string[]`, `setPicks: (picks: string[]) => void`, `pickable: boolean`; for a choice it renders `<fieldset>` with `<legend>Choose up to {maxPick}. Pick none to skip them all.</legend>` and one `<label>` per option holding `<input type="checkbox">` and `<Revealed text={label} />` plus `<code>{key}</code>`; while `picks.length >= maxPick` every unchecked box is disabled; when `pickable` is false (not pending) the boxes are disabled and a picked option shows the word "Picked". `ApprovalDetail.tsx`: the note record gains `choice: "Nothing happens until you choose."`; for a pending choice the actions are one primary large button `Send choice` (no Approve, Edit or Reject), calling a new prop `answer: (picks: string[]) => void`; it keeps the picks in its own state (the component is keyed by approval id). `InboxScreen.tsx`: `answer(picks)` mirrors `resolve` (same `inFlight` and `justResolved` guards, `action("approvals.answer", { approvalId: selected.id, picks })`, status `Choice sent.`, errors in the detail). Fixtures `approvals.answer` (replaces Task 3's body), in this order: `not_found`; kind not `ask` `invalid_input` "This decision is not a choice."; expired (after `expireApprovals`) `not_allowed` "This approval expired."; not pending `not_allowed` "This decision was already made."; run not `waiting_approval` `not_allowed` "This run is no longer waiting for approval."; a pick that is not an option key or repeated, or more picks than `maxPick`, `invalid_input` "Those picks are not allowed."; then the approval becomes `approved` with `picks` and `resolvedAt`, the run's `pick`-step (the step with the approval's `stepId`) becomes `passed` with `picks` = the picked options (`{key, label}`), the run becomes `running` when no other approval of it is pending, and the list `[approval]` is returned.
 
-- [ ] **Step 1: Write the failing tests** (10 named; helper `choice(overrides)` builds a pending `ask` approval of run `run-0006` with options `j1` "Job one" and `j2` "Job two", `maxPick: 1`, pushed to `client.state.approvals` in the UI and client tests)
+- [x] **Step 1: Write the failing tests** (10 named; helper `choice(overrides)` builds a pending `ask` approval of run `run-0006` with options `j1` "Job one" and `j2` "Job two", `maxPick: 1`, pushed to `client.state.approvals` in the UI and client tests)
   `approval.test.ts` (2): (1) `a choice approval carries its question, options and limit`: valid parse; `maxPick: 0` and a missing `question` fail. (2) `an ask approval is not a risky action and may name an item and its picks`: parses without `riskyAction`; with `itemKey: "j1"`, `picks: ["j1"]`.
   `client.test.ts` (3): (3) `answering a choice approves it, records the picks and lets the run go on`. (4) `picks outside the options, too many picks and a second answer are refused`. (5) `an expired choice cannot be answered`.
   `Inbox.test.tsx` (5): (6) `a choice shows its question, its options and one Send choice button`. (7) `Send choice sends the picked keys and shows Choice sent.`: spy on `approvals.answer`, expects `{ approvalId, picks: ["j1"] }`. (8) `with maxPick 1 a second box is disabled until the first is cleared`. (9) `a second click cannot send the choice twice and the choice sent is the one shown`: two clicks give one call; switching the selection while a call is pending does not retarget it (the pattern of the present test `a second click after 400 ms cannot approve another decision`). (10) `a resolved choice lists what was picked and offers no button`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/contracts/src/approval.test.ts packages/fixtures/src/client.test.ts apps/desktop/src/screens/inbox`. Expected: FAIL.
-- [ ] **Step 3: Implement** the contract, the fixtures handler and the screens as described. The present Inbox tests must pass unchanged (the default story has no choice).
-- [ ] **Step 4: Run the tests, the typecheck and the web build**
+- [x] **Step 3: Implement** the contract, the fixtures handler and the screens as described. The present Inbox tests must pass unchanged (the default story has no choice).
+- [x] **Step 4: Run the tests, the typecheck and the web build**
   Run: `pnpm vitest run packages/contracts packages/fixtures apps/desktop/src/screens/inbox && pnpm typecheck && pnpm build:web`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/contracts packages/fixtures apps/desktop/src
 git commit -m "Let the Inbox answer a choice" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

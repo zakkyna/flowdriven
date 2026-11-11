@@ -1,4 +1,4 @@
-import { isRunnerError } from "@flowdriven/contracts";
+import { Approval, isRunnerError } from "@flowdriven/contracts";
 import { describe, expect, test, vi } from "vitest";
 import { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "./index";
 
@@ -398,5 +398,74 @@ test("flows.import needs the engine, audit.list is empty and a decision that is 
     c.call("approvals.answer", { approvalId: "missing", picks: [] }),
     "not_found",
     "There is no approval missing.",
+  );
+});
+
+function choice(overrides: Record<string, unknown> = {}): Approval {
+  return Approval.parse({
+    id: "ap-choice",
+    kind: "ask",
+    flowId: FIGMA,
+    flowName: "Figma to Flutter",
+    runId: "run-0006",
+    stepId: "pick",
+    summary: "Which jobs get a prototype?",
+    payload: {
+      kind: "choice",
+      question: "Which jobs?",
+      options: [
+        { key: "j1", label: "Job one" },
+        { key: "j2", label: "Job two" },
+      ],
+      maxPick: 1,
+    },
+    editable: false,
+    createdAt: "2026-11-10T09:00:00.000Z",
+    expiresAt: "2026-11-12T09:00:00.000Z",
+    state: "pending",
+    ...overrides,
+  });
+}
+function choiceClient(overrides: Record<string, unknown> = {}) {
+  const c = createFixtureRunnerClient();
+  const run = c.state.runs.find((r) => r.id === "run-0006");
+  if (!run) throw new Error("Missing run");
+  run.state = "waiting_approval";
+  const step = run.steps.at(0);
+  if (!step) throw new Error("Missing step");
+  step.stepId = "pick";
+  step.state = "waiting_approval";
+  c.state.approvals.push(choice(overrides));
+  return { c, run, step };
+}
+test("answering a choice approves it, records the picks and lets the run go on", async () => {
+  const { c, run, step } = choiceClient();
+  const result = await c.call("approvals.answer", { approvalId: "ap-choice", picks: ["j1"] });
+  expect(result).toHaveLength(1);
+  expect(result.at(0)).toMatchObject({ state: "approved", picks: ["j1"], resolvedAt: expect.any(String) });
+  expect(step).toMatchObject({ state: "passed", picks: [{ key: "j1", label: "Job one" }] });
+  expect(run.state).toBe("running");
+});
+test("picks outside the options, too many picks and a second answer are refused", async () => {
+  const { c } = choiceClient();
+  for (const picks of [["bad"], ["j1", "j2"], ["j1", "j1"]])
+    await fails(
+      c.call("approvals.answer", { approvalId: "ap-choice", picks }),
+      "invalid_input",
+      "Those picks are not allowed.",
+    );
+  await c.call("approvals.answer", { approvalId: "ap-choice", picks: [] });
+  await fails(
+    c.call("approvals.answer", { approvalId: "ap-choice", picks: [] }),
+    "not_allowed",
+    "This decision was already made.",
+  );
+});
+test("an expired choice cannot be answered", async () => {
+  const { c } = choiceClient({ expiresAt: "2026-11-10T09:01:00.000Z" });
+  await fails(
+    c.call("approvals.answer", { approvalId: "ap-choice", picks: [] }),
+    "not_allowed",
+    "This approval expired.",
   );
 });

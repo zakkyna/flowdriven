@@ -10,6 +10,7 @@ export const ApprovalKind = z.enum([
   "result_sign_off",
   "budget_raise",
   "requirement_addition",
+  "ask",
 ]);
 export type ApprovalKind = z.infer<typeof ApprovalKind>;
 export const ApprovalState = z.enum(["pending", "approved", "rejected", "expired"]);
@@ -29,6 +30,12 @@ export const Payload = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("amount"), amountUsd: z.number(), description: z.string() }),
   z.object({ kind: z.literal("text"), text: z.string() }),
+  z.object({
+    kind: z.literal("choice"),
+    question: z.string(),
+    options: z.array(z.object({ key: z.string(), label: z.string() })),
+    maxPick: z.number().int().min(1),
+  }),
 ]);
 export type Payload = z.infer<typeof Payload>;
 export const Approval = z
@@ -41,6 +48,7 @@ export const Approval = z
     runId: Id.optional(),
     stepId: Id.optional(),
     stepTitle: z.string().optional(),
+    itemKey: z.string().optional(),
     summary: z.string(),
     payload: Payload,
     editable: z.boolean(),
@@ -49,6 +57,7 @@ export const Approval = z
     expiresAt: IsoDateTime,
     state: ApprovalState,
     resolvedAt: IsoDateTime.optional(),
+    picks: z.array(z.string()).optional(),
   })
   .superRefine((approval, ctx) => {
     if ((approval.kind === "risky_action") !== (approval.riskyAction !== undefined)) {

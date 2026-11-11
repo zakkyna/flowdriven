@@ -16,6 +16,7 @@ export function actionName(a: Approval): string {
     result_sign_off: "Result sign-off",
     budget_raise: "Budget raise",
     requirement_addition: "New requirement",
+    ask: "Choice",
   }[a.kind];
 }
 export function noun(a: Approval): string {
@@ -28,6 +29,7 @@ export function noun(a: Approval): string {
     result_sign_off: "result",
     budget_raise: "budget raise",
     requirement_addition: "requirement",
+    ask: "choice",
   }[a.kind];
 }
 function icon(a: Approval): IconName {
@@ -40,6 +42,7 @@ function icon(a: Approval): IconName {
     result_sign_off: "check",
     budget_raise: "coin",
     requirement_addition: "plus",
+    ask: "list",
   }[a.kind] as IconName;
 }
 export function ApprovalList({

@@ -1,5 +1,5 @@
 import type { Approval, ApprovalDecision } from "@flowdriven/contracts";
-import type { ReactElement } from "react";
+import { type ReactElement, useState } from "react";
 import { AppLink } from "../../nav/AppLink";
 import { Button } from "../../ui/Button";
 import { formatDateTime } from "../../ui/format";
@@ -18,6 +18,7 @@ export function ApprovalDetail({
   edit,
   cancel,
   resolve,
+  answer,
   reject,
   approveAll,
   status,
@@ -33,12 +34,14 @@ export function ApprovalDetail({
   edit: () => void;
   cancel: () => void;
   resolve: (decision: ApprovalDecision) => void;
+  answer: (picks: string[]) => void;
   reject: () => void;
   approveAll: () => void;
   status: string;
   error?: string;
   next: () => void;
 }): ReactElement {
+  const [picks, setPicks] = useState<string[]>(a.picks ?? []);
   return (
     <div className={styles.detail}>
       <div className={styles.decisionBar} role="group" aria-label="Decision state">
@@ -80,7 +83,15 @@ export function ApprovalDetail({
               </>
             )}
           </dl>
-          <PayloadView payload={a.payload} editing={editing} text={text} setText={setText} />
+          <PayloadView
+            payload={a.payload}
+            editing={editing}
+            text={text}
+            setText={setText}
+            picks={a.state === "pending" ? picks : (a.picks ?? [])}
+            setPicks={setPicks}
+            pickable={a.state === "pending" && !busy}
+          />
           {a.state === "pending" && (
             <p className={styles.note}>
               {
@@ -90,13 +101,18 @@ export function ApprovalDetail({
                   amount: "Nothing is paid until you choose.",
                   diff: "Nothing changes until you choose.",
                   text: "Nothing happens until you choose.",
+                  choice: "Nothing happens until you choose.",
                 }[a.payload.kind]
               }
             </p>
           )}
           {a.state === "pending" && (
             <div className={styles.actions}>
-              {editing ? (
+              {a.kind === "ask" ? (
+                <Button variant="primary" size="large" disabled={busy} onClick={() => answer(picks)}>
+                  Send choice
+                </Button>
+              ) : editing ? (
                 <>
                   <Button variant="primary" size="large" disabled={busy} onClick={() => resolve("edit")}>
                     Approve with edits
@@ -122,7 +138,7 @@ export function ApprovalDetail({
               )}
             </div>
           )}
-          {a.state === "pending" && !editing && similar.length > 1 && (
+          {a.state === "pending" && a.kind !== "ask" && !editing && similar.length > 1 && (
             <div className={styles.similar}>
               <Button variant="text" disabled={busy} onClick={approveAll}>
                 Approve all {similar.length} similar for this run

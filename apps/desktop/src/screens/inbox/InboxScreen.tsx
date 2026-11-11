@@ -130,6 +130,24 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
     inFlight.current = false;
     setBusy(false);
   };
+  const answer = async (picks: string[]) => {
+    if (!selected || inFlight.current || justResolved.current.has(selected.id)) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError(undefined);
+    setStatus("");
+    const result = await action("approvals.answer", { approvalId: selected.id, picks });
+    if (result.ok) {
+      justResolved.current.add(selected.id);
+      if (previousSelection.current === selected.id) {
+        setStatus("Choice sent.");
+        pinned.current = selected.id;
+        navigate({ screen: "inbox", approvalId: selected.id });
+      }
+    } else if (previousSelection.current === selected.id) setError(result.error.message);
+    inFlight.current = false;
+    setBusy(false);
+  };
   return (
     <section data-screen="inbox" data-screen-ready="true" className={styles.layout}>
       <div className={styles.listZone}>
@@ -218,6 +236,7 @@ export function InboxScreen({ approvalId }: { approvalId?: string }): ReactEleme
           }}
           cancel={() => setEditing(false)}
           resolve={(decision) => void resolve(decision)}
+          answer={(picks) => void answer(picks)}
           reject={() => setDialog({ kind: "reject", approvalId: selected.id, ids: [selected.id] })}
           approveAll={() =>
             setDialog({ kind: "all", approvalId: selected.id, ids: similar.map((a) => a.id) })

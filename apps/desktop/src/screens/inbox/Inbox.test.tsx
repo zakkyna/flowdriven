@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { Approval } from "@flowdriven/contracts";
 import { createFixtureRunnerClient } from "@flowdriven/fixtures";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
@@ -209,6 +210,9 @@ test("patch preserves indentation and blank lines", async () => {
       editing={false}
       text=""
       setText={() => {}}
+      picks={[]}
+      setPicks={() => {}}
+      pickable={false}
     />,
   );
   const patch = screen.getByText("+ added").parentElement;
@@ -466,4 +470,97 @@ test("the decision styles follow the approved layout", () => {
   expect(css).toMatch(/\.similar\s*\{[^}]*border-top:\s*1px solid var\(--border\)/s);
   expect(css).toMatch(/\.hidden\s*\{[^}]*background:\s*var\(--bad-soft\)[^}]*color:\s*var\(--bad\)/s);
   expect(css).toMatch(/\.patch\s*\{[^}]*white-space:\s*pre-wrap/s);
+});
+
+function choice(overrides: Record<string, unknown> = {}): Approval {
+  return Approval.parse({
+    id: "ap-choice",
+    kind: "ask",
+    flowId: "dev.example.figma-to-flutter",
+    flowName: "Figma to Flutter",
+    runId: "run-0006",
+    stepId: "pick",
+    summary: "Which jobs get a prototype?",
+    payload: {
+      kind: "choice",
+      question: "Which jobs?",
+      options: [
+        { key: "j1", label: "Job one" },
+        { key: "j2", label: "Job two" },
+      ],
+      maxPick: 1,
+    },
+    editable: false,
+    createdAt: "2026-11-10T09:00:00.000Z",
+    expiresAt: "2026-11-12T09:00:00.000Z",
+    state: "pending",
+    ...overrides,
+  });
+}
+function renderChoice(overrides: Record<string, unknown> = {}) {
+  const view = renderApp("#/inbox/ap-choice");
+  const run = view.client.state.runs.find((r) => r.id === "run-0006");
+  const step = run?.steps.at(0);
+  if (!run || !step) throw new Error("Missing run or step");
+  run.state = "waiting_approval";
+  step.stepId = "pick";
+  step.state = "waiting_approval";
+  view.client.state.approvals.push(choice(overrides));
+  return view;
+}
+test("a choice shows its question, its options and one Send choice button", async () => {
+  renderChoice();
+  expect(await screen.findByText("Which jobs?")).toBeTruthy();
+  expect(screen.getByRole("checkbox", { name: /Job one/ })).toBeTruthy();
+  expect(screen.getByRole("checkbox", { name: /Job two/ })).toBeTruthy();
+  expect(screen.getAllByRole("button", { name: "Send choice" })).toHaveLength(1);
+  for (const name of ["Approve", "Edit", "Reject"]) expect(screen.queryByRole("button", { name })).toBeNull();
+});
+test("Send choice sends the picked keys and shows Choice sent.", async () => {
+  const { client } = renderChoice();
+  const spy = vi.spyOn(client, "call");
+  fireEvent.click(await screen.findByRole("checkbox", { name: /Job one/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Send choice" }));
+  await screen.findByText("Choice sent.");
+  expect(spy).toHaveBeenCalledWith("approvals.answer", { approvalId: "ap-choice", picks: ["j1"] });
+});
+test("with maxPick 1 a second box is disabled until the first is cleared", async () => {
+  renderChoice();
+  const first = await screen.findByRole("checkbox", { name: /Job one/ });
+  const second = screen.getByRole("checkbox", { name: /Job two/ });
+  fireEvent.click(first);
+  expect(second).toHaveProperty("disabled", true);
+  fireEvent.click(first);
+  expect(second).toHaveProperty("disabled", false);
+});
+test("a second click cannot send the choice twice and the choice sent is the one shown", async () => {
+  const { client } = renderChoice();
+  const original = client.call.bind(client);
+  let release: (() => void) | undefined;
+  const spy = vi.spyOn(client, "call").mockImplementation((name, input) =>
+    name === "approvals.answer"
+      ? new Promise<void>((resolve) => {
+          release = resolve;
+        }).then(() => original(name, input as never))
+      : original(name, input as never),
+  );
+  fireEvent.click(await screen.findByRole("checkbox", { name: /Job one/ }));
+  const button = screen.getByRole("button", { name: "Send choice" });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  const other = client.state.approvals.find((a) => a.id === "ap-0011");
+  if (!other) throw new Error("Missing approval");
+  fireEvent.click(within(list()).getByRole("button", { name: new RegExp(other.summary) }));
+  await act(async () => release?.());
+  expect(spy.mock.calls.filter(([name]) => name === "approvals.answer")).toEqual([
+    ["approvals.answer", { approvalId: "ap-choice", picks: ["j1"] }],
+  ]);
+  expect(window.location.hash).toBe("#/inbox/ap-0011");
+});
+test("a resolved choice lists what was picked and offers no button", async () => {
+  renderChoice({ state: "approved", picks: ["j1"], resolvedAt: "2026-11-10T10:00:00.000Z" });
+  expect(await screen.findByText("Picked")).toBeTruthy();
+  expect(screen.getByRole("checkbox", { name: /Job one/ })).toHaveProperty("disabled", true);
+  expect(screen.getByRole("checkbox", { name: /Job one/ })).toHaveProperty("checked", true);
+  expect(screen.queryByRole("button", { name: "Send choice" })).toBeNull();
 });
