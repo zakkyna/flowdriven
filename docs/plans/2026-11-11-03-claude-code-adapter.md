@@ -495,7 +495,7 @@ export const DENY: { badRequest: string; otherSession: string; noSchema: string;
 - File tools. `Read`, `Write`, `Edit` need a string `file_path` (`noPath` "This call has no file path."; an empty string counts as missing); `Glob` and `Grep` use `path` when present (a non-string gives `pathNotText` "This call has a path that is not text.") and `policy.cwd` otherwise. The path must be absolute (`notAbsolute` "This path is not absolute."), must have no `..` part (`badPath` "This path is not allowed."), must resolve with `resolveDeep` (else `badPath`), and must lie inside one of `policy.folders` (`outside` "This path is outside the folders this step declares."). `Write` and `Edit` need a containing folder with `write: true` (`readOnly` "This step may only read this folder."). A `pattern` of `Glob` and a `glob` of `Grep` that is present is denied with `pattern` "This pattern leaves the folder." when it is not text, or its text holds `..` anywhere (also inside a name such as `a..b`), or any piece of it is absolute (starts with `/` or `\`) or starts with `~`; the pieces are the text split on the characters `{`, `}` and `,`, so that a brace list such as `{/etc/hosts,note.txt}` is caught (fact 30: Claude Code's own confinement also holds for patterns, this is the second layer). `Write` and `Edit` are denied with `protectedPath` "This path is protected." when, for the resolved path or for the given path, some part after `fold(part)` equals `.git` or `.claude`, or the last part after `fold` equals `.mcp.json`; `fold(part)` is the part lower-cased with every code point outside 0x21 to 0x7e removed (the default macOS volume ignores case, and an invisible character inside a name must not hide it; compare code points, no regular expression with control characters). The checks run in this order: pattern, path presence and form, resolution, containment, write right, protected path.
 - Any other tool name in `policy.tools` has no rule: denied `badRequest`. (`tools` only ever holds the five names above; the line keeps a new tool denied until a rule exists.)
 
-- [ ] **Step 1: Write the failing tests** (12; a temp project folder with a space in its name, `notes/`, an `outside/` folder with a file `secret`, `notes/link -> ../../outside`, `notes/dangling -> ../../outside/missing`; the policy is built by hand with real paths: `tools` `["Read","Glob","Grep","Write","Edit"]`, one folder `{ path: <real notes>, write: true }`, `cwd` the same, `sessionId: "s1"`; a helper builds `{ hook_event_name: "PreToolUse", session_id: "s1", tool_name, tool_input, tool_use_id: "t1" }`)
+- [x] **Step 1: Write the failing tests** (12; a temp project folder with a space in its name, `notes/`, an `outside/` folder with a file `secret`, `notes/link -> ../../outside`, `notes/dangling -> ../../outside/missing`; the policy is built by hand with real paths: `tools` `["Read","Glob","Grep","Write","Edit"]`, one folder `{ path: <real notes>, write: true }`, `cwd` the same, `sessionId: "s1"`; a helper builds `{ hook_event_name: "PreToolUse", session_id: "s1", tool_name, tool_input, tool_use_id: "t1" }`)
   1. `declared calls inside the folder are allowed`: `Read` of `<notes>/a.txt` (missing file), `Write` of `<notes>/new/deep/b.txt`, `Glob` with no `path`, `Grep` with `path: <notes>` and `glob: "*.md"`, `Read` of the folder itself; each is `{ allow: true, tool, target }` (`target` is the path, or absent for a `Glob` without `path`).
   2. `a malformed request is denied with the recognised-call sentence`: `null`, `[]`, `"x"`, no `hook_event_name`, `"PostToolUse"`, `tool_name: 5`, `tool_use_id: 5`, no `tool_input`, `tool_input: []`.
   3. `a request of another session is denied`: `session_id: "s2"` and a missing `session_id` give `This request belongs to another session.`.
@@ -508,18 +508,20 @@ export const DENY: { badRequest: string; otherSession: string; noSchema: string;
   10. `a read-only folder refuses Write and Edit`: a policy with `write: false` gives `This step may only read this folder.` for `Write` and `Edit` and allows `Read`; with two folders (one read-only containing the file, one writable elsewhere) the write is still denied.
   11. `Glob and Grep: a path outside, a path that is not text and patterns that leave the folder`: `path: <outside>` gives `outside`; `path: 5` gives `This call has a path that is not text.`; `pattern` or `glob` of `/etc/*`, `~/*`, `../*`, `a/../../*`, `{/etc/hosts,note.txt}`, `{~/x,y}`, `a..b` and `5` give `This pattern leaves the folder.` (`*.md` and `**/*.txt` are allowed; `{a,b}/*.txt` is denied too, because its last piece starts with `/`: the rule is conservative on purpose); a `Grep` `pattern` (the regular expression) of `/etc/*` is not a path and is allowed.
   12. `protected paths and the audit fields`: `Write` and `Edit` of `<notes>/.git/config`, `<notes>/sub/.claude/settings.json` and `<notes>/.mcp.json` give `This path is protected.`, and so do the spellings `<notes>/.CLAUDE/settings.json`, `<notes>/.Git/hooks/x`, `<notes>/.MCP.JSON`, a name with an invisible character inside (`".cl" + String.fromCodePoint(0x200b) + "aude"` as a folder, and `".git" + String.fromCodePoint(0x3164)`) and a trailing space (`".claude "`), all built by concatenation and with no such folder existing; `Read` of `<notes>/.git/config` and `Write` of `<notes>/gitnotes.txt` and `<notes>/.github/x` are allowed; a denial and an allow for a `Write` whose `tool_input` holds `content: "SECRET-TEXT"` have JSON that does not contain `SECRET-TEXT`; a path of 400 characters gives a `target` of 300.
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/runner/src/claude/decide.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** by the rules.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** by the rules.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner/src/claude
 git commit -m "Add the pure decision function for tool calls" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
