@@ -10,7 +10,7 @@ import {
 import type { LeafStep, Value } from "@flowdriven/sdk";
 import type { RunView } from "../engine.ts";
 import { limits } from "../exec/limits.ts";
-import { reportLines } from "../report.ts";
+import { reportLines, sumUsage } from "../report.ts";
 import type { AuditEntry, RunRow, StepRow } from "../storage.ts";
 import { toApproval } from "./map-approval.ts";
 import { coreVersion } from "./map-flow.ts";
@@ -60,7 +60,12 @@ export function skipReason(note: string | undefined): SkipReason | undefined {
       return undefined;
   }
 }
-export function toRunSummary(run: RunRow, flowName: string, reportFirstLine?: string): RunSummary {
+export function toRunSummary(
+  run: RunRow,
+  flowName: string,
+  reportFirstLine?: string,
+  waiting?: import("../keeper/types.ts").Waiting,
+): RunSummary {
   return RunSummary.parse({
     id: run.id,
     flowId: run.flowId,
@@ -72,6 +77,7 @@ export function toRunSummary(run: RunRow, flowName: string, reportFirstLine?: st
     startedAt: run.startedAt,
     endedAt: run.endedAt,
     reportFirstLine,
+    waiting,
   });
 }
 export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => string): RunDetail {
@@ -111,6 +117,11 @@ export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => 
       ...(blocked === undefined ? {} : { blocked }),
       note: row?.note,
       picks,
+      usage: sumUsage(
+        (view.usage ?? []).filter((u) => u.stepId === step.id && u.itemKey === (row?.itemKey ?? "")),
+      ),
+      waiting: view.waiting?.steps.find((w) => w.stepId === step.id && w.itemKey === (row?.itemKey ?? ""))
+        ?.waiting,
     });
   }
   const steps = manifest.steps.map((step) => {
@@ -165,14 +176,34 @@ export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => 
       ];
     });
   });
+  const usageRows = view.usage ?? [];
+  const harnesses = [...new Set(usageRows.map((u) => u.harness))].map((harnessId) => {
+    const rows = usageRows.filter((u) => u.harness === harnessId);
+    const total = sumUsage(rows);
+    const costs = rows.flatMap((u) => (u.costUsd === undefined ? [] : [u.costUsd]));
+    return {
+      harnessId,
+      name: harnessId === "claude-code" ? "Claude Code" : harnessId,
+      calls: total.calls,
+      tokens: total.input + total.output + total.cacheRead + total.cacheWrite,
+      wallSeconds: total.wallSeconds,
+      ...(costs.length ? { estimatedCostUsd: costs.reduce((a, b) => a + b, 0) } : {}),
+    };
+  });
   return RunDetail.parse({
-    ...toRunSummary(run, manifest.name, lines[0]),
+    ...toRunSummary(run, manifest.name, lines[0], view.waiting?.run),
     inputs,
     steps,
     approvalIds: view.approvals.map((a) => a.id),
     outputs,
-    usage: [],
-    estimatedCostUsd: 0,
+    usage: harnesses,
+    calls: usageRows.map(({ harness, wallMs, queuedMs, ...row }) => ({
+      ...row,
+      harnessId: harness,
+      wallSeconds: wallMs / 1000,
+      queuedSeconds: queuedMs / 1000,
+    })),
+    estimatedCostUsd: usageRows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0),
     report: { runId: run.id, lines, saveOffer: false },
     blockedReason: run.blockedReason,
   });

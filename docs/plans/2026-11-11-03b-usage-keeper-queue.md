@@ -1214,7 +1214,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `report.ts` (`:143`): the `## Usage` section is a table `| Step | Calls | Input | Output | Cache read | Cache write | Turns | Seconds | Queued |` with one row per step and item that has usage (`step` or `step@item`) and a `Total` row, every cell through `escapeText` (`report.ts:44` `e()`; step ids and item keys come from untrusted flows), seconds as `(ms / 1000).toFixed(1)`; or the single line `- not reported` when no row has a model. `reportLines` (the three lines) is unchanged.
 - **Present assertion changed (owned by this task):** `report.test.ts:121`, in "inputs, params and outputs are listed" (its `view({})` has no usage rows): old `expect(md).toContain("Usage and cost are not tracked yet (plan 03).");` new `expect(md).toContain("- not reported");`. These edits replace an assertion with the equally strict one for the new behaviour; no test is removed, skipped or loosened.
 
-- [ ] **Step 1: Write the failing tests** `service/map-run-usage.test.ts` (build a `RunView` by hand: `run` with state `done`, `manifest: oneStepFlow("local.u")`, one `StepRow` for step `a` (`state: "passed"`), `items: []`, `approvals: []`, `audit: []`, `waiting: { steps: [] }`, and these `usage` rows, all `runId` of the run, `stepId: "a"`, `itemKey: ""`, `kind: "worker"`, `exit: "ok"`)
+- [x] **Step 1: Write the failing tests** `service/map-run-usage.test.ts` (build a `RunView` by hand: `run` with state `done`, `manifest: oneStepFlow("local.u")`, one `StepRow` for step `a` (`state: "passed"`), `items: []`, `approvals: []`, `audit: []`, `waiting: { steps: [] }`, and these `usage` rows, all `runId` of the run, `stepId: "a"`, `itemKey: ""`, `kind: "worker"`, `exit: "ok"`)
 
 ```ts
 const rows = [
@@ -1239,14 +1239,16 @@ test("a step with no row says nothing was reported, and a waiting reason is mapp
 ```
 
 `report.test.ts` (add; `view()` of that file with a `usage` array): with the three rows above the report contains `| a | 3 | 14 | 400 | 8454 | 156 | 4 | 5.3 | 0.4 |` and `| Total | 3 | 14 | 400 | 8454 | 156 | 4 | 5.3 | 0.4 |`; with a row whose `itemKey` is `x|y` it contains `a@x\|y`; and the old line of 121 is replaced as said above.
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/map-run-usage.test.ts packages/runner/src/report.test.ts`. Expected: FAIL (`usage` undefined; "- not reported" missing).
-- [ ] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/map-run-usage.test.ts packages/runner/src/report.test.ts`. Expected: FAIL (`usage` undefined; "- not reported" missing).
+- [x] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Show tokens per step and waiting reasons in the run read models and report" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

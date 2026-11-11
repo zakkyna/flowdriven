@@ -11,7 +11,16 @@ import { makeScope } from "./exec/scope.ts";
 import type { HarnessAdapter } from "./harness.ts";
 import type { Waiting } from "./keeper/types.ts";
 import type { ApprovalState, RunState } from "./states.ts";
-import type { ApprovalRow, AuditEntry, FlowRow, ItemRow, RunRow, StepRow, Store } from "./storage.ts";
+import type {
+  ApprovalRow,
+  AuditEntry,
+  FlowRow,
+  ItemRow,
+  RunRow,
+  StepRow,
+  Store,
+  UsageEventRow,
+} from "./storage.ts";
 export type EngineDeps = {
   store: Store;
   harness: HarnessAdapter;
@@ -41,6 +50,7 @@ export type RunView = {
   approvals: ApprovalRow[];
   audit: AuditEntry[];
   waiting?: ReturnType<Engine["waitingOf"]>;
+  usage?: UsageEventRow[];
 };
 export type Begun = { run: RunRow; settled: Promise<RunRow> };
 export interface Engine {
@@ -510,6 +520,7 @@ export function createEngine(input: EngineDeps): Engine {
         items: store.listItems(id),
         approvals: store.listApprovals({ runId: id }),
         audit: store.listAudit(id),
+        usage: store.listUsage({ runId: id }),
         waiting: waitingOf(id),
       };
     },

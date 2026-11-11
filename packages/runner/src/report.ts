@@ -1,4 +1,39 @@
 import type { RunView } from "./engine.ts";
+import type { UsageEventRow } from "./storage.ts";
+
+export function sumUsage(rows: UsageEventRow[]) {
+  let input = 0,
+    output = 0,
+    cacheRead = 0,
+    cacheWrite = 0,
+    turns = 0,
+    wallMs = 0,
+    queuedMs = 0;
+  let reported = false;
+  for (const row of rows) {
+    turns += row.turns;
+    wallMs += row.wallMs;
+    queuedMs += row.queuedMs;
+    if (row.models.length) reported = true;
+    for (const model of row.models) {
+      input += model.input;
+      output += model.output;
+      cacheRead += model.cacheRead;
+      cacheWrite += model.cacheWrite;
+    }
+  }
+  return {
+    calls: rows.length,
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    turns,
+    wallSeconds: wallMs / 1000,
+    queuedSeconds: queuedMs / 1000,
+    reported,
+  };
+}
 
 export function escapeText(text: string, max = 200): string {
   const escaped = text
@@ -135,16 +170,32 @@ export function renderRunReport(view: RunView): string {
       .filter((o) => row && Object.hasOwn(row.outputs, o.id))
       .map((o) => `- ${e(s.id)}.${e(o.id)}: ${e(JSON.stringify(row?.outputs[o.id]))}`);
   });
-  lines.push(
-    ...(outputs.length ? outputs : ["- none"]),
-    "",
-    "## Usage",
-    "",
-    "Usage and cost are not tracked yet (plan 03).",
-    "",
-    "## Audit",
-    "",
-  );
+  lines.push(...(outputs.length ? outputs : ["- none"]), "", "## Usage", "");
+  const usage = view.usage ?? [];
+  if (!usage.some((row) => row.models.length > 0)) lines.push("- not reported");
+  else {
+    lines.push(
+      "| Step | Calls | Input | Output | Cache read | Cache write | Turns | Seconds | Queued |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    );
+    const groups: { stepId: string; itemKey: string; rows: UsageEventRow[] }[] = [];
+    for (const row of usage) {
+      let group = groups.find((g) => g.stepId === row.stepId && g.itemKey === row.itemKey);
+      if (!group) {
+        group = { stepId: row.stepId, itemKey: row.itemKey, rows: [] };
+        groups.push(group);
+      }
+      group.rows.push(row);
+    }
+    const line = (name: string, rows: UsageEventRow[]) => {
+      const u = sumUsage(rows);
+      return `| ${[name, u.calls, u.input, u.output, u.cacheRead, u.cacheWrite, u.turns, u.wallSeconds.toFixed(1), u.queuedSeconds.toFixed(1)].map((cell) => e(String(cell))).join(" | ")} |`;
+    };
+    for (const group of groups)
+      lines.push(line(group.stepId + (group.itemKey ? `@${group.itemKey}` : ""), group.rows));
+    lines.push(line("Total", usage));
+  }
+  lines.push("", "## Audit", "");
   lines.push(
     ...(audit.length
       ? audit.map((a) => `- ${e(a.at)} ${e(a.kind)} ${e(JSON.stringify(a.detail))}`)

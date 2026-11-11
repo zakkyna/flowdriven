@@ -130,7 +130,7 @@ export function createHandlers({
           try {
             first = reportLines(engine.getRun(r.id)).at(0);
           } catch {}
-          return toRunSummary(r, flowName(r), first);
+          return toRunSummary(r, flowName(r), first, engine.waitingOf(r.id).run);
         }),
     "runs.status": ({ runId }) => {
       run(runId);

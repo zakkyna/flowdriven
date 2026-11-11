@@ -3,13 +3,14 @@ import { demoFlow } from "./demo/demo-flow.ts";
 import type { RunView } from "./engine.ts";
 import { renderRunReport, reportLines } from "./report.ts";
 import type { RunState } from "./states.ts";
-import type { CheckOutcome, StepRow } from "./storage.ts";
+import type { CheckOutcome, StepRow, UsageEventRow } from "./storage.ts";
 
 function view(overrides: {
   state?: RunState;
   blockedReason?: string;
   itemKey?: string;
   checks?: CheckOutcome[];
+  usage?: UsageEventRow[];
 }): RunView {
   const { manifest } = demoFlow();
   return {
@@ -63,6 +64,7 @@ function view(overrides: {
       },
     ],
     audit: [],
+    ...({ usage: overrides.usage } as { usage?: UsageEventRow[] }),
   };
 }
 test("the three report lines for each state", () => {
@@ -118,7 +120,7 @@ test("inputs, params and outputs are listed", () => {
   const md = renderRunReport(view({}));
   expect(md).toContain("- min\\_score: 7");
   expect(md).toContain('- alerts.jobs: \\[{"id":"j1"');
-  expect(md).toContain("Usage and cost are not tracked yet (plan 03).");
+  expect(md).toContain("- not reported");
 });
 test("the report has the sections in order", () => {
   const md = renderRunReport(view({}));
@@ -135,4 +137,51 @@ test("the report has the sections in order", () => {
   ].map((h) => md.indexOf(h));
   expect(at.every((i) => i >= 0)).toBe(true);
   expect(at).toEqual([...at].sort((a, b) => a - b));
+});
+
+test("usage reports step totals and escapes item keys", () => {
+  const base = {
+    runId: "run-1",
+    stepId: "a",
+    itemKey: "",
+    kind: "worker",
+    exit: "ok",
+    at: "2026-11-12T00:00:00.000Z",
+  } as const;
+  const rows: UsageEventRow[] = [
+    {
+      ...base,
+      harness: "claude-code",
+      attempt: 1,
+      turns: 2,
+      wallMs: 4800,
+      queuedMs: 0,
+      costUsd: 0.0003,
+      models: [{ model: "m", input: 4, output: 384, cacheRead: 8454, cacheWrite: 156 }],
+    },
+    {
+      ...base,
+      harness: "claude-code",
+      attempt: 2,
+      turns: 1,
+      wallMs: 400,
+      queuedMs: 400,
+      models: [{ model: "m", input: 0, output: 16, cacheRead: 0, cacheWrite: 0 }],
+    },
+    {
+      ...base,
+      harness: "codex",
+      attempt: 1,
+      turns: 1,
+      wallMs: 100,
+      queuedMs: 0,
+      models: [{ model: "x", input: 10, output: 0, cacheRead: 0, cacheWrite: 0 }],
+    },
+  ];
+  const md = renderRunReport(view({ usage: rows }));
+  expect(md).toContain("| a | 3 | 14 | 400 | 8454 | 156 | 4 | 5.3 | 0.4 |");
+  expect(md).toContain("| Total | 3 | 14 | 400 | 8454 | 156 | 4 | 5.3 | 0.4 |");
+  expect(renderRunReport(view({ usage: [{ ...(rows[0] as UsageEventRow), itemKey: "x|y" }] }))).toContain(
+    "a@x\\|y",
+  );
 });
