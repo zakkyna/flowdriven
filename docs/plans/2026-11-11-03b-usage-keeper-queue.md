@@ -1264,7 +1264,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `service.ts` creates `weekly` with `recheck: () => wired?.keeper.recheck()` and gives it to `wireKeeper` (`weeklyAnswer: weekly.answerOf`, `onWeekly: weekly.onLimit`); in demo mode `weekly` is built too, with a no-op `recheck`, and no keeper ever calls it. The windows themselves are kept by Task 12, so after a restart the line still holds and the answer is read from this setting.
 - **Built now:** the state, the item, the answer that stands until the reset, the gate (`admit` holds `cls: 2` tickets, Task 9) and the class of a run (a `trigger.kind` other than `manual`, Task 12). **Left to plan 04:** the trigger service that starts such runs, and the macOS notification the spec adds for this item (notifications are plan 04's).
 
-- [ ] **Step 1: Write the failing test** `weekly-limit.test.ts` (an in-memory store; a clock object `{ now: Date }`; `SAT = Date.parse("2026-11-14T09:00:00.000Z") / 1000`, a Saturday; `TZ=UTC` comes from `vitest.config.ts`)
+- [x] **Step 1: Write the failing test** `weekly-limit.test.ts` (an in-memory store; a clock object `{ now: Date }`; `SAT = Date.parse("2026-11-14T09:00:00.000Z") / 1000`, a Saturday; `TZ=UTC` comes from `vitest.config.ts`)
 
 ```ts
 test("one item per window, with the spec's question", () => {
@@ -1304,14 +1304,16 @@ test("with the keeper: triggered runs wait at the weekly line, owner runs go on,
 ```
 
 Add a handler test in the same file: through `createRunnerService` in demo mode, `approvals.list` has no weekly item; after `store.putSetting("weekly:claude-code", { resetsAt: SAT_FUTURE, askedAt, percent: 90 })` with a clock before it, `approvals.list` contains it and `approvals.resolve` with `reject` returns state `rejected`.
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/weekly-limit.test.ts`. Expected: FAIL ("Cannot find module ./weekly-limit.ts").
-- [ ] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/weekly-limit.test.ts`. Expected: FAIL ("Cannot find module ./weekly-limit.ts").
+- [x] **Step 3: Implement.** **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Add the weekly-limit inbox item and hold triggered runs at the line" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

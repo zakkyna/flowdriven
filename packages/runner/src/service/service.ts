@@ -11,6 +11,7 @@ import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
 import { createDispatcher, createHandlers } from "./handlers.ts";
 import { type Every, wireKeeper } from "./keeper-wiring.ts";
+import { createWeekly } from "./weekly-limit.ts";
 
 export type ServiceOptions = {
   store: Store;
@@ -59,9 +60,10 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       runIndex: (runId) =>
         store.listRuns({ flowId: store.getRun(runId)?.flowId }).findIndex((run) => run.id === runId),
     });
+  const weekly = createWeekly({ store, now, recheck: () => wired?.keeper.recheck() });
   const wired =
     mode === "live"
-      ? wireKeeper({ store, now, harness, ...options.keeper, markChanged: options.markChanged })
+      ? wireKeeper({ store, now, harness, ...options.keeper, weekly, markChanged: options.markChanged })
       : undefined;
   const engine = createEngine({
     store,
@@ -82,6 +84,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     projectDir,
     now,
     harnesses: hs,
+    weekly,
     harnessIdOf: (name) =>
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   });

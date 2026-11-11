@@ -18,6 +18,7 @@ import type { HarnessService } from "./claude-harness.ts";
 import { toApproval } from "./map-approval.ts";
 import { defaultSettings, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
 import { toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
+import type { createWeekly } from "./weekly-limit.ts";
 
 export type HandlerContext = {
   engine: Engine;
@@ -27,6 +28,7 @@ export type HandlerContext = {
   now: () => Date;
   harnessIdOf: (workerName: string) => string;
   harnesses?: Pick<HarnessService, "list" | "rescan" | "setConsent">;
+  weekly?: ReturnType<typeof createWeekly>;
 };
 export type Handlers = {
   [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> | Promise<OperationOutput<N>>;
@@ -66,6 +68,7 @@ export function createHandlers({
   now,
   harnessIdOf,
   harnesses,
+  weekly,
 }: HandlerContext): Handlers {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
@@ -152,16 +155,21 @@ export function createHandlers({
     "readiness.check": ({ flowId }) => toReadinessReport(flow(flowId), now().toISOString()),
     "readiness.install": () => unavailable("Installing a requirement arrives with the readiness engine."),
     "approvals.list": ({ state }) =>
-      engine
-        .listApprovals({ state })
-        .reverse()
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map(approval),
+      [
+        ...engine.listApprovals({ state }).reverse().map(approval),
+        ...(weekly?.list() ?? []).filter((a) => !state || a.state === state),
+      ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     "approvals.answer": ({ approvalId, picks }) => {
       engine.beginAnswer(approvalId, { picks });
       return [approval(approvalById(approvalId))];
     },
     "approvals.resolve": ({ approvalId, decision, applyToSimilar }) => {
+      if (approvalId.startsWith("weekly-limit:")) {
+        if (applyToSimilar) throw new RunnerError("not_allowed", "Nothing here can be approved as a batch.");
+        if (decision === "edit") throw new RunnerError("invalid_input", "Only text can be edited.");
+        if (!weekly) throw new RunnerError("not_found", `There is no approval ${approvalId}.`);
+        return weekly.resolve(approvalId, decision);
+      }
       const row = approvalById(approvalId);
       if (applyToSimilar) throw new RunnerError("not_allowed", "Nothing here can be approved as a batch.");
       if (row.kind === "ask")
