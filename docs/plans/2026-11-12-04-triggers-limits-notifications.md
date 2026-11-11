@@ -280,7 +280,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `parseSnapshot(value: unknown): Snapshot | undefined` (an object of `[number, number]` pairs with finite non-negative numbers and at most 5,000 keys, else `undefined`).
 - `mergeHandled(stored: Snapshot, scanned: Snapshot, batch: string[]): Snapshot`: every scanned path is taken at its scanned value if it is unchanged or in `batch`; a changed path that is not in `batch` keeps its stored value (or stays absent), so it shows as changed again; removed paths are dropped.
 
-- [ ] **Step 1: Write the failing tests** (real temporary folders from `test-helpers/tmp.ts`; no timing):
+- [x] **Step 1: Write the failing tests** (real temporary folders from `test-helpers/tmp.ts`; no timing):
   1. "scans relative paths with size and floored mtime, sorted, and keeps only files that match the glob" (`**/*.pdf`, `*.txt`, `a?c.md`, `docs/**`)
   2. "a symlinked file and a symlinked folder inside the root are skipped" (target outside the project)
   3. "the cap stops the scan, says capped, and the same files are kept on a second scan"
@@ -290,16 +290,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   7. "diffSnapshot finds new, resized and re-dated paths and the removed ones"
   8. "parseSnapshot refuses a wrong shape, a non-finite number and more than 5,000 keys"
   9. "mergeHandled keeps the old value of a changed path that is not in the batch"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/scan.test.ts`. Expected: FAIL ("Cannot find module ./scan.ts").
-- [ ] **Step 3: Implement** `scan.ts` with `node:fs` and `node:path` only.
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/scan.test.ts`. Expected: FAIL ("Cannot find module ./scan.ts").
+- [x] **Step 3: Implement** `scan.ts` with `node:fs` and `node:path` only.
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/triggers
 git commit -m "Add the folder scan, the snapshot compare and the watch root check" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
