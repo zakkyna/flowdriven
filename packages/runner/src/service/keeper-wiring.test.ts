@@ -168,3 +168,16 @@ test("invalid settings are audited once when the keeper starts", async () => {
     { detail: "The stored keeper settings could not be read; the ceiling is 1 until they are saved again." },
   ]);
 });
+
+test("a malformed stored quota row is dropped and the service still starts", async () => {
+  const w = await rig();
+  w.store.putSetting("quota:claude-code", { sevenDay: "invalid" });
+  const k = w.again();
+  expect(w.store.getSetting("quota:claude-code")).toBeUndefined();
+  expect(k.keeper.snapshot().ceiling).toBe(DEFAULT_KEEPER.ceiling);
+  w.store.createRun(w.run("r1"));
+  void k.harness.runStep(w.req("r1"));
+  await k.keeper.settled();
+  expect(k.keeper.snapshot().rows.at(0)?.state).toBe("running");
+  w.gate.release();
+});

@@ -88,7 +88,7 @@ test("an unanswered item expires at the reset; an unknown id is not_found", asyn
   const w = await rig();
   w.weekly.onLimit("claude-code", { utilization: 0.9, resetsAt: SAT });
   w.clock.now = new Date((SAT + 1) * 1000);
-  expect(w.weekly.list().at(0)?.state).toBe("expired");
+  expect(w.weekly.list()).toEqual([]);
   expect(() => w.weekly.resolve("weekly-limit:nobody", "approve")).toThrow("There is no approval");
 });
 test("with the keeper: triggered runs wait at the weekly line, owner runs go on, hold keeps them waiting, keep lets them in", async () => {
@@ -162,4 +162,23 @@ test("the demo service lists and resolves a stored weekly item", async () => {
     await service.call("approvals.resolve", { approvalId: "weekly-limit:claude-code", decision: "reject" }),
   );
   expect(result.at(0)?.state).toBe("rejected");
+});
+
+test("an answer stands when the next event has no readable reset time", async () => {
+  const w = await rig();
+  w.weekly.onLimit("claude-code", { utilization: 0.9, resetsAt: SAT });
+  w.weekly.resolve("weekly-limit:claude-code", "reject");
+  w.weekly.onLimit("claude-code", { utilization: 0.95 });
+  expect(w.weekly.answerOf("claude-code")).toBe("hold");
+  expect(w.weekly.list().at(0)).toMatchObject({
+    state: "rejected",
+    expiresAt: new Date(SAT * 1000).toISOString(),
+  });
+});
+test("an item past its reset is gone from the list", async () => {
+  const w = await rig();
+  w.weekly.onLimit("claude-code", { utilization: 0.9, resetsAt: SAT });
+  w.clock.now = new Date(SAT * 1000);
+  expect(w.weekly.list()).toEqual([]);
+  expect(w.store.getSetting("weekly:claude-code")).toBeUndefined();
 });

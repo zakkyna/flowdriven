@@ -27,7 +27,12 @@ export type Probes = {
   groupRssMb(pid: number): number | undefined;
   totalMb(): number;
 };
-export type Slot = { readonly waitedMs: number; attach(pid: number): void; release(): { peakMb?: number } };
+export type Slot = {
+  readonly waitedMs: number;
+  readonly admittedMs: number;
+  attach(pid: number): void;
+  release(): { peakMb?: number };
+};
 export type QueueRowView = {
   ticket: Ticket;
   state: "running" | "waiting";
@@ -39,7 +44,7 @@ export interface Keeper {
   acquire(ticket: Ticket, signal: AbortSignal, onWait?: () => void): Promise<Slot>;
   noteLimits(harnessId: string, limits: RateLimit[]): void;
   noteRefused(harnessId: string, untilMs?: number): void;
-  noteSuccess(harnessId: string): void;
+  noteSuccess(harnessId: string, admittedMs: number): void;
   quotaOf(harnessId: string): HarnessQuota;
   move(runId: string): boolean;
   snapshot(): KeeperSnapshot;

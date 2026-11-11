@@ -67,6 +67,7 @@ export function createKeeper(deps: Deps): Keeper {
   if (!loaded) quotaLoadFailed = true;
   const quotas = new Map<string, HarnessQuota>(Object.entries(loaded ?? {}));
   const refusals = new Map<string, number>();
+  const refusalStarted = new Map<string, number>();
   const front: string[] = [];
   let arrival = 0;
   let cancel: (() => void) | undefined;
@@ -107,6 +108,11 @@ export function createKeeper(deps: Deps): Keeper {
       p.notified = true;
       safely(() => p.onWait?.(), undefined);
     }
+  };
+  const forgetFront = (id: string) => {
+    if (waiting.some((p) => p.ticket.runId === id) || running.some((r) => r.ticket.runId === id)) return;
+    const index = front.indexOf(id);
+    if (index >= 0) front.splice(index, 1);
   };
   const remove = (p: Pending) => {
     const index = waiting.indexOf(p);
@@ -193,6 +199,7 @@ export function createKeeper(deps: Deps): Keeper {
           let released = false;
           p.resolve({
             waitedMs: row.queuedMs,
+            admittedMs: row.startedMs,
             attach(pid) {
               if (!released) row.pid = pid;
             },
@@ -201,6 +208,7 @@ export function createKeeper(deps: Deps): Keeper {
                 released = true;
                 const index = running.indexOf(row);
                 if (index >= 0) running.splice(index, 1);
+                forgetFront(row.ticket.runId);
                 change();
                 timer();
                 pump();
@@ -249,6 +257,7 @@ export function createKeeper(deps: Deps): Keeper {
           notified: false,
           abort: () => {
             remove(p);
+            forgetFront(p.ticket.runId);
             reject(new KeeperAbortError());
             change();
             timer();
@@ -291,21 +300,30 @@ export function createKeeper(deps: Deps): Keeper {
       pump();
     },
     noteRefused(harnessId, untilMs) {
-      const count = refusals.get(harnessId) ?? 0;
-      refusals.set(harnessId, count + 1);
-      const minutes = BACKOFF_MINUTES.at(Math.min(count, BACKOFF_MINUTES.length - 1)) ?? 60;
       const quota = quotas.get(harnessId) ?? {};
       const now = safely(deps.nowMs, Number.POSITIVE_INFINITY);
-      quota.rejectedUntil =
-        untilMs !== undefined && Number.isFinite(untilMs) && untilMs > now ? untilMs : now + minutes * 60_000;
+      const readable = untilMs !== undefined && Number.isFinite(untilMs) && untilMs > now;
+      if (quota.rejectedUntil !== undefined && quota.rejectedUntil > now) {
+        if (readable && untilMs > quota.rejectedUntil) quota.rejectedUntil = untilMs;
+      } else {
+        const count = refusals.get(harnessId) ?? 0;
+        refusals.set(harnessId, count + 1);
+        refusalStarted.set(harnessId, now);
+        const minutes = BACKOFF_MINUTES.at(Math.min(count, BACKOFF_MINUTES.length - 1)) ?? 60;
+        quota.rejectedUntil = readable ? untilMs : now + minutes * 60_000;
+      }
       quotas.set(harnessId, quota);
       pump();
     },
-    noteSuccess(harnessId) {
-      refusals.delete(harnessId);
-      const quota = quotas.get(harnessId);
-      if (quota) delete quota.rejectedUntil;
-      pump();
+    noteSuccess(harnessId, admittedMs) {
+      const began = refusalStarted.get(harnessId);
+      if (began !== undefined && Number.isFinite(admittedMs) && admittedMs > began) {
+        refusals.delete(harnessId);
+        refusalStarted.delete(harnessId);
+        const quota = quotas.get(harnessId);
+        if (quota) delete quota.rejectedUntil;
+        pump();
+      }
     },
     quotaOf(harnessId) {
       return structuredClone(quotas.get(harnessId) ?? {});

@@ -132,6 +132,9 @@ export async function openSqliteStore(
     getSetting(name) {
       return decode(get("SELECT data FROM settings WHERE name = ?", name));
     },
+    deleteSetting(name) {
+      execute("DELETE FROM settings WHERE name = ?", name);
+    },
     putSetting(name, value) {
       execute("INSERT OR REPLACE INTO settings (name, data) VALUES (?, ?)", name, json(value));
     },

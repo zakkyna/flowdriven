@@ -116,7 +116,7 @@ export function createKeptHarness(deps: Deps): HarnessAdapter {
           (limit) => limit.status === "rejected" && limit.resetsAt !== undefined,
         )?.resetsAt;
         if (exit === "quota") keeper.noteRefused(inner.id, reset === undefined ? undefined : reset * 1000);
-        else if (exit === "ok") keeper.noteSuccess(inner.id);
+        else if (exit === "ok") keeper.noteSuccess(inner.id, slot.admittedMs);
       } catch {
         /* A note must not replace the call result. */
       }

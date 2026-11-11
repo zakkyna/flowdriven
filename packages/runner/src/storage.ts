@@ -113,6 +113,7 @@ export interface Store {
   recentPeaks(q: { flowId: string; stepId: string; kind: CallKind; harness: string; runs: number }): number[];
   getSetting(name: string): Value | undefined;
   putSetting(name: string, value: Value): void;
+  deleteSetting(name: string): void;
   getHarnessState(id: string): HarnessStateRow | undefined;
   putHarnessState(row: HarnessStateRow): void;
   transaction<T>(fn: () => T): T; // BEGIN and COMMIT, ROLLBACK on a throw; nested calls use savepoints

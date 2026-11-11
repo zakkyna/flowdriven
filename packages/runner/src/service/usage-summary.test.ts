@@ -123,3 +123,29 @@ test("the harness card shows usage and stored windows, and stays unchanged witho
     Number.MAX_SAFE_INTEGER,
   );
 });
+
+test("today and the week start at the owner's local midnight", async () => {
+  const store = await rig();
+  // The boundary is the owner's local day, even when UTC calendar fields differ.
+  class LocalNow extends Date {
+    override getUTCDate() {
+      return super.getUTCDate() - 1;
+    }
+  }
+  const at = new LocalNow(2026, 10, 11, 12);
+  for (const date of [
+    new Date(2026, 10, 10, 23, 59),
+    new Date(2026, 10, 11, 0, 0),
+    new Date(2026, 10, 4, 0, 0),
+    new Date(2026, 10, 3, 23, 59),
+  ])
+    store.addUsage(row(date.toISOString(), [model]));
+  const result = summarizeUsage({
+    store,
+    now: at,
+    quotaOf: () => ({}),
+    lines: { fiveHour: 0.9, sevenDay: 0.9 },
+  }).harnesses.at(0);
+  expect(result?.today.calls).toBe(1);
+  expect(result?.week.calls).toBe(3);
+});

@@ -72,34 +72,38 @@ export function wireKeeper(o: {
     loadQuota: () => {
       const result: Record<string, { fiveHour?: QuotaWindow; sevenDay?: QuotaWindow }> = {};
       for (const id of new Set([o.harness.id, "claude-code"])) {
-        const value = store.getSetting(`quota:${id}`);
-        if (value === undefined) continue;
-        if (typeof value !== "object" || value === null || Array.isArray(value))
-          throw new Error("Invalid stored quota.");
-        const windows: { fiveHour?: QuotaWindow; sevenDay?: QuotaWindow } = {};
-        for (const key of ["fiveHour", "sevenDay"] as const) {
-          const w = value[key];
-          if (w === undefined) continue;
-          if (typeof w !== "object" || w === null || Array.isArray(w))
+        try {
+          const value = store.getSetting(`quota:${id}`);
+          if (value === undefined) continue;
+          if (typeof value !== "object" || value === null || Array.isArray(value))
             throw new Error("Invalid stored quota.");
-          const utilization = w.utilization;
-          const resetsAt = w.resetsAt;
-          if (
-            (utilization !== undefined &&
-              (typeof utilization !== "number" ||
-                !Number.isFinite(utilization) ||
-                utilization < 0 ||
-                utilization > 1)) ||
-            (resetsAt !== undefined &&
-              (typeof resetsAt !== "number" || !Number.isFinite(resetsAt) || resetsAt < 0))
-          )
-            throw new Error("Invalid stored quota.");
-          windows[key] = {
-            ...(utilization === undefined ? {} : { utilization }),
-            ...(resetsAt === undefined ? {} : { resetsAt }),
-          };
+          const windows: { fiveHour?: QuotaWindow; sevenDay?: QuotaWindow } = {};
+          for (const key of ["fiveHour", "sevenDay"] as const) {
+            const w = value[key];
+            if (w === undefined) continue;
+            if (typeof w !== "object" || w === null || Array.isArray(w))
+              throw new Error("Invalid stored quota.");
+            const utilization = w.utilization;
+            const resetsAt = w.resetsAt;
+            if (
+              (utilization !== undefined &&
+                (typeof utilization !== "number" ||
+                  !Number.isFinite(utilization) ||
+                  utilization < 0 ||
+                  utilization > 1)) ||
+              (resetsAt !== undefined &&
+                (typeof resetsAt !== "number" || !Number.isFinite(resetsAt) || resetsAt < 0))
+            )
+              throw new Error("Invalid stored quota.");
+            windows[key] = {
+              ...(utilization === undefined ? {} : { utilization }),
+              ...(resetsAt === undefined ? {} : { resetsAt }),
+            };
+          }
+          result[id] = windows;
+        } catch {
+          store.deleteSetting(`quota:${id}`);
         }
-        result[id] = windows;
       }
       return result;
     },

@@ -6,7 +6,7 @@ const prefix = "weekly-limit:";
 const validId = (id: string) => /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/.test(id);
 
 export function createWeekly(o: {
-  store: Pick<Store, "getSetting" | "putSetting">;
+  store: Pick<Store, "getSetting" | "putSetting" | "deleteSetting">;
   now: () => Date;
   recheck: () => void;
 }): {
@@ -33,6 +33,10 @@ export function createWeekly(o: {
       (answer !== undefined && answer !== "keep" && answer !== "hold")
     )
       return undefined;
+    if (resetsAt * 1000 <= o.now().getTime()) {
+      o.store.deleteSetting(`weekly:${id}`);
+      return undefined;
+    }
     return { resetsAt, askedAt, percent, ...(answer === undefined ? {} : { answer }) };
   }
   function item(id: string, state: State): Approval {
@@ -77,7 +81,14 @@ export function createWeekly(o: {
         window.utilization > 1
       )
         return;
-      const resetsAt = window.resetsAt ?? o.now().getTime() / 1000 + 86400;
+      const old = read(id);
+      const readable =
+        typeof window.resetsAt === "number" &&
+        Number.isFinite(window.resetsAt) &&
+        window.resetsAt * 1000 > o.now().getTime() &&
+        Number.isFinite(new Date(window.resetsAt * 1000).getTime());
+      if (!readable && old) return;
+      const resetsAt = readable ? (window.resetsAt as number) : o.now().getTime() / 1000 + 86400;
       if (
         !Number.isFinite(resetsAt) ||
         resetsAt * 1000 <= o.now().getTime() ||

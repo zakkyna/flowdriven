@@ -160,8 +160,8 @@ test("a refusal holds the harness until its reset, or backs off 15 then 30 minut
     until: new Date(1_000_000 + 15 * 60_000).toISOString(),
   });
   r.keeper.noteRefused("claude-code");
-  expect(r.keeper.quotaOf("claude-code").rejectedUntil).toBe(1_000_000 + 30 * 60_000);
-  r.keeper.noteSuccess("claude-code");
+  expect(r.keeper.quotaOf("claude-code").rejectedUntil).toBe(1_000_000 + 15 * 60_000);
+  r.keeper.noteSuccess("claude-code", 1_000_001);
   await r.keeper.settled();
   expect(await admitted(b)).toBe(true);
 });
@@ -249,4 +249,42 @@ test("invalid probe readings fail closed", async () => {
   void r.keeper.acquire(tk("bad-probe"), sig());
   await r.keeper.settled();
   expect(r.keeper.waitingOf("bad-probe").at(0)?.waiting.reason).toBe("memory");
+});
+
+test("a call that started before a refusal and ends ok does not lift the hold", () => {
+  const r = rig();
+  const started = r.clock.now;
+  r.clock.now++;
+  r.keeper.noteRefused("claude-code");
+  const until = r.keeper.quotaOf("claude-code").rejectedUntil;
+  r.keeper.noteSuccess("claude-code", started);
+  expect(r.keeper.quotaOf("claude-code").rejectedUntil).toBe(until);
+  r.keeper.noteRefused("claude-code", (until ?? 0) + 1000);
+  expect(r.keeper.quotaOf("claude-code").rejectedUntil).toBe((until ?? 0) + 1000);
+});
+test("three refusals at once count as one for the back-off", () => {
+  const r = rig();
+  for (let i = 0; i < 3; i++) r.keeper.noteRefused("claude-code");
+  expect(r.keeper.quotaOf("claude-code").rejectedUntil).toBe(r.clock.now + 15 * 60_000);
+  r.clock.now += 15 * 60_000 + 1;
+  r.keeper.noteRefused("claude-code");
+  expect(r.keeper.quotaOf("claude-code").rejectedUntil).toBe(r.clock.now + 30 * 60_000);
+});
+test("a moved run loses its front rank once it has nothing waiting", async () => {
+  const r = rig({ ceiling: 1, reserveMb: 0, fiveHourLine: 0.9, sevenDayLine: 0.9 });
+  const first = await r.keeper.acquire(tk("first"), sig());
+  const moved = r.keeper.acquire(tk("moved"), sig());
+  await r.keeper.settled();
+  expect(r.keeper.move("moved")).toBe(true);
+  first.release();
+  const slot = await moved;
+  slot.release();
+  const blocker = await r.keeper.acquire(tk("blocker"), sig());
+  const a = r.keeper.acquire(tk("earlier"), sig());
+  const b = r.keeper.acquire(tk("moved"), sig());
+  await r.keeper.settled();
+  expect(names(r.keeper)).toEqual(["blocker:running", "earlier:waiting", "moved:waiting"]);
+  blocker.release();
+  (await a).release();
+  (await b).release();
 });

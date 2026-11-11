@@ -63,7 +63,7 @@ test("only the operations in spec 8.7 are exposed over MCP, and the approval rul
       .map(([n]) => n),
   ).toEqual(["approvals.resolve", "approvals.answer"]);
   expect(operations["approvals.resolve"].mcpRule).toBe(
-    "Over MCP, risky actions only open the item in the app; only flow and result sign-offs resolve; applyToSimilar is refused.",
+    "Over MCP, risky actions only open the item in the app; only flow and result sign-offs resolve; applyToSimilar is refused. A weekly_limit item is never resolved over MCP.",
   );
 });
 test("every operation has schemas, known error codes and topics", () => {
@@ -119,4 +119,10 @@ test("runner.info names the contract version and one of three modes", () => {
     false,
   );
   expect(RUNNER_MODES).toEqual(["sample", "demo", "live"]);
+});
+
+test("the MCP rule names weekly limit items", () => {
+  expect(operations["approvals.resolve"].mcpRule).toContain(
+    "A weekly_limit item is never resolved over MCP.",
+  );
 });

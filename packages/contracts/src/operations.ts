@@ -162,7 +162,7 @@ export const operations = {
     output: z.array(Approval),
     mcp: "restricted",
     mcpRule:
-      "Over MCP, risky actions only open the item in the app; only flow and result sign-offs resolve; applyToSimilar is refused.",
+      "Over MCP, risky actions only open the item in the app; only flow and result sign-offs resolve; applyToSimilar is refused. A weekly_limit item is never resolved over MCP.",
     errors: ["invalid_input", "not_found", "not_allowed"],
     reads: [],
     writes: ["approvals", "runs", "flows"],

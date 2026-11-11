@@ -258,3 +258,24 @@ test("flows.import registers a valid folder, reports the issues of an invalid on
   });
   expect(await s.call("flows.list", {})).toHaveLength(1);
 });
+
+test("queue.move refuses a run that is running", async () => {
+  const { service, store } = await setup();
+  store.createRun({
+    id: "running",
+    flowId: "f",
+    flowHash: "h",
+    flowVersion: "1.0.0",
+    state: "running",
+    project: "/p",
+    inputs: {},
+    params: {},
+    requirements: [],
+    startedAt: fixed().toISOString(),
+  });
+  await expect(service.call("queue.move", { runId: "running" })).rejects.toMatchObject({
+    code: "not_allowed",
+    message: "This run is not waiting.",
+  });
+  await expect(service.call("queue.move", { runId: "missing" })).rejects.toMatchObject({ code: "not_found" });
+});

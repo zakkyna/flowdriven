@@ -34,8 +34,8 @@ export function summarizeUsage(o: {
 }): UsageSummary {
   const rows = o.store.listUsage();
   const nowMs = o.now.getTime();
-  const day = Date.UTC(o.now.getUTCFullYear(), o.now.getUTCMonth(), o.now.getUTCDate());
-  const week = nowMs - 7 * 86400_000;
+  const day = new Date(o.now.getFullYear(), o.now.getMonth(), o.now.getDate()).getTime();
+  const week = new Date(o.now.getFullYear(), o.now.getMonth(), o.now.getDate() - 7).getTime();
   const harnesses: HarnessUsage[] = [...new Set(rows.map((r) => r.harness))].map((id) => {
     const own = rows.filter((r) => r.harness === id);
     const quota = o.quotaOf(id);

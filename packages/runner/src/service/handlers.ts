@@ -347,7 +347,7 @@ export function createHandlers({
       run(runId);
       if (engine.waitingOf(runId).run?.reason === "flow_overlap")
         throw new RunnerError("not_allowed", "This run waits for the earlier run of its flow.");
-      if (!keeper?.move(runId)) throw new RunnerError("not_found", "That run is not waiting.");
+      if (!keeper?.move(runId)) throw new RunnerError("not_allowed", "This run is not waiting.");
       return queue();
     },
     "usage.summary": summary,
