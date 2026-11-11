@@ -1528,7 +1528,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - Consumes: the live-service setup of `service/review-03-s1.test.ts` and `service/check-flow.test.ts` (a live `createRunnerService` on a temp data folder with the fake `claude` as `claudePath`, `harnesses.setConsent` given after the first scan, readiness real), `readKeeperSettings` (Task 12), `store.listUsage` (Task 7), the fake's `usage` field (Task 8), `writeFakeScript`. No source file changes; if a test fails, the fault is in an earlier task and the executor fixes that task's code, not the test.
 - Helpers local to the test file: `liveRig({ keeper? })` builds the service (with `ServiceOptions.keeper` fake probes and an `every` that is never called) and stores `keeper` with `store.putSetting("keeper", ...)` before it starts; `runAsk(text, result?)` writes a fake script with one play whose `when` is a marker unique to that call (the fake takes the first play whose `when` is inside the prompt, fact 15), registers a one-step worker flow whose instructions start with the marker followed by `text`, output `draft` of type `text` and check `{ type: "not_contains", pattern: "ZZZ-NEVER" }`, starts it with `engine.beginStart`, awaits `settled` and returns the run id; the play answers with `{ do: "text", text }` and `{ do: "result", result: text, structured: { draft: text }, usage? }`. `sourceFiles`, `srcRoot` list the runner's non-test sources.
 
-- [ ] **Step 1: Write the tests** `packages/runner/src/review-03b-r19.test.ts`
+- [x] **Step 1: Write the tests** `packages/runner/src/review-03b-r19.test.ts`
 
 ```ts
 test("a flow, a memory-like text, a skill-like text and outside text that ask for 50 at once change no limit", async () => {
@@ -1568,14 +1568,16 @@ test("a worker's text cannot make a usage event or a rate-limit event of its own
 ```
 
 `parallel` in a flow (spec 20.4) is ignored by the runner today (Known limits), so there is no case for it here; plan 04 adds "a flow's `parallel` only lowers the ceiling" next to these tests.
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/review-03b-r19.test.ts`. Expected: PASS on the finished Tasks 7 to 18 (these are proofs of R19, not a failing-first test; to see them fail, temporarily make `parseUsage` read `event.result`, and the third test fails).
-- [ ] **Step 3: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 4: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/review-03b-r19.test.ts`. Expected: PASS on the finished Tasks 7 to 18 (these are proofs of R19, not a failing-first test; to see them fail, temporarily make `parseUsage` read `event.result`, and the third test fails).
+- [x] **Step 3: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 4: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/review-03b-r19.test.ts
 git commit -m "Prove R19: the limits are the owner's and the numbers come from the harness" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
