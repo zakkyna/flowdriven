@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { expect, test } from "vitest";
 
@@ -29,8 +29,14 @@ test("no eval and no Function constructor in the SDK and runner sources", () => 
   for (const f of [...sources("sdk"), ...sources("runner")])
     expect(readFileSync(f, "utf8")).not.toMatch(/\beval\s*\(|\bnew\s+Function\b|\bFunction\s*\(/);
 });
-test("runner sources never import the contracts", () => {
-  for (const f of sources("runner")) expect(readFileSync(f, "utf8")).not.toContain("@flowdriven/contracts");
+test("only the runner service, its entry and its test helpers import the contracts", () => {
+  for (const f of sources("runner")) {
+    const path = relative(join(pkgs, "runner", "src"), f)
+      .split(sep)
+      .join("/");
+    if (!path.startsWith("service/") && !path.startsWith("test-helpers/") && path !== "main.ts")
+      expect(readFileSync(f, "utf8")).not.toContain("@flowdriven/contracts");
+  }
 });
 test("the SDK main entry stays free of node: modules", () => {
   for (const f of sources("sdk").filter((p) => !/[\\/](hash|load)[\\/]|[\\/]node\.ts$/.test(p)))

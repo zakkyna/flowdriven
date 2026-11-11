@@ -80,6 +80,7 @@ export interface Store {
   transaction<T>(fn: () => T): T; // BEGIN and COMMIT, ROLLBACK on a throw; nested calls use savepoints
   putFlow(row: FlowRow): void;
   getFlow(id: string, hash?: string): FlowRow | undefined; // no hash: the newest registered (highest rowid, not time); the same id and hash replaces
+  listFlows(): FlowRow[];
   createRun(row: RunRow): void;
   updateRun(id: string, patch: Partial<Omit<RunRow, "id">>): void;
   getRun(id: string): RunRow | undefined;

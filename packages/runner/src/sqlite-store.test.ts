@@ -1,4 +1,7 @@
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { once } from "node:events";
 import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "./sqlite-store.ts";
 import type { RunRow, StepRow, Store } from "./storage.ts";
@@ -186,4 +189,53 @@ test("keeps two items with the same key at different positions", async () => {
   store.upsertItem(duplicate);
   store.upsertItem(item);
   expect(store.listItems("r1", "l")).toEqual([item, duplicate]);
+});
+
+test("listFlows returns the newest registration of each flow ordered by id", async () => {
+  const store = await open();
+  const flow = { id: "b", version: "1", hash: "h1", manifest: {}, files: {}, registeredAt: "2026" };
+  store.putFlow(flow);
+  store.putFlow({ ...flow, id: "a" });
+  store.putFlow({ ...flow, id: "a", hash: "h2" });
+  expect(store.listFlows().map((row) => row.id)).toEqual(["a", "b"]);
+  expect(store.listFlows().at(0)?.hash).toBe("h2");
+});
+async function holder(path: string): Promise<ChildProcessWithoutNullStreams> {
+  const child = spawn(
+    process.execPath,
+    [fileURLToPath(new URL("./test-helpers/hold-lock-child.ts", import.meta.url)), path],
+    { env: { ...process.env, NODE_OPTIONS: "" }, stdio: "pipe" },
+  );
+  await new Promise<void>((resolve, reject) => {
+    let output = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+      if (output.includes("locked\n")) resolve();
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => reject(new Error(`holder exited early: ${code}`)));
+  });
+  return child;
+}
+test("an exclusive store refuses a second process and says so", { timeout: 20_000 }, async () => {
+  const path = tempPath();
+  const child = await holder(path);
+  try {
+    await expect(openSqliteStore(path, { exclusive: true })).rejects.toMatchObject({
+      code: "unavailable",
+      message: "Another FlowDriven runner is using this data folder.",
+    });
+  } finally {
+    child.stdin.end();
+  }
+  expect((await once(child, "exit")).at(0)).toBe(0);
+});
+test("the lock goes away when the holder is killed", { timeout: 20_000 }, async () => {
+  const path = tempPath();
+  const child = await holder(path);
+  child.kill("SIGKILL");
+  await once(child, "exit");
+  const store = await openSqliteStore(path, { exclusive: true });
+  stores.push(store);
+  expect(store.listFlows()).toEqual([]);
 });

@@ -3,10 +3,39 @@ import { EngineError } from "./errors.ts";
 import { SCHEMA } from "./schema.ts";
 import type { ApprovalRow, AuditEntry, FlowRow, ItemRow, RunRow, StepRow, Store } from "./storage.ts";
 
-export async function openSqliteStore(path: string, _options?: { now?: () => Date }): Promise<Store> {
+export async function openSqliteStore(
+  path: string,
+  options?: { now?: () => Date; exclusive?: boolean },
+): Promise<Store> {
   const { DatabaseSync } = await import("node:sqlite");
-  const db: DatabaseSync = new DatabaseSync(path);
+  let db: DatabaseSync;
   try {
+    db = new DatabaseSync(path);
+  } catch (error) {
+    if (options?.exclusive && path !== ":memory:")
+      throw new EngineError(
+        "unavailable",
+        error instanceof Error && /locked|busy/i.test(error.message)
+          ? "Another FlowDriven runner is using this data folder."
+          : "The data folder could not be opened.",
+      );
+    throw error;
+  }
+  try {
+    if (options?.exclusive && path !== ":memory:") {
+      try {
+        db.exec(
+          "PRAGMA busy_timeout = 250; PRAGMA locking_mode = EXCLUSIVE; PRAGMA journal_mode = WAL; BEGIN IMMEDIATE; COMMIT;",
+        );
+      } catch (error) {
+        throw new EngineError(
+          "unavailable",
+          error instanceof Error && /locked|busy/i.test(error.message)
+            ? "Another FlowDriven runner is using this data folder."
+            : "The data folder could not be opened.",
+        );
+      }
+    }
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     const version = db.prepare("PRAGMA user_version").get()?.user_version;
     if (typeof version !== "number" || version > 1 || version < 0)
@@ -55,6 +84,11 @@ export async function openSqliteStore(path: string, _options?: { now?: () => Dat
         hash === undefined
           ? get("SELECT data FROM flows WHERE id = ? ORDER BY rowid DESC LIMIT 1", id)
           : get("SELECT data FROM flows WHERE id = ? AND hash = ?", id, hash),
+      );
+    },
+    listFlows() {
+      return decodeAll<FlowRow>(
+        all("SELECT data FROM flows WHERE rowid IN (SELECT MAX(rowid) FROM flows GROUP BY id) ORDER BY id"),
       );
     },
     createRun(row) {

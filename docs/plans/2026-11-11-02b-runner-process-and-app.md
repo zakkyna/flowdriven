@@ -526,22 +526,24 @@ export function prepareDataDir(path: string, options?: { uid?: number }): string
 
 Present test that changes (1): `source-rules.test.ts` "runner sources never import the contracts" (replaced as above).
 
-- [ ] **Step 1: Write the failing tests** (10 new, 1 changed = 11 named)
+- [x] **Step 1: Write the failing tests** (10 new, 1 changed = 11 named)
   `sqlite-store.test.ts` (3): (1) `listFlows returns the newest registration of each flow ordered by id`: put `b` h1, `a` h1, `a` h2: ids `["a","b"]`, `a`'s hash `h2`. (2) `an exclusive store refuses a second process and says so`: spawn `hold-lock-child.ts` with `process.execPath` (`NODE_OPTIONS: ""`), wait for its `locked` line, then `openSqliteStore(path, { exclusive: true })` rejects with `{ code: "unavailable", message: "Another FlowDriven runner is using this data folder." }`; end the child's stdin and expect exit 0. (3) `the lock goes away when the holder is killed`: kill the child with SIGKILL, then opening exclusive succeeds and `listFlows()` is readable.
   `events.test.ts` (3): (4) `each mutating call marks its topics`: a fake `mark` records `putFlow` -> `flows`, `createRun`/`updateRun`/`upsertStep`/`upsertItem` -> `runs`, `createApproval`/`updateApproval` -> `approvals, runs`; inside `transaction` the writes mark too. (5) `reads, counters and the audit log mark nothing, and a call that throws marks nothing`: `getRun`, `listRuns`, `markSeen`, `appendAudit`, `addGrant`, `increment` mark nothing; `updateRun` of an unknown id throws `not_found` and marks nothing. (6) `writes in one turn make one event with sorted topics`: with an injected scheduler that queues its callbacks, marking `runs`, `approvals`, `runs`, `flows` and then running the queue emits exactly one `{ type: "changed", topics: ["flows", "runs", "approvals"] }`; a later mark queues a second callback and emits a second event; with the default scheduler one `await new Promise((resolve) => setImmediate(resolve))` is enough to see the event.
   `data-dir.test.ts` (4): (7) `creates a missing folder with mode 0700`: a nested missing path; `statSync(path).mode & 0o777` is `0o700`. (8) `accepts an existing folder it owns and returns the resolved path`. (9) `refuses what is not a folder owned by the user and writable only by it`: a regular file, a symlink to a folder, a folder with `chmod 0o777`, and an `options.uid` of `(process.getuid?.() ?? 0) + 1`: each rejects with `invalid_input` and the sentence above. (10) `refuses a relative path`.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/service packages/runner/src/sqlite-store.test.ts packages/runner/src/source-rules.test.ts`. Expected: FAIL (modules missing, `listFlows is not a function`).
-- [ ] **Step 3: Implement** the interfaces. Tried in the scratch clone: the exclusive open, the second-process refusal after about 250 ms, the release after SIGKILL and `listFlows` behave as written.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** the interfaces. Tried in the scratch clone: the exclusive open, the second-process refusal after about 250 ms, the release after SIGKILL and `listFlows` behave as written.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Add flow listing, the exclusive lock, change events and data folder checks" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
