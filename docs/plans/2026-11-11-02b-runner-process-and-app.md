@@ -479,21 +479,23 @@ Rules:
 5. `shutdown()` sets a flag and calls `chain.stop()`. After it every `begin*` throws `EngineError("unavailable", "The engine is stopping.")`; `sweepExpired` and the reads still work.
 6. `settled` never rejects and nothing thrown escapes (plan 02's rule): the chain's fallback covers a throw that `blockError` itself could not handle (for example a closed store). The fallback itself must not throw: it is `() => { try { return store.getRun(run.id) ?? run; } catch { return run; } }`.
 
-- [ ] **Step 1: Write the failing tests** (11 named; helper `gated()` is a small `HarnessAdapter` whose `runStep` records `"<runId>:<stepId>"` in `calls` and waits until the test calls `release(runId, result?)`; flows come from `makeFlow` of `test-helpers/review-flow.ts` with `extra: { id: "local.other", name: "Other" }` for the second flow; engines use `createEngine({ store, harness, newId })` on `:memory:` with ids `run-1`, ...)
+- [x] **Step 1: Write the failing tests** (11 named; helper `gated()` is a small `HarnessAdapter` whose `runStep` records `"<runId>:<stepId>"` in `calls` and waits until the test calls `release(runId, result?)`; flows come from `makeFlow` of `test-helpers/review-flow.ts` with `extra: { id: "local.other", name: "Other" }` for the second flow; engines use `createEngine({ store, harness, newId })` on `:memory:` with ids `run-1`, ...)
   (1) `beginStart answers after its own write and the walk goes on in the background`: `b.run.state` is `queued`; `store.getRun("run-1")` exists at once; the harness has not been called in the same turn; after `release` `await b.settled` is `done`. (2) `begin variants refuse bad input at once and write nothing`: `beginStart("nope", ...)` throws `{ code: "not_found" }` synchronously and `listRuns()` is empty; a second `beginAnswer` on the same approval throws `not_allowed` "This decision was already made." synchronously. (3) `beginAnswer commits the decision before it returns`: the approval is `approved`, the run `running`, `answer.run.state` `running`, and the walk is not finished. (4) `beginDecide approves in the background and rejects at once`. (5) `beginResume returns the run in checking and settles when the walk ends`: a blocked run (quota exit) is fixed and resumed; `b.run.state` is `checking`, `settled` is `done`; resuming a `done` run throws `not_allowed` synchronously. (6) `beginRecover returns the interrupted runs at once and settles when the resumed walks end`. (7) `walks of one flow run first in first out`: two `beginStart` of `local.test`, one `local.other`: `calls` is `["run-1:a", "run-3:a"]` while all are held, `run-2` starts only after `release("run-1")`. (8) `walks of different flows overlap` (the same set-up asserts that `run-3` was called before `run-1` was released; write it as its own test with two flows only). (9) `settled never rejects`: a harness that throws, a readiness hook that throws, and a store closed under a walk each give a settled run, not a rejection. (10) `sweepExpired expires an approval without any read, through the flow's chain`: advance the clock 24 h + 1 ms, `await engine.sweepExpired()`, then `store.getApproval(id).state` is `expired` and the run `done` (ask with `on_expiry: end`). (11) `shutdown refuses new work and drops walks that have not begun`: a second queued run's `settled` resolves to its `queued` row and the harness is never called for it; `beginStart` throws `{ code: "unavailable", message: "The engine is stopping." }`.
   No present test changes; `engine-ask.test.ts` "refuses picks outside the options and a second answer" (two concurrent `answerAsk`) must still pass.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/engine-begin.test.ts`. Expected: FAIL (`beginStart is not a function`).
-- [ ] **Step 3: Implement** by the rules.
-- [ ] **Step 4: Run the engine tests**
+- [x] **Step 3: Implement** by the rules.
+- [x] **Step 4: Run the engine tests**
   Run: `pnpm vitest run packages/runner`. Expected: PASS (all 140 present tests, one of them in `states.test.ts` already changed by Task 2).
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner
 git commit -m "Let the engine answer at once and walk in the background" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

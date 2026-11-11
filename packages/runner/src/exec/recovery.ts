@@ -1,5 +1,5 @@
 import type { FlowManifest } from "@flowdriven/sdk";
-import type { ResolvedDeps } from "../engine.ts";
+import type { Begun, ResolvedDeps } from "../engine.ts";
 import { EngineError } from "../errors.ts";
 import type { RunRow, StepRow } from "../storage.ts";
 
@@ -7,11 +7,14 @@ export function createRecovery(ctx: {
   deps: ResolvedDeps;
   checkAndWalk: (run: RunRow) => Promise<RunRow>;
   sweep: () => void;
+  enqueue: (run: RunRow, task: () => Promise<RunRow>) => Begun;
+  assertRunning: () => void;
   blockError: (id: string, error: unknown) => RunRow;
   flowFor: (run: RunRow) => FlowManifest;
 }) {
   const { store, now } = ctx.deps;
-  async function resumeRun(id: string): Promise<RunRow> {
+  function beginResume(id: string): Begun {
+    ctx.assertRunning();
     ctx.sweep();
     const run = store.getRun(id);
     if (!run) throw new EngineError("not_found", "Run not found.");
@@ -36,9 +39,10 @@ export function createRecovery(ctx: {
       });
       const updated = store.getRun(id);
       if (!updated) throw new EngineError("not_found", "Run not found.");
-      return await ctx.checkAndWalk(updated);
+      return ctx.enqueue(updated, () => ctx.checkAndWalk(updated));
     } catch (error) {
-      return ctx.blockError(id, error);
+      const blocked = ctx.blockError(id, error);
+      return { run: blocked, settled: Promise.resolve(blocked) };
     }
   }
   function isIdempotent(row: StepRow, manifest: FlowManifest): boolean {
@@ -56,8 +60,9 @@ export function createRecovery(ctx: {
     });
     return matching.length === 1 && matching.at(0)?.idempotent === true;
   }
-  async function recoverAfterCrash(): Promise<RunRow[]> {
-    const resumed: RunRow[] = [];
+  function beginRecover(): { runs: RunRow[]; settled: Promise<RunRow[]> } {
+    ctx.assertRunning();
+    const resumed: Begun[] = [];
     for (const run of store
       .listRuns()
       .filter((r) => ["queued", "checking", "running", "retrying"].includes(r.state))) {
@@ -80,12 +85,18 @@ export function createRecovery(ctx: {
           store.updateRun(run.id, { state: "interrupted" });
           store.appendAudit({ at: now().toISOString(), kind: "run_interrupted", runId: run.id, detail: {} });
         });
-        if (safe) resumed.push(await resumeRun(run.id));
+        if (safe) resumed.push(beginResume(run.id));
       } catch (error) {
         ctx.blockError(run.id, error);
       }
     }
-    return resumed;
+    return { runs: resumed.map((b) => b.run), settled: Promise.all(resumed.map((b) => b.settled)) };
   }
-  return { resumeRun, recoverAfterCrash };
+  async function resumeRun(id: string): Promise<RunRow> {
+    return beginResume(id).settled;
+  }
+  async function recoverAfterCrash(): Promise<RunRow[]> {
+    return beginRecover().settled;
+  }
+  return { beginResume, beginRecover, resumeRun, recoverAfterCrash };
 }

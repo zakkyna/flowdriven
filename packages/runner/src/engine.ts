@@ -3,6 +3,7 @@ import { type FlowManifest, hasErrors, type Value, validateManifest } from "@flo
 import type { CommandRunner } from "./checks/command.ts";
 import { EngineError } from "./errors.ts";
 import { runAsk } from "./exec/ask.ts";
+import { createChain } from "./exec/chain.ts";
 import { runLeaf } from "./exec/leaf.ts";
 import { runLoop } from "./exec/loop.ts";
 import { createRecovery } from "./exec/recovery.ts";
@@ -38,7 +39,15 @@ export type RunView = {
   approvals: ApprovalRow[];
   audit: AuditEntry[];
 };
+export type Begun = { run: RunRow; settled: Promise<RunRow> };
 export interface Engine {
+  beginStart(flowId: string, options: StartOptions): Begun;
+  beginAnswer(approvalId: string, answer: { picks: string[] }): Begun;
+  beginDecide(approvalId: string, decision: "approve" | "reject"): Begun;
+  beginResume(runId: string): Begun;
+  beginRecover(): { runs: RunRow[]; settled: Promise<RunRow[]> };
+  sweepExpired(): Promise<void>;
+  shutdown(): void;
   registerFlow(manifest: FlowManifest, hash: string, files?: Record<string, string>): FlowRow;
   startRun(flowId: string, options: StartOptions): Promise<RunRow>;
   answerAsk(approvalId: string, answer: { picks: string[] }): Promise<RunRow>;
@@ -58,6 +67,23 @@ export function createEngine(input: EngineDeps): Engine {
     builtins: input.builtins ?? {},
   };
   const { store, now } = deps;
+  const chain = createChain();
+  let stopping = false;
+  function assertRunning() {
+    if (stopping) throw new EngineError("unavailable", "The engine is stopping.");
+  }
+  function enqueue(run: RunRow, task: () => Promise<RunRow>): Begun {
+    return {
+      run,
+      settled: chain.enqueue(run.flowId, task, () => {
+        try {
+          return store.getRun(run.id) ?? run;
+        } catch {
+          return run;
+        }
+      }),
+    };
+  }
   const runById = (id: string) => {
     const run = store.getRun(id);
     if (!run) throw new EngineError("not_found", "Run not found.");
@@ -68,10 +94,14 @@ export function createEngine(input: EngineDeps): Engine {
     if (!flow) throw new EngineError("not_found", "Flow not found.");
     return flow;
   };
-  function sweep() {
+  function sweep(flowId?: string) {
     for (const a of store
       .listApprovals({ state: "pending" })
-      .filter((a) => a.expiresAt <= now().toISOString())
+      .filter(
+        (a) =>
+          a.expiresAt <= now().toISOString() &&
+          (flowId === undefined || store.getRun(a.runId)?.flowId === flowId),
+      )
       .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))) {
       store.updateApproval(a.id, { state: "expired", resolvedAt: a.expiresAt });
       const row = store.getStep(a.runId, a.stepId, a.itemKey);
@@ -191,10 +221,193 @@ export function createEngine(input: EngineDeps): Engine {
   const recovery = createRecovery({
     deps,
     checkAndWalk,
+    enqueue,
+    assertRunning,
     sweep,
     blockError,
     flowFor: (run) => flowFor(run).manifest as FlowManifest,
   });
+  function beginStart(flowId: string, options: StartOptions): Begun {
+    assertRunning();
+    const flow = store.getFlow(flowId);
+    if (!flow) throw new EngineError("not_found", "Flow not found.");
+    const manifest = flow.manifest as FlowManifest;
+    const kind = options.trigger?.kind ?? "manual";
+    if (kind !== "manual") {
+      if (!manifest.triggers.some((t) => t.kind === kind))
+        throw new EngineError("not_allowed", `This flow has no ${kind} trigger.`);
+      const issues = validateManifest(manifest, { files: new Set(Object.keys(flow.files)) });
+      if (hasErrors(issues))
+        throw new EngineError(
+          "not_allowed",
+          issues
+            .filter((i) => i.severity === "error")
+            .map((i) => i.message)
+            .join("; "),
+        );
+    }
+    const entries: [string, Value][] = [];
+    for (const [id, decl] of Object.entries(manifest.params)) {
+      const value = options.params && Object.hasOwn(options.params, id) ? options.params[id] : decl.default;
+      if (value === undefined) continue;
+      if (
+        (decl.type === "number" && typeof value !== "number") ||
+        (decl.type === "bool" && typeof value !== "boolean") ||
+        ((decl.type === "text" || decl.type === "enum") && typeof value !== "string") ||
+        (typeof value === "number" && !Number.isFinite(value)) ||
+        (decl.min !== undefined && (typeof value !== "number" || value < decl.min)) ||
+        (decl.max !== undefined && (typeof value !== "number" || value > decl.max)) ||
+        (decl.type === "enum" &&
+          (!decl.options || typeof value !== "string" || !decl.options.includes(value))) ||
+        (decl.options !== undefined && (typeof value !== "string" || !decl.options.includes(value)))
+      )
+        throw new EngineError("invalid_input", `Invalid parameter ${id}.`);
+      entries.push([id, value as Value]);
+    }
+    for (const id of Object.keys(options.params ?? {}))
+      if (!Object.hasOwn(manifest.params, id))
+        throw new EngineError("invalid_input", `Unknown parameter ${id}.`);
+    const inputs = options.inputs ?? {};
+    for (const id of Object.keys(inputs)) {
+      if (!manifest.inputs.some((decl) => decl.id === id))
+        throw new EngineError("invalid_input", `Unknown input ${id}.`);
+    }
+    for (const decl of manifest.inputs)
+      if (decl.required && !Object.hasOwn(inputs, decl.id))
+        throw new EngineError("invalid_input", `Missing input ${decl.id}.`);
+    const run: RunRow = {
+      id: deps.newId("run"),
+      flowId,
+      flowHash: flow.hash,
+      flowVersion: flow.version,
+      state: "queued",
+      project: options.project,
+      inputs,
+      params: Object.fromEntries(entries),
+      ...(options.trigger ? { trigger: options.trigger } : {}),
+      requirements: structuredClone(manifest.requirements),
+      startedAt: now().toISOString(),
+    };
+    const day = now().toISOString().slice(0, 10);
+    const key = `runs:${flowId}`;
+    if (kind !== "manual" && store.counter(key, day) >= (manifest.limits?.max_runs_per_day ?? 24)) {
+      store.appendAudit({ at: now().toISOString(), kind: "run_dropped", detail: { flowId, day } });
+      throw new EngineError("not_allowed", "Daily run limit reached.");
+    }
+    store.transaction(() => {
+      store.purgeSeen(new Date(now().getTime() - 30 * 86400000).toISOString());
+      store.createRun(run);
+      if (kind !== "manual") store.increment(key, day);
+    });
+    return enqueue(run, () => checkAndWalk(run));
+  }
+  function beginAnswer(id: string, answer: { picks: string[] }): Begun {
+    assertRunning();
+    sweep();
+    const a = store.getApproval(id);
+    if (!a) throw new EngineError("not_found", "Approval not found.");
+    if (a.kind !== "ask") throw new EngineError("invalid_input", "Not a choice.");
+    if (a.state === "expired") throw new EngineError("not_allowed", "This approval expired.");
+    if (a.state !== "pending") throw new EngineError("not_allowed", "This decision was already made.");
+    const run = runById(a.runId);
+    if (run.state !== "waiting_approval")
+      throw new EngineError("not_allowed", "This run is no longer waiting for approval.");
+    const payload = a.payload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      !Array.isArray(payload.options) ||
+      typeof a.maxPick !== "number"
+    )
+      throw new EngineError("invalid_input", "Invalid choice payload.");
+    const options = payload.options.map((option) => {
+      if (
+        !option ||
+        typeof option !== "object" ||
+        Array.isArray(option) ||
+        typeof option.key !== "string" ||
+        !Object.hasOwn(option, "item") ||
+        option.item === undefined
+      )
+        throw new EngineError("invalid_input", "Invalid choice option.");
+      return { key: option.key, item: option.item };
+    });
+    if (
+      !Array.isArray(answer.picks) ||
+      answer.picks.some((pick) => typeof pick !== "string" || !options.some((o) => o.key === pick)) ||
+      new Set(answer.picks).size !== answer.picks.length
+    )
+      throw new EngineError("invalid_input", "Invalid picks.");
+    if (answer.picks.length > a.maxPick) throw new EngineError("invalid_input", "Too many picks.");
+    const row = store.getStep(run.id, a.stepId);
+    if (!row) throw new EngineError("not_found", "Step not found.");
+    const at = now().toISOString();
+    store.transaction(() => {
+      store.updateApproval(id, { state: "approved", picks: answer.picks, resolvedAt: at });
+      for (const tool of a.approves) for (const pick of answer.picks) store.addGrant(run.id, tool, pick);
+      store.upsertStep({
+        ...row,
+        state: "passed",
+        outputs: { choice: options.filter((o) => answer.picks.includes(o.key)).map((o) => o.item) },
+      });
+      store.appendAudit({
+        at,
+        kind: "ask_answered",
+        runId: run.id,
+        detail: { approvalId: id, picks: answer.picks },
+      });
+      store.updateRun(run.id, { state: "running" });
+    });
+    const updated = runById(run.id);
+    return enqueue(updated, () => walk(updated));
+  }
+  function beginDecide(id: string, decision: "approve" | "reject"): Begun {
+    assertRunning();
+    sweep();
+    const a = store.getApproval(id);
+    if (!a) throw new EngineError("not_found", "Approval not found.");
+    if (a.kind !== "result_sign_off") throw new EngineError("invalid_input", "Not a result sign-off.");
+    if (a.state === "expired") throw new EngineError("not_allowed", "This approval expired.");
+    if (a.state !== "pending") throw new EngineError("not_allowed", "This approval was already decided.");
+    const run = runById(a.runId);
+    if (run.state !== "waiting_approval")
+      throw new EngineError("not_allowed", "Run is not waiting for approval.");
+    if (decision !== "approve" && decision !== "reject")
+      throw new EngineError("invalid_input", "Invalid decision.");
+    const row = store.getStep(a.runId, a.stepId, a.itemKey);
+    if (!row) throw new EngineError("not_found", "Step not found.");
+    const at = now().toISOString();
+    store.transaction(() => {
+      store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
+      if (decision === "approve") {
+        const attempt = row.attempts.at(-1);
+        if (attempt) attempt.exit = "ok";
+        row.state = "passed";
+        row.checks = row.checks.map((c) =>
+          c.type === "user" && c.verdict === "pending" ? { ...c, verdict: "passed" } : c,
+        );
+        store.upsertStep(row);
+        store.updateRun(run.id, { state: "running" });
+      } else {
+        const attempt = row.attempts.at(-1);
+        if (attempt) attempt.exit = "failed";
+        row.state = "failed";
+        store.upsertStep(row);
+        if (a.itemKey) {
+          const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
+          if (item) store.upsertItem({ ...item, status: "failed" });
+        }
+        store.updateRun(run.id, { state: "failed", endedAt: at });
+        for (const pending of store.listApprovals({ runId: run.id, state: "pending" }))
+          store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
+      }
+    });
+    const updated = runById(run.id);
+    return decision === "approve"
+      ? enqueue(updated, () => walk(updated))
+      : { run: updated, settled: Promise.resolve(updated) };
+  }
   return {
     registerFlow(manifest, hash, files = {}) {
       const issues = validateManifest(manifest, { files: new Set(Object.keys(files)) });
@@ -217,180 +430,45 @@ export function createEngine(input: EngineDeps): Engine {
       store.putFlow(row);
       return row;
     },
+    beginStart,
+    beginAnswer,
+    beginDecide,
+    ...recovery,
     async startRun(flowId, options) {
-      store.purgeSeen(new Date(now().getTime() - 30 * 86400000).toISOString());
-      const flow = store.getFlow(flowId);
-      if (!flow) throw new EngineError("not_found", "Flow not found.");
-      const manifest = flow.manifest as FlowManifest;
-      const kind = options.trigger?.kind ?? "manual";
-      if (kind !== "manual") {
-        if (!manifest.triggers.some((t) => t.kind === kind))
-          throw new EngineError("not_allowed", `This flow has no ${kind} trigger.`);
-        const issues = validateManifest(manifest, { files: new Set(Object.keys(flow.files)) });
-        if (hasErrors(issues))
-          throw new EngineError(
-            "not_allowed",
-            issues
-              .filter((i) => i.severity === "error")
-              .map((i) => i.message)
-              .join("; "),
-          );
-      }
-      const entries: [string, Value][] = [];
-      for (const [id, decl] of Object.entries(manifest.params)) {
-        const value = options.params && Object.hasOwn(options.params, id) ? options.params[id] : decl.default;
-        if (value === undefined) continue;
-        if (
-          (decl.type === "number" && typeof value !== "number") ||
-          (decl.type === "bool" && typeof value !== "boolean") ||
-          ((decl.type === "text" || decl.type === "enum") && typeof value !== "string") ||
-          (typeof value === "number" && !Number.isFinite(value)) ||
-          (decl.min !== undefined && (typeof value !== "number" || value < decl.min)) ||
-          (decl.max !== undefined && (typeof value !== "number" || value > decl.max)) ||
-          (decl.type === "enum" &&
-            (!decl.options || typeof value !== "string" || !decl.options.includes(value))) ||
-          (decl.options !== undefined && (typeof value !== "string" || !decl.options.includes(value)))
-        )
-          throw new EngineError("invalid_input", `Invalid parameter ${id}.`);
-        entries.push([id, value as Value]);
-      }
-      for (const id of Object.keys(options.params ?? {}))
-        if (!Object.hasOwn(manifest.params, id))
-          throw new EngineError("invalid_input", `Unknown parameter ${id}.`);
-      const inputs = options.inputs ?? {};
-      for (const id of Object.keys(inputs)) {
-        if (!manifest.inputs.some((decl) => decl.id === id))
-          throw new EngineError("invalid_input", `Unknown input ${id}.`);
-      }
-      for (const decl of manifest.inputs)
-        if (decl.required && !Object.hasOwn(inputs, decl.id))
-          throw new EngineError("invalid_input", `Missing input ${decl.id}.`);
-      const run: RunRow = {
-        id: deps.newId("run"),
-        flowId,
-        flowHash: flow.hash,
-        flowVersion: flow.version,
-        state: "queued",
-        project: options.project,
-        inputs,
-        params: Object.fromEntries(entries),
-        ...(options.trigger ? { trigger: options.trigger } : {}),
-        requirements: structuredClone(manifest.requirements),
-        startedAt: now().toISOString(),
-      };
-      const day = now().toISOString().slice(0, 10);
-      const key = `runs:${flowId}`;
-      if (kind !== "manual" && store.counter(key, day) >= (manifest.limits?.max_runs_per_day ?? 24)) {
-        store.appendAudit({ at: now().toISOString(), kind: "run_dropped", detail: { flowId, day } });
-        throw new EngineError("not_allowed", "Daily run limit reached.");
-      }
-      store.transaction(() => {
-        store.createRun(run);
-        if (kind !== "manual") store.increment(key, day);
-      });
-      return checkAndWalk(run);
+      return beginStart(flowId, options).settled;
     },
     async answerAsk(id, answer) {
-      sweep();
-      const a = store.getApproval(id);
-      if (!a) throw new EngineError("not_found", "Approval not found.");
-      if (a.kind !== "ask") throw new EngineError("invalid_input", "Not a choice.");
-      if (a.state === "expired") throw new EngineError("not_allowed", "This approval expired.");
-      if (a.state !== "pending") throw new EngineError("not_allowed", "This decision was already made.");
-      const run = runById(a.runId);
-      if (run.state !== "waiting_approval")
-        throw new EngineError("not_allowed", "This run is no longer waiting for approval.");
-      const payload = a.payload;
-      if (
-        !payload ||
-        typeof payload !== "object" ||
-        Array.isArray(payload) ||
-        !Array.isArray(payload.options) ||
-        typeof a.maxPick !== "number"
-      )
-        throw new EngineError("invalid_input", "Invalid choice payload.");
-      const options = payload.options.map((option) => {
-        if (
-          !option ||
-          typeof option !== "object" ||
-          Array.isArray(option) ||
-          typeof option.key !== "string" ||
-          !Object.hasOwn(option, "item") ||
-          option.item === undefined
-        )
-          throw new EngineError("invalid_input", "Invalid choice option.");
-        return { key: option.key, item: option.item };
-      });
-      if (
-        !Array.isArray(answer.picks) ||
-        answer.picks.some((pick) => typeof pick !== "string" || !options.some((o) => o.key === pick)) ||
-        new Set(answer.picks).size !== answer.picks.length
-      )
-        throw new EngineError("invalid_input", "Invalid picks.");
-      if (answer.picks.length > a.maxPick) throw new EngineError("invalid_input", "Too many picks.");
-      const row = store.getStep(run.id, a.stepId);
-      if (!row) throw new EngineError("not_found", "Step not found.");
-      const at = now().toISOString();
-      store.transaction(() => {
-        store.updateApproval(id, { state: "approved", picks: answer.picks, resolvedAt: at });
-        for (const tool of a.approves) for (const pick of answer.picks) store.addGrant(run.id, tool, pick);
-        store.upsertStep({
-          ...row,
-          state: "passed",
-          outputs: { choice: options.filter((o) => answer.picks.includes(o.key)).map((o) => o.item) },
-        });
-        store.appendAudit({
-          at,
-          kind: "ask_answered",
-          runId: run.id,
-          detail: { approvalId: id, picks: answer.picks },
-        });
-        store.updateRun(run.id, { state: "running" });
-      });
-      return walk(runById(run.id));
+      return beginAnswer(id, answer).settled;
     },
-    ...recovery,
     async decide(id, decision) {
-      sweep();
-      const a = store.getApproval(id);
-      if (!a) throw new EngineError("not_found", "Approval not found.");
-      if (a.kind !== "result_sign_off") throw new EngineError("invalid_input", "Not a result sign-off.");
-      if (a.state === "expired") throw new EngineError("not_allowed", "This approval expired.");
-      if (a.state !== "pending") throw new EngineError("not_allowed", "This approval was already decided.");
-      const run = runById(a.runId);
-      if (run.state !== "waiting_approval")
-        throw new EngineError("not_allowed", "Run is not waiting for approval.");
-      if (decision !== "approve" && decision !== "reject")
-        throw new EngineError("invalid_input", "Invalid decision.");
-      const row = store.getStep(a.runId, a.stepId, a.itemKey);
-      if (!row) throw new EngineError("not_found", "Step not found.");
-      const at = now().toISOString();
-      store.transaction(() => {
-        store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
-        if (decision === "approve") {
-          const attempt = row.attempts.at(-1);
-          if (attempt) attempt.exit = "ok";
-          row.state = "passed";
-          row.checks = row.checks.map((c) =>
-            c.type === "user" && c.verdict === "pending" ? { ...c, verdict: "passed" } : c,
-          );
-          store.upsertStep(row);
-          store.updateRun(run.id, { state: "running" });
-        } else {
-          const attempt = row.attempts.at(-1);
-          if (attempt) attempt.exit = "failed";
-          row.state = "failed";
-          store.upsertStep(row);
-          if (a.itemKey) {
-            const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
-            if (item) store.upsertItem({ ...item, status: "failed" });
-          }
-          store.updateRun(run.id, { state: "failed", endedAt: at });
-          for (const pending of store.listApprovals({ runId: run.id, state: "pending" }))
-            store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
-        }
-      });
-      return decision === "approve" ? walk(runById(run.id)) : runById(run.id);
+      return beginDecide(id, decision).settled;
+    },
+    async sweepExpired() {
+      const flows = new Set(
+        store
+          .listApprovals({ state: "pending" })
+          .filter((a) => a.expiresAt <= now().toISOString())
+          .map((a) => runById(a.runId).flowId),
+      );
+      if (stopping) {
+        for (const id of flows) sweep(id);
+        return;
+      }
+      await Promise.all(
+        [...flows].map((id) =>
+          chain.enqueue(
+            id,
+            async () => {
+              sweep(id);
+            },
+            () => undefined,
+          ),
+        ),
+      );
+    },
+    shutdown() {
+      stopping = true;
+      chain.stop();
     },
     isApproved(runId, tool, itemKey) {
       const state = store.getRun(runId)?.state;
