@@ -318,7 +318,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `payloadFiles(paths: string[], max: number): string[]` (first `max` paths through `sanitizeText(path, 200)`; an empty result after sanitising is dropped).
 - `triggerWords(kind: string, payload: Value | undefined, flowNameOf: (id: string) => string | undefined): string | undefined`: `schedule`: `Started by its schedule` (`, catching up on N missed` when `payload.missed > 0`); `file_change`: `Started by a change in the watched folder`; `flow_done`: `Started after <flow name or id>` (name through `sanitizeText(..., 60)`); `manual` or an unknown kind: `undefined`.
 
-- [ ] **Step 1: Write the failing tests** (`rules.test.ts`, manifests from `parseManifest` as in `test-helpers/flows.ts`; the R4 case is a flow with a requirement `{ id: "mail", type: "mcp_server", ref: "mail", tools: ["SMSSend"] }` and a first step `uses: ["mail"]` followed by nothing before the end, with a `schedule` trigger, as in `sdk/src/validate/validate.test.ts:141-148`):
+- [x] **Step 1: Write the failing tests** (`rules.test.ts`, manifests from `parseManifest` as in `test-helpers/flows.ts`; the R4 case is a flow with a requirement `{ id: "mail", type: "mcp_server", ref: "mail", tools: ["SMSSend"] }` and a first step `uses: ["mail"]` followed by nothing before the end, with a `schedule` trigger, as in `sdk/src/validate/validate.test.ts:141-148`):
   1. "checkEnable accepts a schedule, a file_change inside the project and a flow_done for a flow that exists"
   2. "checkEnable refuses a flow that fails R4, with the reason `This flow cannot run unattended: unattended prefix at steps.0`"
   3. "checkEnable refuses new_item, link and webhook as not available yet and manual as nothing to switch"
@@ -329,16 +329,20 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "sanitizeText cuts by code points and never splits a surrogate pair" (an emoji built with `String.fromCodePoint(0x1f600)` at the cut)
   9. "payloadFiles caps the count and the length and drops names that sanitise to nothing"
   10. "triggerWords gives plain words for each kind and nothing for manual"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/rules.test.ts`. Expected: FAIL ("Cannot find module ./rules.ts").
-- [ ] **Step 3: Implement** `rules.ts` (imports `scan.ts`, `schedule.ts`, `constants.ts`, `@flowdriven/sdk`; `TriggerOutcome` from `../storage.ts`).
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/rules.test.ts`. Expected: FAIL ("Cannot find module ./rules.ts").
+- [x] **Step 3: Implement** `rules.ts` (imports `scan.ts`, `schedule.ts`, `constants.ts`, `@flowdriven/sdk`; `TriggerOutcome` from `../storage.ts`).
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/triggers
 git commit -m "Add the enable check, the fire preflight and text sanitising for triggers" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check (run by the chair: 168 test files, 1,054 tests).
+
+Chair's note (2026-11-12): the executor stopped with `Blocked:` because its second gate run failed once in the present test `claude/adapter-limits.test.ts` with "Missing pid", a process test of plan 03 that this task does not touch. The chair ran the gate outside the sandbox and it passed, so the task stands as done. That test joins "S4b" as one that can fail under load in the executor's sandbox.
 
 ---
 
