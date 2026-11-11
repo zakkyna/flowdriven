@@ -3,6 +3,7 @@ import { type FlowManifest, hasErrors, type Value, validateManifest } from "@flo
 import type { CommandRunner } from "./checks/command.ts";
 import { EngineError } from "./errors.ts";
 import { runLeaf } from "./exec/leaf.ts";
+import { runLoop } from "./exec/loop.ts";
 import { makeScope } from "./exec/scope.ts";
 import type { HarnessAdapter } from "./harness.ts";
 import type { ApprovalState, RunState } from "./states.ts";
@@ -82,14 +83,20 @@ export function createEngine(input: EngineDeps): Engine {
       const row = store.getStep(run.id, step.id);
       if (row?.state === "passed" || row?.state === "skipped") continue;
       if ("for_each" in step) {
-        store.updateRun(run.id, { state: "blocked", blockedReason: "not built yet" });
-        return runById(run.id);
+        const outcome = await runLoop(step, {
+          deps,
+          run: runById(run.id),
+          manifest,
+          scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
+        });
+        if (outcome === "halt") return runById(run.id);
+        continue;
       }
       const outcome = await runLeaf(step, {
         deps,
         run: runById(run.id),
         manifest,
-        scope: makeScope(runById(run.id), store.listSteps(run.id)),
+        scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
         itemKey: "",
       });
       if (outcome === "halt" || outcome === "failed") return runById(run.id);
@@ -123,6 +130,7 @@ export function createEngine(input: EngineDeps): Engine {
       return row;
     },
     async startRun(flowId, options) {
+      store.purgeSeen(new Date(now().getTime() - 30 * 86400000).toISOString());
       const flow = store.getFlow(flowId);
       if (!flow) throw new EngineError("not_found", "Flow not found.");
       const manifest = flow.manifest as FlowManifest;
@@ -230,6 +238,10 @@ export function createEngine(input: EngineDeps): Engine {
       if (attempt) attempt.exit = "failed";
       row.state = "failed";
       store.upsertStep(row);
+      if (a.itemKey) {
+        const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
+        if (item) store.upsertItem({ ...item, status: "failed" });
+      }
       store.updateRun(run.id, { state: "failed", endedAt: at });
       for (const pending of store.listApprovals({ runId: run.id, state: "pending" }))
         store.updateApproval(pending.id, { state: "expired", resolvedAt: at });

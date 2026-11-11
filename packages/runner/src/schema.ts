@@ -2,7 +2,7 @@ export const SCHEMA = `
 CREATE TABLE flows (id TEXT NOT NULL, hash TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (id, hash));
 CREATE TABLE runs (id TEXT PRIMARY KEY, flow_id TEXT NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE steps (run_id TEXT NOT NULL, step_id TEXT NOT NULL, item_key TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (run_id, step_id, item_key));
-CREATE TABLE items (run_id TEXT NOT NULL, loop_id TEXT NOT NULL, key TEXT NOT NULL, position INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (run_id, loop_id, key));
+CREATE TABLE items (run_id TEXT NOT NULL, loop_id TEXT NOT NULL, key TEXT NOT NULL, position INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (run_id, loop_id, position));
 CREATE TABLE seen (flow_id TEXT NOT NULL, loop_id TEXT NOT NULL, key TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (flow_id, loop_id, key));
 CREATE TABLE approvals (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE grants (run_id TEXT NOT NULL, tool TEXT NOT NULL, item_key TEXT NOT NULL, PRIMARY KEY (run_id, tool, item_key));

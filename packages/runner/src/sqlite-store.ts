@@ -110,7 +110,7 @@ export async function openSqliteStore(path: string, _options?: { now?: () => Dat
     },
     upsertItem(row) {
       execute(
-        "INSERT INTO items VALUES (?, ?, ?, ?, ?) ON CONFLICT(run_id, loop_id, key) DO UPDATE SET position = excluded.position, data = excluded.data",
+        "INSERT INTO items VALUES (?, ?, ?, ?, ?) ON CONFLICT(run_id, loop_id, position) DO UPDATE SET key = excluded.key, data = excluded.data",
         row.runId,
         row.loopId,
         row.key,

@@ -171,3 +171,19 @@ test("stores items and approvals and filters them", async () => {
   expect(store.getApproval("a")).toEqual({ ...approval, state: "approved", picks: ["k"] });
   expect(store.listApprovals({ runId: "r1", state: "approved" })).toHaveLength(1);
 });
+
+test("keeps two items with the same key at different positions", async () => {
+  const store = await open();
+  const item = {
+    runId: "r1",
+    loopId: "l",
+    key: "k",
+    position: 0,
+    item: { id: "k" },
+    status: "passed" as const,
+  };
+  const duplicate = { ...item, position: 1, status: "skipped" as const, note: "skipped: duplicate key" };
+  store.upsertItem(duplicate);
+  store.upsertItem(item);
+  expect(store.listItems("r1", "l")).toEqual([item, duplicate]);
+});
