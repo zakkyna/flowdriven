@@ -686,7 +686,7 @@ export function isRateLimited(event: StreamEvent): boolean;    // a rate_limit_e
 ```
 **Rules.** `LineReader` counts bytes, splits on 0x0A, decodes each complete line as UTF-8 (a multi-byte character cut between two chunks stays whole), and reports `overflow: true` as soon as the bytes of the line in progress exceed `maxBytes`, before the line ends. `checkFirstEvent` is `ok` only when the event is `type: "system"`, `subtype: "init"`; `expect.started` is true; `session_id === expect.sessionId`; `tools` is an array of strings with no duplicate that equals as a set `expect.tools` plus `StructuredOutput` when `expect.schema` (and does not hold `StructuredOutput` otherwise); `mcp_servers`, `skills` and `slash_commands` are empty arrays; and `permissionMode === "default"`; every other case is `{ ok: false, why }` with a short reason for the audit (a missing field, a non-array, a first event that is not init, `undefined`). The tripwire remembers `tool_use` blocks of `assistant` events (`message.content[]` with `type: "tool_use"`, `id`, `name`); for each `user` event it looks at the `tool_result` blocks (`message.content[]`): a block with `is_error !== true` whose `tool_use_id` is not a string, or not in `allowedIds`, trips (the tool name is the remembered one, else `"unknown"`); a block with `is_error === true` and every other block type is ignored. `parseResult`: `ok` is `subtype === "success"` and `is_error === false`; `text` is the `result` string (else `""`); `structured` is `structured_output` when present; `apiErrorStatus` is `api_error_status` when a number; `authFailed` is `terminal_reason === "api_error"` together with a result text that starts with `Not logged in`; `denials` is the length of `permission_denials` (0 when absent).
 
-- [ ] **Step 1: Write the failing tests** (11; events are made-up objects)
+- [x] **Step 1: Write the failing tests** (11; events are made-up objects)
   1. `the line reader splits chunks, keeps a multi-byte character cut across chunks whole and returns the cut tail from rest()`: chunks `a\nb`, `\nc`, and a snowman (`String.fromCodePoint(0x2603)`) split byte by byte; `rest()` after `x` with no newline is `x`.
   2. `a line over the limit reports overflow before it ends`: `new LineReader(1000)`, `push(Buffer.alloc(1001, 97))` gives `overflow: true` and no lines; a line of exactly 1000 bytes with its newline is accepted.
   3. `many lines in one chunk, blank lines and CRLF`: `parseEvent` of the empty line is `undefined`.
@@ -698,18 +698,20 @@ export function isRateLimited(event: StreamEvent): boolean;    // a rate_limit_e
   9. `the tripwire reads the live set`: an id added to the set after its `tool_use` event but before its result passes.
   10. `parseResult`: a success with `structured_output` gives `ok: true` and the object; `is_error: true` gives `ok: false`; `subtype: "error_during_execution"` gives `ok: false`; `api_error_status: 429` is kept; `terminal_reason: "api_error"` with the text `Not logged in - Please run /login` gives `authFailed: true`; `permission_denials` of two entries gives `denials: 2`; a result with no `result` string gives `text: ""`.
   11. `the sentences`: `LIMITS_NOT_APPLIED` and `tripSentence("Write")` equal their exact texts, and `tripSentence` of a name with a hidden character shows `<U+202E>`; `isAuthFailure` and `isRateLimited` are true only for the events they name (`rejected` yes, `allowed_warning` no).
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/runner/src/claude/stream.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** by the rules.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 3: Implement** by the rules.
+- [x] **Step 4: Run the tests**
   Run: `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/runner/src/claude
 git commit -m "Add the stream reader, the start proof and the tripwire" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
