@@ -4,6 +4,7 @@ import type { RunnerTopic } from "./client.ts";
 import { ContentHash, Id, IsoDateTime } from "./common.ts";
 import { ChatMessage, FlowDetail, FlowEdit, FlowSummary } from "./flow.ts";
 import { HarnessCard } from "./harness.ts";
+import { QueueView, UsageSummary } from "./queue.ts";
 import { ReadinessReport } from "./readiness.ts";
 import { RunDetail, RunReport, RunState, RunSummary } from "./run.ts";
 import { Settings, SettingsPatch } from "./settings.ts";
@@ -234,6 +235,30 @@ export const operations = {
     errors: ["invalid_input", "not_found", "not_allowed", "unavailable"],
     reads: [],
     writes: ["harnesses", "settings"],
+  },
+  "queue.list": {
+    input: z.object({}),
+    output: QueueView,
+    mcp: "no",
+    errors: ["invalid_input"],
+    reads: ["runs"],
+    writes: [],
+  },
+  "queue.move": {
+    input: z.object({ runId: Id }),
+    output: QueueView,
+    mcp: "no",
+    errors: ["invalid_input", "not_found", "not_allowed"],
+    reads: [],
+    writes: ["runs"],
+  },
+  "usage.summary": {
+    input: z.object({}),
+    output: UsageSummary,
+    mcp: "no",
+    errors: ["invalid_input"],
+    reads: ["runs", "harnesses"],
+    writes: [],
   },
   "settings.get": {
     input: z.object({}),

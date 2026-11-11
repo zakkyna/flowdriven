@@ -328,7 +328,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 - Produces in `queue.ts`: `QueueRow = z.object({ runId: Id, flowName: z.string(), stepId: Id.optional(), stepTitle: z.string().optional(), itemKey: z.string().optional(), class: z.enum(["owner", "triggered"]), harnessId: Id.optional(), state: z.enum(["running", "waiting"]), waiting: Waiting.optional(), queuedSeconds: z.number().min(0) })`; `QueueView = z.object({ running: int >= 0, waiting: int >= 0, ceiling: int >= 1, rows: z.array(QueueRow) })`; `Totals = z.object({ calls: int, input: int, output: int, cacheRead: int, cacheWrite: int })`; `LimitWindow = z.object({ utilization: z.number().min(0).max(1), resetsAt: IsoDateTime.optional() })`; `HarnessUsage = z.object({ harnessId: Id, name: z.string(), today: Totals, week: Totals, limit: z.object({ status: z.enum(["ok", "warning", "limited", "unknown"]), fiveHour: LimitWindow.optional(), sevenDay: LimitWindow.optional(), until: IsoDateTime.optional() }) })`; `UsageSummary = z.object({ harnesses: z.array(HarnessUsage) })`.
 - Operations: `"queue.list"` (input `{}`, output `QueueView`, `mcp: "no"`, errors `["invalid_input"]`, reads `["runs"]`, writes `[]`); `"queue.move"` (input `{ runId: Id }`, output `QueueView`, `mcp: "no"`, errors `["invalid_input", "not_found", "not_allowed"]`, reads `[]`, writes `["runs"]`); `"usage.summary"` (input `{}`, output `UsageSummary`, `mcp: "no"`, errors `["invalid_input"]`, reads `["runs", "harnesses"]`, writes `[]`). All three are app only (spec 21.8). `HarnessCard.quota` gains `windows: z.array(z.object({ name: z.enum(["five_hour", "seven_day"]), utilization: z.number().min(0).max(1), resetsAt: IsoDateTime.optional() })).optional()`: each limit window the harness has reported, shown in words by Task 19 (the spec's badge below the line). The fixture client's `queue.move` moves the named waiting row to the first waiting position (just after the running rows) and returns the re-sorted view; an unknown run is `not_found`.
 
-- [ ] **Step 1: Write the failing test** `packages/contracts/src/queue.test.ts`
+- [x] **Step 1: Write the failing test** `packages/contracts/src/queue.test.ts`
 
 ```ts
 import { expect, test } from "vitest";
@@ -364,15 +364,17 @@ test("a usage summary has day and week totals and a limit state per harness", ()
 
 Also extend `operations.test.ts`: add `"queue.list"`, `"queue.move"` and `"usage.summary"` to the sorted list of version-1 operations (keep the order sorted: after `"harnesses.setConsent"` come `"queue.list"`, `"queue.move"`, then `"readiness.check"`; `"usage.summary"` goes last); the MCP list does not change. **Present assertion changed (owned by this task):** the expected array in the test "version 1 has exactly these operations" gains these three names; these edits replace an assertion with the equally strict one for the new behaviour; no test is removed, skipped or loosened.
 
-- [ ] **Step 2: Run:** `pnpm vitest run packages/contracts`. Expected: FAIL ("QueueView is not exported").
-- [ ] **Step 3: Implement** the schemas and the three entries. Interim behaviour so that everything still compiles: in `fixtures/src/client.ts` the handlers return `state.queue` (a sample from `story/queue.ts`: a running row, a waiting `ceiling` row `{ running: 1, ceiling: 1 }` and a waiting `quota` row, for existing run ids of the story, ceiling 1; Task 19 uses them) and `state.usage` (one harness); `queue.move` moves the named waiting row to the first waiting position (just after the running rows) and throws `RunnerError("not_found", ...)` for an unknown run. In `runner/src/service/handlers.ts` add `"queue.list": () => ({ running: 0, waiting: 0, ceiling: 4, rows: [] })`, `"queue.move": () => unavailable("The queue arrives in this plan's Task 15.")`, `"usage.summary": () => ({ harnesses: [] })`; Task 15 replaces them.
-- [ ] **Step 4: Run** `pnpm vitest run packages/contracts packages/fixtures packages/runner/src/service`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/contracts`. Expected: FAIL ("QueueView is not exported").
+- [x] **Step 3: Implement** the schemas and the three entries. Interim behaviour so that everything still compiles: in `fixtures/src/client.ts` the handlers return `state.queue` (a sample from `story/queue.ts`: a running row, a waiting `ceiling` row `{ running: 1, ceiling: 1 }` and a waiting `quota` row, for existing run ids of the story, ceiling 1; Task 19 uses them) and `state.usage` (one harness); `queue.move` moves the named waiting row to the first waiting position (just after the running rows) and throws `RunnerError("not_found", ...)` for an unknown run. In `runner/src/service/handlers.ts` add `"queue.list": () => ({ running: 0, waiting: 0, ceiling: 4, rows: [] })`, `"queue.move": () => unavailable("The queue arrives in this plan's Task 15.")`, `"usage.summary": () => ({ harnesses: [] })`; Task 15 replaces them.
+- [x] **Step 4: Run** `pnpm vitest run packages/contracts packages/fixtures packages/runner/src/service`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts packages/fixtures packages/runner/src/service/handlers.ts
 git commit -m "Add the queue and usage operations to the contract" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

@@ -202,6 +202,9 @@ export function createHandlers({
       harnesses
         ? harnesses.setConsent(harnessId, consent)
         : unavailable("Harness consent arrives with the harness adapters."),
+    "queue.list": () => ({ running: 0, waiting: 0, ceiling: 4, rows: [] }),
+    "queue.move": () => unavailable("The queue arrives in this plan's Task 15."),
+    "usage.summary": () => ({ harnesses: [] }),
     "settings.get": () => defaultSettings(now().toISOString()),
     "settings.update": () => unavailable("Changing settings arrives with the agent."),
   };

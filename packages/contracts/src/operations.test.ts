@@ -25,6 +25,8 @@ test("version 1 has exactly these operations", () => {
     "harnesses.list",
     "harnesses.rescan",
     "harnesses.setConsent",
+    "queue.list",
+    "queue.move",
     "readiness.check",
     "readiness.install",
     "runner.info",
@@ -35,6 +37,7 @@ test("version 1 has exactly these operations", () => {
     "runs.status",
     "settings.get",
     "settings.update",
+    "usage.summary",
   ]);
 });
 test("only the operations in spec 8.7 are exposed over MCP, and the approval rule travels with the contract", () => {

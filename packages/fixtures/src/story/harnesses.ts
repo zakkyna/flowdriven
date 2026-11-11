@@ -60,6 +60,7 @@ export function harnesses(): HarnessCard[] {
       until: "2026-11-10T13:00:00.000Z",
       today: { calls: 31 },
       week: { calls: 210 },
+      windows: [{ name: "seven_day", utilization: 0.78, resetsAt: "2026-11-14T17:59:00.000Z" }],
     },
     inventory: {
       supported: true,

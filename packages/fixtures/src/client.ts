@@ -510,6 +510,18 @@ export function createFixtureRunnerClient(
       if (backend) backend.consent = consent;
       return card;
     },
+    "queue.list": () => state.queue,
+    "queue.move": ({ runId }) => {
+      const row = find(state.queue.rows, (item) => item.runId === runId, "run", runId);
+      if (row.state !== "waiting") throw new RunnerError("not_allowed", "Only waiting runs can move.");
+      state.queue.rows = [
+        ...state.queue.rows.filter((item) => item.state === "running"),
+        row,
+        ...state.queue.rows.filter((item) => item.state === "waiting" && item !== row),
+      ];
+      return state.queue;
+    },
+    "usage.summary": () => state.usage,
     "settings.get": () => state.settings,
     "settings.update": ({ patch }) => {
       const backend = (id: string) => {

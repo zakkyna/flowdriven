@@ -6,15 +6,18 @@ import type {
   FlowSignOff,
   HarnessCard,
   Playback,
+  QueueView,
   ReadinessReport,
   RunDetail,
   Settings,
+  UsageSummary,
 } from "@flowdriven/contracts";
 import { approvals } from "./story/approvals";
 import { flows } from "./story/flows";
 import { harnesses } from "./story/harnesses";
 import { addLong } from "./story/long";
 import { addLooped } from "./story/looped";
+import { queue, usage } from "./story/queue";
 import { readiness } from "./story/readiness";
 import { runs } from "./story/runs";
 import { emptySettings, settings } from "./story/settings";
@@ -38,6 +41,8 @@ export interface FixtureState {
   readiness: Record<string, ReadinessReport>;
   harnesses: HarnessCard[];
   settings: Settings;
+  queue: QueueView;
+  usage: UsageSummary;
   nextRunNumber: number;
   nextHashNumber: number;
 }
@@ -50,6 +55,8 @@ export function buildStory(): FixtureState {
     readiness: readiness(records),
     harnesses: harnesses(),
     settings: settings(),
+    queue: queue(),
+    usage: usage(),
     nextRunNumber: 8,
     nextHashNumber: 6,
   };
@@ -62,6 +69,8 @@ export function buildEmpty(): FixtureState {
     readiness: {},
     harnesses: [],
     settings: emptySettings(),
+    queue: { running: 0, waiting: 0, ceiling: 1, rows: [] },
+    usage: { harnesses: [] },
     nextRunNumber: 1,
     nextHashNumber: 1,
   };

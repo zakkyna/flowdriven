@@ -6,6 +6,7 @@ export * from "./common.ts";
 export * from "./flow.ts";
 export * from "./harness.ts";
 export * from "./operations.ts";
+export * from "./queue.ts";
 export * from "./readiness.ts";
 export * from "./run.ts";
 export * from "./settings.ts";

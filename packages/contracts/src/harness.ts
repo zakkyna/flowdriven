@@ -39,6 +39,15 @@ export const HarnessCard = z.object({
     today: Usage,
     week: Usage,
     note: z.string().optional(),
+    windows: z
+      .array(
+        z.object({
+          name: z.enum(["five_hour", "seven_day"]),
+          utilization: z.number().min(0).max(1),
+          resetsAt: IsoDateTime.optional(),
+        }),
+      )
+      .optional(),
   }),
   inventory: z.object({
     supported: z.boolean(),
