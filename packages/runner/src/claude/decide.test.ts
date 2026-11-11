@@ -177,11 +177,15 @@ test("Glob and Grep: a path outside, a path that is not text and patterns that l
       "{/etc/hosts,note.txt}",
       "{~/x,y}",
       "a..b",
+      "[/]etc/*",
+      "@(/etc/hosts)",
+      "!(a)",
+      "a[b/c]d",
       5,
       "{a,b}/*.txt",
     ])
       expect(reason(call(tool, { [key]: pattern }))).toBe(DENY.pattern);
-    for (const pattern of ["*.md", "**/*.txt"])
+    for (const pattern of ["*.md", "**/*.txt", "*.[ch]", "[a-z]*.md"])
       expect(decide(policy, call(tool, { [key]: pattern })).allow).toBe(true);
   }
   expect(decide(policy, call("Grep", { pattern: "/etc/*" })).allow).toBe(true);
@@ -200,6 +204,9 @@ test("protected paths and the audit fields", () => {
       `.cl${hidden}aude/x`,
       `.git${invisible}/x`,
       ".claude /x",
+      `.mcp.j${String.fromCodePoint(0x17f)}on`,
+      `.g${String.fromCodePoint(0x131)}t`,
+      `.${String.fromCodePoint(0xff43)}laude`,
     ])
       expect(reason(call(tool, { file_path: notes + "/" + path }))).toBe(DENY.protectedPath);
   expect(decide(policy, call("Read", { file_path: join(notes, ".git/config") })).allow).toBe(true);

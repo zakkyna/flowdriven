@@ -24,7 +24,7 @@ export function startChannel(options: {
 }): Channel {
   const { dir } = options;
   const ids = new Set<string>();
-  const names = new Set<string>();
+  const answers = new Map<string, string>();
   const allowedIds = new Set<string>();
   let allowed = 0;
   let denied = 0;
@@ -62,8 +62,16 @@ export function startChannel(options: {
       let decision: Decision;
       let id: string | undefined;
       try {
+        const previous = answers.get(name);
+        if (previous !== undefined) {
+          const tmp = join(dir.res, `.${name}.tmp`);
+          writeFileSync(tmp, previous, { mode: 0o600 });
+          renameSync(tmp, join(dir.res, name));
+          rmSync(path, { recursive: true, force: true });
+          continue;
+        }
         const stat = lstatSync(path);
-        if (names.has(name) || !stat.isFile()) decision = deny(CHANNEL.unreadable);
+        if (!stat.isFile()) decision = deny(CHANNEL.unreadable);
         else if (stat.size > MAX_REQUEST_BYTES) decision = deny(CHANNEL.tooLarge);
         else {
           let call: unknown;
@@ -93,11 +101,11 @@ export function startChannel(options: {
             }
           }
         }
-        names.add(name);
         record(decision, id);
         const answer = decision.allow
           ? "allow\n"
           : `deny\n${decision.reason.replace(/[\r\n]/g, " ").slice(0, 300)}\n`;
+        answers.set(name, answer);
         const tmp = join(dir.res, `.${name}.tmp`);
         writeFileSync(tmp, answer, { mode: 0o600 });
         renameSync(tmp, join(dir.res, name));

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -199,4 +200,32 @@ test("removing the folder under a waiting hook blocks the call and the channel w
   await new Promise((r) => setTimeout(r, 1100));
   expect(onCall).not.toHaveBeenCalled();
   expect(existsSync(dir.path)).toBe(false);
+});
+
+test("a request that cannot be removed is decided and counted once", { timeout: 20_000 }, async () => {
+  const dir = setup();
+  const onCall = vi.fn();
+  const decide = vi.fn(allow);
+  const child = spawn("/bin/sh", ["-c", hookCommand(dir.path, false)], {
+    env: {},
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stdin.end(JSON.stringify({ tool_use_id: "t1" }));
+  const result = new Promise<number | null>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+  await waitFor(() => readdirSync(dir.req).some((name) => name.endsWith(".json")));
+  chmodSync(dir.req, 0o500);
+  try {
+    const c = start(dir, decide, onCall, 20);
+    expect(await result).toBe(0);
+    expect(readdirSync(dir.req).some((name) => name.endsWith(".json"))).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(c.counts()).toEqual({ allowed: 1, denied: 0 });
+    expect(onCall).toHaveBeenCalledTimes(1);
+    expect(decide).toHaveBeenCalledTimes(1);
+  } finally {
+    chmodSync(dir.req, 0o700);
+  }
 });

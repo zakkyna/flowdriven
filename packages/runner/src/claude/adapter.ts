@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { Value } from "@flowdriven/sdk";
 import type { HarnessAdapter } from "../harness.ts";
 import { buildPolicy } from "./policy.ts";
@@ -20,6 +20,7 @@ export type ClaudeAdapterOptions = {
   audit: (kind: string, runId: string, detail: Value) => void;
   newId: (prefix: string) => string;
   newSessionId?: () => string;
+  newToken?: () => string;
   rounds?: number;
   pollMs?: number;
   graceMs?: number;
@@ -118,6 +119,17 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       if (reason !== undefined) throw new Error(reason);
       const path = options.claudePath();
       if (path === undefined) throw new Error("Claude Code was not found.");
+      let prompt: string | undefined;
+      for (let i = 0; i < 3; i++) {
+        const token = (options.newToken ?? (() => randomBytes(8).toString("hex")))();
+        const candidate = judgePrompt({ rubric: req.rubric, output: req.output, token });
+        if (!req.rubric.includes(token) && !req.output.includes(token)) {
+          prompt = candidate;
+          break;
+        }
+      }
+      if (prompt === undefined) throw new Error("FlowDriven could not mark the judge's data.");
+      const markedPrompt = prompt;
       const result = await run(
         {
           runId: req.runId,
@@ -137,7 +149,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
               sessionId,
               schema: true,
             }),
-          makePrompt: () => judgePrompt({ rubric: req.rubric, output: req.output }),
+          makePrompt: () => markedPrompt,
         },
         path,
       );

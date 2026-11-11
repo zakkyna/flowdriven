@@ -29,7 +29,7 @@ function plain(value: unknown): value is Record<string, unknown> {
 
 function protectedPath(path: string): boolean {
   const parts = path.split(/[\\/]/).map((part) =>
-    [...part.toLowerCase()]
+    [...part.normalize("NFKC").toUpperCase().toLowerCase().normalize("NFKC")]
       .filter((char) => {
         const point = char.codePointAt(0);
         return point !== undefined && point >= 0x21 && point <= 0x7e;
@@ -69,6 +69,8 @@ export function decide(policy: Policy, call: unknown): Decision {
     if (
       typeof pattern !== "string" ||
       pattern.includes("..") ||
+      /[()]/.test(pattern) ||
+      /\[[^\]]*\/[^\]]*\]/.test(pattern) ||
       pattern
         .split(/[{},]/)
         .some((part) => part.startsWith("/") || part.startsWith("\\") || part.startsWith("~"))

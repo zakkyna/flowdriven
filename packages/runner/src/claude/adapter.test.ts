@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Requirement } from "@flowdriven/sdk";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import type { StepRequest } from "../harness.ts";
 import {
   FAKE_CLAUDE_PATH,
@@ -53,6 +53,7 @@ function setup(actions: FakeAction[]) {
     audit: () => {},
     newId: () => `cc-${++n}`,
     newSessionId: () => "session-1",
+    newToken: () => "0123456789abcdef",
     rounds: 20,
   };
   const request: StepRequest = {
@@ -247,7 +248,7 @@ test("judge, replan and probe", { timeout: 20_000 }, async () => {
   expect(c.args[c.args.indexOf("--tools") + 1]).toBe("");
   expect(c.args[c.args.indexOf("--model") + 1]).toBe("sonnet");
   expect(c.args.slice(-2)).toEqual(["--json-schema", JSON.stringify(JUDGE_SCHEMA)]);
-  expect(c.prompt).toBe(judgePrompt({ rubric: "rubric", output: "word" }));
+  expect(c.prompt).toBe(judgePrompt({ rubric: "rubric", output: "word", token: "0123456789abcdef" }));
   writeFakeScript(t.home, { plays: [{ when: "", actions: [{ do: "result", structured: {} }] }] });
   expect(
     await t.adapter.judge({ runId: "r", stepId: "s", rubric: "rubric", output: "word", signal }),
@@ -259,4 +260,26 @@ test("judge, replan and probe", { timeout: 20_000 }, async () => {
     ok: false,
     detail: "Probe checks are not connected yet.",
   });
+});
+
+test("judge retries marker collisions and fails closed after three", { timeout: 20_000 }, async () => {
+  const t = setup([{ do: "result", structured: { verdict: "passed", reasons: "yes", evidence: "word" } }]);
+  const req = {
+    runId: "r",
+    stepId: "s",
+    rubric: "0123456789abcdef",
+    output: "word",
+    signal: t.request.signal,
+  };
+  const newToken = vi.fn().mockReturnValueOnce("0123456789abcdef").mockReturnValueOnce("fedcba9876543210");
+  await createClaudeAdapter({ ...t.options, newToken }).judge(req);
+  expect(newToken).toHaveBeenCalledTimes(2);
+  expect(call(t.home)).toMatchObject({
+    prompt: judgePrompt({ rubric: req.rubric, output: req.output, token: "fedcba9876543210" }),
+  });
+  const collision = vi.fn(() => "0123456789abcdef");
+  await expect(createClaudeAdapter({ ...t.options, newToken: collision }).judge(req)).rejects.toThrow(
+    "FlowDriven could not mark the judge's data.",
+  );
+  expect(collision).toHaveBeenCalledTimes(3);
 });
