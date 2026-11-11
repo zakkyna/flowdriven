@@ -1,0 +1,16 @@
+export const TICK_MS = 30_000;
+export const GRACE_MS = 120_000;
+export const MIN_EVERY_MS = 60_000;
+export const MAX_WINDOW_MS = 8 * 86_400_000;
+export const MAX_SCAN_ENTRIES = 5_000;
+export const RESCAN_MS = 300_000;
+export const MAX_DEBOUNCE_WAIT_MS = 60_000;
+export const DEFAULT_MAX_ITEMS = 20;
+export const DEFAULT_DAILY_CAP = 24;
+export const MAX_QUEUED_TRIGGERED = 2;
+export const MAX_CHAIN_DEPTH = 3;
+export const FLOW_DONE_WINDOW_MS = 7 * 86_400_000;
+export const FLOW_DONE_PER_TICK = 50;
+export const KEY_KEEP_MS = 30 * 86_400_000;
+export const OPEN_STATES = ["queued", "checking", "running", "retrying", "waiting_approval"] as const;
+export const SUPPORTED_KINDS = ["schedule", "file_change", "flow_done"] as const;

@@ -234,7 +234,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 4. `slotKey`: `every:<slotMs>` or `at:<localDay of the slot>` (one key per date, so a slot that DST shifts by an hour still has one key).
 5. `nextSlot` for `every` without `days` is arithmetic and has no window (`every: 30d` still shows its next slot); with `days` or for `at` it looks at most `MAX_WINDOW_MS` ahead and returns `undefined` when `days` is empty or nothing is found.
 
-- [ ] **Step 1: Write the failing tests.** `schedule.test.ts` (`TZ=UTC`; `const H = 3_600_000`, `const T0 = Date.parse("2026-11-12T00:00:00.000Z")`, a Thursday):
+- [x] **Step 1: Write the failing tests.** `schedule.test.ts` (`TZ=UTC`; `const H = 3_600_000`, `const T0 = Date.parse("2026-11-12T00:00:00.000Z")`, a Thursday):
 
 ```ts
 test("every: slots follow the anchor in elapsed time, never at the anchor itself, and latest is the newest", () => {
@@ -251,16 +251,19 @@ test("a clock that moved back and a bad spec give no slots and do not throw", ()
 ```
   Further tests: 3. "days filters by the local weekday for every and for at" (`days: [6]` Saturday 2026-11-14); 4. "at: one slot per local date at the clock time, none before it, two dates over two days"; 5. "a window longer than 8 days is cut and says capped"; 6. "nextSlot for every skips unlisted days and returns undefined for no days, and for at is today when the time is ahead and tomorrow when it has passed"; 7. "slotKey is per slot for every and per date for at, and localDay pads month and day"; 8. "scheduleOf maps names to weekdays and an unreadable duration to NaN".
   `schedule-dst.test.ts` runs `spawnSync(process.execPath, ["--input-type=module", "-e", script], { env: { ...process.env, TZ: zone, NODE_OPTIONS: "" }, encoding: "utf8" })` where `script` imports `schedule.ts` by `pathToFileURL`, calls the function and prints JSON (the pattern of `source-rules.test.ts`): 9. "America/New_York: at 02:30 on the spring-forward day 2026-03-08 gives one slot (03:30 EDT) and the key is that date, and at 01:30 on 2026-11-01 gives one slot, not two"; 10. "every 1h between 2026-03-07 09:00 and 2026-03-09 09:00 local counts 47 slots in America/New_York and 48 in Asia/Jakarta".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/schedule`. Expected: FAIL ("Cannot find module ./schedule.ts").
-- [ ] **Step 3: Implement** `constants.ts` and `schedule.ts`.
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/schedule`. Expected: FAIL ("Cannot find module ./schedule.ts").
+- [x] **Step 3: Implement** `constants.ts` and `schedule.ts`.
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/triggers
 git commit -m "Add the schedule evaluator and the local day" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
