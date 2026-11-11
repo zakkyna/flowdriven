@@ -151,12 +151,12 @@ test("the audit log is append-only", async () => {
     db.close();
   }
 });
-test("a database made by the present code at version 1 opens, keeps every row and becomes version 3", async () => {
+test("a database made by the present code at version 1 opens, keeps every row and becomes version 4", async () => {
   const path = migrationPath();
   makeVersionOne(path);
   const store = await open(path);
   expect(store.listAudit()).toEqual([{ at: "2026", kind: "test", runId: "r1", detail: { value: 1 } }]);
-  expect(version(path)).toBe(3);
+  expect(version(path)).toBe(4);
   expect(store.getHarnessState("claude-code")).toBeUndefined();
 });
 test("an exclusive open migrates a version 1 file too", async () => {
@@ -166,18 +166,18 @@ test("an exclusive open migrates a version 1 file too", async () => {
   expect(store.listAudit()).toEqual([{ at: "2026", kind: "test", runId: "r1", detail: { value: 1 } }]);
   expect(store.getHarnessState("claude-code")).toBeUndefined();
   store.close();
-  expect(version(path)).toBe(3);
+  expect(version(path)).toBe(4);
 });
-test("a new database is created at version 3 with the tables", async () => {
+test("a new database is created at version 4 with the tables", async () => {
   const path = migrationPath();
   const store = await open(path);
-  expect(version(path)).toBe(3);
+  expect(version(path)).toBe(4);
   expect(store.getHarnessState("claude-code")).toBeUndefined();
 });
-test("a database from version 4 is refused", async () => {
+test("a database from version 5 is refused", async () => {
   const path = migrationPath();
   const db = new DatabaseSync(path);
-  db.exec("PRAGMA user_version = 4");
+  db.exec("PRAGMA user_version = 5");
   db.close();
   await expect(openSqliteStore(path)).rejects.toMatchObject({
     code: "unavailable",

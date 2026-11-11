@@ -19,3 +19,8 @@ CREATE TABLE usage_events (id INTEGER PRIMARY KEY, at TEXT NOT NULL, run_id TEXT
 CREATE INDEX usage_events_run ON usage_events (run_id);
 CREATE TABLE settings (name TEXT PRIMARY KEY, data TEXT NOT NULL);
 `;
+
+export const TRIGGER_SCHEMA = `
+CREATE TABLE triggers (flow_id TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (flow_id, idx));
+CREATE TABLE fire_keys (flow_id TEXT NOT NULL, idx INTEGER NOT NULL, key TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (flow_id, idx, key));
+`;

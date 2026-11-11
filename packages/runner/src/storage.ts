@@ -107,7 +107,35 @@ export type UsageEventRow = {
   exit: ExitClass;
   costUsd?: number;
 };
+export type TriggerOutcome =
+  | "started"
+  | "skipped_overlap"
+  | "dropped_cap"
+  | "dropped_queue_full"
+  | "duplicate"
+  | "needs_ok"
+  | "refused"
+  | "missed"
+  | "depth"
+  | "error";
+export type TriggerRow = {
+  flowId: string;
+  index: number;
+  enabled: boolean;
+  hash: string;
+  spec: string;
+  enabledAt: string;
+  cursorMs?: number;
+  recentRuns?: string[];
+  pausedAt?: string;
+  lastFire?: { at: string; outcome: TriggerOutcome; runId?: string; detail?: string };
+};
 export interface Store {
+  getTrigger(flowId: string, index: number): TriggerRow | undefined;
+  putTrigger(row: TriggerRow): void;
+  listTriggers(flowId?: string): TriggerRow[];
+  claimKey(flowId: string, index: number, key: string, at: string): boolean;
+  purgeKeys(before: string): number;
   addUsage(row: UsageEventRow): void;
   listUsage(filter?: { runId?: string; since?: string }): UsageEventRow[];
   recentPeaks(q: { flowId: string; stepId: string; kind: CallKind; harness: string; runs: number }): number[];

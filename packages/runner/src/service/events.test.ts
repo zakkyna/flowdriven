@@ -142,3 +142,16 @@ test("usage and settings mark their topics", async () => {
   });
   expect(marks).toEqual(["runs"]);
 });
+
+test("putTrigger marks the flows topic", async () => {
+  const { store, marks } = await setup();
+  store.putTrigger({
+    flowId: "f",
+    index: 0,
+    enabled: false,
+    hash: "h",
+    spec: "{}",
+    enabledAt: "2026-11-12T00:00:00.000Z",
+  });
+  expect(marks).toEqual(["flows"]);
+});

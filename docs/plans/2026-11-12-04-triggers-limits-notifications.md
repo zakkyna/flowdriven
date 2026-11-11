@@ -195,23 +195,25 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `events.ts`: `putTrigger: ["flows"]` in `topics`.
 - **Present assertions that change.** `sqlite-store.test.ts`: `:159`, `:169` and `:174` `expect(version(path)).toBe(3)` become `toBe(4)`; the titles at `:154` and `:171` say "version 4"; the test at `:177-185` sets `user_version = 5` and is titled "a database from version 5 is refused". `sqlite-store-usage.test.ts` "a version 2 database migrates to 3 and keeps its rows; version 99 is still refused": title says "to 4" and a line `expect(new DatabaseSync(path).prepare("PRAGMA user_version").get()?.user_version).toBe(4)` is added after the open (close that handle). Each is the same assertion for the new version, not a looser one.
 
-- [ ] **Step 1: Write the failing tests** in `sqlite-store-triggers.test.ts` (and `events.test.ts` for the last):
+- [x] **Step 1: Write the failing tests** in `sqlite-store-triggers.test.ts` (and `events.test.ts` for the last):
   1. "a trigger row round-trips, a put replaces it, and the list is by flow and index" (two flows, three rows, `listTriggers("f")`)
   2. "a row that is not JSON, or has the wrong field types (also `recentRuns` and `pausedAt`), reads as absent and is left out of the list" (write raw rows with `new DatabaseSync` on a temp file)
   3. "claimKey is true once per flow, index and key; the same key on another index or flow is new"
   4. "purgeKeys removes keys older than the cut and keeps the rest, and returns the count"
   5. "a version 3 database migrates to 4 and keeps its rows; version 5 is refused" (build with `SCHEMA`, `HARNESS_STATE_SCHEMA`, `USAGE_SCHEMA`, `PRAGMA user_version = 3`)
   6. (`events.test.ts`) "putTrigger marks the flows topic"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/sqlite-store-triggers.test.ts`. Expected: FAIL (`store.putTrigger is not a function`).
-- [ ] **Step 3: Implement**; change the present assertions as named.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/sqlite-store packages/runner/src/service/events`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/sqlite-store-triggers.test.ts`. Expected: FAIL (`store.putTrigger is not a function`).
+- [x] **Step 3: Implement**; change the present assertions as named.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/sqlite-store packages/runner/src/service/events`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Add trigger rows, fire keys and migration 4 to the store" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

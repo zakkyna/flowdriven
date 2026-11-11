@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { EngineError } from "./errors.ts";
-import { HARNESS_STATE_SCHEMA, SCHEMA, USAGE_SCHEMA } from "./schema.ts";
+import { HARNESS_STATE_SCHEMA, SCHEMA, TRIGGER_SCHEMA, USAGE_SCHEMA } from "./schema.ts";
 import type {
   ApprovalRow,
   AuditEntry,
@@ -10,6 +10,7 @@ import type {
   RunRow,
   StepRow,
   Store,
+  TriggerRow,
   UsageEventRow,
 } from "./storage.ts";
 
@@ -48,14 +49,19 @@ export async function openSqliteStore(
     }
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     const version = db.prepare("PRAGMA user_version").get()?.user_version;
-    if (typeof version !== "number" || version > 3 || version < 0)
+    if (typeof version !== "number" || version > 4 || version < 0)
       throw new EngineError("unavailable", "Unsupported database version.");
     if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
     if (version === 0)
-      db.exec(`BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} PRAGMA user_version = 3; COMMIT;`);
+      db.exec(
+        `BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} PRAGMA user_version = 4; COMMIT;`,
+      );
     if (version === 1)
-      db.exec(`BEGIN; ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} PRAGMA user_version = 3; COMMIT;`);
-    if (version === 2) db.exec(`BEGIN; ${USAGE_SCHEMA} PRAGMA user_version = 3; COMMIT;`);
+      db.exec(
+        `BEGIN; ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} PRAGMA user_version = 4; COMMIT;`,
+      );
+    if (version === 2) db.exec(`BEGIN; ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} PRAGMA user_version = 4; COMMIT;`);
+    if (version === 3) db.exec(`BEGIN; ${TRIGGER_SCHEMA} PRAGMA user_version = 4; COMMIT;`);
   } catch (error) {
     db.close();
     throw error;
@@ -67,6 +73,60 @@ export async function openSqliteStore(
     row ? (JSON.parse(String(row.data)) as T) : undefined;
   const decodeAll = <T>(rows: Record<string, unknown>[]): T[] =>
     rows.map((row) => JSON.parse(String(row.data)) as T);
+  const decodeTrigger = (record: Record<string, unknown> | undefined): TriggerRow | undefined => {
+    if (!record) return undefined;
+    try {
+      const value: unknown = JSON.parse(String(record.data));
+      if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+      const r = value as Record<string, unknown>;
+      if (
+        typeof r.flowId !== "string" ||
+        r.flowId !== record.flow_id ||
+        typeof r.index !== "number" ||
+        !Number.isSafeInteger(r.index) ||
+        r.index < 0 ||
+        r.index !== record.idx ||
+        typeof r.enabled !== "boolean" ||
+        typeof r.hash !== "string" ||
+        typeof r.spec !== "string" ||
+        typeof r.enabledAt !== "string" ||
+        (r.cursorMs !== undefined && (typeof r.cursorMs !== "number" || !Number.isFinite(r.cursorMs))) ||
+        (r.recentRuns !== undefined &&
+          (!Array.isArray(r.recentRuns) ||
+            r.recentRuns.length > 3 ||
+            !r.recentRuns.every((v: unknown) => typeof v === "string"))) ||
+        (r.pausedAt !== undefined &&
+          (typeof r.pausedAt !== "string" || !Number.isFinite(Date.parse(r.pausedAt))))
+      )
+        return undefined;
+      if (r.lastFire !== undefined) {
+        if (!r.lastFire || typeof r.lastFire !== "object" || Array.isArray(r.lastFire)) return undefined;
+        const f = r.lastFire as Record<string, unknown>;
+        if (
+          typeof f.at !== "string" ||
+          typeof f.outcome !== "string" ||
+          ![
+            "started",
+            "skipped_overlap",
+            "dropped_cap",
+            "dropped_queue_full",
+            "duplicate",
+            "needs_ok",
+            "refused",
+            "missed",
+            "depth",
+            "error",
+          ].includes(f.outcome) ||
+          (f.runId !== undefined && typeof f.runId !== "string") ||
+          (f.detail !== undefined && typeof f.detail !== "string")
+        )
+          return undefined;
+      }
+      return r as TriggerRow;
+    } catch {
+      return undefined;
+    }
+  };
   const json = (value: unknown): string => {
     const result = JSON.stringify(value);
     if (result === undefined) throw new EngineError("invalid_input", "Value is not JSON serializable.");
@@ -74,6 +134,38 @@ export async function openSqliteStore(
   };
   let depth = 0;
   const store: Store = {
+    getTrigger(flowId, index) {
+      return decodeTrigger(
+        get("SELECT flow_id, idx, data FROM triggers WHERE flow_id = ? AND idx = ?", flowId, index),
+      );
+    },
+    putTrigger(row) {
+      execute(
+        "INSERT OR REPLACE INTO triggers (flow_id, idx, data) VALUES (?, ?, ?)",
+        row.flowId,
+        row.index,
+        json(row),
+      );
+    },
+    listTriggers(flowId) {
+      return all(
+        "SELECT flow_id, idx, data FROM triggers WHERE (? IS NULL OR flow_id = ?) ORDER BY flow_id, idx",
+        flowId ?? null,
+        flowId ?? null,
+      )
+        .map(decodeTrigger)
+        .filter((row): row is TriggerRow => row !== undefined);
+    },
+    claimKey(flowId, index, key, at) {
+      return (
+        Number(
+          execute("INSERT OR IGNORE INTO fire_keys VALUES (?, ?, ?, ?)", flowId, index, key, at).changes,
+        ) === 1
+      );
+    },
+    purgeKeys(before) {
+      return Number(execute("DELETE FROM fire_keys WHERE at < ?", before).changes);
+    },
     addUsage(row) {
       execute(
         "INSERT INTO usage_events (at, run_id, step_id, item_key, attempt, kind, harness, models, turns, wall_ms, queued_ms, memory_peak_mb, exit, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
