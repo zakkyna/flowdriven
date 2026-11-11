@@ -95,7 +95,7 @@ test("a step judged only by a judge is labelled", () =>
         checks: [{ type: "judge", required: true, summary: "s", verdict: "passed", evidence: "line 3" }],
       }),
     ),
-  ).toContain("judge: passed (judged, not verified)"));
+  ).toContain("judge: passed \\(judged, not verified\\)"));
 test("the steps table names the worker and the evidence is quoted", () => {
   const md = renderRunReport(
     view({
@@ -116,8 +116,8 @@ test("the steps table names the worker and the evidence is quoted", () => {
 });
 test("inputs, params and outputs are listed", () => {
   const md = renderRunReport(view({}));
-  expect(md).toContain("- min_score: 7");
-  expect(md).toContain('- alerts.jobs: [{"id":"j1"');
+  expect(md).toContain("- min\\_score: 7");
+  expect(md).toContain('- alerts.jobs: \\[{"id":"j1"');
   expect(md).toContain("Usage and cost are not tracked yet (plan 03).");
 });
 test("the report has the sections in order", () => {

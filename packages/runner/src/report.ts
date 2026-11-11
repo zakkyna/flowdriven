@@ -3,10 +3,14 @@ import type { RunView } from "./engine.ts";
 export function escapeText(text: string, max = 200): string {
   const escaped = text
     .replace(/\r\n|\r|\n/g, " ")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/[\\[\]()!*_#]/g, "\\$&")
     .replace(/\|/g, "\\|")
     .replace(/`/g, "'")
     .replace(
-      /[\p{Cc}\p{Cf}]/gu,
+      /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu,
       (c) => `<U+${(c.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}>`,
     );
   return [...escaped].length > max ? `${[...escaped].slice(0, max).join("")}...` : escaped;

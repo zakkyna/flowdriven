@@ -235,13 +235,6 @@ export function createEngine(input: EngineDeps): Engine {
               .map((i) => i.message)
               .join("; "),
           );
-        const day = now().toISOString().slice(0, 10);
-        const key = `runs:${flowId}`;
-        if (store.counter(key, day) >= (manifest.limits?.max_runs_per_day ?? 24)) {
-          store.appendAudit({ at: now().toISOString(), kind: "run_dropped", detail: { flowId, day } });
-          throw new EngineError("not_allowed", "Daily run limit reached.");
-        }
-        store.increment(key, day);
       }
       const entries: [string, Value][] = [];
       for (const [id, decl] of Object.entries(manifest.params)) {
@@ -250,7 +243,13 @@ export function createEngine(input: EngineDeps): Engine {
         if (
           (decl.type === "number" && typeof value !== "number") ||
           (decl.type === "bool" && typeof value !== "boolean") ||
-          ((decl.type === "text" || decl.type === "enum") && typeof value !== "string")
+          ((decl.type === "text" || decl.type === "enum") && typeof value !== "string") ||
+          (typeof value === "number" && !Number.isFinite(value)) ||
+          (decl.min !== undefined && (typeof value !== "number" || value < decl.min)) ||
+          (decl.max !== undefined && (typeof value !== "number" || value > decl.max)) ||
+          (decl.type === "enum" &&
+            (!decl.options || typeof value !== "string" || !decl.options.includes(value))) ||
+          (decl.options !== undefined && (typeof value !== "string" || !decl.options.includes(value)))
         )
           throw new EngineError("invalid_input", `Invalid parameter ${id}.`);
         entries.push([id, value as Value]);
@@ -279,7 +278,16 @@ export function createEngine(input: EngineDeps): Engine {
         requirements: structuredClone(manifest.requirements),
         startedAt: now().toISOString(),
       };
-      store.createRun(run);
+      const day = now().toISOString().slice(0, 10);
+      const key = `runs:${flowId}`;
+      if (kind !== "manual" && store.counter(key, day) >= (manifest.limits?.max_runs_per_day ?? 24)) {
+        store.appendAudit({ at: now().toISOString(), kind: "run_dropped", detail: { flowId, day } });
+        throw new EngineError("not_allowed", "Daily run limit reached.");
+      }
+      store.transaction(() => {
+        store.createRun(run);
+        if (kind !== "manual") store.increment(key, day);
+      });
       return checkAndWalk(run);
     },
     async answerAsk(id, answer) {

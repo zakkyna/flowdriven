@@ -25,7 +25,11 @@ export function createRecovery(ctx: {
             store.upsertStep({ ...row, state: "pending", attempts: [], note: undefined });
         }
         for (const item of store.listItems(id)) {
-          if (item.status === "failed" || item.status === "running")
+          if (
+            item.status === "failed" ||
+            item.status === "running" ||
+            (item.status === "skipped" && item.note === "skipped: stopped after an item failed")
+          )
             store.upsertItem({ ...item, status: "pending", note: undefined });
         }
         store.updateRun(id, { state: "checking", blockedReason: undefined, endedAt: undefined });
