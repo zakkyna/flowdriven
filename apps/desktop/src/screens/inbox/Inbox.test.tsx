@@ -575,3 +575,24 @@ test("a choice that releases tools names them before it is sent", async () => {
   await screen.findByRole("checkbox", { name: /Job one/ });
   expect(screen.queryByText(sentence)).toBeNull();
 });
+
+test("a weekly limit approval shows its action and harness", async () => {
+  const view = renderApp("#/inbox/weekly-limit:claude-code");
+  view.client.state.approvals.push(
+    Approval.parse({
+      id: "weekly-limit:claude-code",
+      kind: "weekly_limit",
+      summary: "Claude Code's weekly limit is 90% used and resets on Saturday. Keep running triggered flows?",
+      payload: {
+        kind: "text",
+        text: "Claude Code's weekly limit is 90% used and resets on Saturday. Keep running triggered flows?",
+      },
+      editable: false,
+      createdAt: "2026-11-11T09:00:00.000Z",
+      expiresAt: "2026-11-14T09:00:00.000Z",
+      state: "pending",
+    }),
+  );
+  expect(await screen.findByText("Weekly limit")).toBeTruthy();
+  expect(screen.getAllByText("Claude Code").length).toBeGreaterThan(0);
+});

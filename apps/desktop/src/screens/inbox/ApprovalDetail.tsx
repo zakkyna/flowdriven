@@ -62,7 +62,7 @@ export function ApprovalDetail({
             <dd>{actionName(a)}</dd>
             <dt>Flow</dt>
             <dd>
-              <Revealed text={a.flowName} />
+              <Revealed text={a.flowName ?? "Claude Code"} />
             </dd>
             {a.stepTitle && (
               <>

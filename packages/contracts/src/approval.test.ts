@@ -61,3 +61,31 @@ test("an ask approval is not a risky action and may name an item and its picks",
   expect(parsed.itemKey).toBe("j1");
   expect(parsed.picks).toEqual(["j1"]);
 });
+
+const weekly = {
+  id: "weekly-limit:claude-code",
+  kind: "weekly_limit",
+  summary: "Claude Code's weekly limit is 90% used and resets on Saturday. Keep running triggered flows?",
+  payload: {
+    kind: "text",
+    text: "Claude Code's weekly limit is 90% used and resets on Saturday. Keep running triggered flows?",
+  },
+  editable: false,
+  createdAt: "2026-11-11T09:00:00.000Z",
+  expiresAt: "2026-11-14T09:00:00.000Z",
+  state: "pending",
+};
+test("a weekly limit approval names no flow", () => {
+  expect(Approval.parse(weekly).kind).toBe("weekly_limit");
+  expect(Approval.safeParse({ ...weekly, runId: "r" }).success).toBe(false);
+  expect(Approval.safeParse({ ...weekly, stepId: "s" }).success).toBe(false);
+  expect(Approval.safeParse({ ...weekly, itemKey: "i" }).success).toBe(false);
+  expect(
+    Approval.safeParse({ ...weekly, payload: { kind: "amount", amountUsd: 1, description: "x" } }).success,
+  ).toBe(false);
+});
+test("every other kind still names its flow", () => {
+  expect(Approval.safeParse({ ...weekly, kind: "result_sign_off" }).success).toBe(false);
+  expect(Approval.safeParse({ ...weekly, kind: "result_sign_off", flowId: "f" }).success).toBe(false);
+  expect(Approval.safeParse({ ...weekly, kind: "result_sign_off", flowName: "F" }).success).toBe(false);
+});

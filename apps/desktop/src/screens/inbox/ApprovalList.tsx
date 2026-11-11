@@ -17,6 +17,7 @@ export function actionName(a: Approval): string {
     budget_raise: "Budget raise",
     requirement_addition: "New requirement",
     ask: "Choice",
+    weekly_limit: "Weekly limit",
   }[a.kind];
 }
 export function noun(a: Approval): string {
@@ -30,6 +31,7 @@ export function noun(a: Approval): string {
     budget_raise: "budget raise",
     requirement_addition: "requirement",
     ask: "choice",
+    weekly_limit: "weekly limit",
   }[a.kind];
 }
 function icon(a: Approval): IconName {
@@ -43,6 +45,7 @@ function icon(a: Approval): IconName {
     budget_raise: "coin",
     requirement_addition: "plus",
     ask: "list",
+    weekly_limit: "clock",
   }[a.kind] as IconName;
 }
 export function ApprovalList({
@@ -72,7 +75,7 @@ export function ApprovalList({
                 <Revealed text={a.summary} />
               </span>
               <span className={styles.flow}>
-                <Revealed text={a.flowName} />
+                <Revealed text={a.flowName ?? "Claude Code"} />
                 {a.stepTitle && (
                   <>
                     , <Revealed text={a.stepTitle} />

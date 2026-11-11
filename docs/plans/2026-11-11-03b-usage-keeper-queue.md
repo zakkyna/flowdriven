@@ -431,7 +431,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 **Interfaces:**
 - Produces: `ApprovalKind` gains `"weekly_limit"`; `Approval.flowId` and `Approval.flowName` become optional, and the `superRefine` requires them for every kind except `weekly_limit`, and requires a `text` payload and no `runId`, `stepId`, `itemKey` for `weekly_limit`. The Inbox shows `a.flowName ?? "Claude Code"`; `actionName` gives `"Weekly limit"`, `noun` gives `"weekly limit"`, `icon` gives `"clock"`.
 
-- [ ] **Step 1: Write the failing test** (add to `approval.test.ts`)
+- [x] **Step 1: Write the failing test** (add to `approval.test.ts`)
 
 ```ts
 import { Approval } from "./index";
@@ -453,13 +453,16 @@ test("every other kind still names its flow", () => {
 ```
 
 Add to `apps/desktop/src/screens/inbox/` a test in the present Inbox test file that renders a `weekly_limit` approval through the sample client and finds `"Weekly limit"` and `"Claude Code"` (copy the nearest present render test of an approval in `Inbox.test.tsx` and change the data).
-- [ ] **Step 2: Run:** `pnpm vitest run packages/contracts/src/approval.test.ts`. Expected: FAIL. **Step 3: Implement** the schema and the three label maps. **Step 4: Run** `pnpm vitest run packages/contracts apps/desktop/src/screens/inbox`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/contracts/src/approval.test.ts`. Expected: FAIL. **Step 3: Implement** the schema and the three label maps. **Step 4: Run** `pnpm vitest run packages/contracts apps/desktop/src/screens/inbox`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts apps/desktop/src/screens/inbox
 git commit -m "Add the weekly limit approval kind to the contract and the Inbox" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
