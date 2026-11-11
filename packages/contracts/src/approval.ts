@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Id, IsoDateTime } from "./common";
+import { Id, IsoDateTime } from "./common.ts";
 
 export const RiskyAction = z.enum(["send", "post", "pay", "delete", "merge"]);
 export type RiskyAction = z.infer<typeof RiskyAction>;

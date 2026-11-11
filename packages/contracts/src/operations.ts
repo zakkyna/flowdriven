@@ -1,22 +1,21 @@
 import { z } from "zod";
-import { Approval, ApprovalDecision, ApprovalState } from "./approval";
-import type { RunnerTopic } from "./client";
-import { Id } from "./common";
-import { ChatMessage, FlowDetail, FlowEdit, FlowSummary } from "./flow";
-import { HarnessCard } from "./harness";
-import { ReadinessReport } from "./readiness";
-import { RunDetail, RunReport, RunState, RunSummary } from "./run";
-import { Settings, SettingsPatch } from "./settings";
+import { Approval, ApprovalDecision, ApprovalState } from "./approval.ts";
+import type { RunnerTopic } from "./client.ts";
+import { Id } from "./common.ts";
+import { ChatMessage, FlowDetail, FlowEdit, FlowSummary } from "./flow.ts";
+import { HarnessCard } from "./harness.ts";
+import { ReadinessReport } from "./readiness.ts";
+import { RunDetail, RunReport, RunState, RunSummary } from "./run.ts";
+import { Settings, SettingsPatch } from "./settings.ts";
 
 export const RUNNER_ERROR_CODES = ["not_found", "invalid_input", "not_allowed", "unavailable"] as const;
 export type RunnerErrorCode = (typeof RUNNER_ERROR_CODES)[number];
 export class RunnerError extends Error {
-  constructor(
-    readonly code: RunnerErrorCode,
-    message: string,
-  ) {
+  readonly code: RunnerErrorCode;
+  constructor(code: RunnerErrorCode, message: string) {
     super(message);
     this.name = "RunnerError";
+    this.code = code;
   }
 }
 export function isRunnerError(value: unknown): value is RunnerError {

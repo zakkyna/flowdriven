@@ -164,7 +164,7 @@ Covers decision 3 and the plain-Node rule. The runner process (Tasks 9 to 13) im
 - In the eight sources every relative `import ... from "./x"`, `import "./x"` and `export * from "./x"` becomes `"./x.ts"`, the `import type` ones included. `client.ts` is not touched: its only relative import is `import type ... from "./operations"`, which Node erases and never loads.
 - `RunnerError` in `operations.ts` becomes: `export class RunnerError extends Error { readonly code: RunnerErrorCode; constructor(code: RunnerErrorCode, message: string) { super(message); this.name = "RunnerError"; this.code = code; } }`.
 
-- [ ] **Step 1: Write the failing tests** (`packages/runner/src/contracts-load.test.ts`, 3 tests; imports `spawnSync`, `readdirSync`, `readFileSync`, `fileURLToPath`)
+- [x] **Step 1: Write the failing tests** (`packages/runner/src/contracts-load.test.ts`, 3 tests; imports `spawnSync`, `readdirSync`, `readFileSync`, `fileURLToPath`)
 ```ts
 const runner = fileURLToPath(new URL("..", import.meta.url));                 // packages/runner
 const contracts = fileURLToPath(new URL("../../contracts/", import.meta.url));
@@ -183,18 +183,20 @@ test("the base compiler settings keep the contracts erasable", () => {
   expect([base.allowImportingTsExtensions, base.rewriteRelativeImportExtensions, base.erasableSyntaxOnly]).toEqual([true, true, true]);
 });
 ```
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/runner/src/contracts-load.test.ts`. Expected: FAIL (the load test with `ERR_MODULE_NOT_FOUND`; the other two on the offending lines and the missing flags).
-- [ ] **Step 3: Make the changes above.** Then check by hand that nothing else the runner imports at run time has the same fault: `packages/runner/src/source-rules.test.ts` already loads the SDK and the runner on plain Node, and the contracts import only `zod`.
-- [ ] **Step 4: Run the tests, the typecheck and the web build**
+- [x] **Step 3: Make the changes above.** Then check by hand that nothing else the runner imports at run time has the same fault: `packages/runner/src/source-rules.test.ts` already loads the SDK and the runner on plain Node, and the contracts import only `zod`.
+- [x] **Step 4: Run the tests, the typecheck and the web build**
   Run: `pnpm vitest run packages/runner/src/contracts-load.test.ts && pnpm typecheck && pnpm build:web`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS (every present test unchanged).
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add tsconfig.base.json packages/contracts packages/runner/src/contracts-load.test.ts
 git commit -m "Let Node load the contracts" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

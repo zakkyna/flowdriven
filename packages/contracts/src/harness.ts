@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Id, IsoDateTime, RiskLabel } from "./common";
+import { Id, IsoDateTime, RiskLabel } from "./common.ts";
 
 export const LoginState = z.enum(["logged_in", "logged_out", "unknown"]);
 export type LoginState = z.infer<typeof LoginState>;

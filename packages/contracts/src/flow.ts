@@ -1,6 +1,15 @@
 import { z } from "zod";
-import { CheckType, ContentHash, Id, IsoDateTime, OutputType, RouteOption, SemVer, StepDo } from "./common";
-import { RunState, StepRunState } from "./run";
+import {
+  CheckType,
+  ContentHash,
+  Id,
+  IsoDateTime,
+  OutputType,
+  RouteOption,
+  SemVer,
+  StepDo,
+} from "./common.ts";
+import { RunState, StepRunState } from "./run.ts";
 
 export const FlowKind = z.enum(["build", "light"]);
 export type FlowKind = z.infer<typeof FlowKind>;

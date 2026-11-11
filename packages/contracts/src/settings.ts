@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { Id, RiskLabel } from "./common";
-import { ConsentState, LoginState, QuotaState } from "./harness";
+import { Id, RiskLabel } from "./common.ts";
+import { ConsentState, LoginState, QuotaState } from "./harness.ts";
 
 export const BrainBackend = z.object({
   id: Id,

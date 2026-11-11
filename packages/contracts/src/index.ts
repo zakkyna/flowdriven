@@ -1,12 +1,12 @@
-import "./config";
+import "./config.ts";
 
-export * from "./approval";
-export * from "./client";
-export * from "./common";
-export * from "./flow";
-export * from "./harness";
-export * from "./operations";
-export * from "./readiness";
-export * from "./run";
-export * from "./settings";
-export { CONTRACT_VERSION } from "./version";
+export * from "./approval.ts";
+export * from "./client.ts";
+export * from "./common.ts";
+export * from "./flow.ts";
+export * from "./harness.ts";
+export * from "./operations.ts";
+export * from "./readiness.ts";
+export * from "./run.ts";
+export * from "./settings.ts";
+export { CONTRACT_VERSION } from "./version.ts";

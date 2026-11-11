@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { Id, IsoDateTime, RouteOption } from "./common";
-import { RequirementType } from "./flow";
+import { Id, IsoDateTime, RouteOption } from "./common.ts";
+import { RequirementType } from "./flow.ts";
 
 export const RequirementState = z.enum(["ok", "missing", "needs_login", "failed"]);
 export type RequirementState = z.infer<typeof RequirementState>;

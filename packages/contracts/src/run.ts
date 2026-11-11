@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CheckType, Id, IsoDateTime, OutputType, SemVer, StepDo } from "./common";
+import { CheckType, Id, IsoDateTime, OutputType, SemVer, StepDo } from "./common.ts";
 
 export const RunState = z.enum([
   "queued",
