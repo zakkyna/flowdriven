@@ -364,7 +364,7 @@ Chair's note (2026-11-12): the executor stopped with `Blocked:` because its seco
 5. `trigger_paused`: id `paused:<flowId>:<index>:<pausedAt>`, sent once per id; it is a different kind and id from `run_blocked`, so the 10 minute and 6 hour rules never hold it back, and it sets no throttle time. Title `Trigger paused`, body `<name> was switched off after 3 blocked runs in a row.` Target `{ screen: "builder", flowId }`; refuse an `index` that is not a non-negative integer.
 6. `<name>` is `sanitizeText(flowName, NAME_MAX)`; an empty result becomes `A flow`. Every id and target id is checked against `^[A-Za-z0-9:._-]{1,100}$`; one that fails returns `undefined`. The sent-id set keeps the last 1,000 ids.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. "an approval notifies once, a second approval of the same run notifies too, and the same approval never twice"
   2. "a blocked run notifies once and not again within 10 minutes; the same flow blocking again within 6 hours says nothing; after 6 hours it notifies" (clock object)
   3. "a waiting approval is not held back by the 10 minute throttle after a block"
@@ -375,16 +375,18 @@ Chair's note (2026-11-12): the executor stopped with `Blocked:` because its seco
   8. "an id with a slash or a space, or a harness id with capitals, returns undefined"
   9. "the sent-id set is bounded" (1,001 different approvals; memory holds 1,000, the first one can notify again)
   10. "a paused trigger notifies once, even right after a blocked-run notice of the same flow, with the pause text and a builder target"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/notify/policy.test.ts`. Expected: FAIL ("Cannot find module ./policy.ts").
-- [ ] **Step 3: Implement** `policy.ts`.
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/notify/policy.test.ts`. Expected: FAIL ("Cannot find module ./policy.ts").
+- [x] **Step 3: Implement** `policy.ts`.
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/notify
 git commit -m "Add the notice policy with fixed templates" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ### Task 7: The trigger service, part 1: enabling, schedules, overlap, the cap and floods
 
