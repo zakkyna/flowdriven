@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { CheckList } from "../../ui/CheckList";
 import { StateIcon } from "../../ui/StatusBadge";
 import { statusOf } from "../../ui/status";
+import { BlockedCalls } from "./BlockedCalls";
 import styles from "./Runs.module.css";
 
 const reasons: Record<SkipReason, string> = {
@@ -56,6 +57,7 @@ export function ItemList({ title, items }: { title: string; items: RunItem[] }):
                   </span>
                 </div>
                 {step.checks.length > 0 && <CheckList checks={step.checks} />}
+                {step.blocked && <BlockedCalls calls={step.blocked} />}
               </li>
             ))}
           </ul>

@@ -86,3 +86,19 @@ test("an attempt can say it was a re-plan and name its worker", () => {
     Attempt.parse({ number: 1, startedAt: "2026-11-10T09:30:00.000Z", replan: true, worker: "worker" }),
   ).toMatchObject({ replan: true, worker: "worker" });
 });
+
+test("a step run can list blocked calls, each with a count of at least one, at most twenty rows", () => {
+  const step = {
+    stepId: "a",
+    title: "A",
+    do: "worker",
+    state: "failed",
+    attempts: [],
+    maxAttempts: 1,
+    checks: [],
+  };
+  const row = { tool: "Write", reason: "Denied", count: 1 };
+  expect(StepRun.parse({ ...step, blocked: [row] }).blocked).toEqual([row]);
+  expect(StepRun.safeParse({ ...step, blocked: [{ ...row, count: 0 }] }).success).toBe(false);
+  expect(StepRun.safeParse({ ...step, blocked: Array.from({ length: 21 }, () => row) }).success).toBe(false);
+});

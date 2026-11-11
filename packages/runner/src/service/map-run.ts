@@ -1,5 +1,6 @@
 import {
   AuditRecord,
+  type BlockedCall,
   CheckResult,
   LeafStepRun,
   RunDetail,
@@ -13,6 +14,31 @@ import { reportLines } from "../report.ts";
 import type { AuditEntry, RunRow, StepRow } from "../storage.ts";
 import { toApproval } from "./map-approval.ts";
 import { coreVersion } from "./map-flow.ts";
+export function blockedCalls(
+  audit: AuditEntry[],
+  stepId: string,
+  itemKey: string,
+): BlockedCall[] | undefined {
+  const rows: BlockedCall[] = [];
+  for (const entry of audit) {
+    const detail = entry.detail;
+    if (
+      entry.kind !== "tool_denied" ||
+      !detail ||
+      typeof detail !== "object" ||
+      Array.isArray(detail) ||
+      detail.stepId !== stepId ||
+      detail.itemKey !== itemKey ||
+      typeof detail.tool !== "string" ||
+      typeof detail.reason !== "string"
+    )
+      continue;
+    const existing = rows.find((row) => row.tool === detail.tool && row.reason === detail.reason);
+    if (existing) existing.count++;
+    else if (rows.length < 20) rows.push({ tool: detail.tool, reason: detail.reason, count: 1 });
+  }
+  return rows.length ? rows : undefined;
+}
 export function itemLabel(item: Value, key: string): string {
   if (item && typeof item === "object" && !Array.isArray(item)) {
     if (typeof item.title === "string") return item.title;
@@ -72,6 +98,7 @@ export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => 
       )
         picks = [];
     }
+    const blocked = blockedCalls(view.audit, step.id, row?.itemKey ?? "");
     return LeafStepRun.parse({
       stepId: step.id,
       title: step.title ?? step.id,
@@ -81,6 +108,7 @@ export function toRunDetail(view: RunView, harnessIdOf: (workerName: string) => 
       attempts: row?.attempts ?? [],
       maxAttempts: limits(step, manifest).attempts,
       checks: (row?.checks ?? []).map((c) => CheckResult.parse(c)),
+      ...(blocked === undefined ? {} : { blocked }),
       note: row?.note,
       picks,
     });

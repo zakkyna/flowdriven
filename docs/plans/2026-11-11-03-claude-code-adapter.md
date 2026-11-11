@@ -903,24 +903,27 @@ export function BlockedCalls({ calls }: { calls: BlockedCall[] }): ReactElement;
 ```
 **Rules.** `blockedCalls` reads the entries of kind `tool_denied` whose `detail` is an object with string `stepId`, `itemKey`, `tool` and `reason` equal to the asked step and item (an entry with another shape is skipped); the same tool and reason are one row with a count; rows keep the order of their first entry; at most 20 rows; `undefined` when there is none. `toRunDetail` passes `blocked: blockedCalls(view.audit, step.id, row?.itemKey ?? "")` for every leaf step and item step (the key is absent when `undefined`). `BlockedCalls` renders a `section` labelled "Blocked calls" with the heading text "Blocked calls" and a list; each row is an alert icon (`Icon name="alert"`), the tool and the reason through `Revealed` (single line; `import { Revealed } from "../inbox/PayloadView";`, the component the Inbox uses, which shows hidden characters as `<U+XXXX>` by the app's own table), and `(<count> time)` or `(<count> times)`; `StepBlock` and `ItemList` show it after the checks when `step.blocked` is present. `Runs.module.css` gets the row style with `overflow-wrap: anywhere` and `min-width: 0`. In the fixtures the failed step `build` of `run-0006` gets `blocked: [{ tool: "Write", reason: "This path is outside the folders this step declares.", count: 2 }]`, so the existing `run-detail` capture shows it and the capture count stays 20.
 
-- [ ] **Step 1: Write the failing tests** (5)
+- [x] **Step 1: Write the failing tests** (5)
   1. (`run.test.ts`) `a step run can list blocked calls, each with a count of at least one, at most twenty rows`: parse with one row; a count of `0` fails; 21 rows fail.
   2. (`map-run.test.ts`) `blocked calls come from the tool_denied entries of that step and item, one row per tool and reason`: a view whose audit holds three `Write` denials with one reason (two for step `a` item `""`, one for step `a` item `k1`), one `Read` denial of step `a` with another reason, a denial of step `b`, an entry of another kind and a `tool_denied` with a malformed detail: for `a`/`""` the rows are `[{ tool: "Write", reason: R1, count: 2 }, { tool: "Read", reason: R2, count: 1 }]`; for `a`/`k1` one row with count 1; for `b` one row.
   3. (`map-run.test.ts`) `at most twenty rows, and no key when nothing was blocked`: 25 different reasons give 20 rows in order; a step with none has no `blocked` key in `toRunDetail`'s output (the present tests still pass unchanged).
   4. (`Runs.test.tsx`) `the step block lists blocked calls under the words Blocked calls`: `renderApp("#/runs/run-0006")`: inside the section of "Build the screens" there are "Blocked calls", "Write", "This path is outside the folders this step declares." and "(2 times)", with an icon element.
   5. (`Runs.test.tsx`) `an item lists its blocked calls too, and a hidden character in a tool name is shown`: render `ItemList` with an item whose step has `blocked: [{ tool: "Re" + String.fromCodePoint(0x202e) + "ad", reason: "x", count: 1 }]`: the text `<U+202E>` and "(1 time)" are present.
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
   Run: `pnpm vitest run packages/contracts/src/run.test.ts packages/runner/src/service/map-run.test.ts apps/desktop/src/screens/runs`. Expected: FAIL.
-- [ ] **Step 3: Implement** by the interfaces and rules.
-- [ ] **Step 4: Run the tests, the typecheck and the web build**
+- [x] **Step 3: Implement** by the interfaces and rules.
+- [x] **Step 4: Run the tests, the typecheck and the web build**
   Run: `pnpm vitest run packages apps/desktop/src && pnpm typecheck && pnpm build:web`. Expected: PASS (the fixtures' present tests unchanged).
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)** (the chair runs `pnpm capture` first: `captured 20 screens`, and looks at `run-detail-light.png` and `run-detail-dark.png`)
+- [x] **Step 6: Chair step (commit)** (the chair runs `pnpm capture` first: `captured 20 screens`, and looks at `run-detail-light.png` and `run-detail-dark.png`)
 ```bash
 git add packages apps/desktop/src
 git commit -m "Show the blocked calls of a step in the run" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

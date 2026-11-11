@@ -122,6 +122,9 @@ export function runs(flows: FlowRecord[]): RunDetail[] {
     "Build the screens: flutter analyze still fails after 4 attempts and one re-plan. Fix the errors or change the step, then resume.";
   const build = figma.steps[2];
   if (build) {
+    build.blocked = [
+      { tool: "Write", reason: "This path is outside the folders this step declares.", count: 2 },
+    ];
     build.worker = { harnessId: "codex", name: "Codex" };
     build.attempts = [1, 2, 3, 4].map((number) => ({
       number,

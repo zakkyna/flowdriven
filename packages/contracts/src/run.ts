@@ -50,6 +50,8 @@ export type ItemState = z.infer<typeof ItemState>;
 export const SKIP_REASONS = ["seen", "duplicate", "capped", "stopped"] as const;
 export const SkipReason = z.enum(SKIP_REASONS);
 export type SkipReason = z.infer<typeof SkipReason>;
+export const BlockedCall = z.object({ tool: z.string(), reason: z.string(), count: z.number().int().min(1) });
+export type BlockedCall = z.infer<typeof BlockedCall>;
 export const LeafStepRun = z.object({
   stepId: Id,
   title: z.string(),
@@ -59,6 +61,7 @@ export const LeafStepRun = z.object({
   attempts: z.array(Attempt),
   maxAttempts: z.number().int().min(1),
   checks: z.array(CheckResult),
+  blocked: z.array(BlockedCall).max(20).optional(),
   note: z.string().optional(),
   picks: z.array(z.object({ key: z.string(), label: z.string() })).optional(),
 });

@@ -357,3 +357,27 @@ test("a check whose label equals its type shows the word once", async () => {
   const region = await screen.findByRole("region", { name: step.title });
   expect(within(region).getAllByText("schema")).toHaveLength(1);
 });
+
+test("the step block lists blocked calls under the words Blocked calls", async () => {
+  renderApp("#/runs/run-0006");
+  const step = await screen.findByRole("region", { name: "Build the screens" });
+  const section = within(step).getByRole("region", { name: "Blocked calls" });
+  expect(within(section).getByRole("heading", { name: "Blocked calls" })).toBeTruthy();
+  expect(within(section).getByText("Write")).toBeTruthy();
+  expect(within(section).getByText("This path is outside the folders this step declares.")).toBeTruthy();
+  expect(within(section).getByText("(2 times)")).toBeTruthy();
+  expect(section.querySelector("svg")).not.toBeNull();
+});
+test("an item lists its blocked calls too, and a hidden character in a tool name is shown", async () => {
+  const { client } = renderApp("#/runs/run-0008", { scenario: "looped" });
+  const step = client.state.runs
+    .find((run) => run.id === "run-0008")
+    ?.steps.find((s) => s.items)
+    ?.items?.at(0)
+    ?.steps.at(0);
+  if (!step) throw new Error("Missing item step");
+  step.blocked = [{ tool: `Re${String.fromCodePoint(0x202e)}ad`, reason: "x", count: 1 }];
+  const list = await screen.findByRole("list", { name: "Steps of j1" });
+  expect(within(list).getByText("<U+202E>")).toBeTruthy();
+  expect(within(list).getByText("(1 time)")).toBeTruthy();
+});

@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
 import type { RunView } from "../engine.ts";
 import type { ApprovalRow, ItemRow, StepRow } from "../storage.ts";
-import { itemLabel, skipReason, toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
+import { blockedCalls, itemLabel, skipReason, toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
 
 const date = "2026-11-11T00:00:00.000Z";
 function view(): RunView {
@@ -152,4 +152,60 @@ test("toRunSummary and toAuditRecord", () => {
   expect(AuditRecord.parse(toAuditRecord({ at: date, kind: "event", detail: { a: 1 } })).detail).toBe(
     '{"a":1}',
   );
+});
+
+test("blocked calls come from the tool_denied entries of that step and item, one row per tool and reason", () => {
+  const entry = (stepId: string, itemKey: string, tool: string, reason: string) => ({
+    at: date,
+    kind: "tool_denied",
+    detail: { stepId, itemKey, tool, reason },
+  });
+  const audit = [
+    entry("a", "", "Write", "R1"),
+    entry("a", "", "Write", "R1"),
+    entry("a", "k1", "Write", "R1"),
+    entry("a", "", "Read", "R2"),
+    entry("b", "", "Write", "R1"),
+    { at: date, kind: "other", detail: { stepId: "a", itemKey: "", tool: "Read", reason: "R2" } },
+    { at: date, kind: "tool_denied", detail: { stepId: "a" } },
+  ];
+  expect(blockedCalls(audit, "a", "")).toEqual([
+    { tool: "Write", reason: "R1", count: 2 },
+    { tool: "Read", reason: "R2", count: 1 },
+  ]);
+  expect(blockedCalls(audit, "a", "k1")).toEqual([{ tool: "Write", reason: "R1", count: 1 }]);
+  expect(blockedCalls(audit, "b", "")).toEqual([{ tool: "Write", reason: "R1", count: 1 }]);
+  const v = view();
+  const top = v.manifest.steps.at(0);
+  if (!top) throw new Error("Missing step");
+  v.audit = [
+    { at: date, kind: "tool_denied", detail: { stepId: top.id, itemKey: "", tool: "Write", reason: "R1" } },
+    { at: date, kind: "tool_denied", detail: { stepId: "rough", itemKey: "k1", tool: "Read", reason: "R2" } },
+  ];
+  v.items = [{ runId: "run-1", loopId: "review", key: "k1", position: 0, item: {}, status: "passed" }];
+  v.steps.push({
+    runId: "run-1",
+    stepId: "rough",
+    itemKey: "k1",
+    state: "passed",
+    attempts: [],
+    outputs: {},
+    checks: [],
+  });
+  const result = map(v);
+  expect(result.steps.at(0)?.blocked).toEqual([{ tool: "Write", reason: "R1", count: 1 }]);
+  expect(result.steps.at(1)?.items?.at(0)?.steps.at(0)?.blocked).toEqual([
+    { tool: "Read", reason: "R2", count: 1 },
+  ]);
+});
+test("at most twenty rows, and no key when nothing was blocked", () => {
+  const audit = Array.from({ length: 25 }, (_, i) => ({
+    at: date,
+    kind: "tool_denied",
+    detail: { stepId: "a", itemKey: "", tool: "Read", reason: `R${i}` },
+  }));
+  expect(blockedCalls(audit, "a", "")).toEqual(
+    Array.from({ length: 20 }, (_, i) => ({ tool: "Read", reason: `R${i}`, count: 1 })),
+  );
+  expect(map(view()).steps.at(0)).not.toHaveProperty("blocked");
 });

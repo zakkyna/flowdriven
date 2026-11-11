@@ -3,6 +3,7 @@ import { type ReactElement, useId } from "react";
 import { CheckList } from "../../ui/CheckList";
 import { Badge, StateIcon } from "../../ui/StatusBadge";
 import { statusOf } from "../../ui/status";
+import { BlockedCalls } from "./BlockedCalls";
 import { ItemList } from "./ItemList";
 import styles from "./Runs.module.css";
 export function StepBlock({ step, index }: { step: StepRun; index: number }): ReactElement {
@@ -43,6 +44,7 @@ export function StepBlock({ step, index }: { step: StepRun; index: number }): Re
         )}
         {step.note && <p>{step.note}</p>}
         <CheckList checks={step.checks} />
+        {step.blocked && <BlockedCalls calls={step.blocked} />}
         {step.items && <ItemList title={step.title} items={step.items} />}
         {step.picks &&
           (step.picks.length ? (
