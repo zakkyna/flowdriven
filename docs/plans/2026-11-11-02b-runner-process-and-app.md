@@ -979,23 +979,25 @@ Why `show-waiting` and `second-waiting-tab`: after `Send choice` the Inbox keeps
 
 Present tests that change (2): `src/screens.test.ts` "every captured screen is a real route, once" (8 becomes 10 in both counts) and "every captured screen becomes ready and never shows Loading once ready" (the cast becomes `"long" | "looped" | undefined`).
 
-- [ ] **Step 1: Write the failing tests** (7 named: 5 new, 2 changed)
+- [x] **Step 1: Write the failing tests** (7 named: 5 new, 2 changed)
   `demo-walk-steps.test.ts` (5): (1) `the walk steps have unique names, at least one wait each and routes that exist`: every `go` hash parses with `parseRoute` of `src/nav/route.ts` to a screen other than `not_found`; at least eight steps take a screenshot. (2) `actionScript embeds the searched text escaped`: for a name with a double quote, a backslash and `</script>` the script includes `JSON.stringify(name)`; the five kinds of action each give a non-empty string. (3) `pageHasAll needs every text`. (4) `stepFileName numbers from 01 and keeps the name`. (5) `formatStepFailure keeps the step, the URL and 300 characters of the page on one line`.
   `screens.test.ts` (2 changed).
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run apps/desktop/electron/demo-walk-steps.test.ts apps/desktop/src/screens.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the pure module, the two screens, the capture message and `demo-walk.ts`.
-- [ ] **Step 4: Run the tests and the programs**
+- [x] **Step 3: Implement** the pure module, the two screens, the capture message and `demo-walk.ts`.
+- [x] **Step 4: Run the tests and the programs**
   Run: `pnpm vitest run apps/desktop && pnpm typecheck && pnpm build`. Expected: PASS (`dist-electron/demo-walk.js` exists).
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (GUI): the captures and the walk**
+- [x] **Step 6: Chair step (GUI): the captures and the walk**
   Run: `pnpm capture`. Expected: `captured 20 screens to .workflow/scratch/screens`; the new `choice-*.png` and `run-looped-*.png` look right in both themes. Then run: `pnpm build && FLOWDRIVEN_DEMO=1 TZ=UTC pnpm --filter @flowdriven/desktop exec electron dist-electron/demo-walk.js`. Expected: exit 0; one PNG per starred step in `.workflow/scratch/demo-walk/` and `walk.log` ending with `runner stopped`; `pgrep -f packages/runner/src/main.ts` prints nothing. The chair looks at the PNGs and then runs `FLOWDRIVEN_DEMO=1 pnpm start` once by hand for the owner.
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 ```bash
 git add apps/desktop
 git commit -m "Add the evidence walk and the choice and looped-run captures" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

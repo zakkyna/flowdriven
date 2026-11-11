@@ -6,5 +6,7 @@
   { "name": "readiness", "hash": "/readiness/dev.example.social-posts" },
   { "name": "harnesses", "hash": "/harnesses" },
   { "name": "settings", "hash": "/settings" },
-  { "name": "inbox-long", "hash": "/inbox/ap-0016", "scenario": "long" }
+  { "name": "inbox-long", "hash": "/inbox/ap-0016", "scenario": "long" },
+  { "name": "choice", "hash": "/inbox/ap-0017", "scenario": "looped" },
+  { "name": "run-looped", "hash": "/runs/run-0008", "scenario": "looped" }
 ]

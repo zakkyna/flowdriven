@@ -61,7 +61,7 @@ void app
       app.exit(1);
       return;
     }
-    console.log("captured 16 screens to .workflow/scratch/screens");
+    console.log(`captured ${screens.length * 2} screens to .workflow/scratch/screens`);
     app.exit(0);
   })
   .catch((error: unknown) => {
