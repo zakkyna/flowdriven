@@ -894,6 +894,32 @@ Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
+## Review of the finished plan (2026-11-11)
+
+One fresh reviewer per package read the code of Tasks 1 to 10 and proved each finding with a test. Both packages failed the review. Every finding was then fixed in small groups, each with its own gate and commit, and the reviewers' proofs were run again on the fixed code.
+
+| Package | Found | Fixed in the commits |
+|---|---|---|
+| `@flowdriven/sdk` | 1 blocker, 5 major, 8 minor | `Close the gaps in the unattended-prefix rule and the risky classifier`; `Bound the expression, YAML and schema inputs of the SDK` |
+| `@flowdriven/runner` | 2 blockers, 7 major, 9 minor | `Keep a run from being stranded or going on unattended`; `Enforce time limits and make state changes atomic`; `Harden the check runner against slow patterns and large output`; `Tighten starting, resuming and the run report` |
+
+What changed against the decisions and rules above:
+- Decision 9 (R4): an `ask` with a `when` no longer ends the unattended prefix. The prefix also refuses a `cli_tool` whose declared commands merge, delete, publish or force-push, a `builtin` with a risky name, and an `mcp_server` or `plugin` requirement without tools (`tools` is now required for both types).
+- Decision 8: a tool name is split at every character that is not a letter or a digit and at camelCase boundaries, the one after an acronym included. Only whole words count; joined lower-case words stay a known limit until the tool catalog (plan 05).
+- Task 8, rule 10: in a run started by a non-manual trigger, an `ask` with no options ends the run like an expired choice with `on_expiry: end`. A run started by hand goes on as before.
+- New engine rule: nothing thrown inside the walk or by the readiness hook escapes the engine. The run becomes `blocked` with `Internal error: <message>` and an audit entry `run_error`. Crash recovery handles each run on its own.
+- Resume goes through `checking` and the readiness hook, and runs the expiry sweep first. It also sets back the items that an `on_item_fail: stop` had skipped.
+- A time limit holds for any duration (the timer is re-armed) and also when a harness, a re-plan, a judge, a probe or a builtin never answers.
+- The writes of a sign-off, of a choice and of a decision are one transaction each. After a crash a step that waits for sign-off without a pending approval counts as interrupted.
+- `isApproved` is true only while the run is `running` or `retrying` (R10: a grant expires with the run).
+- Checks: the files glob is a linear matcher, and text that a template puts into a path is literal; an empty `contains` pattern fails; a command runs with `spawn` in its own process group and its output is not buffered. On Windows a command check is refused for now.
+- Limits on input: a duration is at most 365 days; `retry` is 0 to 10 and `max_attempts` 1 to 12; `version` is a semantic version; `flow.yaml` is at most 262,144 bytes; a package holds at most 2,000 files; a `where` inside a `where` is refused; a path that is not well-formed Unicode is refused; a param outside its `min`, `max` or `options` is refused at start.
+- Not changed: the folder loader still skips `.git`, `node_modules` and `.DS_Store` at any depth.
+
+No second review round was run. The evidence is the gate, the tests added with each fix, and the reviewers' own proofs passing on the fixed code.
+
+---
+
 ## Handover to plan 02b (the runner process and the app)
 
 What the engine needs from the contract (`packages/contracts`, one task of its own in 02b; none is changed here):
@@ -902,5 +928,6 @@ What the engine needs from the contract (`packages/contracts`, one task of its o
 - `Attempt` needs a `replan` flag and the `worker` name; `StepRun.note` carries the skip reasons; `RunDetail.blockedReason` is already there.
 - New operations: `flows.import` (a folder: issues and hash), `runs.export` (the Markdown report of 13.4; `runs.report` stays the three lines), an audit read. `flows.run` needs `params` and a `trigger` payload.
 - Optional: `RunnerError` with an explicit `code` field instead of a parameter property, so the runner's tsconfig can also set `erasableSyntaxOnly`.
+- From the review: decide whether the folder loader refuses `node_modules` instead of skipping it (skipped files are not covered by the content hash); command checks on Windows need a way to end the whole process tree.
 
 Outline of 02b (at most 15 lines): (1) a contract task for the list above, with the fixtures client updated so the screens still run. (2) The runner process in `packages/runner` (a `bin` entry): opens the store in the app support folder, calls `recoverAfterCrash`, sweeps expiry on a timer. (3) A Unix domain socket server (mode 0600) speaking JSON-RPC over the contract, with the event stream (`changed` topics). (4) Handlers that map engine rows to the contract read models (`RunDetail`, `Approval`, `FlowDetail`) and validate every output with the contract schemas. (5) `SocketRunnerClient` implementing `RunnerClient`. (6) Electron main starts or attaches to the runner and the renderer gets the real client instead of the fixtures (the renderer still talks only to `RunnerClient`). (7) A launchd agent plist and a first-run installer, as chair steps (GUI). (8) The demo flow runs from the app against the scripted harness, with the pick in the Inbox. Plan 03 then adds the Claude Code adapter and its fake `claude`.

@@ -93,6 +93,7 @@ async function ready(
   folders.push(project);
   writeFileSync(join(project, "out.txt"), "ok");
   const jobs = ["one", "two", "three"].map((title, i) => ({ id: `j${i + 1}`, title: `Job ${title}` }));
+  let duringProto: (() => void) | undefined;
   const c = await setup(parsed.manifest, {
     steps: {
       alerts: { text: "j1", outputs: { jobs, message: "ok" } },
@@ -103,12 +104,21 @@ async function ready(
           message: "ok",
         },
       }),
-      proto: {},
+      proto: () => {
+        duringProto?.();
+        return {};
+      },
     },
   });
   stores.push(c.store);
   const run = await c.engine.startRun(parsed.manifest.id, { project });
-  return { ...c, run };
+  return {
+    ...c,
+    run,
+    onProto(fn: () => void) {
+      duringProto = fn;
+    },
+  };
 }
 function approval(c: Awaited<ReturnType<typeof ready>>) {
   const ap = c.engine.listApprovals({ state: "pending" }).at(0);
@@ -198,7 +208,19 @@ test("expiry applies on every read", async () => {
 });
 test("ask.approves grants only the picked items, only in this run", async () => {
   const c = await ready();
+  const during: boolean[] = [];
+  c.onProto(() => {
+    during.push(
+      c.engine.isApproved(c.run.id, "host.publish", "j1"),
+      c.engine.isApproved(c.run.id, "host.publish", "j3"),
+      c.engine.isApproved("run-2", "host.publish", "j1"),
+      c.engine.isApproved(c.run.id, "host.delete", "j1"),
+    );
+  });
   await c.engine.answerAsk(approval(c).id, { picks: ["j1"] });
+  // While the picked item's step runs, only the named tool is released, and only for that item.
+  expect(during).toEqual([true, false, false, false]);
+  // Once the run has ended nothing stays released: the grant expires with the run.
   expect(c.engine.isApproved(c.run.id, "host.publish", "j1")).toBe(false);
   expect(c.engine.isApproved(c.run.id, "host.publish", "j3")).toBe(false);
   expect(c.engine.isApproved("run-2", "host.publish", "j1")).toBe(false);
