@@ -41,9 +41,16 @@ export const Attempt = z.object({
   startedAt: IsoDateTime,
   endedAt: IsoDateTime.optional(),
   exit: ExitClass.optional(),
+  replan: z.boolean().optional(),
+  worker: z.string().optional(),
 });
 export type Attempt = z.infer<typeof Attempt>;
-export const StepRun = z.object({
+export const ItemState = z.enum(["pending", "running", "passed", "failed", "skipped"]);
+export type ItemState = z.infer<typeof ItemState>;
+export const SKIP_REASONS = ["seen", "duplicate", "capped", "stopped"] as const;
+export const SkipReason = z.enum(SKIP_REASONS);
+export type SkipReason = z.infer<typeof SkipReason>;
+export const LeafStepRun = z.object({
   stepId: Id,
   title: z.string(),
   do: StepDo,
@@ -53,7 +60,19 @@ export const StepRun = z.object({
   maxAttempts: z.number().int().min(1),
   checks: z.array(CheckResult),
   note: z.string().optional(),
+  picks: z.array(z.object({ key: z.string(), label: z.string() })).optional(),
 });
+export type LeafStepRun = z.infer<typeof LeafStepRun>;
+export const RunItem = z.object({
+  key: z.string(),
+  label: z.string(),
+  state: ItemState,
+  skip: SkipReason.optional(),
+  note: z.string().optional(),
+  steps: z.array(LeafStepRun),
+});
+export type RunItem = z.infer<typeof RunItem>;
+export const StepRun = LeafStepRun.extend({ items: z.array(RunItem).optional() });
 export type StepRun = z.infer<typeof StepRun>;
 export const RunReport = z.object({
   runId: Id,

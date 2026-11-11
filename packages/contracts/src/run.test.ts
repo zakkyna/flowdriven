@@ -1,5 +1,15 @@
 import { expect, test } from "vitest";
-import { firstUnpassedStep, isResumable, RunReport, RunState, StepRunState } from "./index";
+import {
+  Attempt,
+  firstUnpassedStep,
+  ItemState,
+  isResumable,
+  RunReport,
+  RunState,
+  SKIP_REASONS,
+  StepRun,
+  StepRunState,
+} from "./index";
 
 test("run states are the spec's lifecycle", () => {
   expect(RunState.options).toEqual([
@@ -44,4 +54,35 @@ test("first unpassed step skips passed and skipped steps", () => {
 });
 test("a report has exactly three lines", () => {
   expect(RunReport.safeParse({ runId: "r", lines: ["a", "b"], saveOffer: false }).success).toBe(false);
+});
+
+test("a looped step run lists items with a state and a skip reason", () => {
+  const item = {
+    key: "j4",
+    label: "Job four",
+    state: "skipped",
+    skip: "seen",
+    note: "skipped: seen in an earlier run",
+    steps: [],
+  };
+  const parsed = StepRun.parse({
+    stepId: "loop",
+    title: "Loop",
+    do: "loop",
+    state: "passed",
+    attempts: [],
+    maxAttempts: 1,
+    checks: [],
+    items: [item],
+  });
+  expect(parsed.items).toEqual([item]);
+});
+test("an item state is one of five and a skip reason one of four", () => {
+  expect(ItemState.options).toEqual(["pending", "running", "passed", "failed", "skipped"]);
+  expect(SKIP_REASONS).toEqual(["seen", "duplicate", "capped", "stopped"]);
+});
+test("an attempt can say it was a re-plan and name its worker", () => {
+  expect(
+    Attempt.parse({ number: 1, startedAt: "2026-11-10T09:30:00.000Z", replan: true, worker: "worker" }),
+  ).toMatchObject({ replan: true, worker: "worker" });
 });

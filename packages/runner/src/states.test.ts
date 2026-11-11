@@ -8,7 +8,7 @@ import {
   RunState,
   StepRunState,
 } from "@flowdriven/contracts";
-import { BASE_REQUIREMENT_TYPES, CHECK_TYPES } from "@flowdriven/sdk";
+import { CHECK_TYPES, REQUIREMENT_TYPES } from "@flowdriven/sdk";
 import { expect, test } from "vitest";
 import {
   APPROVAL_STATES,
@@ -27,5 +27,5 @@ test("engine and SDK vocabularies equal the contract's", () => {
   expect([...CHECK_VERDICTS]).toEqual(CheckVerdict.options);
   expect([...RISKY_ACTIONS]).toEqual(RiskyAction.options);
   expect([...CHECK_TYPES]).toEqual(CheckType.options);
-  expect([...BASE_REQUIREMENT_TYPES]).toEqual(RequirementType.options);
+  expect([...REQUIREMENT_TYPES]).toEqual(RequirementType.options);
 });

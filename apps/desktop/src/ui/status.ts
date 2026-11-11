@@ -66,6 +66,7 @@ export const statuses = {
     missing: { icon: "circle-slash", label: "Missing", tone: "bad" },
     needs_login: { icon: "key", label: "Needs login", tone: "wait" },
     failed: { icon: "alert", label: "Failed", tone: "bad" },
+    unchecked: { icon: "dash", label: "Not checked yet", tone: "neutral" },
   },
   approval: {
     pending: { icon: "hand", label: "Waiting for you", tone: "wait" },

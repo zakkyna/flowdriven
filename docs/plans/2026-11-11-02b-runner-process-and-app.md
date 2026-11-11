@@ -242,22 +242,24 @@ RequirementState = z.enum(["ok", "missing", "needs_login", "failed", "unchecked"
 
 Present tests that change (3): `flow.test.ts` "uses the spec's check, input and requirement words" (the requirement list gains `web`, `desktop`, `trigger`); `readiness.test.ts` "readiness states are ok, missing, needs_login and failed" (renamed "... failed and unchecked", list gains `unchecked`); `states.test.ts` "engine and SDK vocabularies equal the contract's" (the last assertion becomes `expect([...REQUIREMENT_TYPES]).toEqual(RequirementType.options)`, importing `REQUIREMENT_TYPES` from the SDK instead of `BASE_REQUIREMENT_TYPES`). `status.test.tsx` iterates `RequirementState.options` and needs no edit.
 
-- [ ] **Step 1: Write the failing tests** (9 new, 3 changed = 12 named)
+- [x] **Step 1: Write the failing tests** (9 new, 3 changed = 12 named)
   `flow.test.ts` (5 new): (1) `format 1.1 adds ask, skill, flow and loop to the step words`: `StepDo.options` equals the seven. (2) `an ask or loop step needs its object and no check, and no other step may carry one`: `Step.parse` accepts `{do:"ask", ask:{...}, checks:[]}` and `{do:"loop", loop:{... steps:[a worker step with one check]}}`; refuses `do:"ask"` without `ask`, `do:"loop"` without `loop`, a `worker` with `loop`, and a `worker` with no checks (the present rule). (3) `a step nested in a loop still needs its check`: `LoopDecl.safeParse` fails for a nested worker with `checks: []` and for `steps: []`. (4) `the manifest carries triggers, params and limits as optional read models and accepts format 1 and 1.1`: a manifest without them parses (format 1), one with `format: "flowdriven-flow/1.1"`, `triggers: [{kind:"manual", summary:"Run by hand"}]`, `params: {min_score: {type:"number", default: 7}}`, `limits: {max_items: 20}` parses; `"flowdriven-flow/2"` does not. (5) `a command check keeps its program and arguments`: `Check.parse({type:"command", summary:"s", cmd:"pnpm", args:["test"]})`.
   `run.test.ts` (3 new): (6) `a looped step run lists items with a state and a skip reason`: `StepRun.parse` with one item `{key:"j4", label:"Job four", state:"skipped", skip:"seen", note:"skipped: seen in an earlier run", steps:[]}`. (7) `an item state is one of five and a skip reason one of four`: `ItemState.options` and `SKIP_REASONS`. (8) `an attempt can say it was a re-plan and name its worker`.
   `readiness.test.ts` (1 new): (9) `an unchecked required item needs attention`: `isReady` false and `attentionCount` 1 for one required `unchecked` item, `isReady` true when it is optional.
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/contracts packages/runner/src/states.test.ts`. Expected: FAIL (missing exports, `StepDo.options` of length three).
-- [ ] **Step 3: Implement the interfaces above** in the contracts, then `ReadinessRow.tsx` and `status.ts`.
-- [ ] **Step 4: Run the tests, the typecheck and the web build**
+- [x] **Step 3: Implement the interfaces above** in the contracts, then `ReadinessRow.tsx` and `status.ts`.
+- [x] **Step 4: Run the tests, the typecheck and the web build**
   Run: `pnpm vitest run packages/contracts packages/runner/src/states.test.ts apps/desktop/src/ui && pnpm typecheck && pnpm build:web`. Expected: PASS.
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS (`version.test.ts` still says 0; Task 3 raises it).
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/contracts packages/runner/src/states.test.ts apps/desktop/src
 git commit -m "Add the format 1.1 flow and run read models to the contract" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 

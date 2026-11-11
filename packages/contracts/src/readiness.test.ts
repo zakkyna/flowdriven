@@ -16,8 +16,8 @@ const item = (over: object) => ({
   ...over,
 });
 
-test("readiness states are ok, missing, needs_login and failed", () => {
-  expect(RequirementState.options).toEqual(["ok", "missing", "needs_login", "failed"]);
+test("readiness states are ok, missing, needs_login, failed and unchecked", () => {
+  expect(RequirementState.options).toEqual(["ok", "missing", "needs_login", "failed", "unchecked"]);
   expect(ENFORCEMENT).toEqual(["enforced by FlowDriven", "enforced by the harness's settings"]);
 });
 test("a flow is ready when every required item is ok", () => {
@@ -33,4 +33,11 @@ test("an install command exists exactly for auto-installable items", () => {
     ReadinessItem.safeParse(item({ autoInstall: "yes", installCommand: "brew install ffmpeg" })).success,
   ).toBe(true);
   expect(ReadinessItem.safeParse(item({ installCommand: "brew install ffmpeg" })).success).toBe(false);
+});
+
+test("an unchecked required item needs attention", () => {
+  const required = ReadinessItem.parse(item({ state: "unchecked" }));
+  expect(isReady([required])).toBe(false);
+  expect(attentionCount([required])).toBe(1);
+  expect(isReady([{ ...required, required: false }])).toBe(true);
 });

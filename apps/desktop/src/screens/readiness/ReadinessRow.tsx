@@ -16,6 +16,9 @@ const labels: Record<RequirementType, string> = {
   account: "Account",
   browser_session: "Browser session",
   path: "Folder",
+  web: "Website",
+  desktop: "Computer",
+  trigger: "Trigger",
 };
 export function ReadinessRow({
   item,

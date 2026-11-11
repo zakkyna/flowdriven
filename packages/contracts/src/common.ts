@@ -23,7 +23,7 @@ export const CheckType = z.enum([
   "probe",
 ]);
 export type CheckType = z.infer<typeof CheckType>;
-export const StepDo = z.enum(["worker", "agent", "builtin"]);
+export const StepDo = z.enum(["worker", "agent", "builtin", "skill", "flow", "ask", "loop"]);
 export type StepDo = z.infer<typeof StepDo>;
 export const OutputType = z.enum(["file", "folder", "text", "url", "json"]);
 export type OutputType = z.infer<typeof OutputType>;

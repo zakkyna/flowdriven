@@ -2,7 +2,7 @@ import { z } from "zod";
 import { Id, IsoDateTime, RouteOption } from "./common.ts";
 import { RequirementType } from "./flow.ts";
 
-export const RequirementState = z.enum(["ok", "missing", "needs_login", "failed"]);
+export const RequirementState = z.enum(["ok", "missing", "needs_login", "failed", "unchecked"]);
 export type RequirementState = z.infer<typeof RequirementState>;
 export const ENFORCEMENT = ["enforced by FlowDriven", "enforced by the harness's settings"] as const;
 export const Enforcement = z.enum(ENFORCEMENT);
