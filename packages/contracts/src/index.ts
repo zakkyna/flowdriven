@@ -10,3 +10,5 @@ export * from "./readiness.ts";
 export * from "./run.ts";
 export * from "./settings.ts";
 export { CONTRACT_VERSION } from "./version.ts";
+
+export * from "./wire.ts";
