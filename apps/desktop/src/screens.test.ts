@@ -5,8 +5,8 @@ import { parseRoute } from "./nav/route";
 import { renderApp } from "./test/render";
 
 test("every captured screen is a real route, once", () => {
-  expect(screens).toHaveLength(10);
-  expect(new Set(screens.map((s) => s.name)).size).toBe(10);
+  expect(screens).toHaveLength(11);
+  expect(new Set(screens.map((s) => s.name)).size).toBe(11);
   for (const s of screens) expect(s.name).toMatch(/^[a-z0-9-]+$/);
   for (const s of screens) expect(parseRoute(`#${s.hash}`).screen).not.toBe("not_found");
 });

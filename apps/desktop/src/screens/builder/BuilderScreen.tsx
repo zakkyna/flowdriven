@@ -13,6 +13,7 @@ import styles from "./Builder.module.css";
 import { ChatPanel } from "./ChatPanel";
 import { Playback } from "./Playback";
 import { StepList } from "./StepList";
+import { TriggersPanel } from "./TriggersPanel";
 
 export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: boolean }): ReactElement {
   const [, navigate] = useRoute();
@@ -35,10 +36,11 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
   const harnesses = useRunnerQuery("harnesses.list", {});
   const error = errorState && errorState.id === id ? errorState.message : undefined;
   const flow = useRunnerQuery("flows.get", { flowId: id ?? "" }, { skip: !id });
+  const triggers = useRunnerQuery("triggers.list", { flowId: id ?? "" }, { skip: !id });
   const runId = list.data?.find((item) => item.id === id)?.lastRun?.runId;
   const run = useRunnerQuery("runs.status", { runId: runId ?? "" }, { skip: !runId });
-  const loading = list.loading || flow.loading || run.loading || harnesses.loading;
-  const queryError = list.error ?? flow.error ?? run.error ?? harnesses.error;
+  const loading = list.loading || flow.loading || run.loading || harnesses.loading || triggers.loading;
+  const queryError = list.error ?? flow.error ?? run.error ?? harnesses.error ?? triggers.error;
   const headingRef = useRef<HTMLHeadingElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: focus must follow the selected flow.
   useLayoutEffect(() => {
@@ -69,6 +71,7 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
           flow.reload();
           run.reload();
           harnesses.reload();
+          triggers.reload();
         }}
       />
     );
@@ -165,6 +168,14 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
                 </p>
               )}
               <Playback playback={detail.playback} />
+              {id && (triggers.data?.length ?? 0) > 0 && (
+                <TriggersPanel
+                  flowId={id}
+                  hash={detail.hash}
+                  triggers={triggers.data ?? []}
+                  reload={triggers.reload}
+                />
+              )}
               <div className={styles.divider} />
               <div className={styles.titleRow}>
                 <h2>Steps</h2>

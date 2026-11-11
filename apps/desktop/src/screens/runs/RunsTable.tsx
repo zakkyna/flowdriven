@@ -23,6 +23,7 @@ export function RunsTable({ runs }: { runs: RunSummary[] }): ReactElement {
             </td>
             <td>
               {run.flowName} {run.oneTime && <Badge tone="neutral">One-time</Badge>}
+              {run.trigger && <div className={styles.muted}>{run.trigger.words}</div>}
             </td>
             <td>
               {run.waiting ? (

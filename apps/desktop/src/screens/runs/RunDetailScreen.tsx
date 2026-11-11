@@ -128,6 +128,7 @@ export function RunDetailScreen({ runId }: { runId: string }): ReactElement {
           {run.endedAt && <span>Ended {formatDateTime(run.endedAt)}</span>}
           {run.oneTime && <Badge tone="neutral">One-time</Badge>}
           <StatusBadge domain="run" value={run.state} />
+          {run.trigger && <span>Started by: {run.trigger.words}</span>}
         </div>
         {save && (
           <p className={styles.muted}>

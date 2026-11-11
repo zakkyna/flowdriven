@@ -767,7 +767,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `screens.json`: a new entry `{ "name": "builder-triggers", "hash": "/builder/dev.example.job-review", "scenario": "looped" }` (capture becomes 22 screens).
 - **Present assertion that changes** (`screens.test.ts:8-9`): `expect(screens).toHaveLength(10)` and `expect(new Set(screens.map((s) => s.name)).size).toBe(10)` become `11` and `11`.
 
-- [ ] **Step 1: Write the failing tests** (`Triggers.test.tsx` through `renderApp("#/builder/dev.example.job-review", { scenario: "looped" })`):
+- [x] **Step 1: Write the failing tests** (`Triggers.test.tsx` through `renderApp("#/builder/dev.example.job-review", { scenario: "looped" })`):
   1. "lists the schedule, the file change and the webhook with icon plus words, and no manual row"
   2. "the webhook says Not available yet and its switch is disabled"
   3. "turning the schedule on calls triggers.setEnabled with the flow's hash, then shows On and a Next run line"
@@ -776,16 +776,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   6. "the honest line about FlowDriven being open is on the screen"
   7. "the last fire shows its words and a link to the run; today's counts show the dropped number only when it is above 0"
   8. "the Runs table shows the trigger in words for a triggered run and nothing for a manual run; the run detail shows Started by"
-- [ ] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens/builder/Triggers.test.tsx`. Expected: FAIL ("Cannot find module ./TriggersPanel").
-- [ ] **Step 3: Implement.** Reuse `Icon`, `Button`, `AppLink`, `formatDateTime`; plain CSS with the tokens; read `BuilderScreen.tsx`, `RunDetailScreen.tsx` and the present builder and runs tests first and change no present assertion except the one named.
-- [ ] **Step 4: Run** `pnpm vitest run apps/desktop`. Expected: PASS (`layout-guards.test.ts` and `screens.test.ts` included).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens/builder/Triggers.test.tsx`. Expected: FAIL ("Cannot find module ./TriggersPanel").
+- [x] **Step 3: Implement.** Reuse `Icon`, `Button`, `AppLink`, `formatDateTime`; plain CSS with the tokens; read `BuilderScreen.tsx`, `RunDetailScreen.tsx` and the present builder and runs tests first and change no present assertion except the one named.
+- [x] **Step 4: Run** `pnpm vitest run apps/desktop`. Expected: PASS (`layout-guards.test.ts` and `screens.test.ts` included).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop packages/fixtures
 git commit -m "Show triggers with a switch on the flow's screen and the trigger on each run" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

@@ -1,4 +1,5 @@
 [
+  { "name": "builder-triggers", "hash": "/builder/dev.example.job-review", "scenario": "looped" },
   { "name": "builder", "hash": "/builder/dev.example.figma-to-flutter" },
   { "name": "inbox", "hash": "/inbox/ap-0011" },
   { "name": "runs", "hash": "/runs" },

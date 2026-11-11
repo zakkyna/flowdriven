@@ -1,0 +1,30 @@
+.panel {
+  margin-top: var(--space-5);
+}
+.panel h2 {
+  font-size: var(--text-xl);
+}
+.muted {
+  color: var(--text-muted);
+}
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.row {
+  border-top: 1px solid var(--border);
+  padding: var(--space-3) 0;
+}
+.row p {
+  margin: var(--space-2) 0 0;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.error {
+  color: var(--bad);
+}
