@@ -1019,6 +1019,32 @@ Done by: Claude Code (chair), 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
+## Review of the finished plan (2026-11-11)
+
+One fresh reviewer per part read the code of Tasks 1 to 17 at commit `6d7372d` and proved each finding with a test that failed on that code. Neither part had a blocker. Every finding was fixed in three groups, each with its own gate, capture, evidence walk and commit. The reviewers' proofs now sit in the tree as `review-02b-*.test.ts` and `review-02b-*.test.tsx`.
+
+| Part | Found | Fixed in the commits |
+|---|---|---|
+| App side: contract, fixtures, mappers, screens, renderer client, evidence walk | 2 major, 6 minor | `Name the tools a choice releases and tighten the contract`; `Make the items of a run readable and keep its report fresh`; the walk's load timeout in `Harden the server, the crash guard, the link and the evidence walk` |
+| Engine, runner process, link, relay and preload (security review) | 5 minor | `Harden the server, the crash guard, the link and the evidence walk` |
+
+What changed against the tasks above:
+- Task 4: the `choice` payload carries `approves`, the tools that answering releases for the picked items in this run (spec 20.7, R10), and the Inbox names them before the choice is sent. An approval has kind `ask` if and only if its payload has kind `choice`.
+- Task 2: a step inside a loop has an `ask` object exactly when its `do` is `ask`, and is never a loop.
+- Task 10: the mapper leaves out a param default that is not a string, a number or a boolean (handover point 14).
+- Task 7: the full report belongs to one run and is fetched again every time it is opened. A row inside an item shows the step name, the worker line and the state as icon plus word in separate places, and the item's state sits in the right column. Two items with the same key get the list names `Steps of <key>, item <n>`. A check whose label equals its type shows the word once.
+- Task 12: `write` never throws. An answer that cannot be turned into JSON, or is `undefined`, becomes `Internal error`; when not even the fallback fits, the answer goes out with a null id. `notify` keeps at most one pending event while the reader is slow and merges the topics into it.
+- Task 13: `process.stderr` has an error listener before the crash guard, and the guard's own logging cannot throw.
+- Task 14: pending stderr text of the runner is cut at 4,096 bytes even when no newline arrives.
+- Task 17: the walk gives the first page 10 seconds to load and exits 1 when the load fails or runs out of time.
+- Tasks 11 and 12 each stopped once on a conflict inside this plan. The chair's note under each task says how it was settled.
+
+Checked by the reviewers and found right: a choice cannot be sent twice or for another item than the one shown; `maxPick` holds; hidden characters in a question and in its options are shown; the renderer client validates every answer and every event; the chain is first in first out per flow and cleans up after itself; the begin variants leave no half write; the data-folder checks, the exclusive lock and its release after a kill work; the relay checks the frame, the origin, the method and the input; the preload is frozen and gets the flag only from the app's own window; a renderer cannot use up the restart budget; the quit sequence cannot loop.
+
+No second review round was run. The evidence is the gate (713 tests), the reviewers' proofs passing on the fixed code, the 20 captures and the evidence walk.
+
+---
+
 ## Handover to plan 03 (the Claude Code adapter)
 
 What plan 03 finds ready:
