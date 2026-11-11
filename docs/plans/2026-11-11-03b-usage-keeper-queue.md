@@ -1534,7 +1534,7 @@ test("the run screen shows tokens per step, or says they are not reported", asyn
 In `Harnesses.test.tsx` (its present render of the Harnesses screen): `expect(await screen.findByText("Weekly limit: 78% used, resets Sat 17:59")).toBeTruthy()`. The assertions of the present tests that count rows or text on `run-0006` are not loosened; the new lines add text only.
 - [x] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens`. Expected: FAIL ("waitingLabel is not exported").
 - [x] **Step 3: Implement** the components, the CSS module rules (tokens only) and the fixture data. **Step 4: Run** `pnpm vitest run apps packages/fixtures`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`; `pnpm build:web`. Expected: PASS.
-- [ ] **Step 6: Chair step (GUI):** `pnpm capture` (must print `captured 20 screens`); look at `runs`, `run-detail` and `harnesses` in light and dark.
+- [x] **Step 6: Chair step (GUI):** `pnpm capture` (must print `captured 20 screens`); look at `runs`, `run-detail` and `harnesses` in light and dark.
 - [x] **Step 7: Chair step (commit)**
 
 ```bash
@@ -1636,11 +1636,11 @@ test("two runs started together with the ceiling at 1: one runs, the other waits
 ```
 - [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/keeper-demo.test.ts`. Expected: FAIL ("Cannot find module keeper-demo-run.ts").
 - [x] **Step 3: Implement** `runKeeperDemo` and the script; `chmod 755` the script as a step. **Step 4: Run** the test, then `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (GUI): the evidence for the owner**
+- [x] **Step 6: Chair step (GUI): the evidence for the owner**
   1. `node packages/runner/src/test-helpers/keeper-demo.ts` (fake `claude`; no real `claude`, no socket). Expected: the lines above.
   2. `pnpm build && pnpm capture`. Expected: `captured 20 screens`; the `runs` picture shows "1 step running, 2 waiting" and the reasons as icon plus words; the `run-detail` picture shows token lines under steps; the `harnesses` picture shows the limit windows.
   3. Update the row 03b of `docs/plans/ROADMAP.md` (detailed plan and status) and the tables of Task 1 under "Facts" with the measured numbers.
-- [ ] **Step 7: Chair step (commit)**
+- [x] **Step 7: Chair step (commit)**
 
 ```bash
 git add packages/runner/src docs/plans
@@ -1652,6 +1652,46 @@ git commit -m "Add the two-runs evidence for the keeper" -m "Assisted-by: Codex"
 Done by: Codex/gpt-6.1-terra, with the chair's one-line fix, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
+
+## Review of the finished plan (2026-11-12)
+
+One fresh reviewer read the whole change (`git diff 51d5765 HEAD`, 20 commits). No blocker, 1 major and 9 minor findings; no present test was weakened, skipped or deleted. All ten were fixed in one round (commits `7299d5d` and `64f23ac`), each with a test that failed before its fix:
+
+1. (major) One token count far above the safe range made the sums fail the contract, so `usage.summary`, `harnesses.list` and `runs.status` answered "Internal error" for good. Counts are now cut to 1e12 when they are read, and every sum is capped.
+2. A stored keeper setting that does not parse gave the default ceiling of 4. It now gives the floor, a ceiling of 1, until the settings are saved again.
+3. A throw in an injected callback rejected the keeper's pump. Callbacks are guarded and `settled()` never rejects.
+4. A call that began before a refusal no longer lifts the hold, and refusals at the same moment count once for the back-off.
+5. The weekly answer stands when the next event has no readable reset time, and an item past its reset leaves the list.
+6. The rule text of `approvals.resolve` says that a `weekly_limit` item is never resolved over MCP.
+7. A malformed stored quota row is dropped and the runner still starts.
+8. "Today" in the usage summary is the owner's local day.
+9. `queue.move` refuses a run that is not waiting with `not_allowed`, and a moved run loses its front rank once nothing of it waits.
+10. The usage row is written before the keeper is told, and a throw in a note cannot replace a call's result.
+
+There was no second review round (the owner's working rule); the gate and the proofs stand in for it.
+
+Gate on the tip: `pnpm format && pnpm check` exit 0, 162 test files and 1,013 tests, 109 check-tool tests, the hidden-character scan and the dependency gate OK.
+
+Evidence:
+- Live service with the fake `claude`: `node packages/runner/src/test-helpers/keeper-demo.ts` prints the lines of Task 21, from "ceiling 1: run-1 running, run-2 waiting: Waiting: 1 of 1 running" to the Usage row.
+- The real Claude Code through the app: plan 03's walk (`dist-electron/claude-walk.js`) on this branch, six stages ok. Its three worker calls on `claude-haiku-5-5` are in `usage_events`:
+
+| Step | Input | Output | Cache read | Cache write | Turns | Seconds | Queued ms | Peak MB |
+|---|---|---|---|---|---|---|---|---|
+| write | 4 | 155 | 10,679 | 3,332 | 2 | 4.1 | 29 | 170 |
+| read | 4 | 255 | 7,035 | 7,196 | 3 | 4.3 | 26 | 178 |
+| outside | 4 | 62 | 12,386 | 1,635 | 2 | 3.5 | 28 | 176 |
+
+  The limit windows stored after that run: 5-hour 0.82, weekly 0.56. The run screen shows the same token numbers under each step.
+- `pnpm capture`: `captured 20 screens`; the Runs picture shows "1 step running, 2 waiting" with each reason as icon plus words.
+
+What the real numbers add to spec 21.1: a small real step that uses a tool peaks near 175 MB (footprint estimated from RSS), and the fixed prefix of a call is about 14,000 tokens (cache read plus cache write) against 4 fresh input tokens.
+
+Follow-ups, not part of this plan:
+- The plan 03 test "S4b a tool that runs without the check after the abort still trips the wire and blocks" (`packages/runner/src/claude/review-03-s4.test.ts`) fails now and then in a full run: at least three times on 2026-11-11 and 2026-11-12, each time passing on the next run. It needs its own fix.
+- The sentence of spec 21.2 that a run waiting before its first step "is `queued`" should be reworded (Decision 2).
+- Two runs at a ceiling of 1 were shown with the fake `claude` only. With the real Claude Code the keeper was seen only as a queue time of 26 to 29 ms on a single run.
+- Listed under Known limits and not built here: per-flow medians and the "needs a look" line, a Settings section for the keeper, the macOS notification of the weekly item (plan 04), and moving a waiting step to the next harness (plan 07 onward).
 
 ## Handover to plan 04 (and later)
 
