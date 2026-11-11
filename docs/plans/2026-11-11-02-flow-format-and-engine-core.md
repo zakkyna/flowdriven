@@ -280,7 +280,7 @@ export function canonicalListing(files: FlowFiles): string {
 // contentHash = "sha256:" + sha256Hex(Buffer.from(canonicalListing(files), "utf8")); sha256Hex uses node:crypto
 // assertSafePath: refuse "", a leading "/", "\\", tab, CR, LF, a segment that is "", "." or "..", and more than 512 characters
 ```
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 ```ts
 const scope: Scope = {
   params: { min_score: 7 }, inputs: {}, job: { id: "a1", tags: ["x", "y"] },
@@ -349,19 +349,19 @@ test("hashes the bytes as they are", () => expect(contentHash(new Map([["f.md", 
 test("refuses unsafe paths", () => { for (const p of ["../x", "/x", "a\\b", "a\tb", "a/./b", "", "a//b", "x".repeat(513)]) expect(() => canonicalListing(new Map([[p, enc("x")]]))).toThrowError(expect.objectContaining({ code: "invalid_path" })); });
 test("a changed file or a renamed path changes the hash", () => { const base = contentHash(new Map([["a.md", enc("1")]])); expect(contentHash(new Map([["a.md", enc("2")]]))).not.toBe(base); expect(contentHash(new Map([["b.md", enc("1")]]))).not.toBe(base); });
 ```
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
   Run: `pnpm vitest run packages/sdk/src/expr packages/sdk/src/hash`. Expected: FAIL with "Failed to resolve import"
-- [ ] **Step 3: Implement** the tokenizer and recursive-descent parser in `parse.ts`, the evaluator in `evaluate.ts` (inside `where`, resolve a path's first segment on the element when the element has it as an own property, else on the scope; `where` on a non-list is `undefined`), `template.ts`, and the listing above with `FlowFileError` (plain class, `code` assigned in the constructor body). No dynamic code of any kind. The hash is exported from `node.ts` only.
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 3: Implement** the tokenizer and recursive-descent parser in `parse.ts`, the evaluator in `evaluate.ts` (inside `where`, resolve a path's first segment on the element when the element has it as an own property, else on the scope; `where` on a non-list is `undefined`), `template.ts`, and the listing above with `FlowFileError` (plain class, `code` assigned in the constructor body). No dynamic code of any kind. The hash is exported from `node.ts` only.
+- [x] **Step 4: Run the tests to verify they pass**
   Run: `pnpm vitest run packages/sdk/src/expr packages/sdk/src/hash`. Expected: PASS
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS (`source-rules.test.ts` now also scans these files)
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/sdk
 git commit -m "Add the expression language, templates and the content hash" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
