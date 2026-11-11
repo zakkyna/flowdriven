@@ -191,7 +191,7 @@ Field names (all strict objects; defaults in brackets). Ids: requirement `^[a-z]
 - `Step = z.union([LoopStep, LeafStep])`. `parseManifest` first walks the raw `steps`: an element of a loop's `steps` that has `for_each` or `steps` is reported as `nested_loop` at its path (`steps.0.steps.0`) and Zod is not run. Then Zod issues become `Issue`s with dotted paths (`steps.1.steps.0.uses.2`): an unrecognised key becomes `unknown_field` at `<path>.<key>`; a wrong `format` becomes `unsupported_format` at `format`; every other issue is code `schema`. For an `invalid_union` at a step, re-parse that value with the branch chosen by whether it has `for_each`, and report that branch's issues, so paths point at the real field.
 
 `test-data/upwork.ts` exports `upworkJobReview: unknown`: the manifest of spec 20.4 (the YAML example) transcribed as an object literal; `max_pick` is the string `"${params.daily_builds}"`.
-- [ ] **Step 1: Write the failing tests** (`format/format.test.ts`, `jitless.test.ts`)
+- [x] **Step 1: Write the failing tests** (`format/format.test.ts`, `jitless.test.ts`)
 ```ts
 const ok = (raw: unknown) => { const r = parseManifest(raw); if (!r.ok) throw new Error(JSON.stringify(r.issues)); return r.manifest; };
 const bad = (raw: unknown) => { const r = parseManifest(raw); if (r.ok) throw new Error("expected issues"); return r.issues; };
@@ -220,19 +220,19 @@ test("durations", () => {
 test("the SDK disables Zod JIT and parses without Function", () => { /* as packages/contracts/src/jitless.test.ts: z.config().jitless is true; vi.spyOn(globalThis, "Function"); parseManifest(upworkJobReview); the spy was not called; restore */ });
 ```
 `min(extra?)` is a valid one-step manifest (`format`, `id: "local.min"`, `name`, `kind: "build"`, one `worker` step `a` with `instructions`), `extra` merged into the step; `nested()` is a loop whose first nested step has `for_each`, `as` and `steps`; `withTrigger` and `withReq` set `triggers` and `requirements`.
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
   Run: `pnpm vitest run packages/sdk/src/format packages/sdk/src/jitless.test.ts`. Expected: FAIL with "Failed to resolve import"
-- [ ] **Step 3: Implement the schemas and `parseManifest`** as described. Export everything from `index.ts`. `durationMs` multiplies by 1_000, 60_000, 3_600_000 and 86_400_000 for `s`, `m`, `h`, `d`.
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 3: Implement the schemas and `parseManifest`** as described. Export everything from `index.ts`. `durationMs` multiplies by 1_000, 60_000, 3_600_000 and 86_400_000 for `s`, `m`, `h`, `d`.
+- [x] **Step 4: Run the test to verify it passes**
   Run: `pnpm vitest run packages/sdk/src/format packages/sdk/src/jitless.test.ts`. Expected: PASS
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
   Run: `pnpm format && pnpm check`. Expected: PASS
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 ```bash
 git add packages/sdk
 git commit -m "Add the flow format 1.1 schemas" -m "Assisted-by: Codex"
 ```
-Done by: <tool/model>, <date>. Evidence: <passing command>.
+Done by: Codex/gpt-6.1-terra, 2026-11-11. Evidence: pnpm format && pnpm check.
 
 ---
 
