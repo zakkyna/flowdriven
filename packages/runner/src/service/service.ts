@@ -1,14 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { operations } from "@flowdriven/contracts";
+import { operations, type RunnerTopic } from "@flowdriven/contracts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { createEngine, type Engine } from "../engine.ts";
 import type { HarnessAdapter } from "../harness.ts";
+import type { Probes } from "../keeper/types.ts";
 import type { Store } from "../storage.ts";
 import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
 import { createDispatcher, createHandlers } from "./handlers.ts";
+import { type Every, wireKeeper } from "./keeper-wiring.ts";
 
 export type ServiceOptions = {
   store: Store;
@@ -20,6 +22,8 @@ export type ServiceOptions = {
   env?: Record<string, string | undefined>;
   claudePath?: string;
   scanTimeoutMs?: number;
+  keeper?: { probes?: Probes; every?: Every };
+  markChanged?: (topic: RunnerTopic) => void;
 };
 export type RunnerService = {
   engine: Engine;
@@ -59,7 +63,10 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     store,
     now,
     newId,
-    harness,
+    harness:
+      mode === "live"
+        ? wireKeeper({ store, now, harness, ...options.keeper, markChanged: options.markChanged }).harness
+        : harness,
     readiness: hs
       ? hs.readiness
       : mode === "demo"

@@ -1095,7 +1095,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - Behaviour: `config()` is `readKeeperSettings(store)` mapped to `KeeperConfig` (`reserveMb` is the setting, else `max(1024, round(0.15 * probes.totalMb()))`, the function `reserveMb` of Task 10); the class of a run is 2 when `run.trigger` exists and its kind is not `manual`, else 1; `underWay` is "a step of the run has state `passed` or `skipped`"; `weight` is `weightFromPeaks(store.recentPeaks({ flowId, stepId, kind, harness, runs: HISTORY_RUNS }), defaultWeightMb({ harnessId, connectors }))`; `record` is `store.addUsage`; `loadQuota` reads the settings `quota:<id>` for the inner harness id and `claude-code`; `saveQuota` is `store.putSetting("quota:<id>", windows)`; `onChange` calls `markChanged("runs")`; `weeklyAnswer` and `onWeekly` come from `weekly` (undefined answers until Task 15). **The wiring changes no stored run state** (decision 2). The default `every` is `setInterval` with `unref`; the default probes are `createProbes` with `realCapture`, `process.platform`, `process.availableMemory` and `os.totalmem`.
 - `service.ts`: in live mode (also with an injected `harness`) `createEngine` gets `wired.harness`; `ServiceOptions.keeper?: { probes?: Probes; every?: Every }` and `ServiceOptions.markChanged?: (topic: RunnerTopic) => void`; demo mode is not wrapped (decision 15). `run-process.ts:53-55` passes `markChanged: emitter.mark` so a change of the keeper's queue reaches the renderer as a `runs` event.
 
-- [ ] **Step 1: Write the failing tests** `service/keeper-wiring.test.ts` (an in-memory store; fake probes as in `keeper.test.ts`; a scripted inner harness; `now` a fixed clock)
+- [x] **Step 1: Write the failing tests** `service/keeper-wiring.test.ts` (an in-memory store; fake probes as in `keeper.test.ts`; a scripted inner harness; `now` a fixed clock)
 
 ```ts
 test("settings default, junk gives the defaults, and a stored change applies at the next decision", async () => {
@@ -1131,14 +1131,17 @@ test("a change of the queue marks the runs topic, and waiting changes no run sta
 ```
 
 `rig()` returns `{ store, wired, again, marks, gate, req, run }`: an in-memory store; an inner scripted harness with id `claude-code` whose `runStep` waits on a `gate()` (Task 11) and returns `OK`; `wired = wireKeeper({ store, now: () => new Date(NOW), harness: inner, probes: fakeProbes, every: () => () => {}, markChanged: (t) => marks.push(t) })` with `NOW = "2026-11-11T09:00:00.000Z"`; `again()` is a second `wireKeeper` over the same store; `req(runId)` builds a `StepRequest` for step `a`; `run(id, over)` builds a `RunRow` of flow `f`, state `running`. No timers: only `await keeper.settled()`.
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/keeper-wiring.test.ts`. Expected: FAIL ("Cannot find module ./keeper-wiring.ts").
-- [ ] **Step 3: Implement.** **Step 4: Run** the test and `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/keeper-wiring.test.ts`. Expected: FAIL ("Cannot find module ./keeper-wiring.ts").
+- [x] **Step 3: Implement.** **Step 4: Run** the test and `pnpm vitest run packages/runner`. Expected: PASS. **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Wire the keeper into the runner service with stored settings and windows" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

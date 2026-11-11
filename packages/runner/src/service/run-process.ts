@@ -53,6 +53,7 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
     const emitter = createChangeEmitter((event) => server?.notify(event));
     service = createRunnerService({
       store: wrapStore(store, emitter.mark),
+      markChanged: emitter.mark,
       dataDir: dir,
       mode: options.demo ? "demo" : "live",
       now: options.now,
