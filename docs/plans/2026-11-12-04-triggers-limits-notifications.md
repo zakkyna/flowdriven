@@ -798,7 +798,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** none new. The file builds a live service as `review-03b-r19.test.ts` does (fake `claude` through the real adapter, a mocked `createKeeper` that exposes the keeper, an injected `now` object, an injected `every` whose jobs the test calls, an injected `watch`, `notify` collecting notices; copy `liveRig` and adapt it). All assertions are on the real service, store and fake `claude`.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. "only triggers.setEnabled switches a trigger on: both trigger operations are mcp no, `.setEnabled(` is called only from `service/handlers.ts`, and a row with `enabled: true` is written only from `triggers/service.ts`" (a source scan of `runner/src` that skips `*.test.ts` **and `test-helpers/`** (the rig's `enable()` calls `setEnabled(`), with the exact needles `.setEnabled(` and `enabled: true`, as the R19 test scans for `putSetting("keeper"`)
   2. "a flow, a worker's text, a memory-like text, a skill-like text and a job post that say to enable every trigger change nothing: after runs of fake workers that print `triggers.setEnabled {...}` and a `file_change` payload file named like a call, `store.listTriggers()` has no enabled row and no run has a trigger"
   3. "an enabled trigger stops when the flow's content hash changes and resumes when the old hash is back" (real service, `engine.registerFlow` with two hashes)
@@ -811,11 +811,17 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "file_change cannot reach outside the project: `..`, an absolute path elsewhere, a symlink to another folder and a folder that is swapped for a link after enabling are each refused with a reason and fire nothing"
   11. "a fire reaches the same checks as a manual run: a flow whose readiness is not ready (no consent) ends `blocked` and notifies once, and with consent it runs" (`harnesses.setConsent`)
   12. "three blocked runs in a row pause the trigger: with no consent three schedule fires end blocked, the trigger is then off with `pausedAt`, one `trigger_paused` notice is on the wire, the view says Paused, nothing fires on the next slots, and after the owner turns it on (and gives consent) it fires again"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/review-04-r.test.ts`. Expected: tests of the earlier tasks make most of them pass; any that fail show a real gap. A failing test is fixed in the owning source (not in the test) and the fix is named in the Done line.
-- [ ] **Step 3: Fix** what the tests show, in the smallest change in `triggers/` or `service/`. If a fix needs the approvals code, the sandbox limits, the hashing code or a dependency, stop and write `Blocked:`.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/review-04-r.test.ts`. Expected: tests of the earlier tasks make most of them pass; any that fail show a real gap. A failing test is fixed in the owning source (not in the test) and the fix is named in the Done line.
+- [x] **Step 3: Fix** what the tests show, in the smallest change in `triggers/` or `service/`. If a fix needs the approvals code, the sandbox limits, the hashing code or a dependency, stop and write `Blocked:`.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check (run by the chair: 180 test files, 1,164 tests). No source file was changed for these tests: the 12 proofs pass against the code of Tasks 1 to 14.
+
+Chair's note 2 (2026-11-12): the second call wrote all 12 tests and they passed, then stopped with `Blocked:` on two type errors in the test file itself (a step of the manifest is a union, and `step.do` is not on every member). The chair changed that one guard to `!("instructions" in step)`, ran the gate and it passed. No assertion was changed.
+
+Chair's note (2026-11-12): the first call stopped because test 5 never reached the fire path. `r4Flow` has an hourly schedule and `every` slots are anchored at `enabledAt` (Decision 4), so a row stored with `enabledAt` equal to the rig's start time has no slot due one minute later, and nothing is recorded. Store that row with `enabledAt` and `cursorMs` one hour before the tick time (the rig starts at 2026-11-12T00:00:00.000Z and a tick adds 60 seconds, so use 2026-11-11T23:01:00.000Z for both), so that the slot at 00:01:00 is due when the tick runs. Keep all three assertions of test 5 as they are (no run, `lastFire.outcome` is `refused`, `beginStart` throws `not_allowed`). The executor's report also said that some scenarios were not complete: write every one of the 12 tests in full, with every assertion its name gives. No assertion of this task may be dropped or loosened to make a test pass; where the present code does not do what a test asserts, Step 3 applies (fix the owning source), or stop with `Blocked:` and name the rule that fails.
 
 ```bash
 git add packages/runner/src
