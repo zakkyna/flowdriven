@@ -9,6 +9,7 @@ import { routeAll } from "../router/route.ts";
 import type { Store } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
 import type { TriggerDeps, TriggerService } from "../triggers/service.ts";
+import { createCapabilities } from "./capabilities.ts";
 import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
@@ -117,6 +118,11 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     projectDir,
     now,
     harnesses: hs,
+    capabilities: createCapabilities({
+      store,
+      now,
+      facts: () => hs?.facts() ?? { hooks: false, chrome: false },
+    }),
     keeper: wired?.keeper,
     weekly,
     harnessIdOf: (name) =>

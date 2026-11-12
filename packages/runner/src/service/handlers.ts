@@ -18,6 +18,7 @@ import type { HarnessQuota, Keeper } from "../keeper/types.ts";
 import { renderRunReport, reportLines } from "../report.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { TriggerService } from "../triggers/service.ts";
+import type { createCapabilities } from "./capabilities.ts";
 import type { HarnessService } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
@@ -39,6 +40,7 @@ export type HandlerContext = {
   harnesses?: Pick<HarnessService, "list" | "rescan" | "setConsent">;
   keeper?: Keeper;
   weekly?: ReturnType<typeof createWeekly>;
+  capabilities?: ReturnType<typeof createCapabilities>;
 };
 export type Handlers = {
   [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> | Promise<OperationOutput<N>>;
@@ -108,6 +110,7 @@ export function createHandlers({
   harnesses,
   keeper,
   weekly,
+  capabilities,
 }: HandlerContext): Handlers {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
@@ -251,9 +254,20 @@ export function createHandlers({
   }
   return {
     "flows.list": () => store.listFlows().map((r) => toFlowSummary(r, store.listRuns({ flowId: r.id }))),
-    "flows.capabilities": () => unavailable("The preview arrives in this plan."),
-    "flows.allowCapabilities": () => unavailable("The preview arrives in this plan."),
-    "flows.withdrawCapabilities": () => unavailable("The preview arrives in this plan."),
+    "flows.capabilities": ({ flowId }) => {
+      flow(flowId);
+      return capabilities ? capabilities.get(flowId) : unavailable("The preview arrives in this plan.");
+    },
+    "flows.allowCapabilities": ({ flowId, hash }) => {
+      flow(flowId);
+      return capabilities
+        ? capabilities.allow(flowId, hash)
+        : unavailable("The preview arrives in this plan.");
+    },
+    "flows.withdrawCapabilities": ({ flowId }) => {
+      flow(flowId);
+      return capabilities ? capabilities.withdraw(flowId) : unavailable("The preview arrives in this plan.");
+    },
     "flows.get": ({ flowId }) => detail(flow(flowId)),
     "flows.build": () => unavailable("Building a flow from chat arrives with the agent."),
     "flows.update": () => unavailable("Editing a flow in the app arrives with the agent."),

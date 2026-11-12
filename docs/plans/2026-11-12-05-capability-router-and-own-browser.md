@@ -877,7 +877,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `handlers.ts`: `HandlerContext` gains `capabilities?: ReturnType<typeof createCapabilities>`; `"flows.capabilities"`, `"flows.allowCapabilities"`, `"flows.withdrawCapabilities"` call it (`flow(flowId)` first; without the service they answer `unavailable`); the stubs of Task 3 go.
 - `service.ts`: creates the capability service in both modes (`facts: () => hs?.facts() ?? { hooks: false, chrome: false }`) and passes it to the handlers.
 
-- [ ] **Step 1: Write the failing tests** in `capabilities.test.ts` (in-memory store, a flow with the spec's Upwork requirements and a few dropped ones):
+- [x] **Step 1: Write the failing tests** in `capabilities.test.ts` (in-memory store, a flow with the spec's Upwork requirements and a few dropped ones):
   1. "rows come in manifest order: a routed web row, a routed path row, two dropped rows with their reasons, and no row for the harness requirement"
   2. "sentences, hosts and folders come from FlowDriven and pass visible: a folder with control and bidi characters is shown cleaned, and no step text, why or name reaches a row"
   3. "the web row has the provider, `FlowDriven hook in Claude Code`, `unofficial`, the spec's sentence, `away: true`, the 12,000 token cost line and the template behind details; the path row has the 10,600 token line"
@@ -888,16 +888,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "allow is refused for a hash that is not the newest with `not_allowed`, and an unknown flow is `not_found`"
   9. "allow and withdraw write the audit lines `capabilities_allowed` and `capabilities_withdrawn` and mark the flows topic"
   10. "through the dispatcher the three operations validate their input and the outputs parse against the contract"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/capabilities.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the files and edits; replace the stubs of Task 3.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/capabilities.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the files and edits; replace the stubs of Task 3.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Add the capability preview and the allow and withdraw operations" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
