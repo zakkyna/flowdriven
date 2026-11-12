@@ -49,6 +49,13 @@ test("it fails for an unexpected built-in tool (Bash), a missing built-in tool, 
     expect(checkFirstEvent({ ...init, tools }, settings).ok).toBe(false);
 });
 
+test("a built-in tool swapped for another one of the same count fails the start proof", () => {
+  expect(checkFirstEvent({ ...init, tools: ["Read", "Bash", chromeTool] }, settings)).toEqual({
+    ok: false,
+    why: "The tools do not match.",
+  });
+});
+
 test("with a schema the built-in set includes StructuredOutput, and without a schema StructuredOutput is refused", () => {
   const event = { ...init, tools: ["Read", "Glob", chromeTool, "StructuredOutput"] };
   expect(checkFirstEvent(event, { ...settings, schema: true })).toEqual({ ok: true });

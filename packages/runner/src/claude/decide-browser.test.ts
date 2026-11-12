@@ -77,6 +77,11 @@ test("a call with a part FlowDriven does not recognise is refused: an extra key,
     ["navigate", { url, tabId: Infinity }],
     ["get_page_text", { tabId: 7, max_chars: -1 }],
     ["get_page_text", { tabId: 7, max_chars: 40001 }],
+    ["navigate", { tabId: 7, url, x: 1 }],
+    ["get_page_text", { tabId: 7, x: 1 }],
+    ["tabs_close_mcp", { tabId: 7, x: 1 }],
+    ["tabs_create_mcp", { x: 1 }],
+    ["get_page_text", { tabId: 7, max_chars: 1.5 }],
   ] as const)
     expect(decision(name, input)).toMatchObject({ allow: false, reason: BROWSER_DENY.part });
   expect(decision("navigate", null)).toMatchObject({ allow: false, reason: BROWSER_DENY.part });

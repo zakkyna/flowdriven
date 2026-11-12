@@ -114,10 +114,12 @@ test("{n} and {m,n} both repeat; two captures in a row and a capture followed by
   expect(matchTemplate(template("https://a.com/{a:[a-z]{2}}"), "https://a.com/ab")).toEqual({ a: "ab" });
 });
 test("a hostile address of 600 characters matches in a blink and one of 601 is refused", () => {
-  const t = template(`https://a.com/${Array.from({ length: 8 }, (_, i) => `{x${i}:[a]{1,128}}`).join("")}b`);
+  const t = template(`https://a.com/${Array.from({ length: 8 }, (_, i) => `{x${i}:[a]{1,128}}`).join("")}`);
   const address = `https://a.com/${"a".repeat(586)}`;
   expect(address).toHaveLength(600);
-  expect(matchTemplate(t, address)).toBeUndefined();
+  const captures = matchTemplate(t, address);
+  if (captures === undefined) throw new Error("the 600 character address must match");
+  expect(Object.values(captures).join("")).toBe("a".repeat(586));
   expect(matchTemplate(t, `${address}a`)).toBeUndefined();
 });
 test("isValidHost accepts `www.upwork.com` and refuses upper case, a port, an IP address, `localhost`, a trailing dot, an empty label and a 254 character host", () => {

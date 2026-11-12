@@ -1315,20 +1315,22 @@ No source file changes. The code is right today; these tests are missing. The re
 
 **Present assertion that changes:** in `packages/sdk/src/web/template.test.ts`, the test that says an address of 601 characters is refused uses addresses that never match its template, so it proves nothing about the limit. Its 600 and 601 character addresses are replaced by two addresses that both match the template (a template of 8 captures `[a]{1,128}`, and after `https://a.com/` as many `a` as make the address 600 and 601 characters long): the first gives the captures, the second gives `undefined`. The test keeps its name.
 
-- [ ] **Step 1: Write the tests:**
+- [x] **Step 1: Write the tests:**
   1. `claude-harness-gate-r4.test.ts`: "gate() refuses an unattended flow whose route is not enforced" (the router module is mocked for this file only so that the route of the flow's requirement comes back routed with `enforcedBy: "not enforced"`, everything else of the module stays real; a flow with a schedule trigger and a use before its first ask; expected: not ready with the sentence `NOT_ENFORCED_UNATTENDED`)
   2. same file: "the same flow passes with a manual trigger only, and with the use after an ask"
   3. `decide-browser.test.ts`, in the table of the test that refuses a part FlowDriven does not recognise: `navigate` with `{ tabId, url, x: 1 }`, `get_page_text` with `{ tabId, x: 1 }`, `tabs_close_mcp` with `{ tabId, x: 1 }`, `tabs_create_mcp` with `{ x: 1 }` and `get_page_text` with `{ tabId, max_chars: 1.5 }` each give `{ allow: false, reason: BROWSER_DENY.part }` (the tab id is one of the attempt's own, and the address matches a template, so that only the extra part can be the reason)
   4. `browser-start.test.ts`, in the test of the built-in tools of a browser step: the tools `["Read", "Bash", <one Chrome tool>]` against the expected `["Read", "Glob"]` give `ok: false` with "The tools do not match."
   5. `template.test.ts`: the changed assertion above
-- [ ] **Step 2: Run** the four files with `pnpm vitest run <file>`. Expected: PASS on the present code. Then check that each new assertion can fail: in a scratch copy under `.workflow/scratch/` (never in a tracked file) or by reading the reviewer's `mut-D.out`, confirm that the rule each assertion guards is the one the reviewer switched off, and say in your report which mutant of the reviewer each new assertion kills.
-- [ ] **Step 3: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 4: Chair step (commit)**
+- [x] **Step 2: Run** the four files with `pnpm vitest run <file>`. Expected: PASS on the present code. Then check that each new assertion can fail: in a scratch copy under `.workflow/scratch/` (never in a tracked file) or by reading the reviewer's `mut-D.out`, confirm that the rule each assertion guards is the one the reviewer switched off, and say in your report which mutant of the reviewer each new assertion kills.
+- [x] **Step 3: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 4: Chair step (commit)**
 
 ```bash
 git add packages/runner/src packages/sdk/src
 git commit -m "Prove the extra-part refusals, the swapped tool, the address limit and the gate's unattended route check" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
