@@ -351,7 +351,7 @@ Chair's note (2026-11-12): the executor stopped with `Blocked:` because the pres
 - `capabilitySentence(req: Requirement): string`: `web` own read: `Reads pages on <hosts> in your own Chrome, at most <per_run> per run and <per_day> a day.` with `<hosts>` every entry of `capabilityHosts` joined with ", " and each passed through `visible(host, 253)` (never cut as a list), rates from `webRates`; `path`: `Reads files in <folder>.` (`access: "read"`) or `Reads and writes files in <folder>.` (`read_write`) with `<folder>` `visible(req.ref ?? "the project folder", 120)`; any other type: `<noun>: <visible(req.ref ?? req.id, 60)>.`
 - `unattendedProviderErrors(manifest: FlowManifest, routes: Routed[]): { path: string; requirementId: string }[]`: the provider half of R4 (spec 20.7). Empty unless the manifest has a trigger whose kind is not `manual`. It walks the steps in order as `validateManifest` does (leaf `do: ask` without `when` ends the prefix; an `ask` with a `when` does not) and reports each leaf step before the end of the prefix that uses a requirement whose route is `routed` and has `enforcedBy: "not enforced"`; `path` is `steps.<i>` or `steps.<i>.steps.<k>`.
 
-- [ ] **Step 1: Write the failing tests** in `route.test.ts` (requirements from `Requirement.parse`):
+- [x] **Step 1: Write the failing tests** in `route.test.ts` (requirements from `Requirement.parse`):
   1. "a path inside the project is the official file-tools route and can run while away; `~/x`, `/x` and `../x` are dropped"
   2. "a read, own-browser web requirement is the unofficial Chrome route with the spec's sentence and can run while away"
   3. "R11: without hooks the web route is dropped with `This needs a harness that can check each call.`, without Chrome with `This Claude Code cannot use Chrome.`, and with neither the hook reason comes first" (table over the four fact pairs)
@@ -362,16 +362,19 @@ Chair's note (2026-11-12): the executor stopped with `Blocked:` because the pres
   8. "capabilitySentence uses the hosts of the templates, not the domains field, and a hostile folder with control and bidi characters is shown cleaned" (characters built with `String.fromCodePoint`)
   9. "capabilitySentence for a read_write path says it reads and writes, and a read path says it reads"
   10. "the provider half of R4: a made-up route labelled not enforced before the first ask is reported with its path; after the ask, or with a manual trigger only, it is not; an ask with a `when` does not end the prefix; a routed hook route is not reported"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/router/route.test.ts`. Expected: FAIL ("Cannot find module ./route.ts").
-- [ ] **Step 3: Implement** `route.ts`.
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/router/route.test.ts`. Expected: FAIL ("Cannot find module ./route.ts").
+- [x] **Step 3: Implement** `route.ts`.
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/router
 git commit -m "Add the capability router with the Chrome route and the drops" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
