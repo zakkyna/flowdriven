@@ -439,7 +439,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `connector.ts` gains `type ConnectorAllow = { requirementId: string; tool: string; class: "read" | "risky"; grant?: { kind: "pick" | "call"; key: string } }`, `type ConnectorState = { calls: number; granted: (grant: string) => boolean }`, and `decideConnector(connector: ConnectorPolicy, name: string, input: Record<string, unknown>, state: ConnectorState): { allow: true; connector: ConnectorAllow } | { allow: false; reason: string; held?: HeldCall }` (pure and synchronous; `name` is the tool name without the prefix). Checks in this order: (1) a name that is not in `connector.tools` is refused with `This step does not declare the tool <visible(prefix + name, 60)>.`; (2) `JSON.stringify(input)` over `MAX_CONNECTOR_INPUT_BYTES` bytes (or a value that cannot be stringified) is refused with `CONNECTOR_DENY.tooLarge`; (3) `state.calls >= MAX_CONNECTOR_CALLS` is refused with `CONNECTOR_DENY.tooMany` (the 21st call); (4) a tool in `connector.read` is allowed with `class: "read"`; (5) a tool that is a key of `connector.risky` is allowed with `class: "risky"` and `grant: { kind: "pick", key: pickGrant(requirementId, name) }` when `state.granted(thatKey)`, else with `grant: { kind: "call", key: callGrant(requirementId, name, digest) }` when `state.granted(thatKey)` where `digest = digestCall(name, copy)`, else refused with `CONNECTOR_DENY.held` and `held: { requirementId, tool: name, input: copy, digest, action: connector.risky[name] }` (`copy` is `JSON.parse(JSON.stringify(input))` typed as `Value`); (6) any other name is refused with `This step does not declare the tool ...` (a tool that is declared but in neither list cannot be built by Task 6, so this is fail-closed only).
 - `decide.ts`: `Decision`'s allow variant gains `connector?: ConnectorAllow` and its `effect` gains `"connector"`; the deny variant gains `held?: HeldCall`. `decide(policy, call, state?, connectorState?: ConnectorState)`: after the Chrome branch and before the `policy.tools.includes` line (`:74`), a `tool_name` that starts with `policy.connector.prefix` is decided by `decideConnector(policy.connector, short, call.tool_input, connectorState ?? { calls: Infinity, granted: () => false })`; an allow becomes `{ allow: true, tool, effect: "connector", connector }`, a refusal `deny(reason)` with `held` when set. Without `policy.connector` such a name still falls to `This step does not declare the tool <name>.`; a non-plain `tool_input` stays `DENY.badRequest` (`:56`); a PostToolUse request stays `DENY.badRequest`.
 
-- [ ] **Step 1: Write the failing tests** (`decide-connector.test.ts`; a policy with `connector` for `search_threads` and `delete_draft`, the session id as in `decide.test.ts`):
+- [x] **Step 1: Write the failing tests** (`decide-connector.test.ts`; a policy with `connector` for `search_threads` and `delete_draft`, the session id as in `decide.test.ts`):
   1. "a declared read tool is allowed with effect connector and class read";
   2. "a tool the flow did not declare is refused with This step does not declare the tool and the full name through visible";
   3. "a declared risky tool with no grant is refused with the hold sentence and held carries requirementId, tool, input, digest and action delete";
@@ -451,16 +451,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   9. "with no connector state every connector call is refused, read tools included";
   10. "a non-plain input is a bad request, a PostToolUse request is still a bad request, and a connector tool without a connector policy is refused as undeclared";
   11. "the held input is a copy: changing the original after the decision does not change held.input".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-connector.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.** `run.ts` still calls `decide(policy, call, state)` with no connector state, so nothing changes at run time yet.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS (`decide.test.ts`, `decide-browser.test.ts` unchanged).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-connector.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.** `run.ts` still calls `decide(policy, call, state)` with no connector state, so nothing changes at run time yet.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS (`decide.test.ts`, `decide-browser.test.ts` unchanged).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude/connector.ts packages/runner/src/claude/decide.ts packages/runner/src/claude/decide-connector.test.ts packages/runner/src/harness.ts
 git commit -m "Add the pre-tool rules for the connector: read allowed, send and delete held" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

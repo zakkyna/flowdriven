@@ -1,8 +1,15 @@
 import type { Requirement, Value } from "@flowdriven/sdk";
 import type { Routed } from "./router/types.ts";
-import type { ExitClass } from "./states.ts";
+import type { ExitClass, RiskyAction } from "./states.ts";
 import type { ModelUsage } from "./storage.ts";
 export type LimitWindow = { utilization?: number; resetsAt?: number; status?: string };
+export type HeldCall = {
+  requirementId: string;
+  tool: string;
+  input: Value;
+  digest: string;
+  action: RiskyAction;
+};
 export type RateLimit = {
   status: string;
   type?: string;

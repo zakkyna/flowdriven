@@ -1,12 +1,20 @@
 import { isAbsolute } from "node:path";
+import type { HeldCall } from "../harness.ts";
 import { BROWSER_DENY, type BrowserState, CHROME_PREFIX, decideBrowser } from "./browser.ts";
+import { type ConnectorAllow, type ConnectorState, decideConnector } from "./connector.ts";
 import { hasParentPart, isInside, resolveDeep } from "./paths.ts";
 import type { Policy } from "./policy.ts";
 import { visible } from "./text.ts";
 
 export type Decision =
-  | { allow: true; tool: string; target?: string; effect?: "page" | "tab" }
-  | { allow: false; reason: string; tool: string; target?: string };
+  | {
+      allow: true;
+      tool: string;
+      target?: string;
+      effect?: "page" | "tab" | "connector";
+      connector?: ConnectorAllow;
+    }
+  | { allow: false; reason: string; tool: string; target?: string; held?: HeldCall };
 
 export const DENY = {
   badRequest: "This request is not a tool call FlowDriven recognises.",
@@ -40,7 +48,12 @@ function protectedPath(path: string): boolean {
   return parts.some((part) => part === ".git" || part === ".claude") || parts.at(-1) === ".mcp.json";
 }
 
-export function decide(policy: Policy, call: unknown, state?: BrowserState): Decision {
+export function decide(
+  policy: Policy,
+  call: unknown,
+  state?: BrowserState,
+  connectorState?: ConnectorState,
+): Decision {
   const tool = plain(call) && typeof call.tool_name === "string" ? visible(call.tool_name, 60) : "";
   const deny = (reason: string, target?: string): Decision => ({
     allow: false,
@@ -71,6 +84,17 @@ export function decide(policy: Policy, call: unknown, state?: BrowserState): Dec
     return result.allow ? { ...result, tool } : deny(result.reason, result.target);
   }
   if (!plain(call.tool_input)) return deny(DENY.badRequest);
+  if (policy.connector && call.tool_name.startsWith(policy.connector.prefix)) {
+    const result = decideConnector(
+      policy.connector,
+      call.tool_name.slice(policy.connector.prefix.length),
+      call.tool_input,
+      connectorState ?? { calls: Infinity, granted: () => false },
+    );
+    return result.allow
+      ? { allow: true, tool, effect: "connector", connector: result.connector }
+      : { ...deny(result.reason), ...(result.held === undefined ? {} : { held: result.held }) };
+  }
   if (!policy.tools.includes(call.tool_name)) return deny(`This step does not declare the tool ${tool}.`);
   const name = call.tool_name;
   if (!["Read", "Write", "Edit", "Glob", "Grep"].includes(name)) return deny(DENY.badRequest);

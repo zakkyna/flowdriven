@@ -1,4 +1,8 @@
+import type { Value } from "@flowdriven/sdk";
+import { callGrant, digestCall, pickGrant } from "../connectors/grants.ts";
+import type { HeldCall } from "../harness.ts";
 import type { RiskyAction } from "../states.ts";
+import { visible } from "./text.ts";
 
 export type ConnectorPolicy = {
   requirementId: string;
@@ -24,6 +28,69 @@ export const CONNECTOR_STOP = {
 };
 export const MAX_CONNECTOR_CALLS = 20;
 export const MAX_CONNECTOR_INPUT_BYTES = 16_000;
+export type ConnectorAllow = {
+  requirementId: string;
+  tool: string;
+  class: "read" | "risky";
+  grant?: { kind: "pick" | "call"; key: string };
+};
+export type ConnectorState = { calls: number; granted: (grant: string) => boolean };
+
+export function decideConnector(
+  connector: ConnectorPolicy,
+  name: string,
+  input: Record<string, unknown>,
+  state: ConnectorState,
+): { allow: true; connector: ConnectorAllow } | { allow: false; reason: string; held?: HeldCall } {
+  const undeclared = () => ({
+    allow: false as const,
+    reason: `This step does not declare the tool ${visible(connector.prefix + name, 60)}.`,
+  });
+  if (!connector.tools.includes(name)) return undeclared();
+  let text: string;
+  try {
+    const encoded = JSON.stringify(input);
+    if (encoded === undefined || Buffer.byteLength(encoded) > MAX_CONNECTOR_INPUT_BYTES)
+      return { allow: false, reason: CONNECTOR_DENY.tooLarge };
+    text = encoded;
+  } catch {
+    return { allow: false, reason: CONNECTOR_DENY.tooLarge };
+  }
+  if (state.calls >= MAX_CONNECTOR_CALLS) return { allow: false, reason: CONNECTOR_DENY.tooMany };
+  if (connector.read.includes(name))
+    return { allow: true, connector: { requirementId: connector.requirementId, tool: name, class: "read" } };
+  const action = Object.hasOwn(connector.risky, name) ? connector.risky[name] : undefined;
+  if (action === undefined) return undeclared();
+  const pick = pickGrant(connector.requirementId, name);
+  if (state.granted(pick))
+    return {
+      allow: true,
+      connector: {
+        requirementId: connector.requirementId,
+        tool: name,
+        class: "risky",
+        grant: { kind: "pick", key: pick },
+      },
+    };
+  const copy = JSON.parse(text) as Value;
+  const digest = digestCall(name, copy);
+  const key = callGrant(connector.requirementId, name, digest);
+  if (state.granted(key))
+    return {
+      allow: true,
+      connector: {
+        requirementId: connector.requirementId,
+        tool: name,
+        class: "risky",
+        grant: { kind: "call", key },
+      },
+    };
+  return {
+    allow: false,
+    reason: CONNECTOR_DENY.held,
+    held: { requirementId: connector.requirementId, tool: name, input: copy, digest, action },
+  };
+}
 export function mcpConfigText(connector: ConnectorPolicy): string {
   return JSON.stringify({
     mcpServers: {
