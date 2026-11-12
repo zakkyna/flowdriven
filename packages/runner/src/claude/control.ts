@@ -19,13 +19,14 @@ export function createControlDir(options: {
   id: string;
   rounds?: number;
   browser?: boolean;
+  connectorPrefix?: string;
 }): ControlDir {
   const { root, id } = options;
   if (!/^[a-z][a-z0-9-]{0,40}$/.test(id)) throw new Error("The control id is not valid.");
   const path = join(root, id);
   if (!isSafeControlPath(path)) throw new Error("The control folder path is not safe.");
   const script = hookScript({ rounds: options.rounds ?? 50 });
-  const settings = settingsJson(path, { browser: options.browser });
+  const settings = settingsJson(path, { browser: options.browser, connectorPrefix: options.connectorPrefix });
   mkdirSync(root, { recursive: true, mode: 0o700 });
   try {
     mkdirSync(path, { mode: 0o700 });

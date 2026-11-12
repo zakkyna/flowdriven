@@ -51,6 +51,7 @@ export function startChannel(options: {
   onPost?: (record: { toolUseId: string; text: string }) => void;
   onUnanswered?: (record: { toolUseId?: string; tool?: string }) => void;
   pollMs?: number;
+  prefixes?: readonly string[];
 }): Channel {
   const { dir } = options;
   const ids = new Set<string>();
@@ -186,13 +187,15 @@ export function startChannel(options: {
                 !Array.isArray(call)
               ) {
                 const request = call as Record<string, unknown>;
-                if (
-                  request.hook_event_name === "PreToolUse" &&
-                  typeof request.tool_name === "string" &&
-                  request.tool_name.startsWith(CHROME_PREFIX)
-                ) {
-                  chromeIds.add(id);
-                  chromeTools.set(id, request.tool_name.slice(CHROME_PREFIX.length));
+                if (request.hook_event_name === "PreToolUse" && typeof request.tool_name === "string") {
+                  const toolName = request.tool_name;
+                  const prefix = (options.prefixes ?? [CHROME_PREFIX]).find((value) =>
+                    toolName.startsWith(value),
+                  );
+                  if (prefix !== undefined) {
+                    chromeIds.add(id);
+                    chromeTools.set(id, toolName.slice(prefix.length));
+                  }
                 }
               }
             }

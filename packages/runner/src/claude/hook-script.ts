@@ -98,7 +98,20 @@ export function postCommand(controlDir: string): string {
   return `/bin/sh '${controlDir}/hook.sh' post || exit 2`;
 }
 
-export function settingsJson(controlDir: string, options?: { browser?: boolean }): string {
+export function settingsJson(
+  controlDir: string,
+  options?: { browser?: boolean; connectorPrefix?: string },
+): string {
+  const prefix = options?.connectorPrefix;
+  if (prefix !== undefined && !/^mcp__[A-Za-z0-9_-]+__$/.test(prefix))
+    throw new Error("The connector prefix is not valid.");
+  const postEntries = [
+    ...(options?.browser ? ["mcp__claude-in-chrome__"] : []),
+    ...(prefix === undefined ? [] : [prefix]),
+  ].map((value) => ({
+    matcher: `${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.*`,
+    hooks: [{ type: "command", command: postCommand(controlDir), timeout: HOOK_TIMEOUT_SECONDS }],
+  }));
   return `${JSON.stringify(
     {
       hooks: {
@@ -117,18 +130,7 @@ export function settingsJson(controlDir: string, options?: { browser?: boolean }
             ],
           },
         ],
-        ...(options?.browser
-          ? {
-              PostToolUse: [
-                {
-                  matcher: "mcp__claude-in-chrome__.*",
-                  hooks: [
-                    { type: "command", command: postCommand(controlDir), timeout: HOOK_TIMEOUT_SECONDS },
-                  ],
-                },
-              ],
-            }
-          : {}),
+        ...(postEntries.length > 0 ? { PostToolUse: postEntries } : {}),
       },
     },
     null,

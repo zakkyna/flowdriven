@@ -478,7 +478,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `control.ts`: `createControlDir` gains `connectorPrefix?: string`, passed to `settingsJson`.
 - `channel.ts`: `startChannel` gains `prefixes?: readonly string[]` (default `[CHROME_PREFIX]`). The test at `:192` becomes "the name starts with one of the prefixes", and `chromeTools.set(id, name.slice(<that prefix>.length))`. `Channel.chromeIds` keeps its name and now holds the ids of every allowed call whose name starts with a checked prefix, so the tripwire (`stream.ts:105-140`, unchanged) also checks connector results, and an unanswered post (over 2 MiB) reports its short tool name through `onUnanswered`.
 
-- [ ] **Step 1: Write the failing tests.** `connector-post.test.ts` (a connector policy for `search_threads`):
+- [x] **Step 1: Write the failing tests.** `connector-post.test.ts` (a connector policy for `search_threads`):
   1. "G6: a tool_response that is a string passes as that text, an empty string passes as an empty text, and text blocks are joined with a line break and pass";
   2. "a text over 40,000 characters, and a CJK text over 40,000 bytes, are cut with the cut marker and report cut, for a string and for blocks";
   3. "a block that is not text (an image block, a block with no text, a text that is not a string) makes the whole result unchecked with the fixed sentence";
@@ -492,16 +492,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "createControlDir with connectorPrefix writes that entry into settings.json";
   11. "a channel with both prefixes records the id of an allowed connector call, answers its post with the runner's line, and reports an oversized post of a connector id through onUnanswered with its short tool name";
   12. "the tripwire passes a connector result that is the runner's answer or the fixed sentence and trips on any other text".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-post.test.ts packages/runner/src/claude/hook-connector.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.** `run.ts` does not pass the new options yet.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS (`hook-script.test.ts`, `hook-post.test.ts`, `channel*.test.ts`, `tripwire-chrome.test.ts` unchanged).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-post.test.ts packages/runner/src/claude/hook-connector.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.** `run.ts` does not pass the new options yet.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS (`hook-script.test.ts`, `hook-post.test.ts`, `channel*.test.ts`, `tripwire-chrome.test.ts` unchanged).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude/connector-post.ts packages/runner/src/claude/connector-post.test.ts packages/runner/src/claude/hook-connector.test.ts packages/runner/src/claude/hook-script.ts packages/runner/src/claude/control.ts packages/runner/src/claude/channel.ts
 git commit -m "Check every connector result after the call and answer it from the runner" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
