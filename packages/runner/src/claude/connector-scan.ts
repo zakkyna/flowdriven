@@ -54,6 +54,7 @@ export async function readConnectors(options: {
   env: Record<string, string | undefined>;
   waitMs?: number;
   pollMs?: number;
+  names?: readonly string[];
 }): Promise<ConnectorFact[] | undefined> {
   try {
     const args = buildConnectorScanArgs();
@@ -120,7 +121,13 @@ export async function readConnectors(options: {
               Array.isArray(data.response.response.mcpServers)
             ) {
               last = parseConnectors(data.response.response);
-              if (last.some((c) => c.status === "pending") && Date.now() - started < wait)
+              if (
+                last.some(
+                  (c) =>
+                    c.status === "pending" && (options.names === undefined || options.names.includes(c.name)),
+                ) &&
+                Date.now() - started < wait
+              )
                 timer = setTimeout(
                   request,
                   Math.min(options.pollMs ?? 1000, Math.max(0, wait - (Date.now() - started))),

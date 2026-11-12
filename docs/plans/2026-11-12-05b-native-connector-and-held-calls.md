@@ -1033,18 +1033,22 @@ The chair repeated the walk after Tasks 20 and 21 (2026-11-13). It stopped twice
 - `readConnectors` gains the option `names?: readonly string[]`. With `names`, the scan goes on asking only while a connector whose `name` is in `names` is `pending`; a `pending` connector outside `names` never delays the answer and is returned with the status `pending`. The first answer is always awaited, and the deadline, the kill of the child and every other rule stay. Without `names` the function is as today.
 - The inventory path that calls `readConnectors` (in `readInventory`) passes the names of the catalog. `readInventory` gains `catalog?: ConnectorEntry[]` with `CONNECTORS` as the default and passes `catalog.map((entry) => entry.name)`. No other caller changes.
 
-- [ ] **Step 1: Write the failing tests** (`connector-scan.test.ts`, with the fake `claude` and two scripted connectors: `claude.ai Gmail`, connected, and `claude.ai Slow`, whose status is `pending` for good):
+- [x] **Step 1: Write the failing tests** (`connector-scan.test.ts`, with the fake `claude` and two scripted connectors: `claude.ai Gmail`, connected, and `claude.ai Slow`, whose status is `pending` for good):
   1. "with names, a pending connector outside the names does not delay the answer: the first mcp_status is enough and that connector is returned as pending";
   2. "with names, the scan goes on while a named connector is pending and stops when it is connected (connectorPending)";
   3. "without names the scan waits for every connector until its deadline, as before";
   4. "readInventory passes the catalog names: a rescan with a slow connector FlowDriven does not use returns the Gmail fact after one answer".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-scan.test.ts`. Expected: FAIL on the new tests.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude packages/runner/src/service`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-scan.test.ts`. Expected: FAIL on the new tests.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude packages/runner/src/service`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Stop the connector scan from waiting for connectors FlowDriven does not use" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-13. Evidence: pnpm format && pnpm check.
+
+---

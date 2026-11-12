@@ -1,5 +1,6 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
 import { type ConnectorFact, readConnectors } from "./connector-scan.ts";
 import { childEnv } from "./env.ts";
 import { runCapture } from "./run-capture.ts";
@@ -90,6 +91,7 @@ export async function readInventory(options: {
   withMcp: boolean;
   timeoutMs?: number;
   mcpTimeoutMs?: number;
+  catalog?: ConnectorEntry[];
 }): Promise<Inventory> {
   const capture = async (args: string[], timeoutMs: number): Promise<string | undefined> => {
     try {
@@ -113,6 +115,7 @@ export async function readInventory(options: {
           cwd: options.cwd,
           env: options.env,
           waitMs: Math.min(options.mcpTimeoutMs ?? 20_000, 20_000),
+          names: (options.catalog ?? CONNECTORS).map((entry) => entry.name),
         })
       : Promise.resolve(undefined),
   ]);

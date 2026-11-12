@@ -156,3 +156,56 @@ test("readInventory with withMcp returns connectors and without withMcp leaves t
   ]);
   expect(await readInventory({ ...opts(h), withMcp: false })).not.toHaveProperty("connectors");
 });
+
+const slowName = "claude.ai Slow";
+const slowConnector = { ...connector, id: "mcpsrv_slow", status: "pending" as const };
+const statusCalls = (h: string) =>
+  readFakeCalls(h).filter((call) => call.kind === "control" && call.subtype === "mcp_status");
+
+test("with names, a pending connector outside the names does not delay the answer: the first mcp_status is enough and that connector is returned as pending", {
+  timeout: 20_000,
+}, async () => {
+  const h = home({ connectors: { [name]: connector, [slowName]: slowConnector } });
+  const result = await readConnectors({ ...opts(h), names: [name] });
+  expect(result).toEqual([
+    expect.objectContaining({ name, status: "connected" }),
+    expect.objectContaining({ name: slowName, status: "pending", tools: [] }),
+  ]);
+  expect(statusCalls(h)).toHaveLength(1);
+});
+
+test("with names, the scan goes on while a named connector is pending and stops when it is connected (connectorPending)", {
+  timeout: 20_000,
+}, async () => {
+  const h = home({ connectors: { [name]: connector, [slowName]: slowConnector }, connectorPending: 2 });
+  const result = await readConnectors({ ...opts(h), names: [name] });
+  expect(result).toEqual([
+    expect.objectContaining({ name, status: "connected" }),
+    expect.objectContaining({ name: slowName, status: "pending" }),
+  ]);
+  expect(statusCalls(h)).toHaveLength(3);
+});
+
+test("without names the scan waits for every connector until its deadline, as before", {
+  timeout: 20_000,
+}, async () => {
+  const h = home({ connectors: { [name]: connector, [slowName]: slowConnector } });
+  const result = await readConnectors({ ...opts(h), waitMs: 500, pollMs: 10 });
+  expect(result).toEqual([
+    expect.objectContaining({ name, status: "connected" }),
+    expect.objectContaining({ name: slowName, status: "pending" }),
+  ]);
+  expect(statusCalls(h).length).toBeGreaterThan(1);
+});
+
+test("readInventory passes the catalog names: a rescan with a slow connector FlowDriven does not use returns the Gmail fact after one answer", {
+  timeout: 20_000,
+}, async () => {
+  const h = home({ connectors: { [name]: connector, [slowName]: slowConnector } });
+  const result = await readInventory({ ...opts(h), withMcp: true, mcpTimeoutMs: 3000 });
+  expect(result.connectors).toEqual([
+    expect.objectContaining({ name, status: "connected" }),
+    expect.objectContaining({ name: slowName, status: "pending" }),
+  ]);
+  expect(statusCalls(h)).toHaveLength(1);
+});
