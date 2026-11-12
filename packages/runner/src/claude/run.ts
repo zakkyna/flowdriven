@@ -1,11 +1,14 @@
 import type { Value } from "@flowdriven/sdk";
 import type { CallInfo, RateLimit } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
+import { BROWSER_DENY } from "./browser.ts";
+import { decidePost, type PostResult, postLine, STOP } from "./browser-post.ts";
 import { startChannel } from "./channel.ts";
 import { startChild } from "./child.ts";
 import { createControlDir, removeControlDir } from "./control.ts";
 import { DENY, decide } from "./decide.ts";
 import { childEnv } from "./env.ts";
+import { createAttemptState, type PageCounter } from "./pages.ts";
 import type { Policy } from "./policy.ts";
 import {
   checkFirstEvent,
@@ -32,6 +35,8 @@ export type RunInput = {
   schema?: object;
   signal: AbortSignal;
   onStart?: (pid: number) => void;
+  browser?: boolean;
+  onOutside?: () => void;
   makePolicy: (control: { root: string; cwd: string }, sessionId: string) => Policy;
   makePrompt: (policy: Policy) => string;
 };
@@ -41,8 +46,10 @@ export type Outcome =
   | { kind: "quota" }
   | { kind: "interrupted" }
   | { kind: "block"; sentence: string }
+  | { kind: "stop"; sentence: string }
   | { kind: "failed"; text: string };
 export type RunDeps = {
+  pages?: PageCounter;
   onCall?: (call: CallInfo) => void;
   nowMs?: () => number;
   claudePath: string;
@@ -62,7 +69,7 @@ export type RunDeps = {
 export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome> {
   const id = deps.newId("cc");
   const sessionId = deps.newSessionId();
-  const dir = createControlDir({ root: deps.controlRoot, id, rounds: deps.rounds });
+  const dir = createControlDir({ root: deps.controlRoot, id, rounds: deps.rounds, browser: input.browser });
   let channel: ReturnType<typeof startChannel> | undefined;
   let child: ReturnType<typeof startChild> | undefined;
   let interrupted = false;
@@ -101,11 +108,40 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         sentence: error instanceof Error ? error.message : "FlowDriven could not check this step.",
       };
     }
+    let attempt: ReturnType<typeof createAttemptState> | undefined;
+    const posts = new Map<string, PostResult>();
+    if (policy.browser) {
+      if (!deps.pages) return { kind: "block", sentence: LIMITS_NOT_APPLIED };
+      try {
+        const count = deps.pages.count(input.runId, policy.browser.requirementId);
+        if (
+          !Number.isSafeInteger(count.run) ||
+          count.run < 0 ||
+          !Number.isSafeInteger(count.day) ||
+          count.day < 0
+        )
+          return { kind: "block", sentence: LIMITS_NOT_APPLIED };
+        if (count.run >= policy.browser.perRun) return { kind: "stop", sentence: BROWSER_DENY.runLimit };
+        if (count.day >= policy.browser.perDay) return { kind: "stop", sentence: BROWSER_DENY.dayLimit };
+        attempt = createAttemptState({
+          pages: deps.pages,
+          runId: input.runId,
+          requirementId: policy.browser.requirementId,
+        });
+      } catch {
+        return { kind: "block", sentence: LIMITS_NOT_APPLIED };
+      }
+    }
     let deniedEntries = 0;
     channel = startChannel({
       dir,
       decide: (call) => {
-        const decision = decide(policy, call);
+        const decision = decide(policy, call, attempt?.state());
+        if (decision.allow && decision.effect === "page" && policy.browser && deps.pages && attempt) {
+          deps.pages.take(input.runId, policy.browser.requirementId);
+          attempt.takePage();
+          input.onOutside?.();
+        } else if (decision.allow && decision.effect === "tab") attempt?.openTab();
         if (
           !decision.allow &&
           (decision.tool === "Write" || decision.tool === "Edit") &&
@@ -115,6 +151,20 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           if (!checked.allow && checked.reason === DENY.readOnly) return checked;
         }
         return decision;
+      },
+      post: (call) => {
+        const r = policy.browser ? decidePost(policy.browser, sessionId, call) : undefined;
+        if (
+          !r ||
+          call === null ||
+          typeof call !== "object" ||
+          !("tool_use_id" in call) ||
+          typeof call.tool_use_id !== "string"
+        )
+          return undefined;
+        attempt?.learn(r.tabs ?? []);
+        posts.set(call.tool_use_id, r);
+        return { text: r.text, line: postLine(r.text) };
       },
       pollMs: deps.pollMs,
       onCall: ({ decision }) => {
@@ -134,6 +184,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       sessionId,
       tools: policy.tools,
       settingsPath: dir.settings,
+      chrome: policy.browser !== undefined,
       addDirs: policy.addDirs,
       ...(input.schema === undefined ? {} : { schema: input.schema }),
     });
@@ -147,7 +198,10 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       input.onStart?.(child.pid);
     }
     const reader = new LineReader(deps.maxLineBytes);
-    const tripwire = createTripwire(channel.allowedIds);
+    const tripwire = createTripwire(
+      channel.allowedIds,
+      policy.browser ? { ids: channel.chromeIds, posted: channel.posted } : undefined,
+    );
     let first = true;
     let startEvents = 0;
     let auth = false;
@@ -175,6 +229,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
                 why: hook.failed ? "The start hook failed." : "Too many events before init.",
               }
             : checkFirstEvent(event, {
+                browser: policy.browser !== undefined,
                 tools: policy.tools,
                 schema: input.schema !== undefined,
                 sessionId,
@@ -185,7 +240,10 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
               ...detail,
               why: proof.why === "The start hook did not run." ? "the start hook did not run" : proof.why,
             });
-            forced = { kind: "block", sentence: LIMITS_NOT_APPLIED };
+            forced = {
+              kind: "block",
+              sentence: proof.why === STOP.chromeDown ? STOP.chromeDown : LIMITS_NOT_APPLIED,
+            };
             child?.kill();
             break;
           }

@@ -702,7 +702,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   6. `createTripwire(channel.allowedIds, policy.browser ? { ids: channel.chromeIds, posted: channel.posted } : undefined)`.
 - `adapter.ts`: `ClaudeAdapterOptions` gains `pages?: PageCounter`; `runStep` passes `routes: req.routes ?? []` to `buildPolicy`, `browser: req.requirements.some((r) => r.type === "web")` and an `onOutside` that calls `req.onOutside?.()` and remembers that a page was opened, and builds the prompt with `browser: policy.browser && { templates: policy.browser.templates.map(describeTemplate), pagesLeft }` where `pagesLeft = max(0, min(perRun - run, perDay - day))` from `options.pages?.count(...)` (0 when it cannot be counted). The result mapping: `kind: "stop"` gives `{ exit: "failed", text: sentence, outputs: {}, noRetry: sentence }`; every result of a step in which a page was opened carries `outside: true`. In `judge` (`adapter.ts:180-185`) the thrown error maps `stop` like `failed`: the message is `result.sentence` and the exit class `"failed"`, so the union still type-checks against `ExitClass` (`harness.ts:22`). `runStep` handles `stop` before the final `withCall({ exit: result.kind ... })` at `adapter.ts:133`.
 
-- [ ] **Step 1: Write the failing tests** in `adapter-browser.test.ts` (copy `setup` of `adapter.test.ts`, add `pages` with `createPageCounter` over an in-memory store and a run row, a request with a routed Chrome route and the spec's template; the plays use the fake `claude` of Task 13 with `chrome: true`, a page table and `tool` actions on the Chrome names):
+- [x] **Step 1: Write the failing tests** in `adapter-browser.test.ts` (copy `setup` of `adapter.test.ts`, add `pages` with `createPageCounter` over an in-memory store and a run row, a request with a routed Chrome route and the spec's template; the plays use the fake `claude` of Task 13 with `chrome: true`, a page table and `tool` actions on the Chrome names):
   1. "the call has --chrome and the control settings have the PostToolUse entry, and a step without a web requirement has --no-chrome and no PostToolUse entry"
   2. "an empty run budget stops the attempt before any harness call: no child is started and the result has noRetry with `This step reached its page limit for this run.`"
   3. "an empty day budget stops the same way with `This flow reached its page limit for today.`"
@@ -714,16 +714,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   9. "an allowed navigate calls onOutside and marks the result outside true; a step that only had its calls refused does not"
   10. "without `pages` a step with a browser is blocked with the limits sentence"
   11. "a judge call whose outcome is a stop throws a HarnessCallError of class failed with the sentence"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-browser.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** `pages.ts` and the edits.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-browser.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** `pages.ts` and the edits.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude
 git commit -m "Count pages and tabs in the runner, stop an empty budget and pass the Chrome flags" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

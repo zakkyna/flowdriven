@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Value } from "@flowdriven/sdk";
+import { describeTemplate, type Value } from "@flowdriven/sdk";
 import { type CallInfo, type HarnessAdapter, HarnessCallError } from "../harness.ts";
+import type { PageCounter } from "./pages.ts";
 import { buildPolicy } from "./policy.ts";
 import {
   buildPrompt,
@@ -14,6 +15,7 @@ import {
 import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
+  pages?: PageCounter;
   effortModels?: () => { low: string; medium: string; high: string } | undefined;
   nowMs?: () => number;
   claudePath: () => string | undefined;
@@ -41,6 +43,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
   const run = (input: RunInput, claudePath: string, onCall: (call: CallInfo) => void) =>
     runClaude(input, {
       claudePath,
+      pages: options.pages,
       onCall,
       nowMs: options.nowMs ?? Date.now,
       env: options.env(),
@@ -80,6 +83,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
         return { exit: "failed", text: "", outputs: {}, block: "Claude Code was not found." };
       const schema = outputSchema(req.outputs);
       let call: CallInfo | undefined;
+      let outside = false;
       const result = await run(
         {
           runId: req.runId,
@@ -90,47 +94,88 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           ...(schema === undefined ? {} : { schema }),
           signal: req.signal,
           onStart: req.onStart,
+          browser: req.requirements.some((r) => r.type === "web"),
+          onOutside: () => {
+            outside = true;
+            req.onOutside?.();
+          },
           makePolicy: (control, sessionId) =>
             buildPolicy({
               kind: req.kind === "agent" ? "agent" : "worker",
               requirements: req.requirements,
+              routes: req.routes ?? [],
               project: req.project,
               controlRoot: control.root,
               controlCwd: control.cwd,
               sessionId,
               schema: schema !== undefined,
             }),
-          makePrompt: (policy) =>
-            buildPrompt({
+          makePrompt: (policy) => {
+            let pagesLeft = 0;
+            if (policy.browser) {
+              try {
+                const count = options.pages?.count(req.runId, policy.browser.requirementId);
+                if (
+                  count &&
+                  Number.isSafeInteger(count.run) &&
+                  count.run >= 0 &&
+                  Number.isSafeInteger(count.day) &&
+                  count.day >= 0
+                )
+                  pagesLeft = Math.max(
+                    0,
+                    Math.min(policy.browser.perRun - count.run, policy.browser.perDay - count.day),
+                  );
+              } catch {}
+            }
+            return buildPrompt({
+              ...(policy.browser
+                ? { browser: { templates: policy.browser.templates.map(describeTemplate), pagesLeft } }
+                : {}),
               ...(policy.tools.length ? { cwd: policy.cwd } : {}),
               instructions: req.instructions,
               outputs: req.outputs,
               ...(req.lastFailure === undefined ? {} : { lastFailure: req.lastFailure }),
-            }),
+            });
+          },
         },
         path,
         (info) => {
           call = info;
         },
       );
+      const mark = outside ? { outside: true as const } : {};
       if (result.kind === "ok") {
-        if (schema === undefined) return withCall({ exit: "ok", text: result.text, outputs: {} }, call);
+        if (schema === undefined)
+          return withCall({ exit: "ok", text: result.text, outputs: {}, ...mark }, call);
         const parsed = readOutputs(result.structured, req.outputs);
         return withCall(
-          parsed
-            ? { exit: "ok" as const, text: parsed.report, outputs: parsed.outputs }
-            : {
-                exit: "failed" as const,
-                text: "Claude Code returned no valid structured output.",
-                outputs: {},
-              },
+          {
+            ...mark,
+            ...(parsed
+              ? { exit: "ok" as const, text: parsed.report, outputs: parsed.outputs }
+              : {
+                  exit: "failed" as const,
+                  text: "Claude Code returned no valid structured output.",
+                  outputs: {},
+                }),
+          },
           call,
         );
       }
       if (result.kind === "block")
-        return withCall({ exit: "failed", text: result.sentence, outputs: {}, block: result.sentence }, call);
-      if (result.kind === "failed") return withCall({ exit: "failed", text: result.text, outputs: {} }, call);
-      return withCall({ exit: result.kind, text: "", outputs: {} }, call);
+        return withCall(
+          { exit: "failed", text: result.sentence, outputs: {}, block: result.sentence, ...mark },
+          call,
+        );
+      if (result.kind === "stop")
+        return withCall(
+          { exit: "failed", text: result.sentence, outputs: {}, noRetry: result.sentence, ...mark },
+          call,
+        );
+      if (result.kind === "failed")
+        return withCall({ exit: "failed", text: result.text, outputs: {}, ...mark }, call);
+      return withCall({ exit: result.kind, text: "", outputs: {}, ...mark }, call);
     },
     async judge(req) {
       const reason = guard();
@@ -179,8 +224,12 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       );
       if (result.kind !== "ok")
         throw new HarnessCallError(
-          result.kind === "block" ? result.sentence : result.kind === "failed" ? result.text : result.kind,
-          result.kind === "block" ? "failed" : result.kind,
+          result.kind === "block" || result.kind === "stop"
+            ? result.sentence
+            : result.kind === "failed"
+              ? result.text
+              : result.kind,
+          result.kind === "block" || result.kind === "stop" ? "failed" : result.kind,
           call,
         );
       return withCall(
