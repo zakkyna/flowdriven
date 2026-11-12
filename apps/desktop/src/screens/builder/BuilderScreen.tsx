@@ -10,6 +10,7 @@ import { Icon } from "../../ui/icons";
 import { ScreenState } from "../../ui/ScreenState";
 import { StatusBadge, ToneIcon } from "../../ui/StatusBadge";
 import styles from "./Builder.module.css";
+import { CapabilitiesNotice, CapabilitiesPanel } from "./CapabilitiesPanel";
 import { ChatPanel } from "./ChatPanel";
 import { Playback } from "./Playback";
 import { StepList } from "./StepList";
@@ -37,10 +38,21 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
   const error = errorState && errorState.id === id ? errorState.message : undefined;
   const flow = useRunnerQuery("flows.get", { flowId: id ?? "" }, { skip: !id });
   const triggers = useRunnerQuery("triggers.list", { flowId: id ?? "" }, { skip: !id });
+  const capabilities = useRunnerQuery("flows.capabilities", { flowId: id ?? "" }, { skip: !id });
+  // A not_allowed answer is shown in the section itself; any other error stops the screen.
+  const capabilitiesRefused = capabilities.error?.code === "not_allowed" ? capabilities.error : undefined;
+  const capabilitiesError = capabilitiesRefused ? undefined : capabilities.error;
   const runId = list.data?.find((item) => item.id === id)?.lastRun?.runId;
   const run = useRunnerQuery("runs.status", { runId: runId ?? "" }, { skip: !runId });
-  const loading = list.loading || flow.loading || run.loading || harnesses.loading || triggers.loading;
-  const queryError = list.error ?? flow.error ?? run.error ?? harnesses.error ?? triggers.error;
+  const loading =
+    list.loading ||
+    flow.loading ||
+    run.loading ||
+    harnesses.loading ||
+    triggers.loading ||
+    capabilities.loading;
+  const queryError =
+    list.error ?? flow.error ?? run.error ?? harnesses.error ?? triggers.error ?? capabilitiesError;
   const headingRef = useRef<HTMLHeadingElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: focus must follow the selected flow.
   useLayoutEffect(() => {
@@ -72,6 +84,7 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
           run.reload();
           harnesses.reload();
           triggers.reload();
+          capabilities.reload();
         }}
       />
     );
@@ -168,6 +181,15 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
                 </p>
               )}
               <Playback playback={detail.playback} />
+              {id && capabilitiesRefused && <CapabilitiesNotice message={capabilitiesRefused.message} />}
+              {id && capabilities.data && capabilities.data.rows.length > 0 && (
+                <CapabilitiesPanel
+                  flowId={id}
+                  hash={detail.hash}
+                  capabilities={capabilities.data}
+                  reload={capabilities.reload}
+                />
+              )}
               {id && (triggers.data?.length ?? 0) > 0 && (
                 <TriggersPanel
                   flowId={id}

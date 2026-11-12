@@ -418,3 +418,67 @@
 .nestedStep:first-child {
   border-top: 0;
 }
+
+.capPanel {
+  margin-top: var(--space-5);
+}
+.capPanel h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.capList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.capRow {
+  border-top: 1px solid var(--border);
+  padding: var(--space-3) 0;
+  overflow-wrap: anywhere;
+}
+.capRow p {
+  margin: var(--space-2) 0 0;
+}
+.capRow .capSentence {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-weight: 500;
+}
+.capLine {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.capDetails {
+  margin-top: var(--space-2);
+  font-size: 13px;
+}
+.capTemplate {
+  margin: var(--space-1) 0 0;
+}
+.capMuted {
+  color: var(--text-muted);
+  font-size: var(--text-s);
+}
+.capState {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.capGiven {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+}
+.capError {
+  color: var(--bad);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}

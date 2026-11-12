@@ -1052,7 +1052,7 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** `CapabilitiesPanel({ flowId, hash, capabilities, reload }: { flowId: string; hash: string; capabilities: FlowCapabilities; reload: () => void })` renders `<section aria-label="What this flow may touch">` with the heading `<h2 id="capabilities-heading">What this flow may touch</h2>`, placed after `Playback` and before `TriggersPanel` in `BuilderScreen.tsx` (the screen adds `useRunnerQuery("flows.capabilities", { flowId })` next to `triggers`, includes it in its loading state, and shows nothing for a flow with no rows). Each row is a list item with icon plus words: a routed row shows `Icon check` and the sentence, then "Provider: <provider>", "Enforced by: <enforcedBy>", the label as a badge ("Official" or "Unofficial", with the label sentence under it), "Can run while you are away: yes" (or "no"), and the cost line; a dropped row shows `Icon circle-slash`, the sentence and "Not available: <reason>". Behind a `<details>` with the summary "Details" the templates of the row. Below the rows: the caps line "Up to <n> runs a day and <m> items a run." (or "Up to <n> runs a day." without `maxItems`); when `hasTriggers`, the line "A new version of this flow turns its triggers off until you OK them again."; and when `needsAllow`, the state: `none`: "This flow cannot run until you allow this." with a primary button "Allow"; `given`: "Allowed for this version" (with a check icon) and a button "Withdraw"; `stale`: "This flow changed. Allow again." and "Allow". The buttons call `flows.allowCapabilities` with `{ flowId, hash }` and `flows.withdrawCapabilities` with `{ flowId }` through `useRunnerAction`, disable themselves while busy, show an error in `role="alert"` and call `reload` on success. If `flows.capabilities` answers `not_allowed` ("This flow declares more than the preview can show.") the section shows that sentence in an alert and no button. No colour carries a status alone.
 
-- [ ] **Step 1: Write the failing tests** in `Capabilities.test.tsx` (`renderApp("#/builder/dev.example.job-review", { scenario: "looped" })` as in `Triggers.test.tsx`):
+- [x] **Step 1: Write the failing tests** in `Capabilities.test.tsx` (`renderApp("#/builder/dev.example.job-review", { scenario: "looped" })` as in `Triggers.test.tsx`):
   1. "lists the Chrome row, the folder row and two dropped rows, each with an icon and words"
   2. "the Chrome row says it is unofficial with the personal browser sentence, who enforces it, that it can run while away and its token cost"
   3. "a dropped row says Not available with its reason, and the templates are behind Details"
@@ -1063,16 +1063,18 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "an error from the allow is shown in an alert and the buttons are enabled again; a not_allowed answer from flows.capabilities shows its sentence and no button"
   9. "a flow that needs no allow shows its rows and no state line and no button" (the test replaces the answer of `flows.capabilities` through `vi.spyOn(client, "call")` with the same value but `needsAllow: false`)
   10. "the section sits between What this flow does and Triggers, and its heading has the id `capabilities-heading`"
-- [ ] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens/builder/Capabilities.test.tsx`. Expected: FAIL.
-- [ ] **Step 3: Implement** the component and the screen edit.
-- [ ] **Step 4: Run** `pnpm vitest run apps/desktop/src`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens/builder/Capabilities.test.tsx`. Expected: FAIL.
+- [x] **Step 3: Implement** the component and the screen edit.
+- [x] **Step 4: Run** `pnpm vitest run apps/desktop/src`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src
 git commit -m "Show what a flow may touch on its screen, with Allow and Withdraw" -m "Assisted-by: Codex"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
