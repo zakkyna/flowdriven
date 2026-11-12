@@ -11,3 +11,11 @@ export function visible(text: string, max: number): string {
   }
   return result;
 }
+
+export function visibleLines(text: string, max: number): string {
+  return text
+    .split("\n")
+    .map((line) => visible(line, max))
+    .join("\n")
+    .slice(0, max);
+}

@@ -592,7 +592,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `exec/held.ts`: `MAX_HOLDS = 3`; `HOLD_TEXT = { tooMany: "This step asked for approval too many times." }`; `approvedCallsOf(store: Pick<Store, "listApprovals" | "hasGrant" | "counter">, runId: string, stepId: string, itemKey: string): { tool: string; input: Value }[]`: the `approved` `risky_action` rows of that run, step and item that have a `call`, whose grant (`approves[0]`) is a call grant, `hasGrant` is true and `grantUsedKey(runId, itemKey, grant)` counts 0, in creation order; `labelOf(requirements: Requirement[], requirementId: string): string` = the catalog label of that requirement's `ref`, or `"a connector"`.
 - `leaf.ts`: the attempt's request gains `approvedCalls` (only when the list is not empty). The result type gains `hold?`. Right after `if (result.outside === true) row.outside = true;`, a result with `hold` is handled before `block`: (1) let `grant = callGrant(hold.requirementId, hold.tool, hold.digest)` and `holds` the `risky_action` approvals of this run, step and item; (2) when a `pending` one has `approves` equal to `[grant]` it is reused; else when `holds.length >= MAX_HOLDS` the attempt ends `failed`, the step fails and the run is blocked with `HOLD_TEXT.tooMany` exactly as a `noRetry` result does (`block(HOLD_TEXT.tooMany)`, return `"failed"`), and no approval is created; (3) otherwise, in one `store.transaction`: `row.attempts.pop()` (the hold uses up no attempt), `row.state = "waiting_approval"`, `save()`, a new approval `{ id: newId("ap"), kind: "risky_action", riskyAction: hold.action, runId, stepId, itemKey, summary: "<step title or id>: <hold.tool> on <labelOf(...)>", payload: visibleLines(JSON.stringify(hold.input, null, 2), 4000), call: { tool: hold.tool, input: hold.input }, approves: [grant], onExpiry: "fail", createdAt, expiresAt: createdAt + 24 hours, state: "pending", outside: true only when row.outside === true }` and `updateRun(waiting_approval)`; return `"halt"`. The title goes through `visible(title, 80)`. Present behaviour for every other result is unchanged.
 
-- [ ] **Step 1: Write the failing tests** (`leaf-hold.test.ts`, engine plus scripted harness; replies built with `hold`):
+- [x] **Step 1: Write the failing tests** (`leaf-hold.test.ts`, engine plus scripted harness; replies built with `hold`):
   1. "a hold result creates a risky_action approval with the action, the summary '<title>: <tool> on Gmail', the input as indented JSON in a text payload, approves [<requirement>.<tool>#<digest>], onExpiry fail, 24 hours and the exact call";
   2. "the step and the run become waiting_approval, the walk halts, and the hold is not kept in row.attempts";
   3. "a hold inside a loop item keeps the item key on the approval and the item running";
@@ -604,16 +604,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   9. "the payload shows hidden characters as <U+...>, keeps its line breaks, and is cut at 4,000 characters (visibleLines)";
   10. "the label falls back to a connector for a ref that is not in the catalog";
   11. "a present result with block, noRetry, quota, auth or interrupted is handled as before" (a spot check of the neighbours).
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/leaf-hold.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.** Nothing produces a `hold` result yet (Task 13).
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/engine-steps.test.ts packages/runner/src/scripted-harness.test.ts`. Expected: PASS, unchanged.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/leaf-hold.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.** Nothing produces a `hold` result yet (Task 13).
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/engine-steps.test.ts packages/runner/src/scripted-harness.test.ts`. Expected: PASS, unchanged.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/exec/held.ts packages/runner/src/exec/leaf-hold.test.ts packages/runner/src/exec/leaf.ts packages/runner/src/harness.ts packages/runner/src/scripted-harness.ts packages/runner/src/claude/text.ts
 git commit -m "Hold a step for the owner's approval when a risky connector call is held" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

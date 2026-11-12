@@ -1,6 +1,7 @@
 import type { Value } from "@flowdriven/sdk";
 import type {
   HarnessAdapter,
+  HeldCall,
   JudgeRequest,
   JudgeResult,
   ProbeRequest,
@@ -16,6 +17,7 @@ export type Reply = {
   hang?: boolean;
   block?: string;
   noRetry?: string;
+  hold?: HeldCall;
   outside?: boolean;
 };
 export type Script = {
@@ -65,6 +67,7 @@ export function scriptedHarness(script: Script): ScriptedHarness {
         outputs: reply.outputs ?? {},
         ...(reply.block === undefined ? {} : { block: reply.block }),
         ...(reply.noRetry === undefined ? {} : { noRetry: reply.noRetry }),
+        ...(reply.hold === undefined ? {} : { hold: reply.hold }),
         ...(reply.outside === undefined ? {} : { outside: reply.outside }),
       };
     },

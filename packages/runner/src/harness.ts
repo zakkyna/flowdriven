@@ -46,6 +46,7 @@ export type StepRequest = {
   project: string;
   requirements: Requirement[];
   routes?: Routed[];
+  approvedCalls?: { tool: string; input: Value }[];
   onOutside?: () => void;
   effort?: "low" | "medium" | "high";
   skill?: string;
@@ -62,6 +63,7 @@ export type StepResult = {
   outputs: Record<string, Value>;
   block?: string;
   noRetry?: string;
+  hold?: HeldCall;
   outside?: boolean;
   call?: CallInfo;
 };

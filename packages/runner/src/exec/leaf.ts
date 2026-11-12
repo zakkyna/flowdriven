@@ -9,8 +9,12 @@ import {
 } from "@flowdriven/sdk";
 import { defaultCommandRunner } from "../checks/command.ts";
 import { runChecks } from "../checks/run-checks.ts";
+import { visible, visibleLines } from "../claude/text.ts";
+import { callGrant } from "../connectors/grants.ts";
 import type { ResolvedDeps } from "../engine.ts";
+import type { HeldCall } from "../harness.ts";
 import type { RunRow, StepRow } from "../storage.ts";
+import { approvedCallsOf, HOLD_TEXT, labelOf, MAX_HOLDS } from "./held.ts";
 import { limits } from "./limits.ts";
 import { takesOutsideText } from "./outside.ts";
 import { raceAbort } from "./timeout.ts";
@@ -142,6 +146,7 @@ export async function runLeaf(
         block?: string;
         noRetry?: string;
         outside?: boolean;
+        hold?: HeldCall;
       };
       if (step.do === "builtin") {
         const fn = deps.builtins[step.builtin];
@@ -152,6 +157,7 @@ export async function runLeaf(
           outputs: await raceAbort(fn((step.with ?? {}) as Record<string, Value>, run), ctl.signal),
         };
       } else {
+        const approvedCalls = approvedCallsOf(store, run.id, step.id, itemKey);
         result = await raceAbort(
           harness.runStep({
             runId: run.id,
@@ -166,6 +172,7 @@ export async function runLeaf(
             project: run.project,
             requirements: step.uses.flatMap((id) => run.requirements.filter((r) => r.id === id)),
             routes: run.routes ?? [],
+            ...(approvedCalls.length ? { approvedCalls } : {}),
             onOutside: () => {
               row.outside = true;
               save();
@@ -186,6 +193,48 @@ export async function runLeaf(
         );
       }
       if (result.outside === true) row.outside = true;
+      if (result.hold) {
+        const hold = result.hold;
+        const grant = callGrant(hold.requirementId, hold.tool, hold.digest);
+        const holds = store
+          .listApprovals({ runId: run.id })
+          .filter((a) => a.kind === "risky_action" && a.stepId === step.id && a.itemKey === itemKey);
+        const pending = holds.find(
+          (a) => a.state === "pending" && a.approves.length === 1 && a.approves.at(0) === grant,
+        );
+        if (!pending && holds.length >= MAX_HOLDS) {
+          Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+          block(HOLD_TEXT.tooMany);
+          return "failed";
+        }
+        store.transaction(() => {
+          row.attempts.pop();
+          row.state = "waiting_approval";
+          save();
+          if (!pending) {
+            const createdAt = now().toISOString();
+            store.createApproval({
+              id: newId("ap"),
+              kind: "risky_action",
+              riskyAction: hold.action,
+              runId: run.id,
+              stepId: step.id,
+              itemKey,
+              summary: `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
+              payload: visibleLines(JSON.stringify(hold.input, null, 2), 4000),
+              call: { tool: hold.tool, input: hold.input },
+              approves: [grant],
+              onExpiry: "fail",
+              createdAt,
+              expiresAt: new Date(Date.parse(createdAt) + 86400000).toISOString(),
+              state: "pending",
+              ...(row.outside === true ? { outside: true } : {}),
+            });
+          }
+          store.updateRun(run.id, { state: "waiting_approval" });
+        });
+        return "halt";
+      }
       if (result.block !== undefined) {
         Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
         block(result.block);
