@@ -65,6 +65,7 @@ export interface TriggerService {
   stop(): void;
   tick(): Promise<void>;
   poke(): void;
+  pauseByRun(runId: string): void;
   settled(): Promise<void>;
 }
 export function createTriggerService(deps: TriggerDeps): TriggerService {
@@ -352,6 +353,34 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       return record(row, outcome, message);
     }
   }
+  function pauseRow(row: TriggerRow, flowName: string): void {
+    const pausedAt = deps.now().toISOString();
+    store.putTrigger({ ...row, enabled: false, pausedAt, recentRuns: [] });
+    close(row.flowId, row.index);
+    audit("trigger_paused", { flowId: row.flowId, index: row.index });
+    try {
+      deps.onPaused?.({ flowId: row.flowId, index: row.index, flowName, pausedAt });
+    } catch {
+      /* notification is optional */
+    }
+  }
+  function pauseByRun(runId: string): void {
+    try {
+      for (const candidate of store.listTriggers()) {
+        const row = store.getTrigger(candidate.flowId, candidate.index);
+        if (!row?.enabled || !row.recentRuns?.includes(runId)) continue;
+        const found = flowOf(row.flowId);
+        if (!found) continue;
+        try {
+          pauseRow(row, found.manifest.name);
+        } catch {
+          /* one row failing must not keep the others from pausing */
+        }
+      }
+    } catch {
+      /* pausing is best effort and never throws */
+    }
+  }
   function section(candidate: TriggerRow) {
     let row = store.getTrigger(candidate.flowId, candidate.index);
     if (!row?.enabled) return;
@@ -363,15 +392,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
         row.recentRuns?.length === 3 &&
         row.recentRuns.every((id) => store.getRun(id)?.state === "blocked")
       ) {
-        const pausedAt = deps.now().toISOString();
-        store.putTrigger({ ...row, enabled: false, pausedAt, recentRuns: [] });
-        close(row.flowId, row.index);
-        audit("trigger_paused", { flowId: row.flowId, index: row.index });
-        try {
-          deps.onPaused?.({ flowId: row.flowId, index: row.index, flowName: manifest.name, pausedAt });
-        } catch {
-          /* notification is optional */
-        }
+        pauseRow(row, manifest.name);
         return;
       }
       const trigger = manifest.triggers.at(row.index);
@@ -633,6 +654,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     setEnabled,
     tick,
     poke,
+    pauseByRun,
     settled: async () => {
       await Promise.resolve();
       await chain;

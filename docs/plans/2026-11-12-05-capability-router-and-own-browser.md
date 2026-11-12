@@ -956,7 +956,7 @@ Done by: Codex (gpt-6.1-terra), 2026-11-12, for the files of the task and tests 
 - `service/service.ts`: in the `onRunState` callback, when `mode === "live"` and `state === "blocked"` and `store.getRun(id)?.blockedReason === STOP.challenge` (from `claude/browser-post.ts`), call `triggers.pauseByRun(id)` before `triggers.poke()`.
 - `trigger-rig.ts` gains `pauseByRun` on the returned object by exposing `svc.pauseByRun`.
 
-- [ ] **Step 1: Write the failing tests** in `service-challenge.test.ts` (rig with a `schedule every 1m` flow):
+- [x] **Step 1: Write the failing tests** in `service-challenge.test.ts` (rig with a `schedule every 1m` flow):
   1. "pauseByRun pauses the trigger that started the run: the row is off with `pausedAt` and empty `recentRuns`, one `trigger_paused` audit line, `onPaused` once, the view is off with the Paused reason"
   2. "a run that no trigger started, a row that is already off and an unknown run id do nothing and do not throw"
   3. "of two triggers of one flow only the one that started the run is paused"
@@ -964,16 +964,18 @@ Done by: Codex (gpt-6.1-terra), 2026-11-12, for the files of the task and tests 
   5. "an error from onPaused is swallowed and the trigger is still paused"
   6. "the three-blocked-runs pause of plan 04 still works" (a short copy of the first test of `service-pause.test.ts`)
   7. "through the runner service: a run that becomes blocked with exactly the challenge sentence pauses its trigger at once, and one blocked with another sentence does not" (service in live mode with the scripted harness: `block` replies)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-challenge.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/triggers packages/runner/src/service`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-challenge.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/triggers packages/runner/src/service`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Pause a trigger at once when its run meets a login or robot check" -m "Assisted-by: Codex"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

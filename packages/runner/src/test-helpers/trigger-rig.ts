@@ -150,6 +150,7 @@ export async function triggerRig(
       utimesSync(path, time / 1000, time / 1000);
     },
     svc,
+    pauseByRun: (runId: string) => svc.pauseByRun(runId),
     engine,
     store,
     clock,

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { type Notice, operations, type RunnerTopic } from "@flowdriven/contracts";
+import { STOP } from "../claude/browser-post.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { createEngine, type Engine } from "../engine.ts";
 import type { HarnessAdapter } from "../harness.ts";
@@ -57,6 +58,13 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     onWeekly: notifier.onWeekly,
     onRunState: (id, state) => {
       notifier.onRunState(id, state);
+      if (mode === "live" && state === "blocked") {
+        try {
+          if (options.store.getRun(id)?.blockedReason === STOP.challenge) triggers.pauseByRun(id);
+        } catch {
+          /* pausing is best effort */
+        }
+      }
       if (mode === "live" && (state === "done" || state === "failed" || state === "blocked")) triggers.poke();
     },
   });
