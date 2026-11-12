@@ -2,6 +2,7 @@ import { RunnerError } from "@flowdriven/contracts";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { renderApp } from "../../test/render";
+import { ALLOW_NOT_ROUTED } from "./CapabilitiesPanel";
 
 const builder = "#/builder/dev.example.job-review";
 const flowId = "dev.example.job-review";
@@ -65,7 +66,9 @@ test("a dropped row says Not available with its reason, and the templates are be
   expect(summary.tagName).toBe("SUMMARY");
   const details = summary.closest("details");
   expect(details?.hasAttribute("open")).toBe(false);
-  expect(within(details as HTMLElement).getByText("https://www.upwork.com/jobs/~{id}")).toBeTruthy();
+  expect(
+    within(details as HTMLElement).getByText("https://www.upwork.com/jobs/~{id:[0-9a-z]{18,24}}"),
+  ).toBeTruthy();
 });
 test("the caps line and the triggers line are shown for the job-alert flow", async () => {
   renderApp(builder, { scenario: "looped" });
@@ -158,4 +161,53 @@ test("the section sits between What this flow does and Triggers, and its heading
   const after = await screen.findByRole("heading", { name: "Triggers" });
   expect(before.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(heading.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+const NOT_ROUTED =
+  "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
+test("a web row that is not routed shows the not-routed sentence and no Allow button", async () => {
+  const { client } = renderApp(builder, { scenario: "looped" });
+  const original = client.call.bind(client);
+  vi.spyOn(client, "call").mockImplementation((async (name: string, input: unknown) => {
+    const answer = await original(name as never, input as never);
+    if (name !== "flows.capabilities") return answer;
+    const caps = answer as { rows: Record<string, unknown>[] };
+    return {
+      ...caps,
+      rows: caps.rows.map((row) =>
+        row.type === "web"
+          ? {
+              requirementId: row.requirementId,
+              type: "web",
+              sentence: row.sentence,
+              routed: false,
+              reason: "This Claude Code cannot use Chrome.",
+              away: false,
+              details: [],
+            }
+          : row,
+      ),
+    };
+  }) as typeof client.call);
+  expect(ALLOW_NOT_ROUTED).toBe(NOT_ROUTED);
+  const view = await section();
+  const notice = await view.findByText(NOT_ROUTED);
+  expect(notice.closest("p")?.querySelector("svg")).not.toBeNull();
+  expect(view.queryByRole("button", { name: "Allow" })).toBeNull();
+  expect(view.queryByText("This flow cannot run until you allow this.")).toBeNull();
+});
+test("Allow sends the hash of the capabilities answer on the screen", async () => {
+  const { client } = renderApp(builder, { scenario: "looped" });
+  const newer = `sha256:${"b".repeat(64)}`;
+  const original = client.call.bind(client);
+  vi.spyOn(client, "call").mockImplementation((async (name: string, input: unknown) => {
+    const answer = await original(name as never, input as never);
+    return name === "flows.get" ? { ...(answer as object), hash: newer } : answer;
+  }) as typeof client.call);
+  const view = await section();
+  const shown = flowHash(client);
+  expect(shown).not.toBe(newer);
+  const spy = vi.spyOn(client, "call");
+  fireEvent.click(view.getByRole("button", { name: "Allow" }));
+  await waitFor(() => expect(spy).toHaveBeenCalledWith("flows.allowCapabilities", { flowId, hash: shown }));
+  expect(spy).not.toHaveBeenCalledWith("flows.allowCapabilities", { flowId, hash: newer });
 });

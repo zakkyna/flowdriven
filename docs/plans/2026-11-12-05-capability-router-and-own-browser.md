@@ -1436,23 +1436,25 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Present assertions that change:** the assertions that pin the Details of a web row to the shortened form `{name}` pin the source text instead; no other present assertion changes.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. `capabilities.test.ts`: "allow is refused with the not-routed sentence while a used web row is dropped, and accepted once it is routed" (facts without the Chrome option, then with it)
   2. `capabilities.test.ts`: "a web requirement that no step uses does not stop the allow"
   3. `capabilities.test.ts`: "the details of a web row show each template as the flow wrote it"
   4. `Capabilities.test.tsx`: "a web row that is not routed shows the not-routed sentence and no Allow button"
   5. `Capabilities.test.tsx`: "Allow sends the hash of the capabilities answer on the screen" (a `flows.get` answer with a newer hash than the capabilities answer; the call carries the capabilities hash)
   6. `packages/fixtures/src/capabilities.test.ts`: the fixture rows show the source text of the templates
-- [ ] **Step 2: Run** the three test files. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/service packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run** the three test files. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/service packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages apps
 git commit -m "Bind the allow to the preview on the screen and refuse it while the web route is missing" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

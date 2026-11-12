@@ -185,7 +185,7 @@ export function BuilderScreen({ flowId, isNew }: { flowId?: string; isNew?: bool
               {id && capabilities.data && capabilities.data.rows.length > 0 && (
                 <CapabilitiesPanel
                   flowId={id}
-                  hash={detail.hash}
+                  hash={capabilities.data.hash}
                   capabilities={capabilities.data}
                   reload={capabilities.reload}
                 />

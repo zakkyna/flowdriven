@@ -30,7 +30,7 @@ import {
   type FlowRecord,
   type Scenario,
 } from "./state";
-import { capabilitiesOf } from "./story/capabilities";
+import { ALLOW_NOT_ROUTED, capabilitiesOf, webNotRouted } from "./story/capabilities";
 import { triggerStatuses } from "./story/triggers";
 
 export const PREVIEW_AGENT_REPLY =
@@ -322,6 +322,7 @@ export function createFixtureRunnerClient(
           "not_allowed",
           "This flow changed since you looked at it. Reload and check it again.",
         );
+      if (webNotRouted(f)) throw new RunnerError("not_allowed", ALLOW_NOT_ROUTED);
       state.capabilityConsents[flowId] = { hash };
       return capabilitiesOf(f, state.capabilityConsents[flowId]);
     },

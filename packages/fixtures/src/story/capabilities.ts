@@ -31,8 +31,9 @@ function isProjectRef(ref: string): boolean {
 function hostOf(pattern: string): string | undefined {
   return /^https:\/\/([a-z0-9.-]+)(?:\/|$)/.exec(pattern)?.[1];
 }
+// The template as the flow wrote it, cut to the 300 characters a row may hold.
 function describe(pattern: string): string {
-  return pattern.replace(/\{([^:{}]+):\[[^\]]*\]\{\d+,\d+\}\}/g, "{$1}");
+  return pattern.slice(0, 300);
 }
 function sentenceOf(req: Requirement): string {
   if (isOwnRead(req)) {
@@ -45,6 +46,16 @@ function sentenceOf(req: Requirement): string {
 }
 function leaves(steps: Step[]): Step[] {
   return steps.flatMap((step) => ("loop" in step && step.loop ? step.loop.steps : [step]));
+}
+
+export const ALLOW_NOT_ROUTED =
+  "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
+
+// True when a step uses a web requirement that has no route in the fixture rows.
+export function webNotRouted(flow: FlowRecord): boolean {
+  const manifest = flow.manifest;
+  const used = new Set(leaves(manifest.steps).flatMap((step) => step.uses));
+  return manifest.requirements.some((req) => req.type === "web" && used.has(req.id) && !isOwnRead(req));
 }
 
 export function capabilitiesOf(flow: FlowRecord, consent: { hash: string } | undefined): FlowCapabilities {

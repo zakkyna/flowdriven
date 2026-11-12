@@ -3,7 +3,7 @@ import { FlowManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
-import { createCapabilities } from "./capabilities.ts";
+import { ALLOW_NOT_ROUTED, createCapabilities } from "./capabilities.ts";
 import { wrapStore } from "./events.ts";
 import { createRunnerService } from "./service.ts";
 
@@ -92,7 +92,7 @@ test("the web row has the provider, `FlowDriven hook in Claude Code`, `unofficia
     away: true,
     sentence: "Reads pages on www.upwork.com in your own browser, at most 3 per run and 10 a day.",
     cost: "Adds about 12,000 tokens to each call of a step that uses it.",
-    details: ["https://www.upwork.com/jobs/{job}"],
+    details: ["https://www.upwork.com/jobs/{job:[a-z]{1,20}}"],
   });
   expect(rows.at(1)).toMatchObject({
     cost: "Adds about 10,600 tokens to each call of a step that uses it.",
@@ -171,7 +171,13 @@ test("allow and withdraw write the audit lines `capabilities_allowed` and `capab
   expect(marks).toEqual(["flows", "readiness", "flows", "readiness"]);
 });
 test("through the dispatcher the three operations validate their input and the outputs parse against the contract", async () => {
-  const { store } = await setup();
+  // The service of this test has no harness facts, so the web row is dropped; the step uses the skill
+  // requirement so that the allow has nothing routed to refuse.
+  const { store } = await setup(
+    base(undefined, {
+      steps: [{ id: "worker", do: "worker", instructions: "Secret instructions", uses: ["skill"] }],
+    }),
+  );
   const service = createRunnerService({ store, dataDir: "/tmp/flowdriven-capabilities", mode: "demo", now });
   for (const [name, input] of [
     ["flows.capabilities", { flowId: "local.test" }],
@@ -185,4 +191,79 @@ test("through the dispatcher the three operations validate their input and the o
     service.call("flows.allowCapabilities", { flowId: "local.test", hash: "bad" }),
   ).rejects.toMatchObject({ code: "invalid_input" });
   service.stop();
+});
+test("allow is refused with the not-routed sentence while a used web row is dropped, and accepted once it is routed", async () => {
+  const { store } = await setup();
+  const facts = { hooks: true, chrome: false };
+  const capabilities = createCapabilities({ store, now, facts: () => ({ ...facts }) });
+  expect(ALLOW_NOT_ROUTED).toBe(
+    "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.",
+  );
+  expect(capabilities.get("local.test").rows.at(0)?.routed).toBe(false);
+  expect(() => capabilities.allow("local.test", hash)).toThrow(
+    expect.objectContaining({ code: "not_allowed", message: ALLOW_NOT_ROUTED }),
+  );
+  expect(capabilities.consentOf("local.test")).toBe("none");
+  expect(store.listAudit()).toEqual([]);
+  facts.hooks = false;
+  facts.chrome = true;
+  expect(() => capabilities.allow("local.test", hash)).toThrow(
+    expect.objectContaining({ code: "not_allowed", message: ALLOW_NOT_ROUTED }),
+  );
+  facts.hooks = true;
+  expect(capabilities.allow("local.test", hash).consent).toBe("given");
+  expect(store.listAudit().map((entry) => entry.kind)).toEqual(["capabilities_allowed"]);
+});
+test("allow keeps its other checks first: a wrong hash is refused with the changed sentence even while the web row is dropped", async () => {
+  const { store } = await setup();
+  const capabilities = createCapabilities({ store, now, facts: () => ({ hooks: true, chrome: false }) });
+  expect(() => capabilities.allow("local.test", hash2)).toThrow(
+    expect.objectContaining({
+      message: "This flow changed since you looked at it. Reload and check it again.",
+    }),
+  );
+});
+test("a web requirement that no step uses does not stop the allow", async () => {
+  const manifest = FlowManifest.parse({
+    format: "flowdriven-flow/1.1",
+    id: "local.test",
+    name: "Secret name",
+    kind: "light",
+    steps: [{ id: "worker", do: "worker", instructions: "Secret instructions", uses: ["path"] }],
+    requirements: [web(), { id: "path", type: "path", ref: "notes" }, { id: "harness", type: "harness" }],
+  });
+  const { store } = await setup(manifest);
+  const capabilities = createCapabilities({ store, now, facts: () => ({ hooks: true, chrome: false }) });
+  expect(capabilities.get("local.test").rows.at(0)?.routed).toBe(false);
+  expect(capabilities.allow("local.test", hash).consent).toBe("given");
+});
+test("a used web requirement inside a loop is checked too", async () => {
+  const manifest = FlowManifest.parse({
+    format: "flowdriven-flow/1.1",
+    id: "local.test",
+    name: "Secret name",
+    kind: "light",
+    steps: [
+      {
+        id: "each",
+        for_each: "items",
+        as: "item",
+        steps: [{ id: "page", do: "worker", instructions: "Secret instructions", uses: ["web"] }],
+      },
+    ],
+    requirements: [web(), { id: "harness", type: "harness" }],
+  });
+  const { store } = await setup(manifest);
+  const capabilities = createCapabilities({ store, now, facts: () => ({ hooks: true, chrome: false }) });
+  expect(() => capabilities.allow("local.test", hash)).toThrow(
+    expect.objectContaining({ message: ALLOW_NOT_ROUTED }),
+  );
+});
+test("the details of a web row show each template as the flow wrote it", async () => {
+  const patterns = [
+    "https://www.upwork.com/jobs/~{id:[0-9a-z]{18,24}}",
+    "https://example.com/a/{slug:[a-z-]{1,40}}/p/{n:[0-9]{1,3}}",
+  ];
+  const { capabilities } = await setup(base([web(patterns)]));
+  expect(capabilities.get("local.test").rows.at(0)?.details).toEqual(patterns);
 });

@@ -17,7 +17,7 @@ afterEach(() => {
   cleanup();
 });
 const hash = `sha256:${"1".repeat(64)}`;
-const manifest = (own = true) =>
+const manifest = (own = true, usesSkill = false) =>
   FlowManifest.parse({
     format: "flowdriven-flow/1.1",
     id: "local.readiness",
@@ -28,6 +28,7 @@ const manifest = (own = true) =>
           { id: "web", type: "web", mode: "read", session: "own", url_patterns: ["https://example.com/"] },
           { id: "managed", type: "web", mode: "read", session: "managed" },
           { id: "path", type: "path", ref: "notes" },
+          ...(usesSkill ? [{ id: "skill", type: "skill" }] : []),
         ]
       : [{ id: "path", type: "path", ref: "notes" }],
     steps: [
@@ -36,12 +37,19 @@ const manifest = (own = true) =>
         do: "worker",
         instructions: "Work",
         checks: [{ type: "user" }],
-        uses: own ? ["web"] : ["path"],
+        uses: usesSkill ? ["skill"] : own ? ["web"] : ["path"],
       },
     ],
     triggers: [{ kind: "schedule", every: "1h" }],
   });
-async function setup(own = true, webCheck?: () => { chromeFlag: boolean; hostFile: boolean }) {
+// `usesSkill`: the step uses a skill requirement instead of the web one. The service of these tests has no
+// harness facts, so a used web row is dropped and flows.allowCapabilities refuses it; a used skill row needs
+// the allow too and leaves nothing routed to refuse.
+async function setup(
+  own = true,
+  webCheck?: () => { chromeFlag: boolean; hostFile: boolean },
+  usesSkill = false,
+) {
   const store = await openSqliteStore(":memory:");
   const service = createRunnerService({
     store,
@@ -53,7 +61,7 @@ async function setup(own = true, webCheck?: () => { chromeFlag: boolean; hostFil
     triggers: { every: () => () => {} },
   });
   active.push({ store, service });
-  service.engine.registerFlow(manifest(own), hash);
+  service.engine.registerFlow(manifest(own, usesSkill), hash);
   return service;
 }
 
@@ -111,7 +119,7 @@ test("without a check function the report is the present one", async () => {
   ).toBe(true);
 });
 test("triggers.setEnabled(true) for a flow that needs the allow is refused until it is given", async () => {
-  const service = await setup();
+  const service = await setup(true, undefined, true);
   const input = { flowId: "local.readiness", index: 0, enabled: true, hash };
   await expect(service.call("triggers.setEnabled", input)).rejects.toMatchObject({
     code: "not_allowed",

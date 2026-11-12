@@ -37,7 +37,7 @@ test("the job-alert flow has a routed web row, a routed path row and two dropped
     labelSentence: UNOFFICIAL,
     away: true,
     cost: "Adds about 12,000 tokens to each call of a step that uses it.",
-    details: ["https://www.upwork.com/jobs/~{id}"],
+    details: ["https://www.upwork.com/jobs/~{id:[0-9a-z]{18,24}}"],
   });
   expect(path?.sentence).toBe("Reads and writes files in job-review.");
   expect(path?.cost).toBe("Adds about 10,600 tokens to each call of a step that uses it.");
@@ -154,4 +154,30 @@ test("the readiness report of the job-alert flow has an ok Chrome row with an un
     route: { via: "Claude in Chrome inside Claude Code", risk: "unofficial", note: UNOFFICIAL },
   });
   expect(report.ready).toBe(true);
+});
+
+test("the fixture rows show the source text of the templates, with their classes and lengths", () => {
+  const found = record(looped());
+  const web = capabilitiesOf(found, undefined).rows.find((row) => row.requirementId === "jobs_web");
+  expect(web?.details).toEqual(["https://www.upwork.com/jobs/~{id:[0-9a-z]{18,24}}"]);
+  expect(web?.details.join("")).not.toBe("https://www.upwork.com/jobs/~{id}");
+});
+
+test("the fixture allow is refused while a used web requirement has no route, and accepted for the routed one", async () => {
+  const client = looped();
+  const found = record(client);
+  const req = found.manifest.requirements.find((item) => item.id === "jobs_web");
+  if (!req) throw new Error("The web requirement is missing.");
+  req.mode = "act";
+  await expect(
+    client.call("flows.allowCapabilities", { flowId: FLOW, hash: found.hash }),
+  ).rejects.toMatchObject({
+    code: "not_allowed",
+    message: "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.",
+  });
+  expect(client.state.capabilityConsents[FLOW]).toBeUndefined();
+  req.mode = "read";
+  expect((await client.call("flows.allowCapabilities", { flowId: FLOW, hash: found.hash })).consent).toBe(
+    "given",
+  );
 });

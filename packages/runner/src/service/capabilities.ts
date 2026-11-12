@@ -1,10 +1,12 @@
 import { FlowCapabilities, RunnerError } from "@flowdriven/contracts";
-import { describeTemplate, FlowManifest, parseTemplate } from "@flowdriven/sdk";
+import { FlowManifest, parseTemplate } from "@flowdriven/sdk";
 import { visible } from "../claude/text.ts";
 import { COST, capabilitySentence, needsAllow, routeAll } from "../router/route.ts";
 import type { HarnessFacts } from "../router/types.ts";
 import type { Store } from "../storage.ts";
 
+export const ALLOW_NOT_ROUTED =
+  "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
 const PREVIEW = "This flow declares more than the preview can show.";
 export function createCapabilities(o: { store: Store; now: () => Date; facts: () => HarnessFacts }) {
   function flow(flowId: string) {
@@ -30,7 +32,7 @@ export function createCapabilities(o: { store: Store; now: () => Date; facts: ()
       for (const pattern of req.url_patterns ?? []) {
         const parsed = parseTemplate(pattern);
         if (!parsed.ok) throw new RunnerError("not_allowed", PREVIEW);
-        details.push(visible(describeTemplate(parsed.template), 300));
+        details.push(visible(parsed.template.source, 300));
       }
       templates.set(req.id, details);
     }
@@ -75,6 +77,16 @@ export function createCapabilities(o: { store: Store; now: () => Date; facts: ()
         "not_allowed",
         "This flow changed since you looked at it. Reload and check it again.",
       );
+    // Fail closed: a web requirement that a step uses must have a routed row, read now like `get` does.
+    const manifest = FlowManifest.parse(flow(flowId).manifest);
+    const used = new Set(
+      manifest.steps.flatMap((step) => ("steps" in step ? step.steps : [step]).flatMap((leaf) => leaf.uses)),
+    );
+    for (const req of manifest.requirements) {
+      if (req.type !== "web" || !used.has(req.id)) continue;
+      const row = preview.rows.find((item) => item.requirementId === req.id);
+      if (!row || !row.routed) throw new RunnerError("not_allowed", ALLOW_NOT_ROUTED);
+    }
     const at = o.now().toISOString();
     o.store.putCapabilityConsent({ flowId, hash, at });
     o.store.appendAudit({ at, kind: "capabilities_allowed", detail: { flowId, hash } });

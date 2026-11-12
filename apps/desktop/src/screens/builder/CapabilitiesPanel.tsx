@@ -6,6 +6,11 @@ import { Icon } from "../../ui/icons";
 import { Badge, ToneIcon } from "../../ui/StatusBadge";
 import styles from "./Builder.module.css";
 
+// The same sentence as ALLOW_NOT_ROUTED in the runner (service/capabilities.ts); the contract has no
+// place for it, so Capabilities.test.tsx and capabilities.test.ts pin both to the same words.
+export const ALLOW_NOT_ROUTED =
+  "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
+
 function capsLine(caps: FlowCapabilities["caps"]): string {
   return caps.maxItems === undefined
     ? `Up to ${caps.maxRunsPerDay} runs a day.`
@@ -96,6 +101,7 @@ export function CapabilitiesPanel({
     setBusy(false);
   }
   const { consent } = capabilities;
+  const webMissing = capabilities.rows.some((row) => row.type === "web" && !row.routed);
   return (
     <section aria-label="What this flow may touch" className={styles.capPanel}>
       <h2 id="capabilities-heading">What this flow may touch</h2>
@@ -128,6 +134,11 @@ export function CapabilitiesPanel({
                 Withdraw
               </Button>
             </>
+          ) : webMissing ? (
+            <span className={styles.capGiven}>
+              <ToneIcon icon="circle-slash" tone="neutral" />
+              {ALLOW_NOT_ROUTED}
+            </span>
           ) : (
             <>
               <span className={styles.capGiven}>
