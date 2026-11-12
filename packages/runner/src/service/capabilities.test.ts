@@ -90,7 +90,7 @@ test("the web row has the provider, `FlowDriven hook in Claude Code`, `unofficia
     label: "unofficial",
     labelSentence: "This uses your personal browser. Every site you are logged into is reachable from it.",
     away: true,
-    sentence: "Reads pages on www.upwork.com in your own Chrome, at most 3 per run and 10 a day.",
+    sentence: "Reads pages on www.upwork.com in your own browser, at most 3 per run and 10 a day.",
     cost: "Adds about 12,000 tokens to each call of a step that uses it.",
     details: ["https://www.upwork.com/jobs/{job}"],
   });
@@ -105,7 +105,7 @@ test("eight templates on eight hosts: the sentence lists every host and the deta
   const row = capabilities.get("local.test").rows.at(0);
   expect(row?.details).toEqual(patterns);
   expect(row?.sentence).toBe(
-    `Reads pages on ${patterns.map((p) => new URL(p).host).join(", ")} in your own Chrome, at most 3 per run and 10 a day.`,
+    `Reads pages on ${patterns.map((p) => new URL(p).host).join(", ")} in your own browser, at most 3 per run and 10 a day.`,
   );
 });
 test("a flow with nine templates, an unparsable template or 51 rows is refused with `This flow declares more than the preview can show.` by get and by allow", async () => {

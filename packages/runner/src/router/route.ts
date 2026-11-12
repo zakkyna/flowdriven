@@ -93,7 +93,7 @@ export function capabilitySentence(req: Requirement): string {
     const { perRun, perDay } = webRates(req);
     return `Reads pages on ${capabilityHosts(req)
       .map((host) => visible(host, 253))
-      .join(", ")} in your own Chrome, at most ${perRun} per run and ${perDay} a day.`;
+      .join(", ")} in your own browser, at most ${perRun} per run and ${perDay} a day.`;
   }
   if (req.type === "path")
     return `Reads${req.access === "read_write" ? " and writes" : ""} files in ${visible(req.ref ?? "the project folder", 120)}.`;

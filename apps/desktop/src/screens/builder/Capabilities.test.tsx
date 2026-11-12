@@ -27,7 +27,7 @@ test("lists the Chrome row, the folder row and two dropped rows, each with an ic
   expect(items).toHaveLength(4);
   const chrome = within(items[0] as HTMLElement);
   const folder = within(items[1] as HTMLElement);
-  expect(chrome.getByText(/^Reads pages on www\.upwork\.com in your own Chrome/)).toBeTruthy();
+  expect(chrome.getByText(/^Reads pages on www\.upwork\.com in your own browser/)).toBeTruthy();
   expect(folder.getByText("Reads and writes files in job-review.")).toBeTruthy();
   for (const routed of [chrome, folder]) {
     expect(routed.getByText(/^Provider: /)).toBeTruthy();
@@ -42,7 +42,7 @@ test("lists the Chrome row, the folder row and two dropped rows, each with an ic
 });
 test("the Chrome row says it is unofficial with the personal browser sentence, who enforces it, that it can run while away and its token cost", async () => {
   renderApp(builder, { scenario: "looped" });
-  const chrome = await rowOf("in your own Chrome");
+  const chrome = await rowOf("in your own browser");
   expect(chrome.getByText("Provider: Claude in Chrome inside Claude Code")).toBeTruthy();
   expect(chrome.getByText("Enforced by: FlowDriven hook in Claude Code")).toBeTruthy();
   expect(chrome.getByText("Unofficial")).toBeTruthy();
@@ -60,7 +60,7 @@ test("a dropped row says Not available with its reason, and the templates are be
   const dropped = await rowOf("A connector");
   expect(dropped.getByText("Not available: FlowDriven cannot provide this yet.")).toBeTruthy();
   expect(dropped.queryByText("Details")).toBeNull();
-  const chrome = await rowOf("in your own Chrome");
+  const chrome = await rowOf("in your own browser");
   const summary = chrome.getByText("Details");
   expect(summary.tagName).toBe("SUMMARY");
   const details = summary.closest("details");

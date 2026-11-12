@@ -1351,17 +1351,19 @@ Nothing else that names Chrome changes: `STOP.chromeDown`, `DROP.noChrome`, the 
 
 **Interface:** `browser.ts`: the `target` of a refused address is `visible(input.url, 300)` (from `./text.ts`) instead of the first 300 characters of the raw text.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. in `packages/runner/src/claude/decide-browser.test.ts`: "a refused address is stored as visible text of at most 300 characters" (an address with a line break and with U+202E built by `String.fromCodePoint`; the target holds neither character and is at most 300 characters long)
   2. change the assertions that pin the four sentences
-- [ ] **Step 2: Run** the changed test files. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run** the changed test files. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages apps
 git commit -m "Say your own browser on the screens and in the prompt, and store a refused address as visible text" -m "Assisted-by: Claude Code"
 ```
 
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.

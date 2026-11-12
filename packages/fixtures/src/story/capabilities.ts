@@ -37,7 +37,7 @@ function describe(pattern: string): string {
 function sentenceOf(req: Requirement): string {
   if (isOwnRead(req)) {
     const hosts = [...new Set((req.url_patterns ?? []).flatMap((pattern) => hostOf(pattern) ?? []))];
-    return `Reads pages on ${hosts.join(", ")} in your own Chrome, at most ${req.rate?.per_run ?? 3} per run and ${req.rate?.per_day ?? 10} a day.`;
+    return `Reads pages on ${hosts.join(", ")} in your own browser, at most ${req.rate?.per_run ?? 3} per run and ${req.rate?.per_day ?? 10} a day.`;
   }
   if (req.type === "path")
     return `Reads${req.access === "read_write" ? " and writes" : ""} files in ${req.ref || "the project folder"}.`;

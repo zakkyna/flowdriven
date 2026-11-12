@@ -1,6 +1,7 @@
 import { join } from "node:path";
 
-export const WEB_FIX = "Install the Claude extension in Chrome, then run `claude --chrome` once.";
+export const WEB_FIX =
+  "Install the Claude extension in your browser (Chrome, or another Chromium browser such as Brave), then run `claude --chrome` once.";
 export function nativeHostPath(home: string): string {
   return join(
     home,
@@ -14,7 +15,8 @@ export function webReadiness(i: { chromeFlag: boolean; hostFile: boolean }): {
   return i.chromeFlag && i.hostFile
     ? {
         state: "ok",
-        detail: "Claude Code can use Chrome and the extension is installed. Chrome itself must be open.",
+        detail:
+          "Claude Code can use the browser and the extension's host is installed. The browser with the Claude extension must be open.",
       }
     : { state: "missing", detail: WEB_FIX };
 }

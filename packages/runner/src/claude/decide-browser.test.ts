@@ -166,6 +166,18 @@ test("a PostToolUse request is still refused as a bad request", () => {
     reason: DENY.badRequest,
   });
 });
+test("a refused address is stored as visible text of at most 300 characters", () => {
+  const bad = `https://evil.example/a${String.fromCodePoint(0x0a)}b${String.fromCodePoint(0x202e)}c${"x".repeat(400)}`;
+  const result = decision("navigate", { url: bad, tabId: 7 });
+  expect(result).toMatchObject({ allow: false, reason: BROWSER_DENY.address });
+  const target = "target" in result && typeof result.target === "string" ? result.target : "";
+  expect(target.length).toBeGreaterThan(0);
+  expect(target.length).toBeLessThanOrEqual(300);
+  expect(target).not.toContain(String.fromCodePoint(0x0a));
+  expect(target).not.toContain(String.fromCodePoint(0x202e));
+  expect(target).toContain("<U+000A>");
+  expect(target).toContain("<U+202E>");
+});
 test("the denied target is cut to 300 characters and the tool name passes visible", () => {
   expect(decision("navigate", { url: "x".repeat(400), tabId: 7 })).toMatchObject({ target: "x".repeat(300) });
   expect(decision(`bad${String.fromCodePoint(0x202e)}`)).toMatchObject({

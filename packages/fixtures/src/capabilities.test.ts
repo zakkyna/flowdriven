@@ -29,7 +29,7 @@ test("the job-alert flow has a routed web row, a routed path row and two dropped
   expect(web).toEqual({
     requirementId: "jobs_web",
     type: "web",
-    sentence: "Reads pages on www.upwork.com in your own Chrome, at most 3 per run and 10 a day.",
+    sentence: "Reads pages on www.upwork.com in your own browser, at most 3 per run and 10 a day.",
     routed: true,
     provider: "Claude in Chrome inside Claude Code",
     enforcedBy: "FlowDriven hook in Claude Code",

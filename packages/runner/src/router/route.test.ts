@@ -134,10 +134,10 @@ describe("capability router", () => {
       ),
     ).toBe(true);
   });
-  test("capabilitySentence for the spec's Upwork requirement is `Reads pages on www.upwork.com in your own Chrome, at most 3 per run and 10 a day.`; with eight templates on eight hosts every host is in the sentence, in order, and a repeated host appears once", () => {
+  test("capabilitySentence for the spec's Upwork requirement is `Reads pages on www.upwork.com in your own browser, at most 3 per run and 10 a day.`; with eight templates on eight hosts every host is in the sentence, in order, and a repeated host appears once", () => {
     const job = FlowManifest.parse(upworkJobReview).requirements.find((r) => r.id === "jobs_web");
     expect(job && capabilitySentence(job)).toBe(
-      "Reads pages on www.upwork.com in your own Chrome, at most 3 per run and 10 a day.",
+      "Reads pages on www.upwork.com in your own browser, at most 3 per run and 10 a day.",
     );
     const hosts = Array.from({ length: 8 }, (_, i) => `host${i}.example.com`);
     const r = web({
@@ -145,7 +145,7 @@ describe("capability router", () => {
     });
     expect(capabilityHosts(r)).toEqual(hosts);
     expect(capabilitySentence(r)).toBe(
-      `Reads pages on ${hosts.join(", ")} in your own Chrome, at most 3 per run and 10 a day.`,
+      `Reads pages on ${hosts.join(", ")} in your own browser, at most 3 per run and 10 a day.`,
     );
   });
   test("capabilitySentence uses the hosts of the templates, not the domains field, and a hostile folder with control and bidi characters is shown cleaned", () => {

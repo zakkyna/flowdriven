@@ -21,7 +21,7 @@ export function buildPrompt(input: {
       : `Your working folder is ${input.cwd}. Work only inside it.`,
     ...(input.browser
       ? [
-          "This step may read web pages in the owner's own Chrome, and nothing else in the browser.",
+          "This step may read web pages in the owner's own browser, and nothing else in it.",
           "To read a page: call tabs_context_mcp with createIfEmpty set to true to get your tab, call navigate with an address of one of the forms below and that tab's id, call get_page_text with the same tab id, and close the tab with tabs_close_mcp when you are done. Use only tab ids that those calls gave you, and open at most 2 tabs.",
           `Allowed address forms: ${input.browser.templates.join(", ")}.`,
           "Clicking, typing, scrolling, screenshots and every other browser tool are refused.",

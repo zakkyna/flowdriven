@@ -60,7 +60,8 @@ async function setup(own = true, webCheck?: () => { chromeFlag: boolean; hostFil
 test("webReadiness is ok with the flag and the file and missing with the fix text otherwise (three cases)", () => {
   expect(webReadiness({ chromeFlag: true, hostFile: true })).toEqual({
     state: "ok",
-    detail: "Claude Code can use Chrome and the extension is installed. Chrome itself must be open.",
+    detail:
+      "Claude Code can use the browser and the extension's host is installed. The browser with the Claude extension must be open.",
   });
   for (const value of [
     { chromeFlag: false, hostFile: true },
@@ -83,7 +84,7 @@ test("readiness.check marks the own-browser web row ok or missing with the unoff
     expect(rows.at(0)).toMatchObject({
       state: flag ? "ok" : "missing",
       detail: flag
-        ? "Claude Code can use Chrome and the extension is installed. Chrome itself must be open."
+        ? "Claude Code can use the browser and the extension's host is installed. The browser with the Claude extension must be open."
         : WEB_FIX,
       route: {
         via: "Claude in Chrome inside Claude Code",

@@ -1,4 +1,5 @@
 import { matchTemplate, type UrlTemplate } from "@flowdriven/sdk";
+import { visible } from "./text.ts";
 
 export const CHROME_PREFIX = "mcp__claude-in-chrome__";
 export const MAX_PAGE_CHARS = 40_000;
@@ -65,7 +66,7 @@ export function decideBrowser(
   if (name === "navigate") {
     if (typeof input.url !== "string") return deny(BROWSER_DENY.part);
     if (!browser.templates.some((template) => matchTemplate(template, input.url as string) !== undefined))
-      return { ...deny(BROWSER_DENY.address), target: input.url.slice(0, 300) };
+      return { ...deny(BROWSER_DENY.address), target: visible(input.url, 300) };
     if (
       !(Number.isSafeInteger(state.counts.run) && state.counts.run >= 0) ||
       state.counts.run >= browser.perRun
