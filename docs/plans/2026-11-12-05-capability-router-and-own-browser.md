@@ -1172,17 +1172,19 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** the pattern of `trigger-walk.ts` and `trigger-walk-steps.ts` (plan 04). `browserWalkPaths(root: string): { output: string; dataDir: string; flowDir: string }` under `<root>/.workflow/scratch/plan-05/walk` (`pictures`, `app data`, `flow`); `BROWSER_WALK_STEPS: { name: string; hash: string; waitFor: string[]; shot: boolean }[]` with the entries `{ name: "touch-before", hash: "#/builder/local.chrome-check", waitFor: ["What this flow may touch", "Allow"], shot: true }`, `{ name: "touch-after", hash: "#/builder/local.chrome-check", waitFor: ["Allowed for this version", "Withdraw"], shot: true }` and `{ name: "run-page", hash: "#/runs", waitFor: ["Chrome check"], shot: true }`; `isPageRunDone(runs: unknown): boolean` (true when a run of the flow `local.chrome-check` is `done`, `blocked` or `failed`). `browser-walk.ts` writes a check flow into `flowDir` (format 1.1, id `local.chrome-check`, name "Chrome check", one `web` requirement `{ id: page, type: web, mode: read, session: own, url_patterns: ["https://example.com/"], rate: { per_run: 2 } }`, one `worker` step that uses it with instructions that open `https://example.com/`, read the page, return its heading as an output and, as a second try, ask for one click on the page, which the hook must refuse), imports it with `flows.import`, presses "Allow" in the window by script, starts the run with `flows.run`, waits for the step to end, and writes the pictures. It never runs by itself; the executor only writes the files and the test.
 
-- [ ] **Step 1: Write the failing test** `browser-walk-steps.test.ts`: 1. "the walk paths are distinct and under the plan 05 scratch folder"; 2. "the steps have unique names and valid routes" (`parseRoute(step.hash).screen` is not `not_found`); 3. "only a terminal run of local.chrome-check is complete" (a table like `isTriggeredRunDone`'s: done, blocked and failed are complete; running, another flow, null, `{}` are not).
-- [ ] **Step 2: Run:** `pnpm vitest run apps/desktop/electron/browser-walk-steps.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the steps file and `browser-walk.ts`; check that `pnpm typecheck` passes (the walk file is compiled but not run).
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 1: Write the failing test** `browser-walk-steps.test.ts`: 1. "the walk paths are distinct and under the plan 05 scratch folder"; 2. "the steps have unique names and valid routes" (`parseRoute(step.hash).screen` is not `not_found`); 3. "only a terminal run of local.chrome-check is complete" (a table like `isTriggeredRunDone`'s: done, blocked and failed are complete; running, another flow, null, `{}` are not).
+- [x] **Step 2: Run:** `pnpm vitest run apps/desktop/electron/browser-walk-steps.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the steps file and `browser-walk.ts`; check that `pnpm typecheck` passes (the walk file is compiled but not run).
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/electron
 git commit -m "Add the walk for reading a page through the owner's Chrome" -m "Assisted-by: Codex"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
