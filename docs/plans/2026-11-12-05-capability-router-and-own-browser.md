@@ -1543,20 +1543,21 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Present assertions that change:** the test in `Capabilities.test.tsx` that pins the panel's own constant to the runner's sentence goes away with the constant; in its place the panel test below reads the sentence from the read model. The runner test that pins `ALLOW_NOT_ROUTED` to its words stays.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. contract test: "allowBlocked is optional, and a text of 1 to 200 characters parses"
   2. `capabilities.test.ts`: "get carries allowBlocked while a used web row is dropped and leaves it out once the row is routed"
   3. `capabilities.test.ts`: "an unused web requirement that is not routed leaves allowBlocked out, and the allow is accepted"
   4. `Capabilities.test.tsx`: "the panel shows the sentence of allowBlocked and no Allow button, and with no allowBlocked it shows Allow even when an unused web row is not routed"
   5. `packages/fixtures/src/capabilities.test.ts`: "the fixture read model sets allowBlocked by the same rule"
-- [ ] **Step 2: Run** the changed test files. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/contracts packages/runner/src/service packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run** the changed test files. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/contracts packages/runner/src/service packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages apps
 git commit -m "Let the runner say when there is nothing to allow and make the panel follow it" -m "Assisted-by: Claude Code"
 ```
 
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.

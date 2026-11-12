@@ -8,6 +8,18 @@ import type { Store } from "../storage.ts";
 export const ALLOW_NOT_ROUTED =
   "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
 const PREVIEW = "This flow declares more than the preview can show.";
+// The one place that decides whether the allow is blocked, used by `get` (which shows it) and by
+// `allow` (which refuses on it). Fail closed: a web requirement that a step uses must have a routed row.
+function allowIsBlocked(manifest: FlowManifest, rows: { requirementId: string; routed: boolean }[]): boolean {
+  const used = new Set(
+    manifest.steps.flatMap((step) => ("steps" in step ? step.steps : [step]).flatMap((leaf) => leaf.uses)),
+  );
+  return manifest.requirements.some((req) => {
+    if (req.type !== "web" || !used.has(req.id)) return false;
+    const row = rows.find((item) => item.requirementId === req.id);
+    return !row || !row.routed;
+  });
+}
 export function createCapabilities(o: { store: Store; now: () => Date; facts: () => HarnessFacts }) {
   function flow(flowId: string) {
     const row = o.store.getFlow(flowId);
@@ -55,6 +67,7 @@ export function createCapabilities(o: { store: Store; now: () => Date; facts: ()
         details: req.type === "web" ? (templates.get(req.id) ?? []) : [],
       };
     });
+    const blocked = allowIsBlocked(manifest, rows);
     const hasTriggers = manifest.triggers.some((trigger) => trigger.kind !== "manual");
     const maxItems = manifest.limits?.max_items ?? (hasTriggers ? 20 : undefined);
     return FlowCapabilities.parse({
@@ -68,6 +81,7 @@ export function createCapabilities(o: { store: Store; now: () => Date; facts: ()
       hasTriggers,
       needsAllow: needsAllow(manifest),
       consent: consentOf(flowId),
+      ...(blocked ? { allowBlocked: ALLOW_NOT_ROUTED } : {}),
     });
   }
   function allow(flowId: string, hash: string): FlowCapabilities {
@@ -77,16 +91,7 @@ export function createCapabilities(o: { store: Store; now: () => Date; facts: ()
         "not_allowed",
         "This flow changed since you looked at it. Reload and check it again.",
       );
-    // Fail closed: a web requirement that a step uses must have a routed row, read now like `get` does.
-    const manifest = FlowManifest.parse(flow(flowId).manifest);
-    const used = new Set(
-      manifest.steps.flatMap((step) => ("steps" in step ? step.steps : [step]).flatMap((leaf) => leaf.uses)),
-    );
-    for (const req of manifest.requirements) {
-      if (req.type !== "web" || !used.has(req.id)) continue;
-      const row = preview.rows.find((item) => item.requirementId === req.id);
-      if (!row || !row.routed) throw new RunnerError("not_allowed", ALLOW_NOT_ROUTED);
-    }
+    if (preview.allowBlocked !== undefined) throw new RunnerError("not_allowed", preview.allowBlocked);
     const at = o.now().toISOString();
     o.store.putCapabilityConsent({ flowId, hash, at });
     o.store.appendAudit({ at, kind: "capabilities_allowed", detail: { flowId, hash } });

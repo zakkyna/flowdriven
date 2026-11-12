@@ -2,7 +2,6 @@ import { RunnerError } from "@flowdriven/contracts";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { renderApp } from "../../test/render";
-import { ALLOW_NOT_ROUTED } from "./CapabilitiesPanel";
 
 const builder = "#/builder/dev.example.job-review";
 const flowId = "dev.example.job-review";
@@ -162,38 +161,63 @@ test("the section sits between What this flow does and Triggers, and its heading
   expect(before.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(heading.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
-const NOT_ROUTED =
-  "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
-test("a web row that is not routed shows the not-routed sentence and no Allow button", async () => {
-  const { client } = renderApp(builder, { scenario: "looped" });
-  const original = client.call.bind(client);
-  vi.spyOn(client, "call").mockImplementation((async (name: string, input: unknown) => {
+const SENTENCE = "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
+function droppedWebRows(rows: Record<string, unknown>[]) {
+  return rows.map((row) =>
+    row.type === "web"
+      ? {
+          requirementId: row.requirementId,
+          type: "web",
+          sentence: row.sentence,
+          routed: false,
+          reason: "This Claude Code cannot use Chrome.",
+          away: false,
+          details: [],
+        }
+      : row,
+  );
+}
+test("the panel shows the sentence of allowBlocked and no Allow button, and with no allowBlocked it shows Allow even when an unused web row is not routed", async () => {
+  const first = renderApp(builder, { scenario: "looped" });
+  const original = first.client.call.bind(first.client);
+  vi.spyOn(first.client, "call").mockImplementation((async (name: string, input: unknown) => {
     const answer = await original(name as never, input as never);
     if (name !== "flows.capabilities") return answer;
     const caps = answer as { rows: Record<string, unknown>[] };
-    return {
-      ...caps,
-      rows: caps.rows.map((row) =>
-        row.type === "web"
-          ? {
-              requirementId: row.requirementId,
-              type: "web",
-              sentence: row.sentence,
-              routed: false,
-              reason: "This Claude Code cannot use Chrome.",
-              away: false,
-              details: [],
-            }
-          : row,
-      ),
-    };
-  }) as typeof client.call);
-  expect(ALLOW_NOT_ROUTED).toBe(NOT_ROUTED);
-  const view = await section();
-  const notice = await view.findByText(NOT_ROUTED);
-  expect(notice.closest("p")?.querySelector("svg")).not.toBeNull();
-  expect(view.queryByRole("button", { name: "Allow" })).toBeNull();
-  expect(view.queryByText("This flow cannot run until you allow this.")).toBeNull();
+    return { ...caps, rows: droppedWebRows(caps.rows), allowBlocked: SENTENCE };
+  }) as typeof first.client.call);
+  const blocked = await section();
+  const notice = await blocked.findByText(SENTENCE);
+  expect(notice.closest("span")?.querySelector("svg")).not.toBeNull();
+  expect(blocked.queryByRole("button", { name: "Allow" })).toBeNull();
+  expect(blocked.queryByText("This flow cannot run until you allow this.")).toBeNull();
+  first.unmount();
+
+  // The sentence is whatever the read model says, not a constant of the panel.
+  const custom = renderApp(builder, { scenario: "looped" });
+  const customOriginal = custom.client.call.bind(custom.client);
+  vi.spyOn(custom.client, "call").mockImplementation((async (name: string, input: unknown) => {
+    const answer = await customOriginal(name as never, input as never);
+    return name === "flows.capabilities"
+      ? { ...(answer as object), allowBlocked: "Nothing can be allowed right now." }
+      : answer;
+  }) as typeof custom.client.call);
+  const customView = await section();
+  expect(await customView.findByText("Nothing can be allowed right now.")).toBeTruthy();
+  expect(customView.queryByRole("button", { name: "Allow" })).toBeNull();
+  custom.unmount();
+
+  const second = renderApp(builder, { scenario: "looped" });
+  const secondOriginal = second.client.call.bind(second.client);
+  vi.spyOn(second.client, "call").mockImplementation((async (name: string, input: unknown) => {
+    const answer = await secondOriginal(name as never, input as never);
+    if (name !== "flows.capabilities") return answer;
+    const caps = answer as { rows: Record<string, unknown>[] };
+    return { ...caps, rows: droppedWebRows(caps.rows) };
+  }) as typeof second.client.call);
+  const open = await section();
+  expect(await open.findByRole("button", { name: "Allow" })).toBeTruthy();
+  expect(open.queryByText(SENTENCE)).toBeNull();
 });
 test("Allow sends the hash of the capabilities answer on the screen", async () => {
   const { client } = renderApp(builder, { scenario: "looped" });

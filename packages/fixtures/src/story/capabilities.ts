@@ -105,5 +105,6 @@ export function capabilitiesOf(flow: FlowRecord, consent: { hash: string } | und
     hasTriggers,
     needsAllow: leaves(manifest.steps).some((step) => step.uses.some((id) => needs.has(id))),
     consent: !consent ? "none" : consent.hash === flow.hash ? "given" : "stale",
+    ...(webNotRouted(flow) ? { allowBlocked: ALLOW_NOT_ROUTED } : {}),
   };
 }

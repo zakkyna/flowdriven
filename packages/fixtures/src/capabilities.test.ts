@@ -181,3 +181,27 @@ test("the fixture allow is refused while a used web requirement has no route, an
     "given",
   );
 });
+
+test("the fixture read model sets allowBlocked by the same rule", async () => {
+  const client = looped();
+  const found = record(client);
+  const sentence =
+    "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
+  const routed = capabilitiesOf(found, undefined);
+  expect("allowBlocked" in routed).toBe(false);
+  expect(FlowCapabilities.parse(routed)).toEqual(routed);
+  const req = found.manifest.requirements.find((item) => item.id === "jobs_web");
+  if (!req) throw new Error("The web requirement is missing.");
+  req.mode = "act";
+  const blocked = capabilitiesOf(found, undefined);
+  expect(blocked.allowBlocked).toBe(sentence);
+  expect(FlowCapabilities.parse(blocked)).toEqual(blocked);
+  expect((await client.call("flows.capabilities", { flowId: FLOW })).allowBlocked).toBe(sentence);
+  // A web requirement that no step uses does not block the allow.
+  for (const step of found.manifest.steps) {
+    if ("uses" in step) step.uses = step.uses.filter((id) => id !== "jobs_web");
+    if ("loop" in step && step.loop)
+      for (const inner of step.loop.steps) inner.uses = inner.uses.filter((id) => id !== "jobs_web");
+  }
+  expect("allowBlocked" in capabilitiesOf(found, undefined)).toBe(false);
+});

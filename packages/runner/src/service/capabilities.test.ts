@@ -267,3 +267,36 @@ test("the details of a web row show each template as the flow wrote it", async (
   const { capabilities } = await setup(base([web(patterns)]));
   expect(capabilities.get("local.test").rows.at(0)?.details).toEqual(patterns);
 });
+test("get carries allowBlocked while a used web row is dropped and leaves it out once the row is routed", async () => {
+  const { store } = await setup();
+  const facts = { hooks: true, chrome: false };
+  const capabilities = createCapabilities({ store, now, facts: () => ({ ...facts }) });
+  const blocked = capabilities.get("local.test");
+  expect(blocked.rows.at(0)?.routed).toBe(false);
+  expect(blocked.allowBlocked).toBe(ALLOW_NOT_ROUTED);
+  facts.hooks = false;
+  facts.chrome = true;
+  expect(capabilities.get("local.test").allowBlocked).toBe(ALLOW_NOT_ROUTED);
+  facts.hooks = true;
+  const open = capabilities.get("local.test");
+  expect(open.rows.at(0)?.routed).toBe(true);
+  expect("allowBlocked" in open).toBe(false);
+  expect(() => capabilities.allow("local.test", hash)).not.toThrow();
+  expect("allowBlocked" in capabilities.get("local.test")).toBe(false);
+});
+test("an unused web requirement that is not routed leaves allowBlocked out, and the allow is accepted", async () => {
+  const manifest = FlowManifest.parse({
+    format: "flowdriven-flow/1.1",
+    id: "local.test",
+    name: "Secret name",
+    kind: "light",
+    steps: [{ id: "worker", do: "worker", instructions: "Secret instructions", uses: ["path"] }],
+    requirements: [web(), { id: "path", type: "path", ref: "notes" }, { id: "harness", type: "harness" }],
+  });
+  const { store } = await setup(manifest);
+  const capabilities = createCapabilities({ store, now, facts: () => ({ hooks: true, chrome: false }) });
+  const preview = capabilities.get("local.test");
+  expect(preview.rows.at(0)?.routed).toBe(false);
+  expect("allowBlocked" in preview).toBe(false);
+  expect(capabilities.allow("local.test", hash).consent).toBe("given");
+});

@@ -45,5 +45,6 @@ export const FlowCapabilities = z.strictObject({
   hasTriggers: z.boolean(),
   needsAllow: z.boolean(),
   consent: CapabilityConsent,
+  allowBlocked: z.string().min(1).max(200).optional(),
 });
 export type FlowCapabilities = z.infer<typeof FlowCapabilities>;

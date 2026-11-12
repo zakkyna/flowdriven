@@ -70,6 +70,25 @@ test("a capabilities value has rows, caps, triggers, needsAllow and a consent st
   expect(FlowCapabilities.safeParse({ ...value, caps: { maxRunsPerDay: 0 } }).success).toBe(false);
   expect(FlowCapabilities.safeParse({ ...value, consent: "maybe" }).success).toBe(false);
 });
+test("allowBlocked is optional, and a text of 1 to 200 characters parses", () => {
+  const base = {
+    flowId: "flow",
+    hash,
+    rows: [routed, dropped],
+    caps: { maxRunsPerDay: 3 },
+    hasTriggers: false,
+    needsAllow: true,
+    consent: "none",
+  };
+  expect(FlowCapabilities.safeParse(base).success).toBe(true);
+  expect("allowBlocked" in FlowCapabilities.parse(base)).toBe(false);
+  for (const allowBlocked of ["a", "a".repeat(200)]) {
+    expect(FlowCapabilities.parse({ ...base, allowBlocked })).toEqual({ ...base, allowBlocked });
+  }
+  expect(FlowCapabilities.safeParse({ ...base, allowBlocked: "" }).success).toBe(false);
+  expect(FlowCapabilities.safeParse({ ...base, allowBlocked: "a".repeat(201) }).success).toBe(false);
+  expect(FlowCapabilities.safeParse({ ...base, allowBlocked: 3 }).success).toBe(false);
+});
 test("the three operations take a flow id, the allow also takes a content hash, and all three are off MCP", () => {
   for (const name of [
     "flows.capabilities",
