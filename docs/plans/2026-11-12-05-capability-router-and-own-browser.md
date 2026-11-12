@@ -576,7 +576,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `channel.ts`: `MAX_POST_BYTES = 2 * 1024 * 1024`; `startChannel` options gain `post?: (call: unknown) => { text: string; line: string } | undefined` and `onPost?: (record: { toolUseId: string; text: string }) => void`; `Channel` gains `posted: ReadonlyMap<string, string>` (tool use id to the replacement text) and `chromeIds: ReadonlySet<string>` (the ids of allowed calls whose `tool_name` starts with `CHROME_PREFIX`, recorded from the parsed PreToolUse request when the decision is an allow). After a request is parsed, if it is a plain object with `hook_event_name: "PostToolUse"`: with no `post` option, or a file over `MAX_POST_BYTES`, or a `tool_use_id` that is not a string, or an id that was not allowed before (`allowedIds`), or an id that already had a post answer: no answer is written and the file is removed (the hook then prints its fixed replacement, which the tripwire accepts). Otherwise `options.post(call)` runs inside `try`; `undefined` or a throw writes no answer; a result is written as the answer file `<line>\n` (one line, no `allow`/`deny`), the id and text go into `posted`, and `onPost` is called inside `try`. A post request never touches the `ids` set or the allowed and denied counts, so the PreToolUse of the same `tool_use_id` is unaffected. The replay of a repeated file name works for post answers as for the others. Everything for PreToolUse stays as it is (the 8 MiB limit, the `deny` for a repeated id, `checkFailed`).
 - `stream.ts`: `createTripwire(allowedIds, chrome?: { ids: ReadonlySet<string>; posted: ReadonlyMap<string, string> })`. For a `user` event `tool_result` that is not an error and whose `tool_use_id` is in `chrome.ids`: it is accepted only when its text equals `chrome.posted.get(id)` or equals `POST_TEXT.unchecked`; anything else trips. The result's text is `content` when it is a string, or the `text` of the only block when `content` is an array of exactly one `{ type: "text", text: string }`; anything else has no text and trips. The trip names the tool from the stream's `tool_use` names when known, else `unknown`. A result whose id is not in `chrome.ids` is judged by `allowedIds` as today; the Chrome decision never depends on the names in the stream. Error results are still ignored. Without `chrome`, behaviour is as today.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   `channel-post.test.ts` (a temp control dir as in `channel.test.ts`; requests written by the test):
   1. "a post request for an allowed id gets one answer line, which is what `post` returned, and the text is recorded in `posted`"
   2. "a post request for an id that was never allowed, one for an id already answered, and one with no `post` option get no answer and the file is removed"
@@ -591,16 +591,19 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "a Chrome result equal to the fixed replacement sentence does not trip (a slow runner or an oversized request withholds one result)"
   11. "a Chrome result with no posted entry and another text, a different text, the original three blocks, an empty array or no text trips and names the tool"
   12. "a Chrome result whose `tool_use` was never seen in the stream still trips; an error result of a Chrome tool never trips; without the chrome argument the tripwire behaves as before"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/channel-post.test.ts packages/runner/src/claude/tripwire-chrome.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** both edits.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/channel-post.test.ts packages/runner/src/claude/tripwire-chrome.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** both edits.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude
 git commit -m "Answer post-tool requests in the channel and check Chrome results in the tripwire" -m "Assisted-by: Codex"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

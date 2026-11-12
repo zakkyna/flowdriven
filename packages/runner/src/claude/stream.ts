@@ -1,7 +1,7 @@
 import type { LimitWindow, RateLimit } from "../harness.ts";
 import type { ModelUsage } from "../storage.ts";
 import { CHROME_PREFIX } from "./browser.ts";
-import { STOP } from "./browser-post.ts";
+import { POST_TEXT, STOP } from "./browser-post.ts";
 import { visible } from "./text.ts";
 
 export const MAX_START_HOOK_EVENTS = 8;
@@ -103,7 +103,10 @@ export function checkFirstEvent(
   return { ok: true };
 }
 export type Tripwire = { check(event: StreamEvent): { tripped: false } | { tripped: true; tool: string } };
-export function createTripwire(allowedIds: ReadonlySet<string>): Tripwire {
+export function createTripwire(
+  allowedIds: ReadonlySet<string>,
+  chrome?: { ids: ReadonlySet<string>; posted: ReadonlyMap<string, string> },
+): Tripwire {
   const names = new Map<string, string>();
   return {
     check(event) {
@@ -120,6 +123,19 @@ export function createTripwire(allowedIds: ReadonlySet<string>): Tripwire {
           names.set(block.id, block.name);
         if (event.type === "user" && block.type === "tool_result" && block.is_error !== true) {
           const id = block.tool_use_id;
+          if (typeof id === "string" && chrome?.ids.has(id)) {
+            const content = block.content;
+            const first = Array.isArray(content) && content.length === 1 ? content.at(0) : undefined;
+            const text =
+              typeof content === "string"
+                ? content
+                : object(first) && first.type === "text" && typeof first.text === "string"
+                  ? first.text
+                  : undefined;
+            if (text === undefined || (text !== POST_TEXT.unchecked && text !== chrome.posted.get(id)))
+              return { tripped: true, tool: names.get(id) ?? "unknown" };
+            continue;
+          }
           if (typeof id !== "string" || !allowedIds.has(id))
             return { tripped: true, tool: typeof id === "string" ? (names.get(id) ?? "unknown") : "unknown" };
         }
