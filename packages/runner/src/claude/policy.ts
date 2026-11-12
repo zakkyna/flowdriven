@@ -1,6 +1,8 @@
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import type { Requirement } from "@flowdriven/sdk";
+import { parseTemplate, type Requirement, type UrlTemplate, webRates } from "@flowdriven/sdk";
+import type { Routed } from "../router/types.ts";
+import type { BrowserPolicy } from "./browser.ts";
 import { hasParentPart, isInside, resolveDeep } from "./paths.ts";
 import { visible } from "./text.ts";
 
@@ -12,6 +14,7 @@ export type Policy = {
   addDirs: string[];
   schema: boolean;
   sessionId: string;
+  browser?: BrowserPolicy;
 };
 
 export function isProjectRef(ref: string | undefined): boolean {
@@ -28,6 +31,7 @@ export function isProjectRef(ref: string | undefined): boolean {
 export function buildPolicy(input: {
   kind: "worker" | "agent";
   requirements: Requirement[];
+  routes?: Routed[];
   project: string;
   controlRoot: string;
   controlCwd: string;
@@ -46,6 +50,29 @@ export function buildPolicy(input: {
   const paths = input.requirements.filter((requirement) => {
     if (requirement.type === "path") return true;
     if (requirement.type === "harness") return false;
+    if (requirement.type === "web") {
+      const fail = () =>
+        new Error(`This step uses something FlowDriven cannot enforce yet (${requirement.id}).`);
+      const route = input.routes?.find((entry) => entry.requirementId === requirement.id);
+      if (
+        policy.browser ||
+        !route?.routed ||
+        route.provider !== "claude-in-chrome" ||
+        requirement.mode !== "read" ||
+        requirement.session !== "own" ||
+        !requirement.url_patterns?.length
+      )
+        throw fail();
+      const templates: UrlTemplate[] = [];
+      for (const source of requirement.url_patterns) {
+        const parsed = parseTemplate(source);
+        if (!parsed.ok || (requirement.domains && !requirement.domains.includes(parsed.template.host)))
+          throw fail();
+        templates.push(parsed.template);
+      }
+      policy.browser = { requirementId: requirement.id, templates, ...webRates(requirement) };
+      return false;
+    }
     throw new Error(`This step uses something FlowDriven cannot enforce yet (${requirement.id}).`);
   });
   if (paths.length === 0) return policy;

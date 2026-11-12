@@ -389,7 +389,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `policy.ts`: `Policy` gains `browser?: BrowserPolicy`. `buildPolicy` input gains `routes?: Routed[]`. A `web` requirement in a worker step is accepted only when `routes` holds a routed entry with that `requirementId` and `provider: "claude-in-chrome"`, the requirement is `mode: "read"`, `session: "own"` with at least one `url_patterns` entry, every entry parses with `parseTemplate` (and, with `domains`, its host is in them); then `policy.browser = { requirementId, templates, perRun, perDay }` from `webRates`. A second `web` requirement in one step, a `web` with no stored route, a dropped route, any parse failure and every other type throw the present sentence `This step uses something FlowDriven cannot enforce yet (<id>).` `policy.tools` is not changed by a browser (the Chrome tools are not built-in tools).
 - `decide.ts`: `decide(policy: Policy, call: unknown, state?: BrowserState): Decision` and the allow variant of `Decision` gains `effect?: "page" | "tab"`. After the session check and the `StructuredOutput` branch and before the `policy.tools.includes` line (`decide.ts:61`): a `tool_name` that starts with `CHROME_PREFIX` is denied with `This step does not declare the tool <visible name>.` when `policy.browser` is unset (as today), and otherwise decided by `decideBrowser(policy.browser, short, tool_input, state ?? { counts: { run: Infinity, day: Infinity }, tabs: new Set(), opened: Infinity })`; an allow carries its `effect`; a deny carries the reason and `tool` (and `target` for an address). The five-tool file branch is untouched, and a PostToolUse request is still `DENY.badRequest`.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   `decide-browser.test.ts` (a policy with the spec's Upwork template `https://www.upwork.com/jobs/~{id:[0-9a-z]{18,24}}`, `perRun: 3`, `perDay: 10`, session id as in `decide.test.ts`, a state with tab ids `{7}`):
   1. "the five read calls are allowed with their exact inputs, a page flagged on `navigate` and a tab flagged on `tabs_create_mcp`" (`tabs_context_mcp` with `{}` and `{createIfEmpty:true}`, `tabs_create_mcp` `{}`, `navigate` a matching address and tab 7, `get_page_text` with and without `max_chars`, `tabs_close_mcp` 7)
   2. "R3: every other Chrome tool is refused with `This step may only read pages.`, one assertion per tool" (all 21 names of F1 minus the five, plus a made-up `new_tool`)
@@ -404,16 +404,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   `policy-browser.test.ts`:
   11. "a routed, read, own web requirement gives a browser policy with its templates and the default rates, and no extra built-in tool; with a path requirement too the folders and tools are as before and the browser is added"
   12. "no stored route, a dropped route, `mode: act`, `session: managed`, no template, a host outside `domains`, a second web requirement and an unparsable template each throw the present sentence"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-browser.test.ts packages/runner/src/claude/policy-browser.test.ts`. Expected: FAIL ("Cannot find module ./browser.ts").
-- [ ] **Step 3: Implement** `browser.ts` and the two edits.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS (the present `decide.test.ts` and `policy.test.ts` pass unchanged).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-browser.test.ts packages/runner/src/claude/policy-browser.test.ts`. Expected: FAIL ("Cannot find module ./browser.ts").
+- [x] **Step 3: Implement** `browser.ts` and the two edits.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS (the present `decide.test.ts` and `policy.test.ts` pass unchanged).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude
 git commit -m "Add the read-only browser rules to the tool decision and the policy" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

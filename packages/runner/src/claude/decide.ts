@@ -1,10 +1,11 @@
 import { isAbsolute } from "node:path";
+import { BROWSER_DENY, type BrowserState, CHROME_PREFIX, decideBrowser } from "./browser.ts";
 import { hasParentPart, isInside, resolveDeep } from "./paths.ts";
 import type { Policy } from "./policy.ts";
 import { visible } from "./text.ts";
 
 export type Decision =
-  | { allow: true; tool: string; target?: string }
+  | { allow: true; tool: string; target?: string; effect?: "page" | "tab" }
   | { allow: false; reason: string; tool: string; target?: string };
 
 export const DENY = {
@@ -39,7 +40,7 @@ function protectedPath(path: string): boolean {
   return parts.some((part) => part === ".git" || part === ".claude") || parts.at(-1) === ".mcp.json";
 }
 
-export function decide(policy: Policy, call: unknown): Decision {
+export function decide(policy: Policy, call: unknown, state?: BrowserState): Decision {
   const tool = plain(call) && typeof call.tool_name === "string" ? visible(call.tool_name, 60) : "";
   const deny = (reason: string, target?: string): Decision => ({
     allow: false,
@@ -52,12 +53,24 @@ export function decide(policy: Policy, call: unknown): Decision {
     call.hook_event_name !== "PreToolUse" ||
     typeof call.tool_name !== "string" ||
     typeof call.tool_use_id !== "string" ||
-    !plain(call.tool_input)
+    (!plain(call.tool_input) && !call.tool_name.startsWith(CHROME_PREFIX))
   )
     return deny(DENY.badRequest);
   if (call.session_id !== policy.sessionId) return deny(DENY.otherSession);
   if (call.tool_name === "StructuredOutput")
     return policy.schema ? { allow: true, tool } : deny(DENY.noSchema);
+  if (call.tool_name.startsWith(CHROME_PREFIX)) {
+    if (!policy.browser) return deny(`This step does not declare the tool ${tool}.`);
+    if (!plain(call.tool_input)) return deny(BROWSER_DENY.part);
+    const result = decideBrowser(
+      policy.browser,
+      call.tool_name.slice(CHROME_PREFIX.length),
+      call.tool_input,
+      state ?? { counts: { run: Infinity, day: Infinity }, tabs: new Set(), opened: Infinity },
+    );
+    return result.allow ? { ...result, tool } : deny(result.reason, result.target);
+  }
+  if (!plain(call.tool_input)) return deny(DENY.badRequest);
   if (!policy.tools.includes(call.tool_name)) return deny(`This step does not declare the tool ${tool}.`);
   const name = call.tool_name;
   if (!["Read", "Write", "Edit", "Glob", "Grep"].includes(name)) return deny(DENY.badRequest);
