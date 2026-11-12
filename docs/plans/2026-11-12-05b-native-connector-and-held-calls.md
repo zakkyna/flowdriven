@@ -277,7 +277,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - Control mode: a call with `-p` and `--input-format stream-json` is `command === "control"`, not `play`. It logs the `call` line without reading stdin to the end, then reads stdin line by line. `{"type":"control_request","request_id":R,"request":{"subtype":"initialize",...}}` is answered `{"type":"control_response","response":{"subtype":"success","request_id":R,"response":{}}}`. `subtype: "mcp_status"` is answered with `response: { mcpServers: [...] }`: one server `{ name, status, scope: "claudeai", config: { type: "claudeai-proxy", url, id }, tools? }` for each scripted connector (`tools: [{ name, annotations: readOnly ? { readOnly: true } : {} }]` only when `status` is `connected`), and an empty list when `--restricted` or `--strict-mcp-config` is among the arguments. Each request logs `{ kind: "control", subtype, restricted }`. The process ends when stdin ends.
 - Play mode: `--mcp-config` is a file path or a JSON literal (read as `arg("--mcp-config")`; a value that starts with `{` is JSON). For each entry with `type: "claudeai-proxy"` whose name, `url` and `id` equal a scripted connector, the init event lists `{ name, status, source: "dynamic" }` (G6) in `mcp_servers` (next to Chrome's entry when `--chrome`) and, for a `connected` server, the tools minus those whose `toolPermissions[tool]` is `"blocked"`, named `mcp__<name with every character outside [A-Za-z0-9_-] replaced by _>__<tool>`. `play.init` is still spread last. A scripted `tool` action whose name is one of those tools and that ran (pre hook allowed) makes its result from `blocks` when given, else from the string `String(action.result ?? "ok")`: the PostToolUse request carries `tool_response` as that string (G6: the real connector sends one string) or as the `blocks` array, and the `tool_result` in the stream is one text block with the string (or the blocks) unless the hook replaces it; it then runs the first `PostToolUse` entry whose matcher matches the name (`new RegExp("^(?:" + matcher + ")$")`) with `mcp_server: { name: <server name>, source: "dynamic" }`, and replaces the content when the hook prints `updatedMCPToolOutput`, as for Chrome. The Chrome branch picks its entry the same way (`find` with the matcher instead of `at(0)`), so a second entry does not change it. A connector name never reaches `FakeChrome`.
 
-- [ ] **Step 1: Write the failing tests** (`fake-connector.test.ts`, spawning `FAKE_CLAUDE_PATH` as `fake-claude.test.ts` does, with a made-up connector `claude.ai Gmail`, a url and an id of the form `mcpsrv_` plus 24 letters):
+- [x] **Step 1: Write the failing tests** (`fake-connector.test.ts`, spawning `FAKE_CLAUDE_PATH` as `fake-claude.test.ts` does, with a made-up connector `claude.ai Gmail`, a url and an id of the form `mcpsrv_` plus 24 letters):
   1. "mcp_status answers the scripted connector with name, scope claudeai, config, status and its tools with annotations (readOnly true or an empty object)";
   2. "mcp_status answers no server when --restricted or --strict-mcp-config is among the arguments";
   3. "connectorPending makes the first answers pending with no tools, and the next one connected";
@@ -290,16 +290,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "a connector tool the pre hook refuses is not run and gets no post line";
   11. "with a Chrome entry and a connector entry in PostToolUse each tool gets its own entry";
   12. "hang with status never answers mcp_status".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/test-helpers`. Expected: FAIL on the new file.
-- [ ] **Step 3: Implement** the changes. Keep one copy of the help text; do not touch `FAKE_HELP`.
-- [ ] **Step 4: Run** the same command. Expected: PASS (`fake-claude.test.ts` and `fake-chrome.test.ts` unchanged).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/test-helpers`. Expected: FAIL on the new file.
+- [x] **Step 3: Implement** the changes. Keep one copy of the help text; do not touch `FAKE_HELP`.
+- [x] **Step 4: Run** the same command. Expected: PASS (`fake-claude.test.ts` and `fake-chrome.test.ts` unchanged).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/test-helpers
 git commit -m "Teach the fake claude connectors, mcp_status and connector tool calls" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

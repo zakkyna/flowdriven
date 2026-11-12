@@ -14,6 +14,7 @@ export type FakeAction =
       input: Record<string, unknown>;
       write?: { path: string; text: string };
       result?: string;
+      blocks?: unknown[];
     }
   | {
       do: "ungated";
@@ -63,12 +64,23 @@ export type FakeScript = {
   auth?: { loggedIn: boolean; authMethod?: string } | { raw: string };
   plugins?: unknown[] | { raw: string };
   mcp?: string;
-  hang?: ("version" | "help" | "auth" | "plugins" | "mcp")[];
+  connectors?: Record<
+    string,
+    {
+      url: string;
+      id: string;
+      status?: "connected" | "needs-auth" | "failed" | "pending";
+      tools: { name: string; readOnly?: boolean }[];
+    }
+  >;
+  connectorPending?: number;
+  hang?: ("version" | "help" | "auth" | "plugins" | "mcp" | "status")[];
   plays?: FakePlay[];
 };
 export type FakeCall =
   | { kind: "call"; pid: number; args: string[]; cwd: string; env: string[]; prompt?: string }
   | { kind: "post"; id: string; name: string; hookExit: number | null; replaced: boolean }
+  | { kind: "control"; subtype: string; restricted: boolean }
   | { kind: "init" }
   | { kind: "tool"; id: string; name: string; hookExit: number | null; ran: boolean };
 export const FAKE_CLAUDE_PATH = fileURLToPath(new URL("./fake-claude.ts", import.meta.url));
