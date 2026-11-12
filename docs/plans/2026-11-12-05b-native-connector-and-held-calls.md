@@ -1091,3 +1091,11 @@ git commit -m "Ask the connector list again while a connector the scan looks for
 Done by: Codex/gpt-6.1-terra, 2026-11-13. Evidence: pnpm format && pnpm check.
 
 ---
+
+### Close of the review
+
+- Tasks 20 and 21 fixed R-1 to R-4 (commits `f13dbb6` and `33df454`). The reviewer's four kept proofs, run against the fixed code, all fail now, because each asserted its defect: R-1 "expected 'blocked' to be 'waiting_approval'" (no card is offered), R-2 "expected false to be true" (the unpicked call did not run), R-3 "expected true to be undefined" (the mark is set), R-4 "expected true not to be true" (the later step is marked). There was no second review round.
+- The repeated walk found two defects of the scan that no test against the fake had shown (Tasks 22 and 23, commits `df1fbda` and `2158390`): the scan waited for connectors FlowDriven does not use, and it ended on a first answer that did not list the claude.ai connectors yet.
+- The walk on the final code (2026-11-13, run `run-14795a56fd1d`, 25 seconds): the stored scan lists the owner's connectors with Gmail connected; step `alerts` passed in one attempt on `claude-haiku-5-5` (3 turns, 8.9 seconds, 0.0027 USD) with one `connector_call` (`search_threads`, class read) and the outside mark; `delete_draft` was held (`call_held` 1, `tool_denied` 1, no call allowed), its card was rejected, and the run ended `failed` as expected. No audit row holds the connector's id or url. Afterwards the chair deleted the store of the walk and the picture of the run without reading them, because this time the worker's `count` output was a sentence of 137 characters and not a bare number; the picture of the Inbox card is kept.
+- Last gate: 245 test files, 1,662 tests, the hidden-character scan and the dependency gate, at commit `2158390`.
+- Open, and written under Known limits and the Handover: a pick grant is not bound to its loop, and a loop over a choice that declares no `key` is never released by a pick (plan 05c); a call grant is not bound to the step that was held; plain writes and the prototype host; the expiry of a held call tidies less than a reject. New from the walk: a rescan takes up to 8 seconds when a catalogued connector is not set up in Claude Code, and the walk's check flow should take its count through a schema check so that the output can only be a number.
