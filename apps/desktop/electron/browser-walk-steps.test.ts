@@ -1,7 +1,12 @@
 import path from "node:path";
 import { expect, test } from "vitest";
 import { parseRoute } from "../src/nav/route";
-import { BROWSER_WALK_STEPS, browserWalkPaths, isPageRunDone } from "./browser-walk-steps";
+import {
+  BROWSER_WALK_STEPS,
+  browserWalkFlowFile,
+  browserWalkPaths,
+  isPageRunDone,
+} from "./browser-walk-steps";
 
 test("the walk paths are distinct and under the plan 05 scratch folder", () => {
   const paths = Object.values(browserWalkPaths("/repo"));
@@ -28,4 +33,12 @@ test("only a terminal run of local.chrome-check is complete", () => {
   expect(isPageRunDone(null)).toBe(false);
   expect(isPageRunDone({})).toBe(false);
   expect(isPageRunDone(["local.chrome-check"])).toBe(false);
+});
+
+test("the walk takes another check flow only when BROWSER_WALK_FLOW_FILE names one", () => {
+  expect(browserWalkFlowFile({})).toBeUndefined();
+  expect(browserWalkFlowFile({ BROWSER_WALK_FLOW_FILE: "" })).toBeUndefined();
+  expect(browserWalkFlowFile({ BROWSER_WALK_FLOW_FILE: "/scratch/u5/flow.yaml" })).toBe(
+    "/scratch/u5/flow.yaml",
+  );
 });

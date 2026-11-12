@@ -64,6 +64,13 @@ A check flow for the walk that reads https://example.com/ through the owner's ow
 address, reads one page and asks for one click, which FlowDriven must refuse.
 `;
 
+// BROWSER_WALK_FLOW_FILE lets the chair walk another check flow that keeps the id and the name of the built-in
+// one (plan 05: the real job pages read with the owner watching). Unset or empty means the built-in flow.
+export function browserWalkFlowFile(env: Record<string, string | undefined>): string | undefined {
+  const file = env.BROWSER_WALK_FLOW_FILE;
+  return file === undefined || file === "" ? undefined : file;
+}
+
 export function isPageRunDone(runs: unknown): boolean {
   return (
     Array.isArray(runs) &&

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import {
@@ -7,6 +7,7 @@ import {
   BROWSER_WALK_FLOW_ID,
   BROWSER_WALK_README,
   BROWSER_WALK_STEPS,
+  browserWalkFlowFile,
   browserWalkPaths,
   isPageRunDone,
 } from "./browser-walk-steps";
@@ -20,7 +21,8 @@ import {
   serveApp,
 } from "./window";
 
-// The chair runs this walk with the owner's Chrome open (plan 05, Task 29). It reads only https://example.com/.
+// The chair runs this walk with the owner's browser open (plan 05, Task 29). It reads only https://example.com/,
+// unless BROWSER_WALK_FLOW_FILE names another check flow (the real job pages read with the owner watching).
 registerAppScheme();
 registerWebContentsSecurity();
 app.on("window-all-closed", () => {});
@@ -43,7 +45,11 @@ void app
     await rm(dataDir, { recursive: true, force: true });
     await mkdir(output, { recursive: true });
     await mkdir(flowDir, { recursive: true });
-    await writeFile(path.join(flowDir, "flow.yaml"), BROWSER_WALK_FLOW);
+    const flowFile = browserWalkFlowFile(process.env);
+    await writeFile(
+      path.join(flowDir, "flow.yaml"),
+      flowFile === undefined ? BROWSER_WALK_FLOW : await readFile(flowFile, "utf8"),
+    );
     await writeFile(path.join(flowDir, "README.md"), BROWSER_WALK_README);
     const env: Record<string, string | undefined> = { ...process.env, FLOWDRIVEN_DATA_DIR: dataDir };
     delete env.FLOWDRIVEN_DEMO;
