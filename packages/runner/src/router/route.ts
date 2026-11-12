@@ -1,6 +1,7 @@
 import { type FlowManifest, parseTemplate, type Requirement, type Step, webRates } from "@flowdriven/sdk";
 import { isProjectRef } from "../claude/policy.ts";
 import { visible } from "../claude/text.ts";
+import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
 import type { HarnessFacts, Routed } from "./types.ts";
 
 export const UNOFFICIAL_SENTENCE =
@@ -9,10 +10,13 @@ export const DROP = {
   notYet: "FlowDriven cannot provide this yet.",
   noHooks: "This needs a harness that can check each call.",
   noChrome: "This Claude Code cannot use Chrome.",
+  noConnector: "This connector is not connected in Claude Code.",
+  connectorTool: "FlowDriven cannot provide one of this connector's tools yet.",
 } as const;
 export const COST = {
   chrome: "Adds about 12,000 tokens to each call of a step that uses it.",
   files: "Adds about 10,600 tokens to each call of a step that uses it.",
+  connector: "Adds about 2,900 tokens for each of its tools to each call of a step that uses it.",
 } as const;
 export const NOT_ENFORCED_UNATTENDED =
   "This step would run unattended on a provider FlowDriven cannot enforce.";
@@ -29,9 +33,41 @@ export const NOUNS = {
   web: "Web access of this kind",
 } as const;
 
-export function routeRequirement(req: Requirement, facts: HarnessFacts): Routed | undefined {
+export function routeRequirement(
+  req: Requirement,
+  facts: HarnessFacts,
+  catalog: ConnectorEntry[] = CONNECTORS,
+): Routed | undefined {
   if (req.type === "harness") return undefined;
   const base = { requirementId: req.id, type: req.type };
+  if (req.type === "mcp_server") {
+    const entry = catalogEntry(req.ref, catalog);
+    if (entry && (req.connect === undefined || req.connect === "native")) {
+      const drop = (reason: string) => ({ ...base, routed: false as const, noun: NOUNS.mcp_server, reason });
+      if (!facts.hooks) return drop(DROP.noHooks);
+      const fact = (facts.connectors ?? []).find(
+        (item) => item.name === entry.name && item.url === entry.url && item.status === "connected",
+      );
+      if (!fact) return drop(DROP.noConnector);
+      for (const tool of new Set(req.tools ?? [])) {
+        const scanned = fact.tools.some(
+          (item) =>
+            item.name === tool &&
+            (Object.hasOwn(entry.risky, tool) || (entry.read.includes(tool) && item.readOnly)),
+        );
+        if (!scanned) return drop(DROP.connectorTool);
+      }
+      return {
+        ...base,
+        routed: true,
+        provider: "claude-ai-connector",
+        providerName: `${entry.label} connector in Claude Code`,
+        enforcedBy: "FlowDriven hook in Claude Code",
+        label: "official",
+        away: true,
+      };
+    }
+  }
   if (req.type === "path") {
     if (!isProjectRef(req.ref))
       return { ...base, routed: false, noun: "A folder outside the project", reason: DROP.notYet };
@@ -62,9 +98,13 @@ export function routeRequirement(req: Requirement, facts: HarnessFacts): Routed 
   return { ...base, routed: false, noun: NOUNS[req.type], reason: DROP.notYet };
 }
 
-export function routeAll(requirements: Requirement[], facts: HarnessFacts): Routed[] {
+export function routeAll(
+  requirements: Requirement[],
+  facts: HarnessFacts,
+  catalog: ConnectorEntry[] = CONNECTORS,
+): Routed[] {
   return requirements.flatMap((req) => {
-    const route = routeRequirement(req, facts);
+    const route = routeRequirement(req, facts, catalog);
     return route ? [route] : [];
   });
 }
@@ -88,7 +128,16 @@ export function capabilityHosts(req: Requirement): string[] {
   return [...hosts];
 }
 
-export function capabilitySentence(req: Requirement): string {
+export function capabilitySentence(req: Requirement, catalog: ConnectorEntry[] = CONNECTORS): string {
+  if (req.type === "mcp_server") {
+    const entry = catalogEntry(req.ref, catalog);
+    if (entry) {
+      const tools = [...new Set(req.tools ?? [])];
+      const read = tools.filter((tool) => entry.read.includes(tool)).map((tool) => visible(tool, 60));
+      const risky = tools.filter((tool) => Object.hasOwn(entry.risky, tool)).map((tool) => visible(tool, 60));
+      return `Uses your ${entry.label} through the ${entry.label} connector in Claude Code.${read.length ? ` Reads with: ${read.join(", ")}.` : ""}${risky.length ? ` Waits for your approval before each: ${risky.join(", ")}.` : ""}`;
+    }
+  }
   if (req.type === "web" && req.mode === "read" && req.session === "own") {
     const { perRun, perDay } = webRates(req);
     return `Reads pages on ${capabilityHosts(req)

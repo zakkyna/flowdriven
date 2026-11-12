@@ -358,7 +358,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `route.ts`: `DROP` gains `noConnector: "This connector is not connected in Claude Code."` and `connectorTool: "FlowDriven cannot provide one of this connector's tools yet."`; `COST` gains `connector: "Adds about 2,900 tokens for each of its tools to each call of a step that uses it."`. `routeRequirement(req, facts, catalog = CONNECTORS)` and `routeAll(requirements, facts, catalog = CONNECTORS)`: for `req.type === "mcp_server"` with `catalogEntry(req.ref, catalog)` found and `req.connect` of `"native"` or absent: `!facts.hooks` gives `DROP.noHooks`; no fact in `facts.connectors ?? []` with the entry's exact `name` AND exact `url` and `status === "connected"` gives `DROP.noConnector` (a fact with the name and another url is "not connected"); then every declared tool (`req.tools`, deduplicated) must be `read` (in `entry.read` and listed in the fact's tools with `readOnly: true`) or `risky` (a key of `entry.risky` and listed in the fact's tools), else `DROP.connectorTool`; the drop noun is `NOUNS.mcp_server`. Routed: `{ routed: true, requirementId, type, provider: "claude-ai-connector", providerName: "<label> connector in Claude Code", enforcedBy: "FlowDriven hook in Claude Code", label: "official", away: true }`. `connect: "gateway"`, another ref and no ref keep `DROP.notYet`. `capabilitySentence(req, catalog = CONNECTORS)` for a catalog connector: `Uses your <label> through the <label> connector in Claude Code.`, then, when at least one declared tool is in `entry.read`, ` Reads with: <those tools, comma and space>.`, then, when at least one is a key of `entry.risky`, ` Waits for your approval before each: <those tools>.`; every tool name goes through `visible(name, 60)`, in declared order, each once. For Gmail with `search_threads` and `delete_draft`: `Uses your Gmail through the Gmail connector in Claude Code. Reads with: search_threads. Waits for your approval before each: delete_draft.` Other requirements keep their sentences.
 - `capabilities.ts`: the cost line is `COST.connector` for `provider === "claude-ai-connector"`, `COST.chrome` for Chrome and `COST.files` otherwise. `allowIsBlocked` returns `string | undefined`: `ALLOW_NOT_ROUTED` for a used `web` requirement with no routed row, else the new `ALLOW_NOT_ROUTED_CONNECTOR = "FlowDriven cannot provide the connector this flow uses yet, so there is nothing to allow."` for a used `mcp_server` requirement with a catalog entry and no routed row, else `undefined`; `get` and `allow` use it as before (`allowBlocked`). `createCapabilities` gains an optional `catalog` that it passes to `routeAll` and `capabilitySentence`. A connector row has `details: []`.
 
-- [ ] **Step 1: Write the failing tests.** `route-connector.test.ts` (facts built by hand with a connected Gmail fact: the exact name and url of the entry, the six read tools with `readOnly: true`, the seven risky tools and `create_draft` with `readOnly: false`):
+- [x] **Step 1: Write the failing tests.** `route-connector.test.ts` (facts built by hand with a connected Gmail fact: the exact name and url of the entry, the six read tools with `readOnly: true`, the seven risky tools and `create_draft` with `readOnly: false`):
   1. "a requirement with ref connector:gmail, connect native or absent, a connected fact with the exact name and url, and hooks, is routed with provider claude-ai-connector, enforcedBy FlowDriven hook in Claude Code, label official, away true";
   2. "without hooks the route drops with DROP.noHooks";
   3. "no fact, a fact that is needs_login, failed or pending, and a fact with the right name and another url each drop with DROP.noConnector";
@@ -370,16 +370,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "a routed connector row says provider Gmail connector in Claude Code, enforcedBy, official, away true, the cost line about 2,900 tokens, and no details";
   9. "an unrouted catalog connector that a step uses gives allowBlocked with the connector sentence, and allow is refused with it";
   10. "a flow with a web requirement and a connector keeps both rows and the web allowBlocked sentence wins when both are unrouted".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/router/route-connector.test.ts packages/runner/src/service/capabilities-connector.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/router packages/runner/src/service/capabilities.test.ts`. Expected: PASS (`route.test.ts:97` still gets `A connector` for an `mcp_server` with no ref).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/router/route-connector.test.ts packages/runner/src/service/capabilities-connector.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/router packages/runner/src/service/capabilities.test.ts`. Expected: PASS (`route.test.ts:97` still gets `A connector` for an `mcp_server` with no ref).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/router packages/runner/src/service/capabilities.ts packages/runner/src/service/capabilities-connector.test.ts
 git commit -m "Route the Gmail connector requirement and show it in the preview" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

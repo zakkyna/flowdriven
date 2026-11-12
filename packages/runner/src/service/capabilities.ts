@@ -1,26 +1,47 @@
 import { FlowCapabilities, RunnerError } from "@flowdriven/contracts";
 import { FlowManifest, parseTemplate } from "@flowdriven/sdk";
 import { visible } from "../claude/text.ts";
+import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
 import { COST, capabilitySentence, needsAllow, routeAll } from "../router/route.ts";
 import type { HarnessFacts } from "../router/types.ts";
 import type { Store } from "../storage.ts";
 
 export const ALLOW_NOT_ROUTED =
   "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow.";
+export const ALLOW_NOT_ROUTED_CONNECTOR =
+  "FlowDriven cannot provide the connector this flow uses yet, so there is nothing to allow.";
 const PREVIEW = "This flow declares more than the preview can show.";
 // The one place that decides whether the allow is blocked, used by `get` (which shows it) and by
 // `allow` (which refuses on it). Fail closed: a web requirement that a step uses must have a routed row.
-function allowIsBlocked(manifest: FlowManifest, rows: { requirementId: string; routed: boolean }[]): boolean {
+function allowIsBlocked(
+  manifest: FlowManifest,
+  rows: { requirementId: string; routed: boolean }[],
+  catalog: ConnectorEntry[],
+): string | undefined {
   const used = new Set(
     manifest.steps.flatMap((step) => ("steps" in step ? step.steps : [step]).flatMap((leaf) => leaf.uses)),
   );
-  return manifest.requirements.some((req) => {
-    if (req.type !== "web" || !used.has(req.id)) return false;
+  const missing = (req: FlowManifest["requirements"][number]) => {
+    if (!used.has(req.id)) return false;
     const row = rows.find((item) => item.requirementId === req.id);
     return !row || !row.routed;
-  });
+  };
+  if (manifest.requirements.some((req) => req.type === "web" && missing(req))) return ALLOW_NOT_ROUTED;
+  if (
+    manifest.requirements.some(
+      (req) => req.type === "mcp_server" && catalogEntry(req.ref, catalog) && missing(req),
+    )
+  )
+    return ALLOW_NOT_ROUTED_CONNECTOR;
+  return undefined;
 }
-export function createCapabilities(o: { store: Store; now: () => Date; facts: () => HarnessFacts }) {
+export function createCapabilities(o: {
+  store: Store;
+  now: () => Date;
+  facts: () => HarnessFacts;
+  catalog?: ConnectorEntry[];
+}) {
+  const catalog = o.catalog ?? CONNECTORS;
   function flow(flowId: string) {
     const row = o.store.getFlow(flowId);
     if (!row) throw new RunnerError("not_found", `There is no flow ${flowId}.`);
@@ -48,12 +69,12 @@ export function createCapabilities(o: { store: Store; now: () => Date; facts: ()
       }
       templates.set(req.id, details);
     }
-    const routes = routeAll(manifest.requirements, o.facts());
+    const routes = routeAll(manifest.requirements, o.facts(), catalog);
     if (routes.length > 50) throw new RunnerError("not_allowed", PREVIEW);
     const rows = routes.map((route) => {
       const req = manifest.requirements.find((r) => r.id === route.requirementId);
       if (!req) throw new RunnerError("not_allowed", PREVIEW);
-      const common = { requirementId: req.id, type: req.type, sentence: capabilitySentence(req) };
+      const common = { requirementId: req.id, type: req.type, sentence: capabilitySentence(req, catalog) };
       if (!route.routed) return { ...common, routed: false, reason: route.reason, away: false, details: [] };
       return {
         ...common,
@@ -63,11 +84,16 @@ export function createCapabilities(o: { store: Store; now: () => Date; facts: ()
         label: route.label,
         ...(route.labelSentence === undefined ? {} : { labelSentence: route.labelSentence }),
         away: route.away,
-        cost: route.provider === "claude-in-chrome" ? COST.chrome : COST.files,
+        cost:
+          route.provider === "claude-ai-connector"
+            ? COST.connector
+            : route.provider === "claude-in-chrome"
+              ? COST.chrome
+              : COST.files,
         details: req.type === "web" ? (templates.get(req.id) ?? []) : [],
       };
     });
-    const blocked = allowIsBlocked(manifest, rows);
+    const blocked = allowIsBlocked(manifest, rows, catalog);
     const hasTriggers = manifest.triggers.some((trigger) => trigger.kind !== "manual");
     const maxItems = manifest.limits?.max_items ?? (hasTriggers ? 20 : undefined);
     return FlowCapabilities.parse({
@@ -81,7 +107,7 @@ export function createCapabilities(o: { store: Store; now: () => Date; facts: ()
       hasTriggers,
       needsAllow: needsAllow(manifest),
       consent: consentOf(flowId),
-      ...(blocked ? { allowBlocked: ALLOW_NOT_ROUTED } : {}),
+      ...(blocked ? { allowBlocked: blocked } : {}),
     });
   }
   function allow(flowId: string, hash: string): FlowCapabilities {
