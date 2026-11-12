@@ -236,7 +236,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `web_domain_invalid` at `requirements.<i>.domains.<k>` for a domain for which `isValidHost` is false.
 Other `web` shapes (`managed`, `none`, `mode: act`) are not checked for templates here; the router drops them and R4 handles `act`. The count and domain checks apply to every `web` requirement.
 
-- [ ] **Step 1: Write the failing tests** in `validate-web.test.ts` (manifests as in `validate.test.ts`):
+- [x] **Step 1: Write the failing tests** in `validate-web.test.ts` (manifests as in `validate.test.ts`):
   1. "the spec's Upwork flow still validates with no error" (`sdk/src/test-data/upwork.ts`)
   2. "a template that cannot be parsed is an error at its own index" (`requirements.0.url_patterns.1`)
   3. "a template whose host is not in domains is an error, and one whose host is listed passes"
@@ -245,16 +245,18 @@ Other `web` shapes (`managed`, `none`, `mode: act`) are not checked for template
   6. "nine domains are an error at `requirements.0.domains`, and a domain with upper case, a port or an IP address is an error at its own index"
   7. "the code and path of each issue are exactly these" (all six codes)
   8. "web checks do not change the unattended rule: a read requirement before an ask is fine, an act requirement before an ask still fails with unattended_prefix"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/sdk/src/validate/validate-web.test.ts`. Expected: FAIL (the new codes are missing).
-- [ ] **Step 3: Implement** the loop over `manifest.requirements` in `validateManifest`, before the step walk; import `parseTemplate` and `isValidHost` from `../web/template.ts`.
-- [ ] **Step 4: Run** `pnpm vitest run packages/sdk`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/sdk/src/validate/validate-web.test.ts`. Expected: FAIL (the new codes are missing).
+- [x] **Step 3: Implement** the loop over `manifest.requirements` in `validateManifest`, before the step walk; import `parseTemplate` and `isValidHost` from `../web/template.ts`.
+- [x] **Step 4: Run** `pnpm vitest run packages/sdk`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/sdk/src
 git commit -m "Validate the URL templates and domains of web requirements" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

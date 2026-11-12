@@ -2,6 +2,7 @@ import type { FlowManifest } from "../format/manifest.ts";
 import type { Requirement } from "../format/requirements.ts";
 import type { Step } from "../format/steps.ts";
 import type { Issue } from "../issues.ts";
+import { isValidHost, parseTemplate } from "../web/template.ts";
 import { checkRefs } from "./refs.ts";
 import { commandAllowed } from "./risky.ts";
 import { unattendedRisk } from "./unattended.ts";
@@ -66,6 +67,22 @@ export function validateManifest(
   manifest.requirements.forEach((req, i) => {
     if (reqIds.has(req.id)) add("duplicate_id", `requirements.${i}`);
     reqIds.add(req.id);
+    if (req.type !== "web") return;
+    const path = `requirements.${i}`;
+    if ((req.url_patterns?.length ?? 0) > 8) add("web_template_count", `${path}.url_patterns`);
+    if ((req.domains?.length ?? 0) > 8) add("web_domain_count", `${path}.domains`);
+    req.domains?.forEach((domain, k) => {
+      if (!isValidHost(domain)) add("web_domain_invalid", `${path}.domains.${k}`);
+    });
+    if (req.session !== "own" || req.mode !== "read") return;
+    if (!req.url_patterns?.length) add("web_template_missing", path);
+    req.url_patterns?.forEach((source, k) => {
+      const parsed = parseTemplate(source);
+      const templatePath = `${path}.url_patterns.${k}`;
+      if (!parsed.ok) add("web_template_invalid", templatePath);
+      else if (req.domains !== undefined && !req.domains.includes(parsed.template.host))
+        add("web_template_host", templatePath);
+    });
   });
   const requirement = (id: string | undefined) => manifest.requirements.find((req) => req.id === id);
   const checkFile = (file: string, path: string) => {
