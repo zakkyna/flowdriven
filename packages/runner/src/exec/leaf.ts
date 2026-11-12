@@ -9,12 +9,12 @@ import {
 } from "@flowdriven/sdk";
 import { defaultCommandRunner } from "../checks/command.ts";
 import { runChecks } from "../checks/run-checks.ts";
-import { visible, visibleLines } from "../claude/text.ts";
+import { visible } from "../claude/text.ts";
 import { callGrant } from "../connectors/grants.ts";
 import type { ResolvedDeps } from "../engine.ts";
 import type { HeldCall } from "../harness.ts";
 import type { RunRow, StepRow } from "../storage.ts";
-import { approvedCallsOf, HOLD_TEXT, labelOf, MAX_HOLDS } from "./held.ts";
+import { approvedCallsOf, HOLD_TEXT, heldPayload, labelOf, MAX_HOLDS } from "./held.ts";
 import { limits } from "./limits.ts";
 import { stepTakesOutsideText } from "./outside.ts";
 import { raceAbort } from "./timeout.ts";
@@ -195,6 +195,12 @@ export async function runLeaf(
       if (result.outside === true) row.outside = true;
       if (result.hold) {
         const hold = result.hold;
+        const payload = heldPayload(hold.input);
+        if (payload === undefined) {
+          Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+          block(HOLD_TEXT.tooLarge);
+          return "failed";
+        }
         const grant = callGrant(hold.requirementId, hold.tool, hold.digest);
         const holds = store
           .listApprovals({ runId: run.id })
@@ -221,7 +227,7 @@ export async function runLeaf(
               stepId: step.id,
               itemKey,
               summary: `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
-              payload: visibleLines(JSON.stringify(hold.input, null, 2), 4000),
+              payload,
               call: { tool: hold.tool, input: hold.input },
               approves: [grant],
               onExpiry: "fail",

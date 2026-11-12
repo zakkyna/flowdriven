@@ -28,6 +28,9 @@ export function callGrant(requirementId: string, tool: string, digest: string): 
 export function isCallGrant(grant: string): boolean {
   return grant.includes("#");
 }
+export function pickKeyUsable(itemKey: string): boolean {
+  return itemKey !== "" && !itemKey.startsWith("#");
+}
 export function grantUsedKey(runId: string, itemKey: string, grant: string): string {
   return `grant-used:${runId}:${itemKey}:${grant}`;
 }
@@ -38,9 +41,12 @@ export type GrantBook = {
 export function createGrantBook(store: Pick<Store, "hasGrant" | "counter" | "increment">): GrantBook {
   return {
     has: (runId, grant, itemKey) =>
+      (isCallGrant(grant) || pickKeyUsable(itemKey)) &&
       store.hasGrant(runId, grant, itemKey) &&
       (!isCallGrant(grant) || store.counter(grantUsedKey(runId, itemKey, grant), "run") === 0),
     use: (runId, grant, itemKey) =>
-      !isCallGrant(grant) || store.increment(grantUsedKey(runId, itemKey, grant), "run") === 1,
+      isCallGrant(grant)
+        ? store.increment(grantUsedKey(runId, itemKey, grant), "run") === 1
+        : pickKeyUsable(itemKey),
   };
 }

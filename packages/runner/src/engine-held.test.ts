@@ -166,3 +166,26 @@ test("recoverAfterCrash leaves a run that waits for a held call in waiting_appro
   expect(c.store.getRun(c.run.id)?.state).toBe("waiting_approval");
   expect(c.store.getApproval("ap-1")?.state).toBe("pending");
 });
+
+test("beginAnswer stores no grant for a pick whose key starts with # or is empty, and still passes the step with the picked items", async () => {
+  const c = await ready();
+  const items = [{ id: "#0" }, { id: "" }, { id: "valid" }];
+  c.store.updateApproval("ap-1", {
+    kind: "ask",
+    approves: ["mail.delete_draft"],
+    maxPick: 3,
+    payload: { options: items.map((item) => ({ key: item.id, item })) },
+  });
+  const begun = c.engine.beginAnswer("ap-1", { picks: ["#0", "", "valid"] });
+  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "#0")).toBe(false);
+  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "")).toBe(false);
+  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "valid")).toBe(true);
+  expect(c.store.getStep(c.run.id, "send")).toMatchObject({ state: "passed", outputs: { choice: items } });
+  expect(c.store.listAudit(c.run.id)).toContainEqual(
+    expect.objectContaining({
+      kind: "ask_answered",
+      detail: { approvalId: "ap-1", picks: ["#0", "", "valid"] },
+    }),
+  );
+  await begun.settled;
+});

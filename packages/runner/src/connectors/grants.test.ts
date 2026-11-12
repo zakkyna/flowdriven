@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "vitest";
+import { heldPayload } from "../exec/held.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
 import {
@@ -69,4 +70,43 @@ test("a call grant: has is true after addGrant and before use, use is true once 
   expect(store.counter(key, "run")).toBe(1);
   expect(book.has("r1", grant, "j1")).toBe(false);
   expect(book.use("r1", grant, "j1")).toBe(false);
+});
+
+test("heldPayload returns the text for 4,000 characters and undefined for 4,001, counting the characters that visible adds", () => {
+  const hidden = String.fromCodePoint(0x200b);
+  const value = { x: hidden + "a".repeat(3979) };
+  const text = heldPayload(value);
+  expect(text).toHaveLength(4000);
+  expect(text).toContain("<U+200B>");
+  expect(heldPayload({ x: hidden + "a".repeat(3980) })).toBeUndefined();
+});
+test("a pick grant is not honoured for an item key that starts with #, and not for the empty key", async () => {
+  const store = await memoryStore();
+  const book = createGrantBook(store);
+  const grant = pickGrant("mail", "send");
+  for (const key of ["#0", "#named", ""]) {
+    store.addGrant("r", grant, key);
+    expect(book.has("r", grant, key)).toBe(false);
+    expect(book.use("r", grant, key)).toBe(false);
+  }
+});
+test("a pick grant is honoured for a declared key as before, and use still does not count it", async () => {
+  const store = await memoryStore();
+  const book = createGrantBook(store);
+  const grant = pickGrant("mail", "send");
+  store.addGrant("r", grant, "job");
+  expect(book.has("r", grant, "job")).toBe(true);
+  expect(book.use("r", grant, "job")).toBe(true);
+  expect(book.use("r", grant, "job")).toBe(true);
+  expect(store.counter(grantUsedKey("r", "job", grant), "run")).toBe(0);
+});
+test("a call grant is honoured and used once for a positional item key", async () => {
+  const store = await memoryStore();
+  const book = createGrantBook(store);
+  const grant = callGrant("mail", "send", "digest");
+  store.addGrant("r", grant, "#0");
+  expect(book.has("r", grant, "#0")).toBe(true);
+  expect(book.use("r", grant, "#0")).toBe(true);
+  expect(book.has("r", grant, "#0")).toBe(false);
+  expect(book.use("r", grant, "#0")).toBe(false);
 });

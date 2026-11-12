@@ -962,7 +962,7 @@ Taken from the reviewer's notes: a failure note is cleaned of connector ids (Tas
 
 The reviewer's kept proofs show both defects on the reviewed code: `.workflow/scratch/plan-05b/review/review-proof.test.ts`, tests "R-1: ..." and "R-2: ...". Use their flows and plays as the pattern for tests 2 and 9.
 
-- [ ] **Step 1: Write the failing tests.** In `leaf-hold.test.ts`:
+- [x] **Step 1: Write the failing tests.** In `leaf-hold.test.ts`:
   1. "a held call whose input does not fit the card is not offered: no approval row, no grant, and the step fails with This call is too large to show for your approval.";
   2. "an input that fits is shown whole: the last key of the input is in the card text";
   3. "the too-large check comes before reuse and before the count of holds".
@@ -976,16 +976,18 @@ The reviewer's kept proofs show both defects on the reviewed code: `.workflow/sc
   In `review-05b-fix.test.ts` (set up like `review-05b-r.test.ts`):
   9. "R-1: a held send with a long body and a bcc after it cannot be approved: there is no card, and the send never runs";
   10. "R-2: picking an item whose id is #0 does not release delete_draft for item #0 of a loop with no key: that call is held".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/leaf-hold.test.ts packages/runner/src/connectors/grants.test.ts packages/runner/src/engine-held.test.ts packages/runner/src/claude/review-05b-fix.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/connectors packages/runner/src/claude packages/runner/src/engine-ask.test.ts packages/runner/src/test-helpers`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/leaf-hold.test.ts packages/runner/src/connectors/grants.test.ts packages/runner/src/engine-held.test.ts packages/runner/src/claude/review-05b-fix.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/connectors packages/runner/src/claude packages/runner/src/engine-ask.test.ts packages/runner/src/test-helpers`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Show a held call whole or do not offer it, and never release a positional item by a pick" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ### Task 21: Review fixes: the outside mark on sign-off cards and on a loop's items, and no connector id in a failure note
 

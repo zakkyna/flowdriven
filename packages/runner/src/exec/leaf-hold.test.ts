@@ -171,9 +171,9 @@ test("after an approval the next request carries approvedCalls with tool and inp
   c.store.addGrant(run.id, "mail.delete_draft", "");
   expect(approvedCallsOf(c.store, run.id, "send", "")).toEqual([]);
 });
-test("the payload shows hidden characters as <U+...>, keeps its line breaks, and is cut at 4,000 characters (visibleLines)", async () => {
+test("the payload shows hidden characters as <U+...>, keeps its line breaks, and is never cut", async () => {
   const hidden = String.fromCodePoint(0x200b);
-  const value = { value: hidden + "x".repeat(5000) };
+  const value = { value: hidden + "x".repeat(100) };
   const c = await ready({ steps: { send: { hold: { ...hold, input: value } } } });
   await c.start();
   const payload = approval(c).payload;
@@ -181,7 +181,8 @@ test("the payload shows hidden characters as <U+...>, keeps its line breaks, and
   if (typeof payload !== "string") throw new Error("missing payload");
   expect(payload).toContain("<U+200B>");
   expect(payload).toContain("\n");
-  expect(payload).toHaveLength(4000);
+  expect(payload).toContain("x".repeat(100));
+  expect(payload.endsWith("\n}")).toBe(true);
   expect(visibleLines(`a${hidden}\nb`, 4000)).toBe("a<U+200B>\nb");
 });
 test("the label falls back to a connector for a ref that is not in the catalog", async () => {
@@ -205,4 +206,44 @@ test("a present result with block, noRetry, quota, auth or interrupted is handle
     expect(c.store.listApprovals()).toEqual([]);
     expect(c.harness.calls).toHaveLength(1);
   }
+});
+
+test("a held call whose input does not fit the card is not offered: no approval row, no grant, and the step fails with This call is too large to show for your approval.", async () => {
+  const c = await ready({ steps: { send: { hold: { ...hold, input: { body: "x".repeat(5000) } } } } });
+  const run = await c.start();
+  expect(c.store.listApprovals()).toEqual([]);
+  expect(c.store.hasGrant(run.id, grant, "")).toBe(false);
+  expect(c.store.getStep(run.id, "send")).toMatchObject({
+    state: "failed",
+    note: "This call is too large to show for your approval.",
+    attempts: [expect.objectContaining({ exit: "failed" })],
+  });
+  expect(run).toMatchObject({
+    state: "blocked",
+    blockedReason: "This call is too large to show for your approval.",
+  });
+});
+test("an input that fits is shown whole: the last key of the input is in the card text", async () => {
+  const value = { body: "x".repeat(3000), bcc: "last@example.com" };
+  const c = await ready({ steps: { send: { hold: { ...hold, input: value } } } });
+  await c.start();
+  expect(approval(c).payload).toBe(JSON.stringify(value, null, 2));
+  expect(approval(c).payload).toContain('"bcc": "last@example.com"');
+});
+test("the too-large check comes before reuse and before the count of holds", async () => {
+  const c = await ready({
+    steps: { send: [{ hold }, { hold: { ...hold, input: { body: "x".repeat(5000) } } }] },
+  });
+  const run = await c.start();
+  const first = approval(c);
+  c.store.createApproval({ ...first, id: "other-1", state: "approved" });
+  c.store.createApproval({ ...first, id: "other-2", state: "approved" });
+  c.store.updateRun(run.id, { state: "blocked" });
+  await c.engine.resumeRun(run.id);
+  expect(c.store.listApprovals()).toHaveLength(3);
+  expect(c.store.getApproval(first.id)?.state).toBe("pending");
+  expect(c.store.getRun(run.id)).toMatchObject({
+    state: "blocked",
+    blockedReason: "This call is too large to show for your approval.",
+  });
 });

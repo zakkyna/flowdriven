@@ -7,6 +7,7 @@ import {
   validateManifest,
 } from "@flowdriven/sdk";
 import type { CommandRunner } from "./checks/command.ts";
+import { pickKeyUsable } from "./connectors/grants.ts";
 import { EngineError } from "./errors.ts";
 import { runAsk } from "./exec/ask.ts";
 import { createChain } from "./exec/chain.ts";
@@ -396,7 +397,8 @@ export function createEngine(input: EngineDeps): Engine {
     const at = now().toISOString();
     store.transaction(() => {
       store.updateApproval(id, { state: "approved", picks: answer.picks, resolvedAt: at });
-      for (const tool of a.approves) for (const pick of answer.picks) store.addGrant(run.id, tool, pick);
+      for (const tool of a.approves)
+        for (const pick of answer.picks) if (pickKeyUsable(pick)) store.addGrant(run.id, tool, pick);
       store.upsertStep({
         ...row,
         state: "passed",
