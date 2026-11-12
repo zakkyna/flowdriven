@@ -25,7 +25,9 @@ import {
   startHookEvent,
   tripSentence,
 } from "./stream.ts";
+import { visible } from "./text.ts";
 export const MAX_DENIED_ENTRIES = 50;
+const MAX_PAGE_ROWS = 50;
 export type RunInput = {
   runId: string;
   stepId: string;
@@ -133,6 +135,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       }
     }
     let deniedEntries = 0;
+    let pageRows = 0;
     channel = startChannel({
       dir,
       decide: (call) => {
@@ -165,6 +168,37 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         attempt?.learn(r.tabs ?? []);
         posts.set(call.tool_use_id, r);
         return { text: r.text, line: postLine(r.text) };
+      },
+      onPost: ({ toolUseId }) => {
+        try {
+          const r = posts.get(toolUseId);
+          if (!r || r.tool !== "get_page_text" || !policy.browser) return;
+          if (pageRows < MAX_PAGE_ROWS) {
+            pageRows++;
+            const address =
+              r.address ??
+              (r.kind === "pass" || r.kind === "cut"
+                ? (/^Title: [^\r\n\u2028\u2029]*\nURL: ([^\r\n\u2028\u2029]*)\nSource element: [^\r\n\u2028\u2029]*\n---(?:\n|$)/.exec(
+                    r.text,
+                  )?.[1] ?? "")
+                : "");
+            const fields = {
+              ...detail,
+              requirementId: policy.browser.requirementId,
+              tool: r.tool,
+              address: visible(address, 300),
+            };
+            if (r.kind === "pass" || r.kind === "cut") audit("page_read", fields);
+            else audit("page_withheld", { ...fields, why: r.kind, sentence: r.text });
+          }
+          if (r.kind === "moved") {
+            forced = { kind: "stop", sentence: STOP.moved };
+            child?.kill();
+          } else if (r.kind === "challenge") {
+            forced = { kind: "block", sentence: STOP.challenge };
+            child?.kill();
+          }
+        } catch {}
       },
       pollMs: deps.pollMs,
       onCall: ({ decision }) => {

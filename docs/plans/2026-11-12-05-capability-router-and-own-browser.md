@@ -741,7 +741,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - an `unchecked` result only withholds that one result: the attempt goes on.
 The audit `tool_calls` at the end of the attempt is as before.
 
-- [ ] **Step 1: Write the failing tests** in `adapter-post.test.ts` (the `setup` of `adapter-browser.test.ts`, copied; fake `claude` with a page table):
+- [x] **Step 1: Write the failing tests** in `adapter-post.test.ts` (the `setup` of `adapter-browser.test.ts`, copied; fake `claude` with a page table):
   1. "a page that passes is audited as page_read with the final address through visible and the step's ids, and the worker's tool_result is exactly the rewritten first block"
   2. "a moved page is audited as page_withheld with `why: moved` and the sentence, ends the attempt as noRetry with `The page moved to an address this step does not declare.`, and is not retried"
   3. "a challenge is audited as page_withheld with `why: challenge`, ends as a block with the challenge sentence, and the worker never receives the page text"
@@ -750,16 +750,18 @@ The audit `tool_calls` at the end of the attempt is as before.
   6. "the audit rows page_read and page_withheld stop at 50 for an attempt and tool_calls still counts every call"
   7. "an oversized request (a page text of 2.1 million characters) gets no answer, the hook prints the fixed sentence, the worker sees it, the tripwire does not trip and the attempt carries on"
   8. "a post hook that is killed lets the original blocks through and the tripwire blocks the step with the present sentence" (the control folder's `hook.sh` is replaced by a script that exits 7 for `post` after the start)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-post.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the `onPost` handler.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-post.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the `onPost` handler.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude
 git commit -m "Audit page reads, stop moved pages and challenges and withhold unchecked results" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
