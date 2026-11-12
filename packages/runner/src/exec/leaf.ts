@@ -309,6 +309,7 @@ export async function runLeaf(
                 store.createApproval({
                   id: newId("ap"),
                   kind: "result_sign_off",
+                  ...(row.outside === true ? { outside: true } : {}),
                   runId: run.id,
                   stepId: step.id,
                   itemKey,

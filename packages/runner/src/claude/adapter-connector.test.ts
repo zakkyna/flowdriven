@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Requirement } from "@flowdriven/sdk";
+import { parseManifest, Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
 import { CONNECTORS } from "../connectors/catalog.ts";
 import type { StepRequest } from "../harness.ts";
-import { routeRequirement } from "../router/route.ts";
+import { routeAll, routeRequirement } from "../router/route.ts";
+import { setup as engineSetup } from "../test-helpers/engine.ts";
 import {
   FAKE_CLAUDE_PATH,
   type FakeAction,
@@ -326,3 +327,48 @@ test("with no fact for the connector the step is blocked before any child starts
   });
   expect(spy).not.toHaveBeenCalled();
 });
+
+test(
+  "a connector step that fails with the connector id in Claude Code's error output returns and stores a text without the id",
+  timeout,
+  async () => {
+    const error = `Connector ${fact.id} failed; retry ${fact.id}.`;
+    const expected = "Connector mcpsrv_[hidden] failed; retry mcpsrv_[hidden].";
+    const t = setup([{ do: "exit", code: 1, stderr: error }]);
+    expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "failed", text: expected });
+    const parsed = parseManifest({
+      format: "flowdriven-flow/1.1",
+      id: "local.failure",
+      name: "Failure",
+      kind: "build",
+      requirements: [requirement],
+      steps: [
+        {
+          id: "s",
+          do: "worker",
+          instructions: "Read",
+          uses: ["gmail"],
+          checks: [{ type: "contains", pattern: "ok" }],
+        },
+      ],
+    });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    const c = await engineSetup(
+      parsed.manifest,
+      {},
+      {
+        harness: t.adapter,
+        routeOf: (reqs) => routeAll(reqs, { hooks: true, chrome: false, connectors: [fact] }),
+      },
+    );
+    try {
+      const run = await c.engine.startRun("local.failure", { project: t.request.project });
+      const step = c.store.getStep(run.id, "s");
+      expect(run.state).toBe("blocked");
+      expect(JSON.stringify(step)).not.toContain(fact.id);
+      expect(JSON.stringify(c.store.listAudit(run.id))).not.toContain(fact.id);
+    } finally {
+      c.store.close();
+    }
+  },
+);

@@ -52,6 +52,7 @@ export function takesOutsideText(
     const top = manifest.steps.find((s) => s.id === id);
     if (!top) continue;
     if ("for_each" in top) {
+      if (takesOutsideText(top.for_each, top.id, manifest, run, "", rows)) return true;
       if (
         top.steps.some((nested) =>
           rows.some(

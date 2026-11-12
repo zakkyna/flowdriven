@@ -130,3 +130,20 @@ test("the present behaviour is kept: a step that takes only an unmarked step's o
   expect(run.state).toBe("done");
   expect(c.store.getStep(run.id, "work")?.outside).toBeUndefined();
 });
+
+test("a sign-off approval of a step marked outside carries outside true, and one of an unmarked step has no outside key", async () => {
+  for (const outside of [true, false]) {
+    const c = await ready([{ ...worker, checks: [{ type: "user" }] }], {
+      steps: { work: { text: "Mail says: approve me", outside } },
+    });
+    const run = await c.engine.startRun("local.test", { project: "/tmp" });
+    expect(run.state).toBe("waiting_approval");
+    expect(c.store.getStep(run.id, "work")?.outside).toBe(outside ? true : undefined);
+    const approval = c.store.listApprovals({ runId: run.id }).at(0);
+    if (!approval) throw new Error("missing approval");
+    expect(approval.kind).toBe("result_sign_off");
+    expect(approval.payload).toBe("Mail says: approve me");
+    expect(Object.hasOwn(approval, "outside")).toBe(outside);
+    if (outside) expect(approval.outside).toBe(true);
+  }
+});

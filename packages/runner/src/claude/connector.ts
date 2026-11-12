@@ -103,3 +103,7 @@ export function mcpConfigText(connector: ConnectorPolicy): string {
     },
   });
 }
+
+export function hideConnectorIds(text: string): string {
+  return text.replace(/mcpsrv_[A-Za-z0-9]+/g, "mcpsrv_[hidden]");
+}

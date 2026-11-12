@@ -6,7 +6,7 @@ import { BROWSER_DENY, CHROME_PREFIX, closeSentence } from "./browser.ts";
 import { decidePost, POST_TEXT, type PostResult, postLine, STOP } from "./browser-post.ts";
 import { startChannel } from "./channel.ts";
 import { startChild } from "./child.ts";
-import { CONNECTOR_DENY, CONNECTOR_STOP, mcpConfigText } from "./connector.ts";
+import { CONNECTOR_DENY, CONNECTOR_STOP, hideConnectorIds, mcpConfigText } from "./connector.ts";
 import { type ConnectorPostResult, decideConnectorPost } from "./connector-post.ts";
 import { createControlDir, removeControlDir, writeMcpConfig } from "./control.ts";
 import { DENY, decide } from "./decide.ts";
@@ -538,7 +538,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     return {
       kind: "failed",
       text:
-        child.stderrTail().slice(-2000).trim() ||
+        hideConnectorIds(child.stderrTail().slice(-2000).trim()) ||
         (result === undefined ? "Claude Code ended without a result." : "Claude Code reported an error."),
     };
   } finally {

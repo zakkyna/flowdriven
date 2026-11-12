@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { callGrant, digestCall, pickGrant } from "../connectors/grants.ts";
-import { CONNECTOR_DENY, type ConnectorPolicy } from "./connector.ts";
+import { CONNECTOR_DENY, type ConnectorPolicy, hideConnectorIds } from "./connector.ts";
 import { DENY, decide } from "./decide.ts";
 import type { Policy } from "./policy.ts";
 import { visible } from "./text.ts";
@@ -149,4 +149,10 @@ test("the held input is a copy: changing the original after the decision does no
   const result = decideCall("delete_draft", input);
   input.nested.id = "changed";
   expect(result).toMatchObject({ allow: false, held: { input: { nested: { id: "d1" } } } });
+});
+
+test("hideConnectorIds replaces every connector id and leaves other text as it is", () => {
+  expect(hideConnectorIds("before mcpsrv_Ab123, mcpsrv_X9! mcpsrv_ and mcpsrv_foo-bar after")).toBe(
+    "before mcpsrv_[hidden], mcpsrv_[hidden]! mcpsrv_ and mcpsrv_[hidden]-bar after",
+  );
 });

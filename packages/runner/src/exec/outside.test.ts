@@ -116,3 +116,22 @@ test("an expression that cannot be read still fails closed", () => {
     false,
   );
 });
+
+const itemsLoop = {
+  id: "loop",
+  for_each: "${steps.source.outputs.jobs}",
+  as: "job",
+  steps: [{ ...worker, id: "tick", instructions: "Tick" }],
+};
+test("a later step that takes the items of a loop over marked text is marked, also when the nested steps do not use the item", () => {
+  const m = manifest([source, itemsLoop, { ...worker, instructions: "Use ${steps.loop.items}" }]);
+  const nested: StepRow = { ...row, stepId: "tick", itemKey: "#0", outside: false };
+  expect(takesOutsideText("Use ${steps.loop.items}", "work", m, run, "", [row, nested])).toBe(true);
+});
+test("a loop over unmarked text does not mark a later step that takes its items", () => {
+  const m = manifest([source, itemsLoop, { ...worker, instructions: "Use ${steps.loop.items}" }]);
+  const nested: StepRow = { ...row, stepId: "tick", itemKey: "#0", outside: false };
+  expect(
+    takesOutsideText("Use ${steps.loop.items}", "work", m, run, "", [{ ...row, outside: false }, nested]),
+  ).toBe(false);
+});

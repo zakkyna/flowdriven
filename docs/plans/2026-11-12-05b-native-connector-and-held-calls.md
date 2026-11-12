@@ -1002,19 +1002,21 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 The reviewer's kept proofs "R-3: ..." and "R-4: ..." in `.workflow/scratch/plan-05b/review/review-proof.test.ts` show the two marks missing on the reviewed code. Use their flows as the pattern.
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   1. (`leaf-outside.test.ts`) "a sign-off approval of a step marked outside carries outside true, and one of an unmarked step has no outside key";
   2. (`outside.test.ts`) "a later step that takes the items of a loop over marked text is marked, also when the nested steps do not use the item";
   3. (`outside.test.ts`) "a loop over unmarked text does not mark a later step that takes its items";
   4. (`decide-connector.test.ts`) "hideConnectorIds replaces every connector id and leaves other text as it is";
   5. (`adapter-connector.test.ts`) "a connector step that fails with the connector id in Claude Code's error output returns and stores a text without the id".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/outside.test.ts packages/runner/src/exec/leaf-outside.test.ts packages/runner/src/claude/decide-connector.test.ts packages/runner/src/claude/adapter-connector.test.ts`. Expected: FAIL on the new tests.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/claude packages/runner/src/engine-ask.test.ts`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/outside.test.ts packages/runner/src/exec/leaf-outside.test.ts packages/runner/src/claude/decide-connector.test.ts packages/runner/src/claude/adapter-connector.test.ts`. Expected: FAIL on the new tests.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/claude packages/runner/src/engine-ask.test.ts`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Mark sign-off cards and loop items that carry outside text, and keep connector ids out of failure notes" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, then the chair (Claude Code) for one line of test 5, 2026-11-12. Evidence: pnpm format && pnpm check. Chair's note: the engine keeps a general note on the step's row after its attempts run out, not the text of the failed attempt, so test 5 asserts what matters: the text the adapter returns has `mcpsrv_[hidden]` in place of the id, and neither the step's row nor the audit log holds the id.
