@@ -824,7 +824,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** tests only; they change no source. They run the real engine with the real adapter, hook, channel and fake `claude` (`createEngine({ store, harness: adapter, routeOf: (reqs) => routeAll(reqs, facts, catalog) })` on an in-memory store; the adapter built as in `adapter-connector.test.ts` with `grants: createGrantBook(store)`; `engine.registerFlow(manifest, hash)`), and `createRunnerService` in demo mode with a scripted harness for the handler tests. Flows are made-up manifests; plays are chosen by the step instructions (`when`), the more specific play first. The prototype-host test passes its own catalog entry (`connector:prototype-host`, name `prototype-host`, prefix `mcp__prototype-host__`, a read tool `list_projects`, a risky `prototype_publish` of class `post`, and a fake connector with that name) to keep the spec's test name.
 
-- [ ] **Step 1: Write the failing tests.** `review-05b-r.test.ts`:
+- [x] **Step 1: Write the failing tests.** `review-05b-r.test.ts`:
   1. "R10: a publish for an unpicked job is held": an ask picks `j1` and `approves: ["host.prototype_publish"]`; a loop over the choice with `key: "${job.id}"` runs the publish for `j1` (audit `grant_used` with grant pick and item `j1`), and a later top-level step that tries the same publish has no grant and is held (a `risky_action` approval, the run `waiting_approval`, no grant at item key "");
   2. "the item key of a picked item in a loop over the choice equals the pick key when the loop declares key: the request of the picked item carries the pick key and the grant exists for it" (scripted harness, engine only);
   3. "without a key on the loop the item key is #<position>, not the pick key, so no grant matches and the call is held (fail closed, Fact 11)";
@@ -838,16 +838,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "approvals.resolve approves and rejects a held call through the handler, refuses edit and applyToSimilar with their present sentences, and an ask is still told to pick";
   11. "R4: the walk's flow shape (a Gmail requirement with search_threads and delete_draft and a worker step that uses it before any ask) has no issue as a manual flow and an unattended_prefix error with a schedule trigger";
   12. "a held run survives the end of the process's engine: a new engine on the same store leaves the run waiting_approval after recoverAfterCrash and the approval can still be approved".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/review-05b-r.test.ts packages/runner/src/service/review-05b-s.test.ts`. Expected: PASS. These tests prove what Tasks 5 to 16 built, so they are written last; a failure here is a bug in an earlier task: fix it in that task's code, never by weakening the test.
-- [ ] **Step 3: Implement** only the fixes the tests show (the files of Tasks 5 to 16). If test 3 shows the item key equals the pick key without a loop key, stop and write `Blocked:` (Fact 11 would be wrong).
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. A load-sensitive test of plan 03 that fails alone-in-suite is re-run alone first.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/review-05b-r.test.ts packages/runner/src/service/review-05b-s.test.ts`. Expected: PASS. These tests prove what Tasks 5 to 16 built, so they are written last; a failure here is a bug in an earlier task: fix it in that task's code, never by weakening the test.
+- [x] **Step 3: Implement** only the fixes the tests show (the files of Tasks 5 to 16). If test 3 shows the item key equals the pick key without a loop key, stop and write `Blocked:` (Fact 11 would be wrong).
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS. A load-sensitive test of plan 03 that fails alone-in-suite is re-run alone first.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude/review-05b-r.test.ts packages/runner/src/service/review-05b-s.test.ts
 git commit -m "Prove R10, the item key, hold, approve, reject, the outside mark and R4 against the fake claude" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
