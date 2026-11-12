@@ -77,6 +77,8 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
   let interrupted = false;
   let abort = false;
   let forced: Outcome | undefined;
+  let pendingStop: { id: string; outcome: Outcome } | undefined;
+  let stopTimer: ReturnType<typeof setTimeout> | undefined;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let result: ResultInfo | undefined;
   const limits: RateLimit[] = [];
@@ -139,6 +141,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     channel = startChannel({
       dir,
       decide: (call) => {
+        if (pendingStop) return { allow: false, tool: "unknown", reason: DENY.badRequest };
         const decision = decide(policy, call, attempt?.state());
         if (decision.allow && decision.effect === "page" && policy.browser && deps.pages && attempt) {
           deps.pages.take(input.runId, policy.browser.requirementId);
@@ -192,12 +195,15 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             else audit("page_withheld", { ...fields, why: r.kind, sentence: r.text });
           }
           if (r.kind === "moved") {
-            forced = { kind: "stop", sentence: STOP.moved };
-            child?.kill();
+            pendingStop = { id: toolUseId, outcome: { kind: "stop", sentence: STOP.moved } };
           } else if (r.kind === "challenge") {
-            forced = { kind: "block", sentence: STOP.challenge };
-            child?.kill();
+            pendingStop = { id: toolUseId, outcome: { kind: "block", sentence: STOP.challenge } };
           }
+          if (pendingStop)
+            stopTimer = setTimeout(() => {
+              forced = pendingStop?.outcome;
+              child?.kill();
+            }, deps.exitWaitMs);
         } catch {}
       },
       pollMs: deps.pollMs,
@@ -291,6 +297,25 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           child?.kill();
           break;
         }
+        if (
+          pendingStop &&
+          event.type === "user" &&
+          event.message &&
+          typeof event.message === "object" &&
+          "content" in event.message &&
+          Array.isArray(event.message.content) &&
+          event.message.content.some(
+            (block: unknown) =>
+              block !== null &&
+              typeof block === "object" &&
+              "tool_use_id" in block &&
+              block.tool_use_id === pendingStop?.id,
+          )
+        ) {
+          forced = pendingStop.outcome;
+          child?.kill();
+          break;
+        }
         auth ||= isAuthFailure(event);
         quota ||= isRateLimited(event);
         const limit = parseRateLimit(event, nowMs());
@@ -309,6 +334,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     const done = await child.done;
     if (interrupted) return { kind: "interrupted" };
     if (forced) return forced;
+    if (pendingStop) return pendingStop.outcome;
     if (abort) return { kind: "failed", text: "The step was aborted." };
     if (auth || result?.authFailed) return { kind: "auth" };
     if (result?.ok && done.code === 0)
@@ -327,6 +353,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
   } finally {
     input.signal.removeEventListener("abort", onAbort);
     if (exitTimer !== undefined) clearTimeout(exitTimer);
+    if (stopTimer !== undefined) clearTimeout(stopTimer);
     channel?.stop();
     audit("tool_calls", {
       ...detail,
