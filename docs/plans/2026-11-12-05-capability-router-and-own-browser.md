@@ -1523,3 +1523,40 @@ git commit -m "Mark a step outside when its instructions take the output of a ma
 
 Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
+---
+
+### What the chair settled after the second fix round
+
+- Task 34 left the screen stricter than the runner: the runner refuses the allow when a web requirement that a step uses is not routed, and the panel, which cannot see which steps use a row, hid Allow when any web row is not routed. A flow with an unused web requirement that cannot be routed could then be allowed by the runner and not from the screen. Task 37 lets the runner say it: the read model carries the sentence, and the panel follows it.
+- Present assertions that changed in the fix rounds and that no task named: in `packages/runner/src/triggers/service.test.ts` and `packages/runner/src/triggers/service-done.test.ts` the expected `trigger` of a run a trigger started gained `index: 0` (Task 35 gives every such run its trigger's index; stricter, not weaker). In `packages/runner/src/service/capabilities.test.ts` and `packages/runner/src/service/readiness-web.test.ts` two tests that allow a flow now let their step use a skill requirement instead of a web requirement, because their service has no Claude Code with the Chrome option and Task 34 refuses the allow for a dropped web row; their assertions did not change.
+
+### Task 37: Review fix: the runner says when there is nothing to allow, and the panel follows it
+
+**Files:**
+- Modify: `packages/contracts/src/capability.ts` and its test, `packages/runner/src/service/capabilities.ts`, `packages/runner/src/service/capabilities.test.ts`, `packages/fixtures/src/story/capabilities.ts`, `packages/fixtures/src/client.ts` (if the fixture builds the read model there), `packages/fixtures/src/capabilities.test.ts`, `apps/desktop/src/screens/builder/CapabilitiesPanel.tsx`, `apps/desktop/src/screens/builder/Capabilities.test.tsx`
+
+**Interfaces:**
+- `packages/contracts/src/capability.ts`: `FlowCapabilities` gains `allowBlocked: z.string().min(1).max(200).optional()`: the sentence that says why the allow cannot be given now. Nothing else of the contract changes, and `CONTRACT_VERSION` changes only if the present rule of the contracts package says an optional field needs it (read the package's own notes and tests and follow them).
+- `capabilities.ts` (runner): one function decides whether the allow is blocked (a web requirement that a step uses has a row that is not routed) and is used by both `get` and `allow`: `get` sets `allowBlocked: ALLOW_NOT_ROUTED` then and leaves the field out otherwise; `allow` throws `not_allowed` with the same sentence as today.
+- The fixture's read model sets `allowBlocked` by the same rule (its own copy of the sentence stays pinned by its test).
+- `CapabilitiesPanel.tsx`: the panel shows the sentence of `capabilities.allowBlocked` with its icon and no Allow button exactly when that field is there and the consent is not given; its own constant `ALLOW_NOT_ROUTED` and its own test of the rows (`webMissing`) are removed. Withdraw stays when the consent is given.
+
+**Present assertions that change:** the test in `Capabilities.test.tsx` that pins the panel's own constant to the runner's sentence goes away with the constant; in its place the panel test below reads the sentence from the read model. The runner test that pins `ALLOW_NOT_ROUTED` to its words stays.
+
+- [ ] **Step 1: Write the failing tests:**
+  1. contract test: "allowBlocked is optional, and a text of 1 to 200 characters parses"
+  2. `capabilities.test.ts`: "get carries allowBlocked while a used web row is dropped and leaves it out once the row is routed"
+  3. `capabilities.test.ts`: "an unused web requirement that is not routed leaves allowBlocked out, and the allow is accepted"
+  4. `Capabilities.test.tsx`: "the panel shows the sentence of allowBlocked and no Allow button, and with no allowBlocked it shows Allow even when an unused web row is not routed"
+  5. `packages/fixtures/src/capabilities.test.ts`: "the fixture read model sets allowBlocked by the same rule"
+- [ ] **Step 2: Run** the changed test files. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `pnpm vitest run packages/contracts packages/runner/src/service packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages apps
+git commit -m "Let the runner say when there is nothing to allow and make the panel follow it" -m "Assisted-by: Claude Code"
+```
+
