@@ -31,6 +31,7 @@ export type ArgsInput = {
   addDirs: string[];
   schema?: object;
   chrome?: boolean;
+  mcpConfigPath?: string;
 };
 export function assertSafeArgs(args: readonly string[]): void {
   for (const arg of args)
@@ -52,7 +53,7 @@ export function buildClaudeArgs(input: ArgsInput): string[] {
     "--restricted",
     "--strict-mcp-config",
     "--mcp-config",
-    '{"mcpServers":{}}',
+    input.mcpConfigPath ?? '{"mcpServers":{}}',
     "--tools",
     input.tools.join(","),
     "--disable-slash-commands",

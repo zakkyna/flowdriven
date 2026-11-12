@@ -1,8 +1,11 @@
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { parseTemplate, type Requirement, type UrlTemplate, webRates } from "@flowdriven/sdk";
+import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
 import type { Routed } from "../router/types.ts";
 import type { BrowserPolicy } from "./browser.ts";
+import { CONNECTOR_STOP, type ConnectorPolicy } from "./connector.ts";
+import type { ConnectorFact } from "./connector-scan.ts";
 import { hasParentPart, isInside, resolveDeep } from "./paths.ts";
 import { visible } from "./text.ts";
 
@@ -15,6 +18,7 @@ export type Policy = {
   schema: boolean;
   sessionId: string;
   browser?: BrowserPolicy;
+  connector?: ConnectorPolicy;
 };
 
 export function isProjectRef(ref: string | undefined): boolean {
@@ -32,6 +36,8 @@ export function buildPolicy(input: {
   kind: "worker" | "agent";
   requirements: Requirement[];
   routes?: Routed[];
+  connectors?: ConnectorFact[];
+  catalog?: ConnectorEntry[];
   project: string;
   controlRoot: string;
   controlCwd: string;
@@ -56,6 +62,7 @@ export function buildPolicy(input: {
       const route = input.routes?.find((entry) => entry.requirementId === requirement.id);
       if (
         policy.browser ||
+        policy.connector ||
         !route?.routed ||
         route.provider !== "claude-in-chrome" ||
         requirement.mode !== "read" ||
@@ -71,6 +78,53 @@ export function buildPolicy(input: {
         templates.push(parsed.template);
       }
       policy.browser = { requirementId: requirement.id, templates, ...webRates(requirement) };
+      return false;
+    }
+    if (requirement.type === "mcp_server") {
+      const fail = () =>
+        new Error(`This step uses something FlowDriven cannot enforce yet (${requirement.id}).`);
+      const entry = catalogEntry(requirement.ref, input.catalog ?? CONNECTORS);
+      const route = input.routes?.find((item) => item.requirementId === requirement.id);
+      if (
+        !entry ||
+        (requirement.connect !== undefined && requirement.connect !== "native") ||
+        policy.connector ||
+        policy.browser ||
+        !route?.routed ||
+        route.provider !== "claude-ai-connector"
+      )
+        throw fail();
+      const fact = input.connectors?.find((item) => item.name === entry.name && item.url === entry.url);
+      if (!fact || fact.status !== "connected") throw new Error(CONNECTOR_STOP.down(entry.label));
+      const tools = [...new Set(requirement.tools ?? [])];
+      const read: string[] = [];
+      const risky: ConnectorPolicy["risky"] = {};
+      for (const tool of tools) {
+        const scanned = fact.tools.find((item) => item.name === tool);
+        if (entry.read.includes(tool) && scanned?.readOnly === true) read.push(tool);
+        else if (Object.hasOwn(entry.risky, tool) && scanned) {
+          const action = entry.risky[tool];
+          if (action === undefined) throw fail();
+          Object.defineProperty(risky, tool, {
+            value: action,
+            enumerable: true,
+            configurable: true,
+            writable: true,
+          });
+        } else throw fail();
+      }
+      policy.connector = {
+        requirementId: requirement.id,
+        label: entry.label,
+        name: entry.name,
+        url: entry.url,
+        id: fact.id,
+        prefix: entry.prefix,
+        tools,
+        read,
+        risky,
+        blocked: fact.tools.map((item) => item.name).filter((name) => !tools.includes(name)),
+      };
       return false;
     }
     throw new Error(`This step uses something FlowDriven cannot enforce yet (${requirement.id}).`);

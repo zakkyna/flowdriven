@@ -72,3 +72,9 @@ export function sweepControlRoot(root: string): number {
     return 0;
   }
 }
+
+export function writeMcpConfig(dir: { path: string }, text: string): string {
+  const path = join(dir.path, "mcp.json");
+  writeFileSync(path, text, { mode: 0o600 });
+  return path;
+}
