@@ -865,7 +865,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `connector-walk-steps.ts` (pure; no `electron`): `connectorWalkPaths(root)` returns `{ output, dataDir, flowDir }` under `<root>/.workflow/scratch/plan-05b/walk/` (`pictures`, `app data`, `flow`); `CONNECTOR_WALK_FLOW_ID = "local.gmail-check"`; `CONNECTOR_WALK_STEPS` (`touch-before` at `#/builder/local.gmail-check` waiting for `What this flow may touch` and `Allow`, `touch-after` waiting for `Allowed for this version` and `Withdraw`); `runHash(runId)` = `#/runs/<runId>` and `inboxHash(approvalId)` = `#/inbox/<approvalId>` (each through `encodeURIComponent`); `isRunInState(runs: unknown, runId: string, states: string[]): boolean`; `auditCounts(records: unknown, kinds: string[]): string` returns one line `counts: connector_call=1 call_held=1 tool_denied=1` (a count per kind, in the order given, never any detail text); `CONNECTOR_WALK_FLOW` (YAML) and `CONNECTOR_WALK_README`. The flow is manual: requirement `gmail` (`type: mcp_server`, `ref: connector:gmail`, `connect: native`, `sensitive: true`, `tools: [search_threads, delete_draft]`); step `alerts` (title `Count the alert threads`, `uses: [gmail]`, `worker: { effort: low }`, instructions: use `search_threads` once with the query `from:donotreply@upwork.com newer_than:7d`, return only the number of threads as the output `count` (type text), copy no email text); step `hold` (title `Hold test`, `uses: [gmail]`, `worker: { effort: low }`, instructions: call `delete_draft` once with the draft id `flowdriven-hold-test-no-such-draft`; FlowDriven is expected to hold the call; if it is held, stop and report that it is held).
 - `connector-walk.ts` (Electron, like `browser-walk.ts`; it is not run by the executor): starts the runner bridge with `FLOWDRIVEN_DATA_DIR` set to the walk's own folder (emptied first) and `FLOWDRIVEN_DEMO` deleted, writes the flow and README, imports it with `flows.import`, runs `harnesses.rescan` and `harnesses.setConsent` (`claude-code`, `given`), opens `#/builder/local.gmail-check`, takes the picture, presses Allow, takes the picture, runs the flow (`flows.run`), polls `runs.list` until the run is `waiting_approval` (at most `CONNECTOR_WALK_WAIT_MS`, default 180,000; a terminal state first is an error), reads the pending `risky_action` approval with `approvals.list`, takes the pictures of the run (`runHash`) and the Inbox card (`inboxHash`), rejects the held call with `approvals.resolve` (`decision: "reject"`), waits for the run to end, and prints `run <id> held`, `run <id> ended <state>`, the `auditCounts` line over `audit.list` for the run (`connector_call`, `call_held`, `tool_denied`) and `Pictures: <dir>`. It prints no email text and never approves the call.
 
-- [ ] **Step 1: Write the failing tests.** `connector-demo.test.ts`:
+- [x] **Step 1: Write the failing tests.** `connector-demo.test.ts`:
   1. "the demo prints the eight lines in order";
   2. "each line comes from the audit, the approvals or the call log: a run with no connectors scripted does not print line 1";
   3. "the demo leaves no control folder and no temporary folder behind".
@@ -875,16 +875,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   6. "the check flow declares the gmail requirement with exactly search_threads and delete_draft, the alert query and the hold-test draft id, and is a manual flow with two worker steps";
   7. "isRunInState reads a runs list by run id and state and refuses anything that is not a list";
   8. "auditCounts counts the three kinds and prints no detail".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/test-helpers/connector-demo.test.ts apps/desktop/electron/connector-walk-steps.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the six files. The executor does NOT run the walk.
-- [ ] **Step 4: Run** the same command, and `node packages/runner/src/test-helpers/connector-demo.ts`. Expected: PASS; the script prints the eight lines and exits 0.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/test-helpers/connector-demo.test.ts apps/desktop/electron/connector-walk-steps.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the six files. The executor does NOT run the walk.
+- [x] **Step 4: Run** the same command, and `node packages/runner/src/test-helpers/connector-demo.ts`. Expected: PASS; the script prints the eight lines and exits 0.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/test-helpers/connector-demo-run.ts packages/runner/src/test-helpers/connector-demo.ts packages/runner/src/test-helpers/connector-demo.test.ts apps/desktop/electron/connector-walk-steps.ts apps/desktop/electron/connector-walk-steps.test.ts apps/desktop/electron/connector-walk.ts
 git commit -m "Add the evidence for the connector on the fake claude and the walk for the real app" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, then the chair (Claude Code) for three lines of the demo's pick flow (the scripted worker calls StructuredOutput, and the contains check reads a text output), 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
