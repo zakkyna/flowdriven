@@ -1599,3 +1599,6 @@ git commit -m "Pass the outside mark through an ask, and say browser in the walk
 
 Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
+### Close of the review
+
+Task 38 fixed F-1 (commit `14c3a50`; the gate passed with 217 test files and 1,444 tests). The reviewer's kept proof of F-1, run against the fixed code, now fails with "expected true to be undefined": the mark it expected to be missing is set. With that the review is closed: 17 findings from four lenses and one fix review, all minor, each fixed, measured or written down as a Known limit, and one fresh verification of the whole ledger that passed. What stays open is named in the Known limits and in the Handover: the tab left open after a stop, held calls and the taint of what follows outside text (plan 05b), and two real job pages read with the owner watching.
