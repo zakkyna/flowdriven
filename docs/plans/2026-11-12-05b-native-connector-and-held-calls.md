@@ -1020,3 +1020,31 @@ git commit -m "Mark sign-off cards and loop items that carry outside text, and k
 ```
 
 Done by: Codex/gpt-6.1-terra, then the chair (Claude Code) for one line of test 5, 2026-11-12. Evidence: pnpm format && pnpm check. Chair's note: the engine keeps a general note on the step's row after its attempts run out, not the text of the failed attempt, so test 5 asserts what matters: the text the adapter returns has `mcpsrv_[hidden]` in place of the id, and neither the step's row nor the audit log holds the id.
+
+### Task 22: Fix from the repeated walk: the connector scan does not wait for connectors FlowDriven does not use
+
+The chair repeated the walk after Tasks 20 and 21 (2026-11-13). It stopped twice at its first screen, before any call to Gmail: the flow's screen had no Allow button, because the stored scan held no connector. Measured right after: of the owner's 12 claude.ai connectors one stayed `pending` for more than 20 seconds, while Gmail was `connected` after about 4 seconds. `readConnectors` goes on asking while ANY connector is `pending`, so the rescan took its whole 20 seconds, longer than the walk waits for it. The first walk passed because no connector was pending then.
+
+**Files:**
+- Modify: `packages/runner/src/claude/connector-scan.ts`, `packages/runner/src/claude/inventory.ts`
+- Modify (tests): `packages/runner/src/claude/connector-scan.test.ts`
+
+**Interfaces:**
+- `readConnectors` gains the option `names?: readonly string[]`. With `names`, the scan goes on asking only while a connector whose `name` is in `names` is `pending`; a `pending` connector outside `names` never delays the answer and is returned with the status `pending`. The first answer is always awaited, and the deadline, the kill of the child and every other rule stay. Without `names` the function is as today.
+- The inventory path that calls `readConnectors` (in `readInventory`) passes the names of the catalog. `readInventory` gains `catalog?: ConnectorEntry[]` with `CONNECTORS` as the default and passes `catalog.map((entry) => entry.name)`. No other caller changes.
+
+- [ ] **Step 1: Write the failing tests** (`connector-scan.test.ts`, with the fake `claude` and two scripted connectors: `claude.ai Gmail`, connected, and `claude.ai Slow`, whose status is `pending` for good):
+  1. "with names, a pending connector outside the names does not delay the answer: the first mcp_status is enough and that connector is returned as pending";
+  2. "with names, the scan goes on while a named connector is pending and stops when it is connected (connectorPending)";
+  3. "without names the scan waits for every connector until its deadline, as before";
+  4. "readInventory passes the catalog names: a rescan with a slow connector FlowDriven does not use returns the Gmail fact after one answer".
+- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-scan.test.ts`. Expected: FAIL on the new tests.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude packages/runner/src/service`. Expected: PASS.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src
+git commit -m "Stop the connector scan from waiting for connectors FlowDriven does not use" -m "Assisted-by: Claude Code"
+```
