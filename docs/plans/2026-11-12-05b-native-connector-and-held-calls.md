@@ -667,7 +667,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `adapter.ts`: `ClaudeAdapterOptions` gains `grants?: GrantBook` (Task 2), passed to `runClaude` as `deps.grants`. `runStep` maps `result.kind === "hold"` to `{ exit: "failed", text: CONNECTOR_DENY.held, outputs: {}, hold: result.held, ...mark }` (no `block`, no `noRetry`). The judge mapping at `:228-236` treats `hold` like `block` (exit `failed`, message `CONNECTOR_DENY.held`). `makePrompt` adds `approved: req.approvedCalls` (kept only for tools in `policy.connector.tools`) with full names (`prefix + tool`) to the connector paragraph.
 - `run.ts`: `RunDeps` gains `grants?: GrantBook`; `Outcome` gains `{ kind: "hold"; held: HeldCall }`. The connector state's `granted` is `(grant) => deps.grants?.has(input.runId, grant, input.itemKey) ?? false` (no `grants` means no grant, fail closed). On an allowed risky call: when `connector.grant?.kind === "call"` the wrapper calls `deps.grants.use(runId, key, itemKey)` BEFORE it answers allow, and refuses with `CONNECTOR_DENY.held` (no hold) when `use` is false or `grants` is missing; it audits `grant_used` with `{ stepId, itemKey, attempt, requirementId, tool, grant: "pick" | "call" }`. On a refusal with `held`: `pendingStop = { id: <tool_use_id of the call>, outcome: { kind: "hold", held } }`, a `setTimeout` kill after `deps.exitWaitMs`, and the audit `call_held` with `{ stepId, itemKey, attempt, requirementId, tool, digest }`; every later request is refused (`DENY.badRequest`, as for any `pendingStop`), and the child is killed when the refusal's result reaches the worker (`:323-341`, unchanged) or at the timer. The refusal is also a `tool_denied` row through `onCall`. A hold has no closing time (Task 15 changes only moved and challenge stops).
 
-- [ ] **Step 1: Write the failing tests** (`adapter-held.test.ts`, set up like `adapter-connector.test.ts`; a `GrantBook` over an in-memory store with `addGrant` for the grants; plays whose `when` matches the step prompt):
+- [x] **Step 1: Write the failing tests** (`adapter-held.test.ts`, set up like `adapter-connector.test.ts`; a `GrantBook` over an in-memory store with `addGrant` for the grants; plays whose `when` matches the step prompt):
   1. "a risky tool with no grant is refused with the hold sentence, the worker is stopped, and the step result is exit failed with hold carrying requirementId, tool, input, digest and the action";
   2. "the action is send for send_message, reply and forward, and delete for trash_thread, trash_message, delete_draft and delete_label";
   3. "the audit has call_held with the digest and a tool_denied row with the hold sentence, and no later action of the play runs a tool";
@@ -680,16 +680,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "without a grants option every risky tool is held";
   11. "the prompt of a step with approvedCalls holds 'The owner approved this call. Make it once, exactly as written:' with the full tool name and the input JSON, and an approved call for a tool the step does not declare is left out";
   12. "a read tool allowed before a held call keeps its connector_call row, and the result of the attempt is still hold".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-held.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude`. Expected: PASS, unchanged. In `adapter-connector.test.ts` (Task 12) no test asserts that a risky call is merely refused, so it stays as written.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-held.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude`. Expected: PASS, unchanged. In `adapter-connector.test.ts` (Task 12) no test asserts that a risky call is merely refused, so it stays as written.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude/run.ts packages/runner/src/claude/adapter.ts packages/runner/src/claude/adapter-held.test.ts
 git commit -m "Hold risky connector calls, release them by pick or approval, and repeat an approved call" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

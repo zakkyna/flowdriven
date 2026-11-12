@@ -1,11 +1,12 @@
 import type { Value } from "@flowdriven/sdk";
-import type { CallInfo, RateLimit } from "../harness.ts";
+import type { GrantBook } from "../connectors/grants.ts";
+import type { CallInfo, HeldCall, RateLimit } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
 import { BROWSER_DENY, CHROME_PREFIX } from "./browser.ts";
 import { decidePost, POST_TEXT, type PostResult, postLine, STOP } from "./browser-post.ts";
 import { startChannel } from "./channel.ts";
 import { startChild } from "./child.ts";
-import { CONNECTOR_STOP, mcpConfigText } from "./connector.ts";
+import { CONNECTOR_DENY, CONNECTOR_STOP, mcpConfigText } from "./connector.ts";
 import { type ConnectorPostResult, decideConnectorPost } from "./connector-post.ts";
 import { createControlDir, removeControlDir, writeMcpConfig } from "./control.ts";
 import { DENY, decide } from "./decide.ts";
@@ -52,8 +53,10 @@ export type Outcome =
   | { kind: "interrupted" }
   | { kind: "block"; sentence: string }
   | { kind: "stop"; sentence: string }
+  | { kind: "hold"; held: HeldCall }
   | { kind: "failed"; text: string };
 export type RunDeps = {
+  grants?: GrantBook;
   pages?: PageCounter;
   onCall?: (call: CallInfo) => void;
   nowMs?: () => number;
@@ -168,9 +171,40 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         if (pendingStop) return { allow: false, tool: "unknown", reason: DENY.badRequest };
         const decision = decide(policy, call, attempt?.state(), {
           calls: connectorCalls,
-          granted: () => false,
+          granted: (grant) => deps.grants?.has(input.runId, grant, input.itemKey) ?? false,
         });
+        if (
+          !decision.allow &&
+          decision.held &&
+          call !== null &&
+          typeof call === "object" &&
+          "tool_use_id" in call &&
+          typeof call.tool_use_id === "string"
+        ) {
+          const held = decision.held;
+          pendingStop = { id: call.tool_use_id, outcome: { kind: "hold", held } };
+          stopTimer = setTimeout(() => {
+            forced = pendingStop?.outcome;
+            child?.kill();
+          }, deps.exitWaitMs);
+          audit("call_held", {
+            ...detail,
+            requirementId: held.requirementId,
+            tool: held.tool,
+            digest: held.digest,
+          });
+        }
         if (decision.allow && decision.effect === "connector" && decision.connector) {
+          const grant = decision.connector.grant;
+          if (grant?.kind === "call" && !(deps.grants?.use(input.runId, grant.key, input.itemKey) ?? false))
+            return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
+          if (grant)
+            audit("grant_used", {
+              ...detail,
+              requirementId: decision.connector.requirementId,
+              tool: decision.connector.tool,
+              grant: grant.kind,
+            });
           connectorCalls++;
           if (connectorCalls === 1) input.onOutside?.();
           if (connectorRows++ < 50)

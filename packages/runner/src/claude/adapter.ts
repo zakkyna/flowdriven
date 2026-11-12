@@ -1,7 +1,9 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { describeTemplate, type Value } from "@flowdriven/sdk";
 import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
+import type { GrantBook } from "../connectors/grants.ts";
 import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
+import { CONNECTOR_DENY } from "./connector.ts";
 import type { ConnectorFact } from "./connector-scan.ts";
 import type { PageCounter } from "./pages.ts";
 import { buildPolicy } from "./policy.ts";
@@ -19,6 +21,7 @@ import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
   admit?: (req: StepRequest) => string | undefined;
   pages?: PageCounter;
+  grants?: GrantBook;
   connectors?: () => ConnectorFact[];
   catalog?: ConnectorEntry[];
   effortModels?: () => { low: string; medium: string; high: string } | undefined;
@@ -49,6 +52,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
     runClaude(input, {
       claudePath,
       pages: options.pages,
+      grants: options.grants,
       onCall,
       nowMs: options.nowMs ?? Date.now,
       env: options.env(),
@@ -148,6 +152,9 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                     connector: {
                       label: policy.connector.label,
                       tools: policy.connector.tools.map((t) => `${policy.connector?.prefix ?? ""}${t}`),
+                      approved: (req.approvedCalls ?? [])
+                        .filter((call) => policy.connector?.tools.includes(call.tool))
+                        .map((call) => ({ ...call, tool: `${policy.connector?.prefix ?? ""}${call.tool}` })),
                     },
                   }
                 : {}),
@@ -167,6 +174,11 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
         },
       );
       const mark = outside ? { outside: true as const } : {};
+      if (result.kind === "hold")
+        return withCall(
+          { exit: "failed", text: CONNECTOR_DENY.held, outputs: {}, hold: result.held, ...mark },
+          call,
+        );
       if (result.kind === "ok") {
         if (schema === undefined)
           return withCall({ exit: "ok", text: result.text, outputs: {}, ...mark }, call);
@@ -246,12 +258,16 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       );
       if (result.kind !== "ok")
         throw new HarnessCallError(
-          result.kind === "block" || result.kind === "stop"
-            ? result.sentence
-            : result.kind === "failed"
-              ? result.text
-              : result.kind,
-          result.kind === "block" || result.kind === "stop" ? "failed" : result.kind,
+          result.kind === "hold"
+            ? CONNECTOR_DENY.held
+            : result.kind === "block" || result.kind === "stop"
+              ? result.sentence
+              : result.kind === "failed"
+                ? result.text
+                : result.kind,
+          result.kind === "block" || result.kind === "stop" || result.kind === "hold"
+            ? "failed"
+            : result.kind,
           call,
         );
       return withCall(
