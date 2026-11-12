@@ -1225,3 +1225,139 @@ For plan 05b (native connectors, R10 in the hook, holding a risky call) and plan
 - **The seen store and the page cap.** An item whose page step failed on the page cap or on a moved page is a failed item; whether the next run should offer it again is a question for plan 05c, which owns the seen store changes.
 - **A real job site may move a declared address to a longer one.** A page can land on an address with a title slug or a query that the declared template does not match, and then every real page is "moved" and withheld. A flow must declare the landing form too (a second template for the same host), and the first real page of such a site is read by the chair, with the owner watching, before a flow depends on it. The chair tests at most 2 real pages with the owner watching.
 - **What this plan leaves true for them:** the router has one place to add a route (`router/route.ts`), the gate has one place that reads routes and the allow (`gate` in `service/claude-harness.ts`), the preview rows come from the same router, the post hook, the channel and the tripwire already key on a prefix (`CHROME_PREFIX`) and a set of allowed ids, so a second MCP server can be added next to it, and `StepResult.noRetry`, `StepResult.outside` and `StepRequest.onOutside` are generic.
+
+---
+
+## Review of the finished plan
+
+The change was reviewed at commit `d567d6e` on 2026-11-12 through four lenses: A (addresses and the rules around a browser call), B (the hook channel, the tripwire, the start proof and how it fails), C (the owner's allow, the gate, the triggers, the stores and the screens) and D (tests, gates and the rules of the plan). After each lens a second agent tried to refute every finding. Briefs, findings and kept proofs: `.workflow/scratch/plan-05/review-brief.md`, `review-lens-<letter>.md`, `review/lens-<letter>.md`, `review/verify-<letter>.md`. Lenses B and D are recorded here first; A and C follow below when they end.
+
+### Facts measured for the review
+
+- F17: see the record under Task 29 (the extension was connected through another Chromium browser, not Google Chrome).
+- F18 (chair's probes c1 to c5 on the real Claude Code 2.1.318, `https://example.com/` only; kit and output in `.workflow/scratch/plan-05/probe/`, `out/c1.jsonl` to `c5.jsonl`). When a PostToolUse hook fails on a successful `get_page_text` (it exits 2, exits 1, prints text that is not JSON, or runs past its time limit), the worker gets the original result as a `tool_result` that is not marked as an error and has two blocks (the page text and the "Tab Context" block); after an exit 2 the model is also told that the hook returned a blocking error. A result that a hook replaced has exactly one block. So the tripwire of Task 11, which accepts for a Chrome call only one text block equal to the runner's answer or to the fixed sentence, trips in all four cases, and the fake `claude` behaves like the real one here. A replaced text with CR, CRLF, U+0000, U+0001, U+007F, U+2028, U+2029, U+FEFF, a lone surrogate, U+00A0, U+200B, U+202E and ESC arrived character for character, so an odd character of a page does not make the tripwire trip.
+
+### Findings of lens B (four, all confirmed, all minor)
+
+| Id | Finding | What was done |
+|---|---|---|
+| B-1 | A stream line over the line limit in a browser step ended as a failed attempt that is tried again, not as a block (`claude/run.ts`, the overflow branch). The worker was killed either way. | Task 30 |
+| B-2 | The proofs of a failing post hook rested on the fake; the real program had not been measured. | Measured: F18. The proofs hold. |
+| B-3 | After a moved page or a challenge the worker is stopped before it can close its tab, so the tab stays open on the page that was withheld. | Known limit below; the fix is handed to plan 05b. |
+| B-4 | A post request over 2 MiB was withheld without a `page_withheld` line, and one over 8 MiB was counted as a refused call of the tool `unknown` (`claude/channel.ts`). | Task 30 |
+
+Also taken from lens B's notes: a refused address is stored through `visible` like every other address (Task 32).
+
+### Findings of lens D (six, all confirmed, all minor; 100 one-line changes of the rules were tried against the tests)
+
+| Id | Finding | What was done |
+|---|---|---|
+| D-1 | The provider half of R4 was proven for `gateRoutes` only, not for its call inside `gate()`. | Task 31 |
+| D-2 | A key outside the list was tested for `tabs_context_mcp` only, and a `max_chars` that is not a whole number was not tested. | Task 31 |
+| D-3 | The start proof's comparison of built-in tool names for a browser step was not tested with a swapped tool of the same count. | Task 31 |
+| D-4 | The 600 character limit of `matchTemplate` was not proven. | Task 31 |
+| D-5 | Task 23 changed two present assertions that no task names. | Named here: in `apps/desktop/src/screens/runs/Runs.test.tsx`, "an item shows its own steps" counts the step rows without the rows of "Blocked calls" (still exactly 3), and "an item lists its blocked calls too, and a hidden character in a tool name is shown as its code" looks for "(1 time)" inside the step's own row. Both follow from the refused call that Task 23 added to the sample item `j1`; neither is weaker. |
+| D-6 | `claude/hook-post.test.ts` waits on real time. | Named here as the one exception to "new tests never wait on real time": the test runs the real shell script, whose rounds sleep 0.1 seconds (under a second in all), as the present `hook-script.test.ts` does. |
+
+The rules R1, R2, R3, R5, R6 and R11 each have proofs that fail when the rule is switched off (lens D's table in `review/lens-D.md`).
+
+### The chair's own findings
+
+- CH-1 (from F17). The screens and the prompt said "your own Chrome"; the route works in other Chromium browsers, and on the owner's machine it is another Chromium browser. Task 32 says "your own browser". The readiness check still looks only at the Chrome folder for the host file: on this machine Claude Code wrote that file for five browsers at once, so the check says that the host is set up, not which browser is connected.
+- The executor of Tasks 21 to 28 and of the review fixes was Claude Code (Sonnet), not Codex: Codex reached its usage limit during Task 20 and returns on 2026-11-15. The chair decided this and told the owner.
+
+### Known limits added by the review
+
+- After a moved page or a challenge, FlowDriven stops the worker as soon as the withheld result reaches it, so the worker cannot close its tab, and the tab stays open in the owner's browser on the page that was withheld until the owner closes it. The pauses bound this: a challenge pauses its trigger at once (Task 21), and three blocked runs in a row pause a trigger (plan 04). Letting the worker close its own tab during a stop belongs with the held calls of plan 05b.
+- The words "Chrome is not connected to Claude Code." and "This Claude Code cannot use Chrome." keep the name of Claude Code's own option; they also apply when the connected browser is another Chromium browser.
+
+### Task 30: Review fixes: an oversized line or post request is never a silent pass
+
+**Files:**
+- Modify: `packages/runner/src/claude/channel.ts`, `packages/runner/src/claude/run.ts`
+- Create: `packages/runner/src/claude/review-05-b.test.ts`
+
+**Interfaces:**
+- `channel.ts`: the options of `startChannel` gain `onUnanswered?: (record: { toolUseId?: string; tool?: string }) => void`. The channel remembers the tool name (without `CHROME_PREFIX`) of every allowed Chrome call, next to `chromeIds`. A PostToolUse request for an allowed Chrome id that was not answered before and gets no answer now (the file is over `MAX_POST_BYTES`, or `options.post` is missing, throws or returns `undefined`) calls `onUnanswered({ toolUseId, tool })` once for that id, inside `try`; a second post request for an id that was answered or reported calls nothing. A request file over `MAX_REQUEST_BYTES` is never read in full: the channel reads its first 4,096 bytes, and when they match `/"hook_event_name"\s*:\s*"PostToolUse"/` it writes no answer, counts nothing, calls `onCall` for nothing, removes the file and calls `onUnanswered({})`; any other file over that size is refused as today. The allowed and denied counts never change for a post request.
+- `run.ts`: passes `onUnanswered`: when the step has a browser policy, and `tool` is `get_page_text` or is missing, and fewer than `MAX_PAGE_ROWS` page lines were written, it audits `page_withheld` with the fields of the other page lines, `tool: tool ?? "unknown"`, `address: ""`, `why: "unchecked"` and `sentence: POST_TEXT.unchecked`, and counts the line. In the branch for a line over the line limit (`read.overflow`): when the step has a browser policy, audit `tool_unchecked` with `tool: "unknown"` and set `forced = { kind: "block", sentence: tripSentence("unknown") }`; without a browser policy the present `failed` outcome stays as it is.
+
+The reviewer's kept proofs show both defects on the present code: `.workflow/scratch/plan-05/review/zz-review-05-B-1.test.ts` and `zz-review-05-B-4.test.ts`. Use their set-up (the fake `claude`, the fake Chrome, a failing post hook) as the pattern.
+
+- [ ] **Step 1: Write the failing tests** in `review-05-b.test.ts`:
+  1. "B-1: in a browser step a result line over the line limit blocks the step with the unchecked-tool sentence, audits tool_unchecked and is not tried again" (a small `maxLineBytes`, a failing post hook and a page longer than that)
+  2. "B-1: without a browser policy a line over the limit is the present failed outcome"
+  3. "B-4: a page text over 2 MiB is withheld and gives exactly one page_withheld line with why unchecked, no tool_denied line, and denied 0"
+  4. "B-4: a post request over 8 MiB gets no answer, counts nothing, and gives one page_withheld line with the tool unknown and no tool_denied line"
+  5. "B-4: a request over 8 MiB that is not a post request is refused as before"
+  6. "a post request that the post function answers with nothing reports the id once, and a second post request for that id reports nothing"
+- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/review-05-b.test.ts`. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src
+git commit -m "Block an oversized stream line in a browser step and record a withheld oversized page" -m "Assisted-by: Claude Code"
+```
+
+---
+
+### Task 31: Review fixes: close four gaps in the proofs
+
+**Files:**
+- Modify: `packages/runner/src/claude/decide-browser.test.ts`, `packages/runner/src/claude/browser-start.test.ts`, `packages/sdk/src/web/template.test.ts`
+- Create: `packages/runner/src/service/claude-harness-gate-r4.test.ts`
+
+No source file changes. The code is right today; these tests are missing. The reviewer's kept proofs pass on the present code and hold the cases: `.workflow/scratch/plan-05/review/zz-review-05-D-1.test.ts` and `zz-review-05-D-2.test.ts`; the reviewer's notes are in `.workflow/scratch/plan-05/review/lens-D.md`.
+
+**Present assertion that changes:** in `packages/sdk/src/web/template.test.ts`, the test that says an address of 601 characters is refused uses addresses that never match its template, so it proves nothing about the limit. Its 600 and 601 character addresses are replaced by two addresses that both match the template (a template of 8 captures `[a]{1,128}`, and after `https://a.com/` as many `a` as make the address 600 and 601 characters long): the first gives the captures, the second gives `undefined`. The test keeps its name.
+
+- [ ] **Step 1: Write the tests:**
+  1. `claude-harness-gate-r4.test.ts`: "gate() refuses an unattended flow whose route is not enforced" (the router module is mocked for this file only so that the route of the flow's requirement comes back routed with `enforcedBy: "not enforced"`, everything else of the module stays real; a flow with a schedule trigger and a use before its first ask; expected: not ready with the sentence `NOT_ENFORCED_UNATTENDED`)
+  2. same file: "the same flow passes with a manual trigger only, and with the use after an ask"
+  3. `decide-browser.test.ts`, in the table of the test that refuses a part FlowDriven does not recognise: `navigate` with `{ tabId, url, x: 1 }`, `get_page_text` with `{ tabId, x: 1 }`, `tabs_close_mcp` with `{ tabId, x: 1 }`, `tabs_create_mcp` with `{ x: 1 }` and `get_page_text` with `{ tabId, max_chars: 1.5 }` each give `{ allow: false, reason: BROWSER_DENY.part }` (the tab id is one of the attempt's own, and the address matches a template, so that only the extra part can be the reason)
+  4. `browser-start.test.ts`, in the test of the built-in tools of a browser step: the tools `["Read", "Bash", <one Chrome tool>]` against the expected `["Read", "Glob"]` give `ok: false` with "The tools do not match."
+  5. `template.test.ts`: the changed assertion above
+- [ ] **Step 2: Run** the four files with `pnpm vitest run <file>`. Expected: PASS on the present code. Then check that each new assertion can fail: in a scratch copy under `.workflow/scratch/` (never in a tracked file) or by reading the reviewer's `mut-D.out`, confirm that the rule each assertion guards is the one the reviewer switched off, and say in your report which mutant of the reviewer each new assertion kills.
+- [ ] **Step 3: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 4: Chair step (commit)**
+
+```bash
+git add packages/runner/src packages/sdk/src
+git commit -m "Prove the extra-part refusals, the swapped tool, the address limit and the gate's unattended route check" -m "Assisted-by: Claude Code"
+```
+
+---
+
+### Task 32: Review fixes: say "your own browser", and store a refused address as visible text
+
+**Files:**
+- Modify: `packages/runner/src/router/route.ts`, `packages/runner/src/service/readiness-web.ts`, `packages/runner/src/claude/prompt.ts`, `packages/runner/src/claude/browser.ts`, `packages/fixtures/src/story/capabilities.ts`, and the present tests that pin the four sentences below (find them with `grep -rn "your own Chrome\|owner's own Chrome\|extension in Chrome\|can use Chrome" packages apps --include="*.ts" --include="*.tsx"`)
+
+**The four sentences (old, then new):**
+- the capability sentence of a web row in `route.ts`, and its copy in `packages/fixtures/src/story/capabilities.ts`: `... in your own Chrome, at most ...` becomes `... in your own browser, at most ...`
+- `WEB_FIX` in `readiness-web.ts`: "Install the Claude extension in Chrome, then run `claude --chrome` once." becomes "Install the Claude extension in your browser (Chrome, or another Chromium browser such as Brave), then run `claude --chrome` once."
+- the `ok` detail in `readiness-web.ts`: "Claude Code can use Chrome and the extension is installed. Chrome itself must be open." becomes "Claude Code can use the browser and the extension's host is installed. The browser with the Claude extension must be open."
+- the worker's prompt line in `prompt.ts`: "This step may read web pages in the owner's own Chrome, and nothing else in the browser." becomes "This step may read web pages in the owner's own browser, and nothing else in it."
+
+Nothing else that names Chrome changes: `STOP.chromeDown`, `DROP.noChrome`, the provider name "Claude in Chrome inside Claude Code", the path of the host file and the flag names stay.
+
+**Present assertions that change:** every assertion that pins one of the four old sentences pins the new one; no other assertion changes.
+
+**Interface:** `browser.ts`: the `target` of a refused address is `visible(input.url, 300)` (from `./text.ts`) instead of the first 300 characters of the raw text.
+
+- [ ] **Step 1: Write the failing tests:**
+  1. in `packages/runner/src/claude/decide-browser.test.ts`: "a refused address is stored as visible text of at most 300 characters" (an address with a line break and with U+202E built by `String.fromCodePoint`; the target holds neither character and is at most 300 characters long)
+  2. change the assertions that pin the four sentences
+- [ ] **Step 2: Run** the changed test files. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `pnpm vitest run packages/runner packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages apps
+git commit -m "Say your own browser on the screens and in the prompt, and store a refused address as visible text" -m "Assisted-by: Claude Code"
+```
+
