@@ -37,6 +37,7 @@ export type ClaudeAdapterOptions = {
   pollMs?: number;
   graceMs?: number;
   exitWaitMs?: number;
+  closeWaitMs?: number;
   maxLineBytes?: number;
   maxDeniedEntries?: number;
   allowed?: () => string | undefined;
@@ -64,6 +65,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       pollMs: options.pollMs ?? 25,
       graceMs: options.graceMs ?? 2000,
       exitWaitMs: options.exitWaitMs ?? 10000,
+      closeWaitMs: options.closeWaitMs ?? 8000,
       maxLineBytes: options.maxLineBytes ?? MAX_LINE_BYTES,
       maxDeniedEntries: options.maxDeniedEntries ?? MAX_DENIED_ENTRIES,
       register: (stop) => {

@@ -5,6 +5,7 @@ export const CHROME_PREFIX = "mcp__claude-in-chrome__";
 export const MAX_PAGE_CHARS = 40_000;
 export const MAX_TABS_OPENED = 2;
 export const BROWSER_DENY = {
+  closing: "This step is stopping. It may only close its tab.",
   readOnly: "This step may only read pages.",
   address: "This address is not one this step declares.",
   runLimit: "This step reached its page limit for this run.",
@@ -13,6 +14,7 @@ export const BROWSER_DENY = {
   tab: "This tab is not one this step opened.",
   tabs: "This step opened too many tabs.",
 };
+export const closeSentence = (tab: number): string => `Close tab ${tab} now, then stop.`;
 export type BrowserPolicy = {
   requirementId: string;
   templates: UrlTemplate[];

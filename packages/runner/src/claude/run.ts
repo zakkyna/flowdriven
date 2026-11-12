@@ -2,7 +2,7 @@ import type { Value } from "@flowdriven/sdk";
 import type { GrantBook } from "../connectors/grants.ts";
 import type { CallInfo, HeldCall, RateLimit } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
-import { BROWSER_DENY, CHROME_PREFIX } from "./browser.ts";
+import { BROWSER_DENY, CHROME_PREFIX, closeSentence } from "./browser.ts";
 import { decidePost, POST_TEXT, type PostResult, postLine, STOP } from "./browser-post.ts";
 import { startChannel } from "./channel.ts";
 import { startChild } from "./child.ts";
@@ -70,6 +70,7 @@ export type RunDeps = {
   pollMs: number;
   graceMs: number;
   exitWaitMs: number;
+  closeWaitMs?: number;
   maxLineBytes: number;
   maxDeniedEntries?: number;
   register?: (stop: (sentence?: string) => void) => () => void;
@@ -90,6 +91,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
   let abort = false;
   let forced: Outcome | undefined;
   let pendingStop: { id: string; outcome: Outcome } | undefined;
+  let closing: { tab: number } | undefined;
   let stopTimer: ReturnType<typeof setTimeout> | undefined;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let result: ResultInfo | undefined;
@@ -136,6 +138,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     } else if (input.connectorPrefix !== undefined) return { kind: "block", sentence: LIMITS_NOT_APPLIED };
     let attempt: ReturnType<typeof createAttemptState> | undefined;
     const posts = new Map<string, PostResult>();
+    const postTabs = new Map<string, number>();
     const connectorPosts = new Map<string, ConnectorPostResult>();
     let connectorCalls = 0;
     let connectorRows = 0;
@@ -168,7 +171,27 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       dir,
       prefixes: [CHROME_PREFIX, ...(policy.connector ? [policy.connector.prefix] : [])],
       decide: (call) => {
-        if (pendingStop) return { allow: false, tool: "unknown", reason: DENY.badRequest };
+        if (pendingStop) {
+          if (!closing) return { allow: false, tool: "unknown", reason: DENY.badRequest };
+          if (
+            !(
+              call !== null &&
+              typeof call === "object" &&
+              "tool_name" in call &&
+              call.tool_name === `${CHROME_PREFIX}tabs_close_mcp`
+            )
+          ) {
+            const tool =
+              call !== null &&
+              typeof call === "object" &&
+              "tool_name" in call &&
+              typeof call.tool_name === "string"
+                ? visible(call.tool_name, 60)
+                : "";
+            return { allow: false, tool, reason: BROWSER_DENY.closing };
+          }
+          return decide(policy, call, attempt?.state());
+        }
         const decision = decide(policy, call, attempt?.state(), {
           calls: connectorCalls,
           granted: (grant) => deps.grants?.has(input.runId, grant, input.itemKey) ?? false,
@@ -255,7 +278,21 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           return undefined;
         attempt?.learn(r.tabs ?? []);
         posts.set(call.tool_use_id, r);
-        return { text: r.text, line: postLine(r.text) };
+        const tab =
+          "tool_input" in call &&
+          call.tool_input !== null &&
+          typeof call.tool_input === "object" &&
+          "tabId" in call.tool_input &&
+          typeof call.tool_input.tabId === "number" &&
+          Number.isSafeInteger(call.tool_input.tabId)
+            ? call.tool_input.tabId
+            : undefined;
+        if (tab !== undefined) postTabs.set(call.tool_use_id, tab);
+        const text =
+          r.tool === "get_page_text" && (r.kind === "moved" || r.kind === "challenge") && tab !== undefined
+            ? `${r.text} ${closeSentence(tab)}`
+            : r.text;
+        return { text, line: postLine(text) };
       },
       onPost: ({ toolUseId }) => {
         try {
@@ -271,6 +308,16 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             return;
           }
           const r = posts.get(toolUseId);
+          if (
+            pendingStop &&
+            closing &&
+            r?.tool === "tabs_close_mcp" &&
+            postTabs.get(toolUseId) === closing.tab
+          ) {
+            forced = pendingStop.outcome;
+            child?.kill();
+            return;
+          }
           if (!r || r.tool !== "get_page_text" || !policy.browser) return;
           if (pageRows < MAX_PAGE_ROWS) {
             pageRows++;
@@ -295,11 +342,17 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           } else if (r.kind === "challenge") {
             pendingStop = { id: toolUseId, outcome: { kind: "block", sentence: STOP.challenge } };
           }
-          if (pendingStop)
-            stopTimer = setTimeout(() => {
-              forced = pendingStop?.outcome;
-              child?.kill();
-            }, deps.exitWaitMs);
+          if (pendingStop) {
+            const tab = postTabs.get(toolUseId);
+            if (tab !== undefined) closing = { tab };
+            stopTimer = setTimeout(
+              () => {
+                forced = pendingStop?.outcome;
+                child?.kill();
+              },
+              closing ? (deps.closeWaitMs ?? 8000) : deps.exitWaitMs,
+            );
+          }
         } catch {}
       },
       onUnanswered: ({ tool }) => {
@@ -436,6 +489,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         }
         if (
           pendingStop &&
+          !closing &&
           event.type === "user" &&
           event.message &&
           typeof event.message === "object" &&

@@ -750,7 +750,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - New: `expect(received(output(), "read")).toEqual(textBlock(\`${POST_TEXT.moved} Close tab 1001 now, then stop.\`));` (the same strictness; the tab is the one `read()` asks for).
 No other present test may change: `adapter-post.test.ts` (moved, challenge, unchecked), `review-05-r.test.ts` R5 and the "worker never receives the page text" checks, and `browser-demo.test.ts` do not assert the exact received text or the timing, and `adapter-limits.test.ts:352` is about another stop. If one fails, stop and write `Blocked:` with its name.
 
-- [ ] **Step 1: Write the failing tests** (`adapter-closing.test.ts`, set up like `review-05-r.test.ts` with `closeWaitMs: 300` and `exitWaitMs: 5000` unless a test says otherwise; the play after the withheld read has a close of tab 1001, then a navigate with id `after` and the result):
+- [x] **Step 1: Write the failing tests** (`adapter-closing.test.ts`, set up like `review-05-r.test.ts` with `closeWaitMs: 300` and `exitWaitMs: 5000` unless a test says otherwise; the play after the withheld read has a close of tab 1001, then a navigate with id `after` and the result):
   1. "after a moved page the worker receives the withheld sentence plus Close tab 1001 now, then stop., and the audit sentence is the plain one";
   2. "after a challenge the worker receives the same close sentence and the page text never reaches it";
   3. "a close of the withheld tab is allowed by the present rules, and the child is stopped as soon as its result was answered: the action after it (id after) never runs";
@@ -761,16 +761,19 @@ No other present test may change: `adapter-post.test.ts` (moved, challenge, unch
   8. "the outcome, its sentence and the audit rows are as before: noRetry The page moved to an address this step does not declare. with one page_withheld row, and block with the challenge sentence";
   9. "the tripwire accepts the extended withheld text as the runner's answer";
   10. "a tripwire stop does not wait for the closing time".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-closing.test.ts packages/runner/src/claude/review-05-r.test.ts`. Expected: FAIL (tests 1 to 7 and the changed line).
-- [ ] **Step 3: Implement.** Change the one line of `review-05-r.test.ts` as above.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-closing.test.ts packages/runner/src/claude/review-05-r.test.ts`. Expected: FAIL (tests 1 to 7 and the changed line).
+- [x] **Step 3: Implement.** Change the one line of `review-05-r.test.ts` as above.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude/browser.ts packages/runner/src/claude/run.ts packages/runner/src/claude/adapter.ts packages/runner/src/claude/review-05-r.test.ts packages/runner/src/claude/adapter-closing.test.ts
 git commit -m "Let the worker close its own tab after a withheld page before the step is stopped" -m "Assisted-by: Claude Code"
 ```
+
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

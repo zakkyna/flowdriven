@@ -281,7 +281,7 @@ test("R2: a redirect: the fake page table says the asked address ends on another
   const output = capture();
   const t = await setup(actions(), { title: "Job", text: "secret", final: "https://other.example/job" });
   expect(await t.adapter.runStep(t.request)).toMatchObject({ noRetry: STOP.moved });
-  expect(received(output(), "read")).toEqual(textBlock(POST_TEXT.moved));
+  expect(received(output(), "read")).toEqual(textBlock(`${POST_TEXT.moved} Close tab 1001 now, then stop.`));
   expect(t.audits.filter((a) => a.kind === "page_withheld")).toEqual([
     expect.objectContaining({ detail: expect.objectContaining({ why: "moved", sentence: POST_TEXT.moved }) }),
   ]);
