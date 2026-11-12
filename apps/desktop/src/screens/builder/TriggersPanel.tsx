@@ -86,7 +86,7 @@ export function TriggersPanel({
   }
   return (
     <section aria-label="Triggers" className={styles.panel}>
-      <h2>Triggers</h2>
+      <h2 id="triggers-heading">Triggers</h2>
       <p className={styles.muted}>
         Triggers fire only while FlowDriven is open. On a Mac you can close the window and leave the app open;
         quitting the app stops them.

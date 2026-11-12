@@ -1119,17 +1119,19 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `screens.json`: the entry `builder-triggers` gains `"scrollTo": "triggers-heading"`; two entries are added at the end: `{ "name": "builder-capabilities", "hash": "/builder/dev.example.job-review", "scenario": "looped", "scrollTo": "capabilities-heading" }` and `{ "name": "readiness-web", "hash": "/readiness/dev.example.job-review", "scenario": "looped" }`. The capture prints `captured 26 screens`.
 - **Present assertion that changes** (`src/screens.test.ts`, "every captured screen is a real route, once"): old: `expect(screens).toHaveLength(11);` and `expect(new Set(screens.map((s) => s.name)).size).toBe(11);`; new: `toHaveLength(13)` and `.size).toBe(13)`. The next test iterates every entry and needs no change.
 
-- [ ] **Step 1: Write the failing tests:** `capture-scroll.test.ts`: 1. "scrollScript quotes the id and scrolls it to the top"; 2. "an id with a quote, a space, upper case or 70 characters gives undefined". In `screens.test.ts` (a new test beside the present ones): 3. "every scrollTo names an element of its ready screen" (render each entry with a `scrollTo` as the present second test does, wait for ready, and expect `container.querySelector('#' + id)` not null; `builder-triggers` finds `triggers-heading`, `builder-capabilities` finds `capabilities-heading`); 4. "the readiness screen of the job-alert flow shows the Chrome row as OK with the unofficial route" (`#/readiness/dev.example.job-review`, scenario looped); 5. the changed count test above.
-- [ ] **Step 2: Run:** `pnpm vitest run apps/desktop/electron/capture-scroll.test.ts apps/desktop/src/screens.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement**; change `screens.test.ts` as named.
-- [ ] **Step 4: Run** `pnpm vitest run apps/desktop`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 1: Write the failing tests:** `capture-scroll.test.ts`: 1. "scrollScript quotes the id and scrolls it to the top"; 2. "an id with a quote, a space, upper case or 70 characters gives undefined". In `screens.test.ts` (a new test beside the present ones): 3. "every scrollTo names an element of its ready screen" (render each entry with a `scrollTo` as the present second test does, wait for ready, and expect `container.querySelector('#' + id)` not null; `builder-triggers` finds `triggers-heading`, `builder-capabilities` finds `capabilities-heading`); 4. "the readiness screen of the job-alert flow shows the Chrome row as OK with the unofficial route" (`#/readiness/dev.example.job-review`, scenario looped); 5. the changed count test above.
+- [x] **Step 2: Run:** `pnpm vitest run apps/desktop/electron/capture-scroll.test.ts apps/desktop/src/screens.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement**; change `screens.test.ts` as named.
+- [x] **Step 4: Run** `pnpm vitest run apps/desktop`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop
 git commit -m "Scroll captures to a heading and add the capabilities and readiness pictures" -m "Assisted-by: Codex"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

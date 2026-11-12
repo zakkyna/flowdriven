@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
 import { formatConsoleErrors, formatNotReady, recordConsoleError } from "./capture-diagnostics";
+import { scrollScript } from "./capture-scroll";
 import screens from "./screens.json";
 import {
   createMainWindow,
@@ -50,6 +51,17 @@ void app
           console.error(formatNotReady(entry.name, window.webContents.getURL(), body));
           app.exit(1);
           return;
+        }
+        const scrollTo: unknown = "scrollTo" in entry ? entry.scrollTo : undefined;
+        if (scrollTo !== undefined) {
+          const script = typeof scrollTo === "string" ? scrollScript(scrollTo) : undefined;
+          if (script === undefined) {
+            console.error(`screen ${entry.name} has a scrollTo that is not a plain element id`);
+            app.exit(1);
+            return;
+          }
+          await window.webContents.executeJavaScript(script);
+          await new Promise((resolve) => setTimeout(resolve, 150));
         }
         const image = await window.webContents.capturePage();
         await writeFile(path.join(output, `${entry.name}-${theme}.png`), image.toPNG());
