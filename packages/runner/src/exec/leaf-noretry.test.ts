@@ -259,3 +259,85 @@ test("the mark is kept when the marked step fails, blocks or is tried again", as
     }
   }
 });
+const jobsStep = {
+  id: "page",
+  do: "worker",
+  instructions: "Read the page",
+  checks: [{ type: "contains", pattern: "ok" }],
+  outputs: [
+    { id: "jobs", type: "json" },
+    { id: "body", type: "text" },
+  ],
+};
+const askStep = {
+  id: "pick",
+  do: "ask",
+  ask: { question: "Pick one", choose_from: "${steps.page.outputs.jobs}", max_pick: 1 },
+};
+const afterAsk = {
+  id: "next",
+  do: "worker",
+  instructions: "Review ${steps.pick.outputs.choice}",
+  checks: [{ type: "contains", pattern: "ok" }],
+};
+test("an ask whose choose_from takes an output of a marked step is marked outside, and the step that takes its choice is marked too", async () => {
+  const c = await ready(
+    {
+      steps: {
+        page: { text: "ok", outside: true, outputs: { jobs: [{ id: "j1", title: "T" }], body: "ok" } },
+        next: { text: "ok" },
+      },
+    },
+    [jobsStep, askStep, afterAsk],
+  );
+  const run = await c.start();
+  expect(run.state).toBe("waiting_approval");
+  const approval = c.engine.listApprovals({ state: "pending" }).at(0);
+  if (!approval) throw new Error("missing approval");
+  const after = await c.engine.answerAsk(approval.id, { picks: ["j1"] });
+  expect(after.state).toBe("done");
+  expect(c.store.getStep(run.id, "page")?.outside).toBe(true);
+  expect(c.store.getStep(run.id, "pick")?.outside).toBe(true);
+  expect(c.store.getStep(run.id, "next")?.outside).toBe(true);
+});
+test("an ask that takes nothing from a marked step is not marked, and neither is the step after it", async () => {
+  const c = await ready(
+    {
+      steps: {
+        page: { text: "ok", outside: true, outputs: { jobs: [{ id: "j1" }], body: "ok" } },
+        list: { text: "ok", outputs: { jobs: [{ id: "k1", title: "K" }], body: "ok" } },
+        next: { text: "ok" },
+      },
+    },
+    [
+      jobsStep,
+      { ...jobsStep, id: "list" },
+      { ...askStep, ask: { ...askStep.ask, choose_from: "${steps.list.outputs.jobs}" } },
+      afterAsk,
+    ],
+  );
+  const run = await c.start();
+  expect(run.state).toBe("waiting_approval");
+  const approval = c.engine.listApprovals({ state: "pending" }).at(0);
+  if (!approval) throw new Error("missing approval");
+  const after = await c.engine.answerAsk(approval.id, { picks: ["k1"] });
+  expect(after.state).toBe("done");
+  expect(c.store.getStep(run.id, "page")?.outside).toBe(true);
+  expect(c.store.getStep(run.id, "pick")?.outside).toBeUndefined();
+  expect(c.store.getStep(run.id, "next")?.outside).toBeUndefined();
+});
+test("the ask's mark is there before the owner answers", async () => {
+  const c = await ready(
+    {
+      steps: {
+        page: { text: "ok", outside: true, outputs: { jobs: [{ id: "j1" }], body: "ok" } },
+        next: { text: "ok" },
+      },
+    },
+    [jobsStep, askStep, afterAsk],
+  );
+  const run = await c.start();
+  expect(run.state).toBe("waiting_approval");
+  expect(c.store.getStep(run.id, "pick")).toMatchObject({ state: "waiting_approval", outside: true });
+  expect(c.store.getStep(run.id, "next")).toBeUndefined();
+});

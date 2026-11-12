@@ -1,6 +1,7 @@
 import {
   durationMs,
   evaluate,
+  type FlowManifest,
   interpolate,
   type LeafStep,
   resolveValue,
@@ -10,6 +11,7 @@ import {
 } from "@flowdriven/sdk";
 import type { ResolvedDeps } from "../engine.ts";
 import type { RunRow, StepRow } from "../storage.ts";
+import { takesOutsideText } from "./outside.ts";
 
 type AskStep = Extract<LeafStep, { do: "ask" }>;
 type Option = { key: string; label: string; item: Value };
@@ -18,11 +20,12 @@ const record = (value: Value | undefined): value is { [key: string]: Value } =>
 
 export function runAsk(
   step: AskStep,
-  ctx: { deps: ResolvedDeps; run: RunRow; scope: Scope },
+  ctx: { deps: ResolvedDeps; run: RunRow; manifest: FlowManifest; scope: Scope },
 ): "passed" | "skipped" | "halt" | "end" {
   const {
     deps: { store, now, newId },
     run,
+    manifest,
     scope,
   } = ctx;
   const row: StepRow = store.getStep(run.id, step.id) ?? {
@@ -40,6 +43,19 @@ export function runAsk(
       writing = true;
       store.upsertStep({ ...row, state: "skipped", note: "skipped: condition false" });
       return "skipped";
+    }
+    // The ask copies the items of its choose_from into its own output, so it carries the mark of the step
+    // those items came from. It is saved before anything is shown or any choice is stored.
+    if (row.outside !== true) {
+      const rows = store.listSteps(run.id);
+      const texts = [step.ask.choose_from, step.ask.question];
+      if (typeof step.ask.max_pick === "string") texts.push(step.ask.max_pick);
+      if (texts.some((text) => takesOutsideText(text, step.id, manifest, run, "", rows))) {
+        row.outside = true;
+        writing = true;
+        store.upsertStep(row);
+        writing = false;
+      }
     }
     const list = resolveValue(step.ask.choose_from, scope);
     if (!Array.isArray(list)) throw new Error("choose_from is not a list.");

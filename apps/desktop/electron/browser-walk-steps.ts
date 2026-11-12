@@ -60,7 +60,7 @@ steps:
 
 export const BROWSER_WALK_README = `# Chrome check
 
-A check flow for the walk that reads https://example.com/ through the owner's own Chrome. It declares that one
+A check flow for the walk that reads https://example.com/ through the owner's own browser. It declares that one
 address, reads one page and asks for one click, which FlowDriven must refuse.
 `;
 

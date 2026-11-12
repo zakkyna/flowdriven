@@ -1582,18 +1582,20 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 The reviewer's kept proof shows the defect on the present code: `.workflow/scratch/plan-05/review/zz-review-05-F-1.test.ts`. Use its flow (a marked page step, an ask whose `choose_from` takes the page step's list, a step that takes the ask's choice) as the pattern.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. "an ask whose choose_from takes an output of a marked step is marked outside, and the step that takes its choice is marked too"
   2. "an ask that takes nothing from a marked step is not marked, and neither is the step after it"
   3. "the ask's mark is there before the owner answers" (the row is marked while the run waits for the answer)
-- [ ] **Step 2: Run** the test file. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/exec packages/runner/src/engine*.test.ts apps/desktop/electron`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run** the test file. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/exec packages/runner/src/engine*.test.ts apps/desktop/electron`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src apps/desktop/electron
 git commit -m "Pass the outside mark through an ask, and say browser in the walk flow's text" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 

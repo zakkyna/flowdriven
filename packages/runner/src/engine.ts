@@ -211,6 +211,7 @@ export function createEngine(input: EngineDeps): Engine {
           const outcome = runAsk(step, {
             deps,
             run: runById(run.id),
+            manifest,
             scope: makeScope(runById(run.id), store.listSteps(run.id), manifest, store.listItems(run.id)),
           });
           if (outcome === "halt" || outcome === "end") {
