@@ -52,6 +52,19 @@ Why the split, from the 04 ledger:
 
 Out of scope for 04 and not scheduled: `new_item`, `link` and `webhook` triggers, a tray icon, extra-folder grants for `file_change` (spec 9.4), R1 taint marks, and `LoopStep.parallel`. The coverage table above keeps its old rows: its row "Notifications" now reads plan 04, and "Schedules" moves from plan 05 to plan 04.
 
+## Order changed on 2026-11-12: plan 05 before 04b, and plan 05 split
+
+Chair's call (owner may override). Row 05 of spec 20.8 is too large for one plan, and nothing in it needs the socket or the launch agent (schedules already fire while the app is open), while 04b waits for two owner decisions that are still open (who may approve over the socket; the permanent launch agent). So plan 05 runs before 04b, and it is cut in three. Plan 05 is detailed in `2026-11-12-05-capability-router-and-own-browser.md`. Where this section and the earlier ones differ, this section wins: the row 05 of the two tables of 2026-11-11 and the heading `### 05 Readiness engine, gateway, approvals enforcement, notifications` below are superseded by the table here.
+
+| Plan | Content | Shows working |
+|---|---|---|
+| 05 | Capability router; `web` with `mode: read` and `session: own` through Claude in Chrome inside Claude Code; URL templates; page rates; the post-tool check that withholds moved pages and challenges; the outside-text mark; capability consent and the "What this flow may touch" preview; readiness for this route | A real page is read through the owner's Chrome from the app; a click, an off-pattern address and the page over the cap are refused and shown |
+| 05b (new) | Native connectors (`mcp_server` with `connect: native`: Gmail, the prototype host) in a scoped call; R10 wired into the hook (a pick releases only the named tools); holding a risky call for the owner | A real Gmail alert list is read through the connector; a publish for an unpicked item is held |
+| 05c (new) | Skill calls (`do: skill`): the copy without front matter (R14), the hash at consent (R9), long steps, `cli_tool`, extra-folder grants (spec 9.4); then M1 end to end | M1 on real data, attended first, then on the schedule |
+| 04b | As in the section "Order changed on 2026-11-12: plan 04 split". It waits for the owner's answer on the socket and the launch agent | As before |
+
+Rules of spec 20.7 proved in plan 05: R1 (the mark and the denial test), R2, R3, R5, R6, R11 and the provider half of R4. Plan 05b adds R10; plan 05c adds R9 and R14. Out of scope for 05 and written into it: `web` with `session: none` or `managed`; `mode: act`; `desktop`; the `mcp_server`, `plugin`, `cli_tool`, `skill`, `account`, `gui_app` and `browser_session` providers; holding a call for the owner; extra-folder grants; the `new_item`, `link` and `webhook` triggers; the socket; other harnesses; real Upwork pages (the chair tests those later with the owner watching, at most 2).
+
 ## Plans
 
 ### 01 Foundation and screens on sample data (detailed: `2026-11-10-01-foundation-and-screens.md`)
@@ -85,6 +98,8 @@ Out of scope for 04 and not scheduled: `new_item`, `link` and `webhook` triggers
 - Depends on: 02; 03 for brain fallback.
 
 ### 05 Readiness engine, gateway, approvals enforcement, notifications (outline, detailed just in time)
+
+*Superseded on 2026-11-12 by the section "Order changed on 2026-11-12: plan 05 before 04b, and plan 05 split".*
 - Goal: requirement checks with fixes from a signed catalog, the MCP gateway that holds risky calls, approval hooks that fail closed, macOS notifications, schedules and Keychain secrets.
 - Owner sees: a live checklist with "Install for me", a risky send held in the Inbox, a notification only when a decision is needed.
 - Spec: 8.5, 10.6, 11.7, 12 (all), 13.3, 13.6, 15.2, audit log (8.4).
