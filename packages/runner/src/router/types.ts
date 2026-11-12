@@ -16,4 +16,10 @@ export type Route = {
 };
 export type Dropped = { routed: false; requirementId: string; type: string; noun: string; reason: string };
 export type Routed = Route | Dropped;
-export type HarnessFacts = { hooks: boolean; chrome: boolean };
+export type FactConnector = {
+  name: string;
+  url: string;
+  status: string;
+  tools: { name: string; readOnly: boolean }[];
+};
+export type HarnessFacts = { hooks: boolean; chrome: boolean; connectors?: FactConnector[] };

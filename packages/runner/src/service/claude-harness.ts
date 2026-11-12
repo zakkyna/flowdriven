@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { type HarnessCard, RunnerError } from "@flowdriven/contracts";
 import type { FlowManifest, Requirement, Value } from "@flowdriven/sdk";
 import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapter.ts";
+import type { ConnectorFact } from "../claude/connector-scan.ts";
 import { controlRoot, sweepControlRoot } from "../claude/control.ts";
 import { isSafeControlPath } from "../claude/hook-script.ts";
 import { type InventoryEntry, readInventory } from "../claude/inventory.ts";
@@ -22,10 +23,14 @@ import { readKeeperSettings } from "./keeper-wiring.ts";
 
 export const CLAUDE_ID = "claude-code";
 export const ALLOW_FIRST = "Allow what this flow may touch on its screen first.";
-export function harnessFacts(scan: ClaudeScan | undefined): HarnessFacts {
-  return scan?.detected && scan.missingFlags.length === 0
-    ? { hooks: true, chrome: scan.chrome === true }
-    : { hooks: false, chrome: false };
+export function harnessFacts(scan: ClaudeScan | undefined, connectors?: ConnectorFact[]): HarnessFacts {
+  const facts: HarnessFacts =
+    scan?.detected && scan.missingFlags.length === 0
+      ? { hooks: true, chrome: scan.chrome === true }
+      : { hooks: false, chrome: false };
+  if (connectors !== undefined)
+    facts.connectors = connectors.map(({ name, url, status, tools }) => ({ name, url, status, tools }));
+  return facts;
 }
 export function gateRoutes(
   manifest: FlowManifest,
@@ -54,7 +59,12 @@ export const GATE = {
 };
 export type StoredScan = {
   scan: ClaudeScan;
-  inventory: { skills: InventoryEntry[]; plugins: InventoryEntry[]; mcpServers: InventoryEntry[] };
+  inventory: {
+    skills: InventoryEntry[];
+    plugins: InventoryEntry[];
+    mcpServers: InventoryEntry[];
+    connectors?: ConnectorFact[];
+  };
 };
 export function harnessGate(input: {
   platform: string;
@@ -195,6 +205,38 @@ export function storedScan(value: unknown): StoredScan | undefined {
           ["connected", "needs_login", "failed"].includes(String((x as Record<string, unknown>).connection))),
     );
   if (!entries(i.skills) || !entries(i.plugins) || !entries(i.mcpServers)) return undefined;
+  const connectors = i.connectors;
+  const valid =
+    Array.isArray(connectors) &&
+    connectors.length <= 40 &&
+    connectors.every((c: unknown) => {
+      if (!c || typeof c !== "object" || Array.isArray(c)) return false;
+      const x = c as Record<string, unknown>;
+      return (
+        typeof x.name === "string" &&
+        typeof x.url === "string" &&
+        x.url.length <= 300 &&
+        typeof x.id === "string" &&
+        /^mcpsrv_[A-Za-z0-9]{1,60}$/.test(x.id) &&
+        ["connected", "needs_login", "failed", "pending"].includes(String(x.status)) &&
+        Array.isArray(x.tools) &&
+        x.tools.length <= 200 &&
+        x.tools.every(
+          (t: unknown) =>
+            !!t &&
+            typeof t === "object" &&
+            !Array.isArray(t) &&
+            "name" in t &&
+            typeof t.name === "string" &&
+            "readOnly" in t &&
+            typeof t.readOnly === "boolean",
+        )
+      );
+    });
+  if (connectors !== undefined && !valid) {
+    const { connectors: _discard, ...rest } = i;
+    return { scan: s, inventory: rest } as StoredScan;
+  }
   return value as StoredScan;
 }
 export type HarnessService = {
@@ -260,6 +302,9 @@ export function createHarnessService(options: {
               skills: inventory.skills,
               plugins: inventory.plugins,
               mcpServers: inventory.mcpServers ?? cache?.inventory.mcpServers ?? [],
+              ...((inventory.connectors ?? cache?.inventory.connectors) !== undefined
+                ? { connectors: inventory.connectors ?? cache?.inventory.connectors }
+                : {}),
             },
           };
           options.store.putHarnessState({
@@ -341,7 +386,7 @@ export function createHarnessService(options: {
       });
       return list()[0] as HarnessCard;
     },
-    facts: () => harnessFacts(cache?.scan),
+    facts: () => harnessFacts(cache?.scan, cache?.inventory.connectors),
     readiness(manifest, ctx) {
       return gate({
         platform: options.platform ?? process.platform,
@@ -351,7 +396,7 @@ export function createHarnessService(options: {
         fileExists: existsSync,
         consent: state()?.consent ?? "not_given",
         manifest,
-        facts: harnessFacts(cache?.scan),
+        facts: harnessFacts(cache?.scan, cache?.inventory.connectors),
         allowed: ctx !== undefined && options.store.getCapabilityConsent(ctx.flowId)?.hash === ctx.hash,
       });
     },

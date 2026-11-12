@@ -67,3 +67,25 @@ export function buildClaudeArgs(input: ArgsInput): string[] {
   assertSafeArgs(args);
   return args;
 }
+export function buildConnectorScanArgs(): string[] {
+  const args = [
+    "-p",
+    "--model",
+    "haiku",
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--no-session-persistence",
+    "--tools",
+    "",
+    "--disable-slash-commands",
+    "--permission-prompts",
+    "none",
+    "--settings",
+    '{"disableAllHooks":true}',
+  ];
+  assertSafeArgs(args);
+  return args;
+}

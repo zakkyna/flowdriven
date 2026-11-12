@@ -1,5 +1,6 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { type ConnectorFact, readConnectors } from "./connector-scan.ts";
 import { childEnv } from "./env.ts";
 import { runCapture } from "./run-capture.ts";
 import { visible } from "./text.ts";
@@ -13,6 +14,7 @@ export type Inventory = {
   skills: InventoryEntry[];
   plugins: InventoryEntry[];
   mcpServers?: InventoryEntry[];
+  connectors?: ConnectorFact[];
 };
 export function listSkills(options: { home?: string; project?: string }): InventoryEntry[] {
   const entries: InventoryEntry[] = [];
@@ -102,14 +104,23 @@ export async function readInventory(options: {
       return undefined;
     }
   };
-  const [plugins, mcp] = await Promise.all([
+  const [plugins, mcp, connectors] = await Promise.all([
     capture(["plugin", "list", "--json"], options.timeoutMs ?? 10_000),
     options.withMcp ? capture(["mcp", "list"], options.mcpTimeoutMs ?? 30_000) : Promise.resolve(undefined),
+    options.withMcp
+      ? readConnectors({
+          claude: options.claude,
+          cwd: options.cwd,
+          env: options.env,
+          waitMs: Math.min(options.mcpTimeoutMs ?? 20_000, 20_000),
+        })
+      : Promise.resolve(undefined),
   ]);
   const result: Inventory = {
     skills: listSkills({ home: options.env.HOME, project: options.project }),
     plugins: parsePlugins(plugins ?? ""),
   };
+  if (connectors !== undefined) result.connectors = connectors;
   if (mcp !== undefined) result.mcpServers = parseMcp(mcp);
   return result;
 }

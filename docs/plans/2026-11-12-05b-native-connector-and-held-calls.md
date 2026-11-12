@@ -318,7 +318,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `router/types.ts`: `type FactConnector = { name: string; url: string; status: string; tools: { name: string; readOnly: boolean }[] }`; `HarnessFacts = { hooks: boolean; chrome: boolean; connectors?: FactConnector[] }`.
 - `claude-harness.ts`: `StoredScan.inventory` gains `connectors?: ConnectorFact[]`; `scan()` stores `connectors: inventory.connectors ?? cache?.inventory.connectors` (kept from the cache when a scan runs without MCP or the call failed; absent when never read); `storedScan()` keeps an old scan without the key and drops a `connectors` value that is not a list of well-formed facts (the scan is then kept with no `connectors`); `harnessFacts(scan, connectors?: ConnectorFact[])` adds `connectors: connectors.map(({ name, url, status, tools }) => ({ name, url, status, tools }))` only when `connectors` is given; `facts()` and `readiness()` pass `cache?.inventory.connectors`. `toHarnessCard` is unchanged, so the card carries no id.
 
-- [ ] **Step 1: Write the failing tests.** `connector-scan.test.ts` (the fake of Task 3; small `waitMs` and `pollMs`):
+- [x] **Step 1: Write the failing tests.** `connector-scan.test.ts` (the fake of Task 3; small `waitMs` and `pollMs`):
   1. "parseConnectors keeps only claudeai servers with a claudeai-proxy config and maps the four statuses";
   2. "a server with an id that does not match /^mcpsrv_[A-Za-z0-9]{1,60}$/, a tool name with a hidden character, and counts beyond 40 connectors and 200 tools are dropped or cut";
   3. "readOnly is true only when the annotation says readOnly true";
@@ -332,16 +332,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "a rescan stores the connectors with the scan, a later scan without MCP keeps them, and a hung call keeps the cached list";
   11. "the harness card and harnessFacts carry no id: the card JSON has no mcpsrv_, and harnessFacts(scan, connectors) has name, url, status and tools only, and no connectors key without the second argument";
   12. "storedScan keeps an old scan that has no connectors and drops a malformed connectors list".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-scan.test.ts packages/runner/src/service/claude-harness-connectors.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude/inventory.test.ts packages/runner/src/service/claude-harness.test.ts packages/runner/src/service/claude-harness-web.test.ts packages/runner/src/service/claude-harness-wiring.test.ts`. Expected: PASS, unchanged (the new fake call in `readInventory` with `withMcp` runs in the same folder, so `inventory.test.ts` "readInventory runs mcp list only when asked" and `claude-harness.test.ts:269` still hold).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-scan.test.ts packages/runner/src/service/claude-harness-connectors.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude/inventory.test.ts packages/runner/src/service/claude-harness.test.ts packages/runner/src/service/claude-harness-web.test.ts packages/runner/src/service/claude-harness-wiring.test.ts`. Expected: PASS, unchanged (the new fake call in `readInventory` with `withMcp` runs in the same folder, so `inventory.test.ts` "readInventory runs mcp list only when asked" and `claude-harness.test.ts:269` still hold).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude/connector-scan.ts packages/runner/src/claude/connector-scan.test.ts packages/runner/src/claude/args.ts packages/runner/src/claude/inventory.ts packages/runner/src/service/claude-harness.ts packages/runner/src/service/claude-harness-connectors.test.ts packages/runner/src/router/types.ts
 git commit -m "Let the scan read the connectors of Claude Code without a prompt" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
