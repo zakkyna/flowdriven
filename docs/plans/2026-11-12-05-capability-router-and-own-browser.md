@@ -987,22 +987,24 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** `toRunDetail` (leaf mapping) sets `outside: true` on a step whose row has `outside === true` (absent otherwise) and `pagesRead` to the number of `page_read` audit entries for that step and item key (absent when 0). `blockedCalls` also reads `page_withheld` audit entries (same step and item key, `tool` a string, `sentence` a string) as rows `{ tool, reason: sentence, count }`, grouped with the `tool_denied` rows by tool and reason, at most 20 rows. Nothing else in the mapping changes.
 
-- [ ] **Step 1: Write the failing tests** in `map-run-web.test.ts` (a store with a run, a step row and audit lines, as in `map-run.test.ts`):
+- [x] **Step 1: Write the failing tests** in `map-run-web.test.ts` (a store with a run, a step row and audit lines, as in `map-run.test.ts`):
   1. "a step row with outside true shows outside true, and a row without it shows nothing"
   2. "pagesRead counts the page_read lines of that step and item only, and is absent at zero"
   3. "a page_withheld line appears under blocked calls with the tool and its sentence, grouped and counted with a tool_denied line that has the same tool and reason"
   4. "the 21st different row is dropped and a malformed audit detail is ignored"
   5. "the detail parses against `RunDetail` of the contract, for a top-level step and for a step of a loop item"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/map-run-web.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/service`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/map-run-web.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/service`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Show the outside mark, pages read and withheld pages in the run read model" -m "Assisted-by: Codex"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

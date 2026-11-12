@@ -24,21 +24,38 @@ export function blockedCalls(
   for (const entry of audit) {
     const detail = entry.detail;
     if (
-      entry.kind !== "tool_denied" ||
+      (entry.kind !== "tool_denied" && entry.kind !== "page_withheld") ||
       !detail ||
       typeof detail !== "object" ||
       Array.isArray(detail) ||
       detail.stepId !== stepId ||
       detail.itemKey !== itemKey ||
-      typeof detail.tool !== "string" ||
-      typeof detail.reason !== "string"
+      typeof detail.tool !== "string"
     )
       continue;
-    const existing = rows.find((row) => row.tool === detail.tool && row.reason === detail.reason);
+    const reason = entry.kind === "tool_denied" ? detail.reason : detail.sentence;
+    if (typeof reason !== "string") continue;
+    const existing = rows.find((row) => row.tool === detail.tool && row.reason === reason);
     if (existing) existing.count++;
-    else if (rows.length < 20) rows.push({ tool: detail.tool, reason: detail.reason, count: 1 });
+    else if (rows.length < 20) rows.push({ tool: detail.tool, reason, count: 1 });
   }
   return rows.length ? rows : undefined;
+}
+export function pagesRead(audit: AuditEntry[], stepId: string, itemKey: string): number {
+  let count = 0;
+  for (const entry of audit) {
+    const detail = entry.detail;
+    if (
+      entry.kind === "page_read" &&
+      detail &&
+      typeof detail === "object" &&
+      !Array.isArray(detail) &&
+      detail.stepId === stepId &&
+      detail.itemKey === itemKey
+    )
+      count++;
+  }
+  return count;
 }
 export function itemLabel(item: Value, key: string): string {
   if (item && typeof item === "object" && !Array.isArray(item)) {
@@ -112,6 +129,7 @@ export function toRunDetail(
         picks = [];
     }
     const blocked = blockedCalls(view.audit, step.id, row?.itemKey ?? "");
+    const pages = pagesRead(view.audit, step.id, row?.itemKey ?? "");
     return LeafStepRun.parse({
       stepId: step.id,
       title: step.title ?? step.id,
@@ -122,6 +140,8 @@ export function toRunDetail(
       maxAttempts: limits(step, manifest).attempts,
       checks: (row?.checks ?? []).map((c) => CheckResult.parse(c)),
       ...(blocked === undefined ? {} : { blocked }),
+      ...(row?.outside === true ? { outside: true } : {}),
+      ...(pages > 0 ? { pagesRead: pages } : {}),
       note: row?.note,
       picks,
       usage: sumUsage(
