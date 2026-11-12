@@ -1505,19 +1505,21 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 Known limit to keep in mind (do not solve it here): a loop whose items come from a list that a marked step returned is not marked through its items.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   1. "a step whose instructions take an output of a step marked outside is marked outside too, before its harness call"
   2. "a step that takes an output of an unmarked step, or no output at all, is not marked"
   3. "inside a loop the mark follows the row of the same item, and an item whose page step was not marked stays unmarked"
   4. "the mark is kept when the marked step fails, blocks or is tried again"
-- [ ] **Step 2: Run** the test file. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/exec packages/runner/src/engine*.test.ts`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run** the test file. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/exec packages/runner/src/engine*.test.ts`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Mark a step outside when its instructions take the output of a marked step" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 

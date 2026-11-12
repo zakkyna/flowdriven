@@ -139,3 +139,123 @@ test("the request carries the run's routes, and an empty list for a run that has
     expect(c.harness.calls.at(0)?.routes).toEqual(routes ?? []);
   }
 });
+const pageStep = {
+  id: "page",
+  do: "worker",
+  instructions: "Read the page",
+  checks: [{ type: "contains", pattern: "ok" }],
+  outputs: [{ id: "body", type: "text" }],
+};
+const plainStep = {
+  id: "plain",
+  do: "worker",
+  instructions: "Make a note",
+  checks: [{ type: "contains", pattern: "ok" }],
+  outputs: [{ id: "note", type: "text" }],
+};
+const nextStep = {
+  id: "next",
+  do: "worker",
+  instructions: "Summarize ${steps.page.outputs.body}",
+  checks: [{ type: "contains", pattern: "ok" }],
+};
+test("a step whose instructions take an output of a step marked outside is marked outside too, before its harness call", async () => {
+  const seen: Array<boolean | undefined> = [];
+  const c = await ready(
+    {
+      steps: {
+        page: { text: "ok", outside: true, outputs: { body: "ok" } },
+        next: (req) => {
+          seen.push(c.store.getStep(req.runId, "next")?.outside);
+          return { text: "ok" };
+        },
+      },
+    },
+    [pageStep, nextStep],
+  );
+  const run = await c.start();
+  expect(run.state).toBe("done");
+  expect(seen).toEqual([true]);
+  expect(c.store.getStep(run.id, "next")?.outside).toBe(true);
+});
+test("a step that takes an output of an unmarked step, or no output at all, is not marked", async () => {
+  const c = await ready(
+    {
+      steps: {
+        page: { text: "ok", outputs: { body: "ok" } },
+        plain: { text: "ok", outside: true, outputs: { note: "ok" } },
+        next: { text: "ok" },
+        alone: { text: "ok" },
+      },
+    },
+    [
+      pageStep,
+      { ...plainStep, instructions: "Make a note, no output taken" },
+      nextStep,
+      { ...worker, id: "alone", instructions: "Do it alone" },
+    ],
+  );
+  const run = await c.start();
+  expect(run.state).toBe("done");
+  expect(c.store.getStep(run.id, "page")?.outside).toBeUndefined();
+  expect(c.store.getStep(run.id, "next")?.outside).toBeUndefined();
+  // a marked step that nothing takes an output from does not mark the step after it
+  expect(c.store.getStep(run.id, "plain")?.outside).toBe(true);
+  expect(c.store.getStep(run.id, "alone")?.outside).toBeUndefined();
+});
+test("inside a loop the mark follows the row of the same item, and an item whose page step was not marked stays unmarked", async () => {
+  const c = await ready(
+    {
+      steps: {
+        list: { text: "ok", outputs: { jobs: [{ id: "j1" }, { id: "j2" }], message: "ok" } },
+        page: (req) => ({ text: "ok", outputs: { body: "ok" }, outside: req.itemKey === "j1" }),
+        next: { text: "ok" },
+      },
+    },
+    [
+      {
+        id: "list",
+        do: "worker",
+        instructions: "List",
+        checks: [{ type: "contains", pattern: "ok" }],
+        outputs: [
+          { id: "jobs", type: "json" },
+          { id: "message", type: "text" },
+        ],
+      },
+      {
+        id: "loop",
+        for_each: "${steps.list.outputs.jobs}",
+        as: "job",
+        key: "${job.id}",
+        steps: [pageStep, { ...nextStep, instructions: "Summarize ${page.outputs.body}" }],
+      },
+    ],
+  );
+  const run = await c.start();
+  expect(run.state).toBe("done");
+  expect(c.store.getStep(run.id, "next", "j1")?.outside).toBe(true);
+  expect(c.store.getStep(run.id, "next", "j2")?.outside).toBeUndefined();
+  expect(c.store.getStep(run.id, "page", "j2")?.outside).toBeUndefined();
+});
+test("the mark is kept when the marked step fails, blocks or is tried again", async () => {
+  for (const reply of [
+    { exit: "failed" as const, outside: true, noRetry: "No retry" },
+    { block: "Blocked", outside: true },
+    [
+      { exit: "failed" as const, outside: true },
+      { text: "ok", outputs: { body: "ok" } },
+    ],
+  ]) {
+    const c = await ready({ steps: { page: reply, next: { text: "ok" } } }, [pageStep, nextStep]);
+    const run = await c.start();
+    expect(c.store.getStep(run.id, "page")?.outside).toBe(true);
+    if (Array.isArray(reply)) {
+      // the step after it takes the output of the retried step, which is still marked
+      expect(run.state).toBe("done");
+      expect(c.store.getStep(run.id, "next")?.outside).toBe(true);
+    } else {
+      expect(c.store.getStep(run.id, "next")).toBeUndefined();
+    }
+  }
+});
