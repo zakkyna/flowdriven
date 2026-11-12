@@ -239,7 +239,7 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `catalog.ts`: `type ConnectorEntry = { ref: string; name: string; url: string; prefix: string; label: string; read: string[]; risky: Record<string, RiskyAction> }` (`RiskyAction` from `../states.ts`); `CONNECTORS: ConnectorEntry[]` with one entry: `ref: "connector:gmail"`, `name: "claude.ai Gmail"`, `url: "https://gmailmcp.googleapis.com/mcp/v1"`, `prefix: "mcp__claude_ai_Gmail__"`, `label: "Gmail"`, `read: ["search_threads", "get_thread", "get_message", "list_labels", "list_drafts", "get_draft"]`, `risky: { send_message: "send", reply: "send", forward: "send", trash_thread: "delete", trash_message: "delete", delete_draft: "delete", delete_label: "delete" }`; `catalogEntry(ref: string | undefined, catalog: ConnectorEntry[] = CONNECTORS): ConnectorEntry | undefined` (exact match on `ref`).
 - `grants.ts`: `canonicalJson(value: Value): string` (keys sorted by code unit at every depth, arrays in order, no spaces, `JSON.stringify` for scalars, a key whose value is `undefined` skipped); `digestCall(tool: string, input: Value): string` = lowercase hex SHA-256 of `tool + "\n" + canonicalJson(input)` (`tool` is the short name); `pickGrant(requirementId, tool): string` = `<requirementId>.<tool>`; `callGrant(requirementId, tool, digest): string` = `<requirementId>.<tool>#<digest>`; `isCallGrant(grant: string): boolean` (contains `#`); `grantUsedKey(runId, itemKey, grant): string` = `grant-used:<runId>:<itemKey>:<grant>`; `type GrantBook = { has(runId: string, grant: string, itemKey: string): boolean; use(runId: string, grant: string, itemKey: string): boolean }`; `createGrantBook(store: Pick<Store, "hasGrant" | "counter" | "increment">): GrantBook`. `has` is `store.hasGrant(...)` and, for a call grant, also `store.counter(grantUsedKey(...), "run") === 0`. `use` returns `true` for a pick grant without counting, and for a call grant returns `store.increment(grantUsedKey(...), "run") === 1`.
 
-- [ ] **Step 1: Write the failing tests.** `catalog.test.ts`:
+- [x] **Step 1: Write the failing tests.** `catalog.test.ts`:
   1. "the catalog has one entry, connector:gmail, with the name, url, prefix and label measured in the probes";
   2. "the read list is the six read-only tools of G5, the risky map is the seven send and delete tools, and no tool is in both";
   3. "catalogEntry finds an entry by its ref and returns nothing for another ref or for undefined, and takes a catalog as a parameter";
@@ -251,16 +251,18 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "pickGrant and callGrant join as <requirement>.<tool> and <requirement>.<tool>#<digest>, and isCallGrant tells them apart";
   9. "a pick grant: has follows hasGrant for that run, tool and item key only, and use is true every time without counting";
   10. "a call grant: has is true after addGrant and before use, use is true once and then false, and has is false after use; the counter key is grant-used:<run>:<item>:<grant>".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/connectors`. Expected: FAIL ("Cannot find module ./catalog.ts").
-- [ ] **Step 3: Implement** the two files.
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/connectors`. Expected: FAIL ("Cannot find module ./catalog.ts").
+- [x] **Step 3: Implement** the two files.
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/connectors
 git commit -m "Add the connector catalog, the call digest and the grant book" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
