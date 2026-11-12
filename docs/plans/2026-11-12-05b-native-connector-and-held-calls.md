@@ -210,21 +210,23 @@ Done by: Claude Code/chair, 2026-11-12. Evidence: `.workflow/scratch/plan-05b/pr
 - `approval.ts`: `ApprovalFields` gains `outside: z.boolean().optional()` after `picks`. Nothing else changes; `CONTRACT_VERSION` stays 1 (an optional field).
 - `ApprovalDetail.tsx`: after the `<dl>` of definitions and before the payload, when `a.outside === true`, one paragraph with the class `styles.note` holding `<Icon name="post" /> <span>Has text from outside</span>` (the words and the icon of `apps/desktop/src/screens/runs/StepWeb.tsx`; import `Icon` from `../../ui/icons`). Nothing is shown when `outside` is absent or false.
 
-- [ ] **Step 1: Write the failing tests.** `approval.test.ts`:
+- [x] **Step 1: Write the failing tests.** `approval.test.ts`:
   1. "an approval keeps outside and is valid without it" (`outside: true` parses and survives; the base object without it still parses);
   2. "outside must be a boolean" (`"yes"` fails). `Inbox.test.tsx`, in the style of "a weekly limit approval shows its action and harness" (`view.client.state.approvals.push(Approval.parse({...}))`):
   3. "an approval marked outside shows the words Has text from outside with its icon, and one that is not marked shows neither" (a `risky_action` with `riskyAction: "delete"`, a `text` payload, `outside: true`, then the same without it);
   4. "a risky action approval from a run shows its action, its step and its text payload" (the same approval; the action line reads "Delete", the step title and the payload text are visible).
-- [ ] **Step 2: Run:** `pnpm vitest run packages/contracts/src/approval.test.ts apps/desktop/src/screens/inbox/Inbox.test.tsx`. Expected: FAIL (tests 1, 3).
-- [ ] **Step 3: Implement** the field and the paragraph.
-- [ ] **Step 4: Run** the same command. Expected: PASS (every present Inbox test passes unchanged).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/contracts/src/approval.test.ts apps/desktop/src/screens/inbox/Inbox.test.tsx`. Expected: FAIL (tests 1, 3).
+- [x] **Step 3: Implement** the field and the paragraph.
+- [x] **Step 4: Run** the same command. Expected: PASS (every present Inbox test passes unchanged).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts/src/approval.ts packages/contracts/src/approval.test.ts apps/desktop/src/screens/inbox
 git commit -m "Add the outside mark to approvals and show it in the Inbox" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

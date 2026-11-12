@@ -576,6 +576,50 @@ test("a choice that releases tools names them before it is sent", async () => {
   expect(screen.queryByText(sentence)).toBeNull();
 });
 
+const riskyFromRun = (extra: Record<string, unknown>) =>
+  Approval.parse({
+    id: "ap-risky-1",
+    kind: "risky_action",
+    riskyAction: "delete",
+    flowId: "f",
+    flowName: "Mail watcher",
+    runId: "run-9",
+    stepId: "clean",
+    stepTitle: "Clean the drafts",
+    summary: "Delete the draft d-1",
+    payload: { kind: "text", text: "delete_draft with id d-1" },
+    editable: false,
+    createdAt: "2026-11-11T09:00:00.000Z",
+    expiresAt: "2026-11-12T09:00:00.000Z",
+    state: "pending",
+    ...extra,
+  });
+
+test("an approval marked outside shows the words Has text from outside with its icon, and one that is not marked shows neither", async () => {
+  const view = renderApp("#/inbox/ap-risky-1");
+  view.client.state.approvals.push(riskyFromRun({ outside: true }));
+  const words = await screen.findByText("Has text from outside");
+  expect(words.parentElement?.querySelector("svg")).toBeTruthy();
+  view.unmount();
+  const plain = renderApp("#/inbox/ap-risky-1");
+  plain.client.state.approvals.push(riskyFromRun({}));
+  await screen.findByRole("heading", { level: 2, name: "Delete the draft d-1" });
+  expect(screen.queryByText("Has text from outside")).toBeNull();
+  plain.unmount();
+  const off = renderApp("#/inbox/ap-risky-1");
+  off.client.state.approvals.push(riskyFromRun({ outside: false }));
+  await screen.findByRole("heading", { level: 2, name: "Delete the draft d-1" });
+  expect(screen.queryByText("Has text from outside")).toBeNull();
+});
+
+test("a risky action approval from a run shows its action, its step and its text payload", async () => {
+  const view = renderApp("#/inbox/ap-risky-1");
+  view.client.state.approvals.push(riskyFromRun({ outside: true }));
+  expect(await screen.findByText("Delete")).toBeTruthy();
+  expect(screen.getByText("Clean the drafts")).toBeTruthy();
+  expect(screen.getByText("delete_draft with id d-1")).toBeTruthy();
+});
+
 test("a weekly limit approval shows its action and harness", async () => {
   const view = renderApp("#/inbox/weekly-limit:claude-code");
   view.client.state.approvals.push(

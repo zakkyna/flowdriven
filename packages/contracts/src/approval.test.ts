@@ -27,6 +27,14 @@ test("a risky approval names its action and only then", () => {
   expect(Approval.safeParse({ ...base, riskyAction: undefined }).success).toBe(false);
   expect(Approval.safeParse({ ...base, kind: "flow_sign_off" }).success).toBe(false);
 });
+test("an approval keeps outside and is valid without it", () => {
+  expect(Approval.parse({ ...base, outside: true }).outside).toBe(true);
+  const plain = Approval.parse(base);
+  expect(plain.outside).toBeUndefined();
+});
+test("outside must be a boolean", () => {
+  expect(Approval.safeParse({ ...base, outside: "yes" }).success).toBe(false);
+});
 test("an email payload needs a recipient", () => {
   expect(Approval.safeParse({ ...base, payload: { ...base.payload, to: [] } }).success).toBe(false);
 });

@@ -59,6 +59,7 @@ const ApprovalFields = z.object({
   state: ApprovalState,
   resolvedAt: IsoDateTime.optional(),
   picks: z.array(z.string()).optional(),
+  outside: z.boolean().optional(),
 });
 export const Approval = z
   .discriminatedUnion("kind", [

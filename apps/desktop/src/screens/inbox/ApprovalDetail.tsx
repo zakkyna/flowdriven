@@ -3,6 +3,7 @@ import { type ReactElement, useState } from "react";
 import { AppLink } from "../../nav/AppLink";
 import { Button } from "../../ui/Button";
 import { formatDateTime } from "../../ui/format";
+import { Icon } from "../../ui/icons";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { actionName, noun } from "./ApprovalList";
 import styles from "./Inbox.module.css";
@@ -83,6 +84,11 @@ export function ApprovalDetail({
               </>
             )}
           </dl>
+          {a.outside === true && (
+            <p className={styles.note}>
+              <Icon name="post" /> <span>Has text from outside</span>
+            </p>
+          )}
           <PayloadView
             payload={a.payload}
             editing={editing}
