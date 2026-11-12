@@ -155,3 +155,11 @@ test("putTrigger marks the flows topic", async () => {
   });
   expect(marks).toEqual(["flows"]);
 });
+
+test("putCapabilityConsent and deleteCapabilityConsent mark the flows and readiness topics", async () => {
+  const { store, marks } = await setup();
+  store.putCapabilityConsent({ flowId: "f", hash: "h", at: "2026" });
+  expect(marks.splice(0)).toEqual(["flows", "readiness"]);
+  store.deleteCapabilityConsent("f");
+  expect(marks).toEqual(["flows", "readiness"]);
+});

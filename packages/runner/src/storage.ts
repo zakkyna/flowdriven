@@ -1,4 +1,5 @@
 import type { Requirement, Value } from "@flowdriven/sdk";
+import type { Routed } from "./router/types.ts";
 import type { ApprovalState, CheckVerdict, ExitClass, RunState, StepState } from "./states.ts";
 
 export type Attempt = {
@@ -35,6 +36,7 @@ export type RunRow = {
   params: Record<string, Value>;
   trigger?: { kind: string; payload?: Value };
   requirements: Requirement[];
+  routes?: Routed[];
   startedAt: string;
   endedAt?: string;
   blockedReason?: string;
@@ -48,6 +50,7 @@ export type StepRow = {
   outputs: Record<string, Value>;
   checks: CheckOutcome[];
   note?: string;
+  outside?: boolean;
 };
 export type ItemRow = {
   runId: string;
@@ -130,7 +133,11 @@ export type TriggerRow = {
   pausedAt?: string;
   lastFire?: { at: string; outcome: TriggerOutcome; runId?: string; detail?: string };
 };
+export type CapabilityConsentRow = { flowId: string; hash: string; at: string };
 export interface Store {
+  getCapabilityConsent(flowId: string): CapabilityConsentRow | undefined;
+  putCapabilityConsent(row: CapabilityConsentRow): void;
+  deleteCapabilityConsent(flowId: string): void;
   getTrigger(flowId: string, index: number): TriggerRow | undefined;
   putTrigger(row: TriggerRow): void;
   listTriggers(flowId?: string): TriggerRow[];

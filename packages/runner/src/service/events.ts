@@ -26,6 +26,8 @@ export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Sto
     deleteSetting: ["settings"],
     putHarnessState: ["harnesses", "settings"],
     putFlow: ["flows"],
+    putCapabilityConsent: ["flows", "readiness"],
+    deleteCapabilityConsent: ["flows", "readiness"],
     putTrigger: ["flows"],
     createRun: ["runs"],
     updateRun: ["runs"],

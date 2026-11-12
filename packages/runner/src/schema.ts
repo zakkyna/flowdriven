@@ -24,3 +24,6 @@ export const TRIGGER_SCHEMA = `
 CREATE TABLE triggers (flow_id TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (flow_id, idx));
 CREATE TABLE fire_keys (flow_id TEXT NOT NULL, idx INTEGER NOT NULL, key TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (flow_id, idx, key));
 `;
+
+export const CAPABILITY_SCHEMA =
+  "CREATE TABLE capability_consents (flow_id TEXT PRIMARY KEY, hash TEXT NOT NULL, at TEXT NOT NULL);";

@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { EngineError } from "./errors.ts";
-import { HARNESS_STATE_SCHEMA, SCHEMA, TRIGGER_SCHEMA, USAGE_SCHEMA } from "./schema.ts";
+import { CAPABILITY_SCHEMA, HARNESS_STATE_SCHEMA, SCHEMA, TRIGGER_SCHEMA, USAGE_SCHEMA } from "./schema.ts";
 import type {
   ApprovalRow,
   AuditEntry,
@@ -49,19 +49,24 @@ export async function openSqliteStore(
     }
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     const version = db.prepare("PRAGMA user_version").get()?.user_version;
-    if (typeof version !== "number" || version > 4 || version < 0)
+    if (typeof version !== "number" || version > 5 || version < 0)
       throw new EngineError("unavailable", "Unsupported database version.");
     if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
     if (version === 0)
       db.exec(
-        `BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} PRAGMA user_version = 4; COMMIT;`,
+        `BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`,
       );
     if (version === 1)
       db.exec(
-        `BEGIN; ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} PRAGMA user_version = 4; COMMIT;`,
+        `BEGIN; ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`,
       );
-    if (version === 2) db.exec(`BEGIN; ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} PRAGMA user_version = 4; COMMIT;`);
-    if (version === 3) db.exec(`BEGIN; ${TRIGGER_SCHEMA} PRAGMA user_version = 4; COMMIT;`);
+    if (version === 2)
+      db.exec(
+        `BEGIN; ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`,
+      );
+    if (version === 3)
+      db.exec(`BEGIN; ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`);
+    if (version === 4) db.exec(`BEGIN; ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`);
   } catch (error) {
     db.close();
     throw error;
@@ -134,6 +139,35 @@ export async function openSqliteStore(
   };
   let depth = 0;
   const store: Store = {
+    getCapabilityConsent(flowId) {
+      const row = get("SELECT flow_id, hash, at FROM capability_consents WHERE flow_id = ?", flowId);
+      if (
+        !row ||
+        typeof row.flow_id !== "string" ||
+        row.flow_id !== flowId ||
+        typeof row.hash !== "string" ||
+        typeof row.at !== "string"
+      )
+        return undefined;
+      try {
+        const hash: unknown = JSON.parse(row.hash);
+        const at: unknown = JSON.parse(row.at);
+        return typeof hash === "string" && typeof at === "string" ? { flowId, hash, at } : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    putCapabilityConsent(row) {
+      execute(
+        "INSERT OR REPLACE INTO capability_consents (flow_id, hash, at) VALUES (?, ?, ?)",
+        row.flowId,
+        json(row.hash),
+        json(row.at),
+      );
+    },
+    deleteCapabilityConsent(flowId) {
+      execute("DELETE FROM capability_consents WHERE flow_id = ?", flowId);
+    },
     getTrigger(flowId, index) {
       return decodeTrigger(
         get("SELECT flow_id, idx, data FROM triggers WHERE flow_id = ? AND idx = ?", flowId, index),

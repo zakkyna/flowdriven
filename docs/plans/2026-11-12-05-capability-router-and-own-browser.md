@@ -313,23 +313,27 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   - `sqlite-store-triggers.test.ts:96` title "a version 3 database migrates to 4 and keeps its rows; version 5 is refused" becomes "... migrates to 5 ...; version 6 is refused"; `:107` `.toBe(4)` becomes `.toBe(5)`; `:112` `"PRAGMA user_version = 5"` becomes `= 6`.
   - `sqlite-store-usage.test.ts:68` title "a version 2 database migrates to 4 and keeps its rows; version 99 is still refused" becomes "... to 5 ..."; `:80` `.toBe(4)` becomes `.toBe(5)`.
 
-- [ ] **Step 1: Write the failing tests** in `sqlite-store-capabilities.test.ts` (and `events.test.ts` for the last):
+- [x] **Step 1: Write the failing tests** in `sqlite-store-capabilities.test.ts` (and `events.test.ts` for the last):
   1. "an allow row round-trips, a put replaces the row of that flow, and a delete removes it"
   2. "a row that is not JSON or has the wrong field types reads as absent" (raw rows through `new DatabaseSync`)
   3. "a version 4 database migrates to 5 and keeps its rows" (build with all four schemas and `user_version = 4`, one setting row)
   4. "a version 1 database reaches 5 with every table, including capability_consents"
   5. "routes on a run and outside on a step round-trip, and a run stored without routes reads without them" (a `Routed[]` of one routed and one dropped entry)
   6. (`events.test.ts`) "putCapabilityConsent and deleteCapabilityConsent mark the flows and readiness topics"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/sqlite-store-capabilities.test.ts`. Expected: FAIL (`store.putCapabilityConsent is not a function`).
-- [ ] **Step 3: Implement**; change the present assertions as named.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/sqlite-store packages/runner/src/service/events`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/sqlite-store-capabilities.test.ts`. Expected: FAIL (`store.putCapabilityConsent is not a function`).
+- [x] **Step 3: Implement**; change the present assertions as named.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/sqlite-store packages/runner/src/service/events`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Add the capability allow rows and migration 5 to the store" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check (run by the chair outside the executor's sandbox: 188 test files, 1,210 tests).
+
+Chair's note (2026-11-12): the executor stopped with `Blocked:` because the present test file `triggers/service-files.test.ts` ran past its 5 second limit twice inside the executor's sandbox. The code and the six new tests were complete. The chair's gate outside the sandbox passed, so the task is ticked and committed by the chair. The present tests changed only in the version lines this task names.
 
 ---
 

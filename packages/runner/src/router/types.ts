@@ -1,0 +1,19 @@
+export type Enforcer =
+  | "FlowDriven"
+  | "FlowDriven hook in Claude Code"
+  | "Claude Code's settings"
+  | "not enforced";
+export type Route = {
+  routed: true;
+  requirementId: string;
+  type: string;
+  provider: "claude-code-files" | "claude-in-chrome";
+  providerName: string;
+  enforcedBy: Enforcer;
+  label: "official" | "gray" | "unofficial";
+  labelSentence?: string;
+  away: boolean;
+};
+export type Dropped = { routed: false; requirementId: string; type: string; noun: string; reason: string };
+export type Routed = Route | Dropped;
+export type HarnessFacts = { hooks: boolean; chrome: boolean };
