@@ -1230,7 +1230,7 @@ For plan 05b (native connectors, R10 in the hook, holding a risky call) and plan
 
 ## Review of the finished plan
 
-The change was reviewed at commit `d567d6e` on 2026-11-12 through four lenses: A (addresses and the rules around a browser call), B (the hook channel, the tripwire, the start proof and how it fails), C (the owner's allow, the gate, the triggers, the stores and the screens) and D (tests, gates and the rules of the plan). After each lens a second agent tried to refute every finding. Briefs, findings and kept proofs: `.workflow/scratch/plan-05/review-brief.md`, `review-lens-<letter>.md`, `review/lens-<letter>.md`, `review/verify-<letter>.md`. Lenses B and D are recorded here first; A and C follow below when they end.
+The change was reviewed at commit `d567d6e` on 2026-11-12 through four lenses: A (addresses and the rules around a browser call), B (the hook channel, the tripwire, the start proof and how it fails), C (the owner's allow, the gate, the triggers, the stores and the screens) and D (tests, gates and the rules of the plan). After each lens a second agent tried to refute every finding. Briefs, findings and kept proofs: `.workflow/scratch/plan-05/review-brief.md`, `review-lens-<letter>.md`, `review/lens-<letter>.md`, `review/verify-<letter>.md`. Lenses B and D read commit `d567d6e`; lenses A and C read `ce642bf`, which holds the first fixes, and are recorded further down. A final verification by two fresh agents is recorded at the end.
 
 ### Facts measured for the review
 
@@ -1561,3 +1561,39 @@ git commit -m "Let the runner say when there is nothing to allow and make the pa
 ```
 
 Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
+
+---
+
+### Final verification (at `96e7988`, two fresh agents)
+
+- The chair's steps were repeated after the fixes: `pnpm capture` printed `captured 26 screens`, and the walk in the real app read `https://example.com/` again (run `run-7485e39b250b`, `done` in 16.8 seconds and 7 turns, `page_read` once, one click refused with "This step may only read pages.", 5 calls allowed and 1 denied, `heading: "Example Domain"`, `outside: true`). The first picture of the walk now says "in your own browser".
+- A fresh reviewer read the fixes of Tasks 30 to 37 (`.workflow/scratch/plan-05/review/final-F.md`). It found all eight right and one new minor defect, F-1: an ask between the page step and the next step dropped the outside mark, because an ask copies the items of its `choose_from` into its own output and its row was never marked. Task 38 fixes it. Noted and left: a check pattern that takes a marked output can bring that text into the same step's next try through the evidence of the failed check; that step is the one that reads the marked output already, so it is marked by Task 36 in the usual case.
+- A fresh verifier checked every item of the ledger and every finding against its evidence (`.workflow/scratch/plan-05/review/final-V.md`): 37 tasks ticked and committed, 16 findings and CH-1 each with a decision, every regression test passing, every kept proof of a defect failing now (or passing where it was written to assert the right behaviour), the last gate (217 test files, 1,441 tests, the hidden-character scan and the dependency gate) belonging to the last code commit, nothing changed that must not change, no test weakened, and the store of the real run showing one read and one refused click. It passed the verification and named small things: this record of the repeated walk (now written here), a stale sentence at the head of this section (now corrected), one text of the walk flow that still said Chrome (Task 38), and Biome warnings that rose from 102 to 114 during the plan (warnings only; the gate has no errors).
+- The owner did not give a separate yes for the change of the sandbox limits in this plan (a worker may use five read-only browser calls after the owner allows the flow). The chair read it from the owner's decision D3 (the owner's own logged-in browser may be used, read-only) and from the owner's word to continue the work, and says so plainly in the report to the owner.
+
+### Task 38: Review fix: an ask passes the outside mark on
+
+**Files:**
+- Modify: `packages/runner/src/exec/ask.ts`, `packages/runner/src/exec/leaf.ts` (only to share the function of Task 36 that decides whether a text takes an output of a marked step; move it to a small file of its own under `packages/runner/src/exec/` if that is cleaner), the present test file of the ask step or `packages/runner/src/exec/leaf-noretry.test.ts`, and `apps/desktop/electron/browser-walk-steps.ts`
+
+**Interfaces:**
+- `runAsk`: when the ask's `choose_from`, its question or any other text of the ask that the engine fills in takes an output of a step whose row in this run is marked `outside` (the same rule and the same function as Task 36, with the same row choice for a loop), the ask's own row is marked `outside` and saved before the ask is shown and before a choice is stored. The mark is never removed. A later step whose instructions take the ask's output is then marked by the rule of Task 36.
+- `browser-walk-steps.ts`: in the texts of the walk's check flow (`BROWSER_WALK_README` and the comment above the flow), "the owner's own Chrome" becomes "the owner's own browser". Nothing else changes there.
+
+The reviewer's kept proof shows the defect on the present code: `.workflow/scratch/plan-05/review/zz-review-05-F-1.test.ts`. Use its flow (a marked page step, an ask whose `choose_from` takes the page step's list, a step that takes the ask's choice) as the pattern.
+
+- [ ] **Step 1: Write the failing tests:**
+  1. "an ask whose choose_from takes an output of a marked step is marked outside, and the step that takes its choice is marked too"
+  2. "an ask that takes nothing from a marked step is not marked, and neither is the step after it"
+  3. "the ask's mark is there before the owner answers" (the row is marked while the run waits for the answer)
+- [ ] **Step 2: Run** the test file. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/exec packages/runner/src/engine*.test.ts apps/desktop/electron`. Expected: PASS.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src apps/desktop/electron
+git commit -m "Pass the outside mark through an ask, and say browser in the walk flow's text" -m "Assisted-by: Claude Code"
+```
+
