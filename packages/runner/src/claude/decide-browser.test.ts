@@ -33,7 +33,6 @@ test("the five read calls are allowed with their exact inputs, a page flagged on
     ["tabs_create_mcp", {}, "tab"],
     ["navigate", { url, tabId: 7 }, "page"],
     ["get_page_text", { tabId: 7 }, undefined],
-    ["get_page_text", { tabId: 7, max_chars: 40000 }, undefined],
     ["tabs_close_mcp", { tabId: 7 }, undefined],
   ] as const)
     expect(decision(name, input)).toEqual({
@@ -41,6 +40,18 @@ test("the five read calls are allowed with their exact inputs, a page flagged on
       tool: CHROME_PREFIX + name,
       ...(effect ? { effect } : {}),
     });
+});
+test("get_page_text with max_chars 500 or 40000 is refused as a part FlowDriven does not recognise, and with the tab id alone it is allowed", () => {
+  for (const max_chars of [1, 500, 40000, 0, 40001, 1.5, "500"])
+    expect(decision("get_page_text", { tabId: 7, max_chars })).toEqual({
+      allow: false,
+      reason: BROWSER_DENY.part,
+      tool: CHROME_PREFIX + "get_page_text",
+    });
+  expect(decision("get_page_text", { tabId: 7 })).toEqual({
+    allow: true,
+    tool: CHROME_PREFIX + "get_page_text",
+  });
 });
 test("R3: every other Chrome tool is refused with This step may only read pages., one assertion per tool", () => {
   for (const name of [

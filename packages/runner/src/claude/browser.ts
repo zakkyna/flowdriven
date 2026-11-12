@@ -44,22 +44,10 @@ export function decideBrowser(
   if (name !== "navigate" && name !== "get_page_text" && name !== "tabs_close_mcp")
     return deny(BROWSER_DENY.readOnly);
   if (
-    !only(
-      ...(name === "navigate"
-        ? ["tabId", "url"]
-        : name === "get_page_text"
-          ? ["tabId", "max_chars"]
-          : ["tabId"]),
-    ) ||
+    !only(...(name === "navigate" ? ["tabId", "url"] : ["tabId"])) ||
     typeof input.tabId !== "number" ||
     !Number.isSafeInteger(input.tabId) ||
-    (name === "navigate" && typeof input.url !== "string") ||
-    (name === "get_page_text" &&
-      "max_chars" in input &&
-      (typeof input.max_chars !== "number" ||
-        !Number.isSafeInteger(input.max_chars) ||
-        input.max_chars <= 0 ||
-        input.max_chars > MAX_PAGE_CHARS))
+    (name === "navigate" && typeof input.url !== "string")
   )
     return deny(BROWSER_DENY.part);
   if (!state.tabs.has(input.tabId)) return deny(BROWSER_DENY.tab);

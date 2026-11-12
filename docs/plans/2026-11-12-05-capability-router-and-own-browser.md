@@ -1405,19 +1405,21 @@ Noted by the reviewers and not changed in this plan:
 
 The reviewer's kept proof: `.workflow/scratch/plan-05/review/zz-review-05-A-1.test.ts`.
 
-- [ ] **Step 1: Write the failing tests** in `decide-browser.test.ts`:
+- [x] **Step 1: Write the failing tests** in `decide-browser.test.ts`:
   1. "get_page_text with max_chars 500 or 40000 is refused as a part FlowDriven does not recognise, and with the tab id alone it is allowed"
   2. change the present cases named above
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-browser.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-browser.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Let get_page_text take a tab id and nothing else" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
