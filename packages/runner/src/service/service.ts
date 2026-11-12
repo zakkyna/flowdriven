@@ -132,6 +132,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     projectDir,
     now,
     harnesses: hs,
+    ...(hs ? { connectors: () => hs.facts().connectors ?? [] } : {}),
     webCheck:
       options.webCheck ??
       (hs

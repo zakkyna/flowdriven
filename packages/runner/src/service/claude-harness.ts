@@ -9,6 +9,8 @@ import { type InventoryEntry, readInventory } from "../claude/inventory.ts";
 import { createPageCounter } from "../claude/pages.ts";
 import { isProjectRef } from "../claude/policy.ts";
 import { type ClaudeScan, scanClaude } from "../claude/scan.ts";
+import { catalogEntry } from "../connectors/catalog.ts";
+import { createGrantBook } from "../connectors/grants.ts";
 import type { HarnessAdapter } from "../harness.ts";
 import {
   NOT_ENFORCED_UNATTENDED,
@@ -101,7 +103,7 @@ export function gate(
   const { manifest } = input;
   const facts = input.facts ?? { hooks: false, chrome: false };
   const drops = new Map<string, string>();
-  let routedWeb = false;
+  let routedNeedsAllow = false;
   const cannot = new Set<string>(),
     sensitive = new Set<string>();
   for (const step of manifest.steps.flatMap((s) => ("steps" in s ? s.steps : [s]))) {
@@ -113,11 +115,11 @@ export function gate(
     if (step.do !== "worker") continue;
     for (const id of step.uses) {
       const req = manifest.requirements.find((r) => r.id === id);
-      if (req?.type === "web") {
+      if (req?.type === "web" || (req?.type === "mcp_server" && catalogEntry(req.ref))) {
         const route = routeRequirement(req, facts);
         if (!route || !route.routed) drops.set(id, route?.reason ?? "FlowDriven cannot provide this yet.");
         else {
-          routedWeb = true;
+          routedNeedsAllow = true;
           if (req.sensitive && input.allowed !== true) sensitive.add(id);
         }
         continue;
@@ -136,7 +138,7 @@ export function gate(
   if (cannot.size) return { ready: false, reason: GATE.cannotEnforce([...cannot].sort()) };
   const firstDrop = [...drops.keys()].sort().at(0);
   if (firstDrop !== undefined) return { ready: false, reason: drops.get(firstDrop) };
-  if (routedWeb && input.allowed !== true) return { ready: false, reason: ALLOW_FIRST };
+  if (routedNeedsAllow && input.allowed !== true) return { ready: false, reason: ALLOW_FIRST };
   const routeReason = gateRoutes(manifest, facts);
   if (routeReason !== undefined) return { ready: false, reason: routeReason };
   if (sensitive.size) return { ready: false, reason: GATE.sensitive([...sensitive].sort()) };
@@ -336,10 +338,13 @@ export function createHarnessService(options: {
       } catch {}
     },
     newId: options.newId,
+    connectors: () => cache?.inventory.connectors ?? [],
+    grants: createGrantBook(options.store),
     ...options.adapter,
     pages: createPageCounter({ store: options.store, dayOf: options.dayOf ?? localDay, now: options.now }),
     admit: (req) => {
-      if (!req.requirements.some((r) => r.type === "web")) return undefined;
+      if (!req.requirements.some((r) => r.type === "web" || (r.type === "mcp_server" && catalogEntry(r.ref))))
+        return undefined;
       const run = options.store.getRun(req.runId);
       return run && options.store.getCapabilityConsent(run.flowId)?.hash === run.flowHash
         ? undefined

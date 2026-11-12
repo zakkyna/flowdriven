@@ -44,6 +44,7 @@ export type HandlerContext = {
   weekly?: ReturnType<typeof createWeekly>;
   capabilities?: ReturnType<typeof createCapabilities>;
   webCheck?: () => { chromeFlag: boolean; hostFile: boolean };
+  connectors?: () => { name: string; url: string; status: string }[];
 };
 export type Handlers = {
   [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> | Promise<OperationOutput<N>>;
@@ -115,6 +116,7 @@ export function createHandlers({
   weekly,
   capabilities,
   webCheck,
+  connectors,
 }: HandlerContext): Handlers {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
@@ -327,7 +329,8 @@ export function createHandlers({
         runTrigger(begun.run, flowNameOf),
       );
     },
-    "readiness.check": ({ flowId }) => toReadinessReport(flow(flowId), now().toISOString(), webCheck?.()),
+    "readiness.check": ({ flowId }) =>
+      toReadinessReport(flow(flowId), now().toISOString(), webCheck?.(), connectors?.()),
     "readiness.install": () => unavailable("Installing a requirement arrives with the readiness engine."),
     "approvals.list": ({ state }) =>
       [

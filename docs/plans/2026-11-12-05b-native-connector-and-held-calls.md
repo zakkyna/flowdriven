@@ -707,7 +707,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `map-flow.ts`: `toReadinessReport(row, checkedAt, web?, connectors?)`; for an `mcp_server` row with a catalog entry and `connect` of `native` or absent, when `connectors` is given, the row gets `connectorReadiness(...)`, `route: { via: "<label> connector in Claude Code", risk: "official" }`, `guide: { steps: [detail], commands: [], verified: false }` when not `ok`. With `connectors` undefined the row stays `unchecked`, as today.
 - `handlers.ts` and `service.ts`: the options of `createHandlers` (`handlers.ts:46`, next to `webCheck`) gain `connectors?: () => { name: string; url: string; status: string }[]`; `readiness.check` passes `connectors?.()`; the service passes `() => hs?.facts().connectors ?? []` when it has a harness service. R4 is unchanged (Fact 20).
 
-- [ ] **Step 1: Write the failing tests.** `claude-harness-connector.test.ts` (the `gate` input as `claude-harness-web.test.ts` builds it, a Gmail requirement used by a worker step):
+- [x] **Step 1: Write the failing tests.** `claude-harness-connector.test.ts` (the `gate` input as `claude-harness-web.test.ts` builds it, a Gmail requirement used by a worker step):
   1. "a used connector:gmail requirement with a connected fact is ready only with the allow, and says Allow what this flow may touch on its screen first. without it";
   2. "a missing fact, a fact with the right name and another url, and a declared plain write give the router's drop reasons This connector is not connected in Claude Code. and FlowDriven cannot provide one of this connector's tools yet.";
   3. "a sensitive connector requirement is blocked when it is not routed or not allowed and passes when routed and allowed";
@@ -719,16 +719,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "a needs_login fact is needs_login with the sign-in fix, and a failed, a pending, another url and no fact are missing with the add fix";
   9. "toReadinessReport gives the Gmail row its state, route Gmail connector in Claude Code and risk official, leaves it unchecked when connectors is undefined, and leaves an mcp_server with another ref unchecked";
   10. "readiness.check through the service after a rescan reports the Gmail row ok".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/claude-harness-connector.test.ts packages/runner/src/service/readiness-connector.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/service`. Expected: PASS, unchanged (`claude-harness.test.ts:148` and `:540`, `claude-harness-web.test.ts:93`, `map-flow.test.ts:104`).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/claude-harness-connector.test.ts packages/runner/src/service/readiness-connector.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/service`. Expected: PASS, unchanged (`claude-harness.test.ts:148` and `:540`, `claude-harness-web.test.ts:93`, `map-flow.test.ts:104`).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Gate and check the connector route, wire the scan and the grants, and report readiness" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

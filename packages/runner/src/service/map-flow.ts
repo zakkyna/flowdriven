@@ -14,8 +14,10 @@ import {
   type Step,
   type Trigger,
 } from "@flowdriven/sdk";
+import { catalogEntry } from "../connectors/catalog.ts";
 import { UNOFFICIAL_SENTENCE } from "../router/route.ts";
 import type { FlowRow, RunRow, StepRow } from "../storage.ts";
+import { connectorReadiness } from "./readiness-connector.ts";
 import { WEB_FIX, webReadiness } from "./readiness-web.ts";
 
 export function coreVersion(version: string): string {
@@ -186,33 +188,50 @@ export function toReadinessReport(
   row: FlowRow,
   checkedAt: string,
   web?: { chromeFlag: boolean; hostFile: boolean },
+  connectors?: { name: string; url: string; status: string }[],
 ): ReadinessReport {
   const m = manifestOf(row);
-  const items = m.requirements.map((r) => ({
-    requirementId: r.id,
-    name: r.ref ?? r.id,
-    type: r.type,
-    why: r.why,
-    required: r.required,
-    sensitive: r.sensitive,
-    state: "unchecked" as const,
-    detail: "Not checked yet. Checking requirements arrives with the readiness engine.",
-    route: { via: "FlowDriven", risk: "official" as const },
-    autoInstall: "guided" as const,
-    guide: { steps: ["Nothing to do yet."], commands: [], verified: false },
-    checkedAt,
-    ...(web && r.type === "web" && r.mode === "read" && r.session === "own"
-      ? {
-          ...webReadiness(web),
-          route: {
-            via: "Claude in Chrome inside Claude Code",
-            risk: "unofficial" as const,
-            note: UNOFFICIAL_SENTENCE,
-          },
-          guide: { steps: [WEB_FIX], commands: ["claude --chrome"], verified: false },
-        }
-      : {}),
-  }));
+  const items = m.requirements.map((r) => {
+    const entry =
+      r.type === "mcp_server" && (r.connect === undefined || r.connect === "native")
+        ? catalogEntry(r.ref)
+        : undefined;
+    const connector = entry && connectors !== undefined ? connectorReadiness(entry, connectors) : undefined;
+    return {
+      requirementId: r.id,
+      name: r.ref ?? r.id,
+      type: r.type,
+      why: r.why,
+      required: r.required,
+      sensitive: r.sensitive,
+      state: "unchecked" as const,
+      detail: "Not checked yet. Checking requirements arrives with the readiness engine.",
+      route: { via: "FlowDriven", risk: "official" as const },
+      autoInstall: "guided" as const,
+      guide: { steps: ["Nothing to do yet."], commands: [], verified: false },
+      checkedAt,
+      ...(connector && entry
+        ? {
+            ...connector,
+            route: { via: `${entry.label} connector in Claude Code`, risk: "official" as const },
+            ...(connector.state !== "ok"
+              ? { guide: { steps: [connector.detail], commands: [], verified: false } }
+              : {}),
+          }
+        : {}),
+      ...(web && r.type === "web" && r.mode === "read" && r.session === "own"
+        ? {
+            ...webReadiness(web),
+            route: {
+              via: "Claude in Chrome inside Claude Code",
+              risk: "unofficial" as const,
+              note: UNOFFICIAL_SENTENCE,
+            },
+            guide: { steps: [WEB_FIX], commands: ["claude --chrome"], verified: false },
+          }
+        : {}),
+    };
+  });
   return ReadinessReport.parse({ flowId: m.id, flowName: m.name, checkedAt, ready: isReady(items), items });
 }
 export function defaultSettings(now: string): Settings {
