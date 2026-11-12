@@ -116,6 +116,7 @@ export function runAsk(
           createdAt: createdAt.toISOString(),
           expiresAt: new Date(createdAt.getTime() + durationMs(step.ask.expires)).toISOString(),
           state: "pending",
+          ...(row.outside === true ? { outside: true } : {}),
         });
       }
       store.upsertStep({ ...row, state: "waiting_approval" });

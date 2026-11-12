@@ -1,4 +1,10 @@
-import { type FlowManifest, parseExpression, references, templateExpressions } from "@flowdriven/sdk";
+import {
+  type FlowManifest,
+  type LeafStep,
+  parseExpression,
+  references,
+  templateExpressions,
+} from "@flowdriven/sdk";
 import type { RunRow, StepRow } from "../storage.ts";
 
 const STATUS_KEYS = new Set(["status", "passed", "failed", "skipped"]);
@@ -25,7 +31,16 @@ export function takesOutsideText(
     return rows.some((r) => r.runId === run.id && r.outside === true);
   }
   for (const path of paths) {
-    const viaSteps = path.at(0) === "steps";
+    const first = path.at(0);
+    if (home && "for_each" in home && first === home.as) {
+      if (takesOutsideText(home.for_each, home.id, manifest, run, "", rows)) return true;
+      continue;
+    }
+    if (first === "trigger") {
+      if (run.trigger && run.trigger.kind !== "manual" && run.trigger.kind !== "schedule") return true;
+      continue;
+    }
+    const viaSteps = first === "steps";
     const id = viaSteps ? path.at(1) : path.at(0);
     const rest = viaSteps ? path.slice(2) : path.slice(1);
     if (id === undefined || (!viaSteps && SCOPE_NAMES.has(id))) continue;
@@ -50,4 +65,24 @@ export function takesOutsideText(
     if (marked(id, "")) return true;
   }
   return false;
+}
+
+export function checkTexts(checks: LeafStep["checks"]): string[] {
+  return checks.flatMap((check) => {
+    if (check.type === "contains" || check.type === "not_contains")
+      return [...(check.pattern === undefined ? [] : [check.pattern]), ...(check.patterns ?? [])];
+    if (check.type === "files") return check.paths;
+    return [];
+  });
+}
+
+export function stepTakesOutsideText(
+  step: LeafStep,
+  manifest: FlowManifest,
+  run: RunRow,
+  itemKey: string,
+  rows: StepRow[],
+): boolean {
+  const texts = [...("instructions" in step ? [step.instructions] : []), ...checkTexts(step.checks)];
+  return texts.some((text) => takesOutsideText(text, step.id, manifest, run, itemKey, rows));
 }

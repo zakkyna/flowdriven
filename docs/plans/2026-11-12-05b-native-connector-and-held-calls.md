@@ -788,7 +788,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `leaf.ts:73`: the condition uses `stepTakesOutsideText(step, ...)` for `step.do !== "builtin"` (the rest of the condition is unchanged).
 - `ask.ts`: the approval it creates carries `outside: true` when `row.outside === true` (the mark is saved before the approval is created, `ask.ts:48-58`).
 
-- [ ] **Step 1: Write the failing tests.** `outside.test.ts` (rows and runs built by hand):
+- [x] **Step 1: Write the failing tests.** `outside.test.ts` (rows and runs built by hand):
   1. "a contains pattern that takes a value of a marked step marks the step, and an unmarked one does not";
   2. "each of the patterns of a not_contains check and each path of a files check is looked at";
   3. "a schema, a judge and a user check add no text";
@@ -802,16 +802,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "a step that uses ${trigger.payload.x} is marked in a run started by a webhook and not in a manual run";
   11. "an ask whose step row is marked gives an approval with outside true, and the approval of an unmarked ask has no outside key";
   12. "the present behaviour is kept: a step that takes only an unmarked step's output stays unmarked".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/outside.test.ts packages/runner/src/exec/leaf-outside.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/engine-ask.test.ts packages/runner/src/engine-loop.test.ts`. Expected: PASS, unchanged (`leaf-noretry.test.ts:162-330` keep their meaning: none of them uses an item value, a check template or a trigger value that newly marks).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/outside.test.ts packages/runner/src/exec/leaf-outside.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/engine-ask.test.ts packages/runner/src/engine-loop.test.ts`. Expected: PASS, unchanged (`leaf-noretry.test.ts:162-330` keep their meaning: none of them uses an item value, a check template or a trigger value that newly marks).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/exec
 git commit -m "Carry the outside mark through check patterns, loop item values, trigger values and asks" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

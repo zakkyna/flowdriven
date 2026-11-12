@@ -16,7 +16,7 @@ import type { HeldCall } from "../harness.ts";
 import type { RunRow, StepRow } from "../storage.ts";
 import { approvedCallsOf, HOLD_TEXT, labelOf, MAX_HOLDS } from "./held.ts";
 import { limits } from "./limits.ts";
-import { takesOutsideText } from "./outside.ts";
+import { stepTakesOutsideText } from "./outside.ts";
 import { raceAbort } from "./timeout.ts";
 
 export async function runLeaf(
@@ -74,7 +74,7 @@ export async function runLeaf(
   if (
     step.do !== "builtin" &&
     row.outside !== true &&
-    takesOutsideText(step.instructions, step.id, manifest, run, itemKey, store.listSteps(run.id))
+    stepTakesOutsideText(step, manifest, run, itemKey, store.listSteps(run.id))
   ) {
     row.outside = true;
     save();
