@@ -1,5 +1,7 @@
 import type { LimitWindow, RateLimit } from "../harness.ts";
 import type { ModelUsage } from "../storage.ts";
+import { CHROME_PREFIX } from "./browser.ts";
+import { STOP } from "./browser-post.ts";
 import { visible } from "./text.ts";
 
 export const MAX_START_HOOK_EVENTS = 8;
@@ -63,26 +65,38 @@ export function parseEvent(line: string): StreamEvent | undefined {
 }
 export function checkFirstEvent(
   event: StreamEvent | undefined,
-  expect: { tools: string[]; schema: boolean; sessionId: string; started: boolean },
+  expect: { tools: string[]; schema: boolean; sessionId: string; started: boolean; browser?: boolean },
 ): { ok: true } | { ok: false; why: string } {
   const fail = (why: string): { ok: false; why: string } => ({ ok: false, why });
   if (!event || event.type !== "system" || event.subtype !== "init")
     return fail("The first event is not init.");
   if (!expect.started) return fail("The start hook did not run.");
   if (event.session_id !== expect.sessionId) return fail("The session id does not match.");
+  if (expect.browser) {
+    const servers = event.mcp_servers;
+    const server = Array.isArray(servers) && servers.length === 1 ? servers.at(0) : undefined;
+    if (!object(server) || server.name !== "claude-in-chrome" || server.status !== "connected")
+      return fail(STOP.chromeDown);
+  }
   const tools = event.tools;
   const expected = new Set(expect.tools);
   if (expect.schema) expected.add("StructuredOutput");
+  const builtIn = Array.isArray(tools)
+    ? tools.filter((tool: unknown) => typeof tool === "string" && !tool.startsWith(CHROME_PREFIX))
+    : [];
   if (
     (!expect.schema && expected.has("StructuredOutput")) ||
     !Array.isArray(tools) ||
     tools.some((tool: unknown) => typeof tool !== "string") ||
     new Set(tools).size !== tools.length ||
-    tools.length !== expected.size ||
-    tools.some((tool: string) => !expected.has(tool))
+    (expect.browser && !tools.some((tool: string) => tool.startsWith(CHROME_PREFIX))) ||
+    (expect.browser ? builtIn.length : tools.length) !== expected.size ||
+    (expect.browser ? builtIn : tools).some((tool: string) => !expected.has(tool))
   )
     return fail("The tools do not match.");
-  for (const key of ["mcp_servers", "skills", "slash_commands"]) {
+  for (const key of expect.browser
+    ? ["skills", "slash_commands"]
+    : ["mcp_servers", "skills", "slash_commands"]) {
     if (!Array.isArray(event[key]) || event[key].length !== 0) return fail(`${key} is not empty.`);
   }
   if (event.permissionMode !== "default") return fail("The permission mode is not default.");

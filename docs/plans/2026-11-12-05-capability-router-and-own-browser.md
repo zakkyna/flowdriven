@@ -508,23 +508,25 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** `checkFirstEvent(event, expect)` where `expect` gains `browser?: boolean`. Without `browser` it is exactly as today. With it: `mcp_servers` must be an array of exactly one entry whose `name` is `claude-in-chrome` and whose `status` is `connected`, else `why` is `STOP.chromeDown` (imported from `./browser-post.ts`); the tool names that do not start with `CHROME_PREFIX` must equal the expected built-in set exactly (with `StructuredOutput` when `schema`), duplicates refused; at least one name starts with the prefix and every name that does is a string; `skills` and `slash_commands` stay empty arrays; `permissionMode` stays `default`. A failed proof still blocks as today; Task 14 maps `why === STOP.chromeDown` to that sentence instead of `LIMITS_NOT_APPLIED`.
 
-- [ ] **Step 1: Write the failing tests** in `browser-start.test.ts` (an init event built as in `stream.test.ts`):
+- [x] **Step 1: Write the failing tests** in `browser-start.test.ts` (an init event built as in `stream.test.ts`):
   1. "the start proof with a browser: one connected claude-in-chrome server, the expected built-in tools and the Chrome tools pass"
   2. "it fails with `Chrome is not connected to Claude Code.` for no server, a server that is not connected, a second server and a server of another name"
   3. "it fails for an unexpected built-in tool (Bash), a missing built-in tool, a duplicate, no Chrome tool at all, and a non-string tool"
   4. "with a schema the built-in set includes StructuredOutput, and without a schema StructuredOutput is refused"
   5. "skills, slash commands and a permission mode other than default still fail"
   6. "without a browser the proof is as strict as before: any MCP server fails, and the present tests of `stream.test.ts` pass unchanged"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/browser-start.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the edit.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/browser-start.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the edit.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude
 git commit -m "Add the start proof for a step with the Chrome server" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
