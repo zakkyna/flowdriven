@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { chromeTools, FakeChrome } from "./fake-chrome.ts";
 
 type Action = { do: string; [key: string]: unknown };
 type Play = {
@@ -14,6 +15,8 @@ type Play = {
 };
 type Script = {
   version?: string;
+  chrome?: boolean;
+  pages?: Record<string, { final?: string; title: string; text: string }>;
   help?: string;
   auth?: { loggedIn: boolean; authMethod?: string } | { raw: string };
   plugins?: unknown[] | { raw: string };
@@ -85,7 +88,10 @@ if (script.hang?.includes(command))
     setInterval(() => {}, 1000);
   });
 if (command === "version") process.stdout.write(`${script.version ?? "2.1.318"} (Claude Code)\n`);
-else if (command === "help") process.stdout.write(script.help ?? help);
+else if (command === "help")
+  process.stdout.write(
+    script.help ?? help + (script.chrome ? "--chrome  Enable Claude in Chrome integration\n" : ""),
+  );
 else if (command === "auth") {
   const auth = script.auth ?? {
     loggedIn: true,
@@ -111,7 +117,11 @@ else if (command === "play") {
   const settingsPath = arg("--settings");
   if (!settingsPath) throw new Error("Missing settings");
   const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as {
-    hooks: { SessionStart: { hooks: Hook[] }[]; PreToolUse: { hooks: Hook[] }[] };
+    hooks: {
+      SessionStart: { hooks: Hook[] }[];
+      PreToolUse: { hooks: Hook[] }[];
+      PostToolUse?: { matcher?: string; hooks: Hook[] }[];
+    };
   };
   const start = settings.hooks.SessionStart.at(0)?.hooks.at(0);
   const pre = settings.hooks.PreToolUse.at(0)?.hooks.at(0);
@@ -193,13 +203,14 @@ else if (command === "play") {
     );
     const tools = (arg("--tools") ?? "").split(",").filter(Boolean);
     if (args.includes("--json-schema")) tools.push("StructuredOutput");
+    if (args.includes("--chrome")) tools.push(...chromeTools);
     emit({
       type: "system",
       subtype: "init",
       session_id: session,
       cwd: process.cwd(),
       tools,
-      mcp_servers: [],
+      mcp_servers: args.includes("--chrome") ? [{ name: "claude-in-chrome", status: "connected" }] : [],
       permissionMode: "default",
       additional_directories: dirs,
       skills: args.includes("--disable-slash-commands") ? [] : ["fake-skill"],
@@ -209,6 +220,7 @@ else if (command === "play") {
     log({ kind: "init" });
   }
   const denials: unknown[] = [];
+  const chrome = new FakeChrome();
   let lastText = "";
   const result = (
     isError: boolean,
@@ -320,7 +332,7 @@ else if (command === "play") {
       const input = action.input ?? {};
       emit({ type: "assistant", message: { content: [{ type: "tool_use", id, name, input }] } });
       let ran = true;
-      let content = String(action.result ?? "ok");
+      let content: unknown = String(action.result ?? "ok");
       if (action.do === "tool") {
         const reply = await hook(
           pre,
@@ -372,6 +384,62 @@ else if (command === "play") {
         typeof action.write.text === "string"
       )
         writeFileSync(action.write.path, action.write.text);
+      if (ran && name.startsWith("mcp__claude-in-chrome__")) {
+        const made =
+          action.result === undefined
+            ? chrome.result(name, input as Record<string, unknown>, script.pages ?? {})
+            : { blocks: [{ type: "text" as const, text: String(action.result) }] };
+        if (made.error) {
+          content = made.error;
+        } else {
+          content = made.blocks;
+          const entry = settings.hooks.PostToolUse?.at(0);
+          let matches = false;
+          try {
+            matches =
+              !!entry && (entry.matcher === undefined || new RegExp(`^(?:${entry.matcher})$`).test(name));
+          } catch {}
+          const command = entry?.hooks.at(0);
+          if (matches && command) {
+            const reply = await hook(
+              command,
+              JSON.stringify({
+                session_id: session,
+                transcript_path: "",
+                cwd: process.cwd(),
+                prompt_id: "fake-prompt",
+                permission_mode: "default",
+                effort: "low",
+                hook_event_name: "PostToolUse",
+                tool_name: name,
+                tool_input: input,
+                tool_response: made.blocks,
+                tool_use_id: id,
+                duration_ms: 1,
+                mcp_server: { name: "claude-in-chrome", source: "dynamic" },
+              }),
+            );
+            let replaced = false;
+            try {
+              const value = JSON.parse(reply.stdout) as {
+                hookSpecificOutput?: { updatedMCPToolOutput?: unknown };
+              };
+              if (reply.code === 0 && Array.isArray(value.hookSpecificOutput?.updatedMCPToolOutput)) {
+                content = value.hookSpecificOutput.updatedMCPToolOutput;
+                replaced = true;
+              }
+            } catch {}
+            log({ kind: "post", id, name, hookExit: reply.code, replaced });
+          }
+        }
+        if (made.error) {
+          emit({
+            type: "user",
+            message: { content: [{ type: "tool_result", tool_use_id: id, is_error: true, content }] },
+          });
+          continue;
+        }
+      }
       if (!ran) denials.push({ tool_name: name, tool_use_id: id, tool_input: input });
       emit({
         type: "user",

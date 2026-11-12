@@ -658,7 +658,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `fake-chrome.ts` (pure, no I/O): `chromeTools` (the 21 names of F1 with the prefix); `class FakeChrome` with `result(name, input, pages): { blocks: { type: "text"; text: string }[]; error?: string }` and tab state: `tabs_context_mcp` gives the F6 JSON for tab `1001` (title `New Tab`, url `chrome://newtab/`) plus every tab created since; `tabs_create_mcp` gives `Created new tab. Tab ID: <next id from 1002>`; `navigate` gives `Navigated to <asked>` and remembers the asked address for that tab; `get_page_text` gives `Title: <title>\nURL: <final or asked>\nSource element: <body>\n---\n<text>` from `pages[asked]` (an unknown address is a page titled `Not found` with text `Nothing here.` and the asked address; a tab that was never navigated is an error "Couldn't determine which page this action targets. Re-read tabs_context_mcp and try again."); `tabs_close_mcp` gives `Closed tab <id>. Group is now empty (auto-removed).`; any other tool gives `ok`. A tab id that is not one of the session's (not `1001` and not created) gives the F15 error for `tabs_close_mcp` and `get_page_text`. Every success has the three blocks of F6: the first block, then `\n\nTab Context:\n- Executed on tabId: <id>\n- Available tabs: ...`, then the `<system-reminder>You used a single tool call this turn. Prefer browser_batch ...</system-reminder>` block. `tabs_create_mcp` before `tabs_context_mcp` is an error with the F7 sentence.
 - `fake-claude.ts`: the init event, when `--chrome` is among the arguments, has `mcp_servers: [{ name: "claude-in-chrome", status: "connected" }]` and its `tools` are the `--tools` list, `StructuredOutput` when asked, and `chromeTools` (`play.init` still wins). A `tool` action on a Chrome name builds its result with `FakeChrome` unless `action.result` is set (then it is the one text block). After the PreToolUse hook allows it, the fake reads `PostToolUse` from the settings (`settings.hooks.PostToolUse?.at(0)`; absent is fine), applies the entry's `matcher` as a regular expression anchored on the whole tool name (`^(?:<matcher>)$`; an entry with no matcher matches every tool), and when it matches and the tool ran it runs the entry's first command with the request `{ session_id, transcript_path: "", cwd, prompt_id, permission_mode, effort, hook_event_name: "PostToolUse", tool_name, tool_input, tool_response: <the blocks>, tool_use_id, duration_ms: 1, mcp_server: { name: "claude-in-chrome", source: "dynamic" } }`, parses a stdout that is JSON with `hookSpecificOutput.updatedMCPToolOutput` as an array and uses it as the `content` of the `tool_result` (as the real one does, F5), logs `{ kind: "post", id, name, hookExit, replaced }`, and otherwise leaves the blocks. A tool whose name does not match the matcher (`StructuredOutput`, `Read`) never runs the post hook. A Chrome `tool_result` has `content` as the array of blocks; a denied one stays an error with the string of today. The help text has `--chrome` only when `script.chrome` is true.
 
-- [ ] **Step 1: Write the failing tests** in `fake-chrome.test.ts` (and the fake's own cases, using the run helper pattern of `fake-claude.test.ts`):
+- [x] **Step 1: Write the failing tests** in `fake-chrome.test.ts` (and the fake's own cases, using the run helper pattern of `fake-claude.test.ts`):
   1. "FakeChrome gives the three blocks of F6 for each of the five calls, and the first block of each has the F6 shape"
   2. "get_page_text says the final address of the page table, which can differ from the one navigate was asked for (F8)"
   3. "an unknown address is a Not found page, a never-navigated tab is an error, and tabs_create_mcp before tabs_context_mcp is the F7 error"
@@ -670,16 +670,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   9. "a denied Chrome call is an error result with the hook text and is listed in permission_denials, and the post hook does not run"
   10. "with `chrome: true` the help text has the --chrome line, and the present help is unchanged otherwise"
   11. "the present fake tests still pass" (run `pnpm vitest run packages/runner/src/test-helpers`)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/test-helpers/fake-chrome.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** `fake-chrome.ts` and the two edits. The fake script stays a plain Node script run through type stripping (erasable TypeScript, relative imports ending in `.ts`).
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/test-helpers packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/test-helpers/fake-chrome.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** `fake-chrome.ts` and the two edits. The fake script stays a plain Node script run through type stripping (erasable TypeScript, relative imports ending in `.ts`).
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/test-helpers packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/test-helpers
 git commit -m "Teach the fake claude the Chrome tools, made-up pages and the post-tool hook" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

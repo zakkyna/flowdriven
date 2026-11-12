@@ -57,6 +57,8 @@ export type FakePlay = {
 };
 export type FakeScript = {
   version?: string;
+  chrome?: boolean;
+  pages?: Record<string, { final?: string; title: string; text: string }>;
   help?: string;
   auth?: { loggedIn: boolean; authMethod?: string } | { raw: string };
   plugins?: unknown[] | { raw: string };
@@ -66,6 +68,7 @@ export type FakeScript = {
 };
 export type FakeCall =
   | { kind: "call"; pid: number; args: string[]; cwd: string; env: string[]; prompt?: string }
+  | { kind: "post"; id: string; name: string; hookExit: number | null; replaced: boolean }
   | { kind: "init" }
   | { kind: "tool"; id: string; name: string; hookExit: number | null; ran: boolean };
 export const FAKE_CLAUDE_PATH = fileURLToPath(new URL("./fake-claude.ts", import.meta.url));
