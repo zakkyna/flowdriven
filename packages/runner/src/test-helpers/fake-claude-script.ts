@@ -74,6 +74,7 @@ export type FakeScript = {
     }
   >;
   connectorPending?: number;
+  connectorAbsent?: number;
   hang?: ("version" | "help" | "auth" | "plugins" | "mcp" | "status")[];
   plays?: FakePlay[];
 };

@@ -258,3 +258,17 @@ test("hang with status never answers mcp_status", { timeout: 20_000 }, async () 
   await closed;
   lines.close();
 });
+
+test("connectorAbsent makes the first answers list no connector, and the next answer lists the scripted ones", () => {
+  const responses = control(
+    home({ connectorAbsent: 2, connectorPending: 1 }),
+    [],
+    request("mcp_status", "1") +
+      request("mcp_status", "2") +
+      request("mcp_status", "3") +
+      request("mcp_status", "4"),
+  );
+  expect(
+    responses.map((r) => r.response.response.mcpServers.map((s: { status: string }) => s.status)),
+  ).toEqual([[], [], ["pending"], ["connected"]]);
+});

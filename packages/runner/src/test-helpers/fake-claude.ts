@@ -15,7 +15,7 @@ type Play = {
   init?: false | Record<string, unknown>;
   actions: Action[];
 };
-type Script = Pick<FakeScript, "connectors" | "connectorPending"> & {
+type Script = Pick<FakeScript, "connectors" | "connectorPending" | "connectorAbsent"> & {
   version?: string;
   chrome?: boolean;
   pages?: Record<string, { final?: string; title: string; text: string }>;
@@ -91,26 +91,29 @@ if (command === "control") {
     if (subtype === "mcp_status") {
       count++;
       response = {
-        mcpServers: restricted
-          ? []
-          : Object.entries(script.connectors ?? {}).map(([name, connector]) => {
-              const status =
-                count <= (script.connectorPending ?? 0) ? "pending" : (connector.status ?? "connected");
-              return {
-                name,
-                status,
-                scope: "claudeai",
-                config: { type: "claudeai-proxy", url: connector.url, id: connector.id },
-                ...(status === "connected"
-                  ? {
-                      tools: connector.tools.map((tool) => ({
-                        name: tool.name,
-                        annotations: tool.readOnly ? { readOnly: true } : {},
-                      })),
-                    }
-                  : {}),
-              };
-            }),
+        mcpServers:
+          restricted || count <= (script.connectorAbsent ?? 0)
+            ? []
+            : Object.entries(script.connectors ?? {}).map(([name, connector]) => {
+                const status =
+                  count - (script.connectorAbsent ?? 0) <= (script.connectorPending ?? 0)
+                    ? "pending"
+                    : (connector.status ?? "connected");
+                return {
+                  name,
+                  status,
+                  scope: "claudeai",
+                  config: { type: "claudeai-proxy", url: connector.url, id: connector.id },
+                  ...(status === "connected"
+                    ? {
+                        tools: connector.tools.map((tool) => ({
+                          name: tool.name,
+                          annotations: tool.readOnly ? { readOnly: true } : {},
+                        })),
+                      }
+                    : {}),
+                };
+              }),
       };
     } else if (subtype !== "initialize") continue;
     emit({

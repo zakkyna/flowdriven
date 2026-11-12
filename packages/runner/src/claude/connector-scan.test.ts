@@ -1,5 +1,5 @@
 import { rmSync } from "node:fs";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { FAKE_CLAUDE_PATH, makeFakeHome, readFakeCalls } from "../test-helpers/fake-claude-script.ts";
 import { buildConnectorScanArgs } from "./args.ts";
 import { parseConnectors, readConnectors } from "./connector-scan.ts";
@@ -24,6 +24,8 @@ const opts = (h: string) => ({
   env: { HOME: h, PATH: process.env.PATH },
   waitMs: 1000,
   pollMs: 10,
+  settleMs: 0,
+  connectorSettleMs: 0,
 });
 const server = (status = "connected") => ({
   name,
@@ -208,4 +210,73 @@ test("readInventory passes the catalog names: a rescan with a slow connector Flo
     expect.objectContaining({ name: slowName, status: "pending" }),
   ]);
   expect(statusCalls(h)).toHaveLength(1);
+});
+
+test("an answer that does not list a named connector yet is not the end: the scan asks again and returns the connector once it is listed and connected (connectorAbsent)", {
+  timeout: 20_000,
+}, async () => {
+  const h = home({ connectorAbsent: 2 });
+  expect(await readConnectors({ ...opts(h), names: [name], settleMs: 800 })).toEqual([
+    expect.objectContaining({ name, status: "connected" }),
+  ]);
+  expect(statusCalls(h)).toHaveLength(3);
+});
+
+test("a named connector that never appears ends the scan after settleMs with the list it has, well before the deadline", {
+  timeout: 20_000,
+}, async () => {
+  const h = home({ connectors: { [slowName]: slowConnector } });
+  let now = 0;
+  const clock = vi.spyOn(Date, "now").mockImplementation(() => (now += 100));
+  try {
+    expect(
+      await readConnectors({ ...opts(h), names: [name], settleMs: 250, pollMs: 0, waitMs: 5000 }),
+    ).toEqual([expect.objectContaining({ name: slowName, status: "pending" })]);
+    expect(statusCalls(h).length).toBeGreaterThan(1);
+    expect(now).toBeLessThan(5000);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+test("when every named connector is listed and connected the scan stops at once, before settleMs", {
+  timeout: 20_000,
+}, async () => {
+  const h = home();
+  expect(await readConnectors({ ...opts(h), names: [name], settleMs: 800 })).toEqual([
+    expect.objectContaining({ name, status: "connected" }),
+  ]);
+  expect(statusCalls(h)).toHaveLength(1);
+});
+
+test("without names an empty first answer before settleMs is asked again, and the scan ends after settleMs when nothing is pending", {
+  timeout: 20_000,
+}, async () => {
+  const h = home({ connectorAbsent: 1 });
+  let now = 0;
+  const clock = vi.spyOn(Date, "now").mockImplementation(() => (now += 100));
+  try {
+    expect(await readConnectors({ ...opts(h), settleMs: 450, pollMs: 0, waitMs: 5000 })).toEqual([
+      expect.objectContaining({ name, status: "connected" }),
+    ]);
+    expect(statusCalls(h).length).toBeGreaterThan(1);
+    expect(now).toBeGreaterThanOrEqual(450);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+test("settleMs is never more than waitMs", { timeout: 20_000 }, async () => {
+  const h = home({ connectorAbsent: 10000 });
+  let now = 0;
+  const clock = vi.spyOn(Date, "now").mockImplementation(() => (now += 100));
+  try {
+    expect(
+      await readConnectors({ ...opts(h), names: [name], settleMs: 5000, waitMs: 1000, pollMs: 0 }),
+    ).toEqual([]);
+    expect(statusCalls(h).length).toBeGreaterThan(1);
+    expect(now).toBeGreaterThanOrEqual(1000);
+  } finally {
+    clock.mockRestore();
+  }
 });

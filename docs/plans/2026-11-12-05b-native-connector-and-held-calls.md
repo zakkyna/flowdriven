@@ -1069,7 +1069,7 @@ Measured by the chair after Task 22: the stored scan of the walk still held no c
 - The fake: `FakeScript.connectorAbsent?: number`: the first N `mcp_status` answers of one process list no connector at all, as a real start does before the list is fetched; after them the answers are as scripted, and `connectorPending` counts from there.
 - No test may wait on the 8 seconds: every test that rescans against the fake, or calls `readConnectors` where a named connector is not listed, passes a small `settleMs` or `connectorSettleMs` (put it in the shared test helper where one builds the service). This changes no assertion.
 
-- [ ] **Step 1: Write the failing tests.** In `connector-scan.test.ts` (small `settleMs`, `pollMs` and `waitMs`):
+- [x] **Step 1: Write the failing tests.** In `connector-scan.test.ts` (small `settleMs`, `pollMs` and `waitMs`):
   1. "an answer that does not list a named connector yet is not the end: the scan asks again and returns the connector once it is listed and connected (connectorAbsent)";
   2. "a named connector that never appears ends the scan after settleMs with the list it has, well before the deadline";
   3. "when every named connector is listed and connected the scan stops at once, before settleMs";
@@ -1077,13 +1077,17 @@ Measured by the chair after Task 22: the stored scan of the walk still held no c
   5. "settleMs is never more than waitMs".
   In `fake-connector.test.ts`:
   6. "connectorAbsent makes the first answers list no connector, and the next answer lists the scripted ones".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-scan.test.ts packages/runner/src/test-helpers/fake-connector.test.ts`. Expected: FAIL on the new tests.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude packages/runner/src/service packages/runner/src/test-helpers`. Expected: PASS, and no test file takes seconds longer than before.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-scan.test.ts packages/runner/src/test-helpers/fake-connector.test.ts`. Expected: FAIL on the new tests.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude packages/runner/src/service packages/runner/src/test-helpers`. Expected: PASS, and no test file takes seconds longer than before.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Ask the connector list again while a connector the scan looks for is not listed yet" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-13. Evidence: pnpm format && pnpm check.
+
+---

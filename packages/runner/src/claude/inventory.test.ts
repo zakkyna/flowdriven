@@ -99,7 +99,12 @@ test("visible shows hidden characters, and the caps hold", () => {
 });
 test("readInventory runs mcp list only when asked", { timeout: 20_000 }, async () => {
   const h = home();
-  const options = { claude: FAKE_CLAUDE_PATH, cwd: h, env: { HOME: h, PATH: process.env.PATH } };
+  const options = {
+    claude: FAKE_CLAUDE_PATH,
+    cwd: h,
+    env: { HOME: h, PATH: process.env.PATH },
+    connectorSettleMs: 0,
+  };
   const first = await readInventory({ ...options, withMcp: false });
   expect(first).not.toHaveProperty("mcpServers");
   expect(readFakeCalls(h).some((c) => c.kind === "call" && c.args[0] === "mcp")).toBe(false);

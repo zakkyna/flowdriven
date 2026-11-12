@@ -49,6 +49,7 @@ test("a rescan stores the connectors with the scan, a later scan without MCP kee
     now: () => new Date("2026-11-12T00:00:00Z"),
     newId: (s: string) => s,
     mcpTimeoutMs: 500,
+    connectorSettleMs: 0,
   };
   const service = createHarnessService(options);
   await service.start().settled;

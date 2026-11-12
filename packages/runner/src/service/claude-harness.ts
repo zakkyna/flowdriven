@@ -266,6 +266,7 @@ export function createHarnessService(options: {
   newId: (prefix: string) => string;
   scanTimeoutMs?: number;
   mcpTimeoutMs?: number;
+  connectorSettleMs?: number;
   adapter?: Partial<ClaudeAdapterOptions>;
 }): HarnessService {
   let cache: StoredScan | undefined,
@@ -295,6 +296,7 @@ export function createHarnessService(options: {
                   withMcp,
                   timeoutMs: options.scanTimeoutMs,
                   mcpTimeoutMs: options.mcpTimeoutMs,
+                  connectorSettleMs: options.connectorSettleMs,
                 })
               : { skills: [], plugins: [] };
           if (stopped) return;

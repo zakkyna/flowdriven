@@ -116,6 +116,7 @@ async function setup() {
     now,
     newId: (p) => `${p}-${++n}`,
     mcpTimeoutMs: 500,
+    connectorSettleMs: 0,
     adapter: { rounds: 20 },
   });
   services.push(hs);

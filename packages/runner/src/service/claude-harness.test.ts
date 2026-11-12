@@ -254,6 +254,7 @@ test("a scan at start fills the card from the fake, a re-scan adds the MCP serve
     projectDir: dataDir,
     env: env(h),
     claudePath: FAKE_CLAUDE_PATH,
+    connectorSettleMs: 0,
     now,
     newId: ids(),
   });
@@ -562,6 +563,7 @@ test("a re-scan whose mcp list hangs keeps the list of the scan before", { timeo
     now,
     newId: ids(),
     mcpTimeoutMs: 300,
+    connectorSettleMs: 0,
   });
   await hs.start().settled;
   const before = (await hs.rescan()).at(0)?.inventory.mcpServers;

@@ -54,6 +54,7 @@ export async function readConnectors(options: {
   env: Record<string, string | undefined>;
   waitMs?: number;
   pollMs?: number;
+  settleMs?: number;
   names?: readonly string[];
 }): Promise<ConnectorFact[] | undefined> {
   try {
@@ -72,7 +73,8 @@ export async function readConnectors(options: {
       sequence = 0,
       timer: ReturnType<typeof setTimeout> | undefined;
     const wait = Math.max(0, options.waitMs ?? 20_000),
-      started = Date.now();
+      started = Date.now(),
+      settle = Math.min(wait, Math.max(0, options.settleMs ?? 8000));
     return await new Promise((resolve) => {
       let finished = false;
       const done = () => {
@@ -120,18 +122,18 @@ export async function readConnectors(options: {
               object(data.response.response) &&
               Array.isArray(data.response.response.mcpServers)
             ) {
-              last = parseConnectors(data.response.response);
-              if (
-                last.some(
-                  (c) =>
-                    c.status === "pending" && (options.names === undefined || options.names.includes(c.name)),
-                ) &&
-                Date.now() - started < wait
-              )
-                timer = setTimeout(
-                  request,
-                  Math.min(options.pollMs ?? 1000, Math.max(0, wait - (Date.now() - started))),
-                );
+              const facts = parseConnectors(data.response.response);
+              last = facts;
+              const elapsed = Date.now() - started;
+              const pending = facts.some(
+                (c) =>
+                  c.status === "pending" && (options.names === undefined || options.names.includes(c.name)),
+              );
+              const allListed =
+                options.names !== undefined &&
+                options.names.every((name) => facts.some((c) => c.name === name && c.status !== "pending"));
+              if (!allListed && (elapsed < settle || pending) && elapsed < wait)
+                timer = setTimeout(request, Math.min(options.pollMs ?? 1000, Math.max(0, wait - elapsed)));
               else done();
             }
           } catch {}

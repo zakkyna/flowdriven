@@ -91,6 +91,7 @@ export async function readInventory(options: {
   withMcp: boolean;
   timeoutMs?: number;
   mcpTimeoutMs?: number;
+  connectorSettleMs?: number;
   catalog?: ConnectorEntry[];
 }): Promise<Inventory> {
   const capture = async (args: string[], timeoutMs: number): Promise<string | undefined> => {
@@ -115,6 +116,7 @@ export async function readInventory(options: {
           cwd: options.cwd,
           env: options.env,
           waitMs: Math.min(options.mcpTimeoutMs ?? 20_000, 20_000),
+          settleMs: options.connectorSettleMs,
           names: (options.catalog ?? CONNECTORS).map((entry) => entry.name),
         })
       : Promise.resolve(undefined),
