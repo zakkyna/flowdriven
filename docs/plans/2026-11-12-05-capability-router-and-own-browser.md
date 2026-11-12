@@ -540,7 +540,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `hook-script.ts`: `POST_WITHHELD_LINE = postLine(POST_TEXT.unchecked)` (imported from `./browser-post.ts`; the fixed replacement, the shape of F5, one line without a single quote). `hookScript(options)` gains no new option. The generated script gets a new branch for its first argument `post`, placed **right after the `PATH=` line and before the `deny` function, the `trap` and the `dir=$(dirname ...)` line** (`hook-script.ts:23-27`), so nothing before it can exit 2; the lines after it are not changed byte for byte. The branch defines its own `withheld` (prints `POST_WITHHELD_LINE`, exits 0), its own trap on HUP, INT and TERM that calls `withheld`, its own `dir=$(dirname -- "$0") || withheld`, and uses the same mailbox (`req/<name>.json`, `res/<name>`, the same rounds); every failure (no folders, no temp file, the request cannot be written or moved) calls `withheld`; when the answer file appears it reads its first line raw (`IFS= read -r`) and removes the file; a line that starts with `{` is printed verbatim and the script exits 0; any other line, and no answer after the rounds, is `withheld`. The script never builds JSON except that one fixed line. `hookCommand(controlDir, start)` is unchanged; a new `postCommand(controlDir: string): string` returns `/bin/sh '<controlDir>/hook.sh' post || exit 2` (same safe-path rule). `settingsJson(controlDir: string, options?: { browser?: boolean })`: without `browser` the output is byte-identical to today; with it, a third event `PostToolUse: [{ matcher: "mcp__claude-in-chrome__.*", hooks: [{ type: "command", command: postCommand(dir), timeout: HOOK_TIMEOUT_SECONDS }] }]` is added after `PreToolUse`.
 - `control.ts`: `createControlDir` options gain `browser?: boolean`, passed to `settingsJson`.
 
-- [ ] **Step 1: Write the failing tests** in `hook-post.test.ts` (the `setup`, `answerer` and `run` helpers of `hook-script.test.ts` are copied into the file; `rounds` 3 and an answerer on a 5 ms timer):
+- [x] **Step 1: Write the failing tests** in `hook-post.test.ts` (the `setup`, `answerer` and `run` helpers of `hook-script.test.ts` are copied into the file; `rounds` 3 and an answerer on a 5 ms timer):
   1. "post mode prints the runner's line verbatim and exits 0" (the answerer replies with `postLine("Hello")` from Task 7)
   2. "post mode with no answer prints the fixed replacement after the rounds and exits 0"
   3. "post mode with an answer that does not start with `{` prints the fixed replacement"
@@ -551,16 +551,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "the settings with browser add exactly one PostToolUse entry with the matcher and the post command, and the settings without it are byte-identical to the present ones"
   9. "createControlDir with browser writes the PostToolUse entry; without it the file equals `settingsJson(path)`"
   10. "the script text has no `exec`, no `eval` and still passes the checks of the present hook tests" (reuses the present assertions on `hookScript({ rounds })`)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/hook-post.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the branch, `postCommand`, the `settingsJson` option and the `control.ts` option.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS (the present `hook-script.test.ts` and `control.test.ts` pass unchanged).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/hook-post.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the branch, `postCommand`, the `settingsJson` option and the `control.ts` option.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS (the present `hook-script.test.ts` and `control.test.ts` pass unchanged).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude
 git commit -m "Add the post-tool mode to the hook script and the PostToolUse settings entry" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

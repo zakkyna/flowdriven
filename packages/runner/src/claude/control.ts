@@ -14,13 +14,18 @@ export type ControlDir = {
 export function controlRoot(dataDir: string): string {
   return join(dataDir, "control");
 }
-export function createControlDir(options: { root: string; id: string; rounds?: number }): ControlDir {
+export function createControlDir(options: {
+  root: string;
+  id: string;
+  rounds?: number;
+  browser?: boolean;
+}): ControlDir {
   const { root, id } = options;
   if (!/^[a-z][a-z0-9-]{0,40}$/.test(id)) throw new Error("The control id is not valid.");
   const path = join(root, id);
   if (!isSafeControlPath(path)) throw new Error("The control folder path is not safe.");
   const script = hookScript({ rounds: options.rounds ?? 50 });
-  const settings = settingsJson(path);
+  const settings = settingsJson(path, { browser: options.browser });
   mkdirSync(root, { recursive: true, mode: 0o700 });
   try {
     mkdirSync(path, { mode: 0o700 });
