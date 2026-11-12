@@ -1052,3 +1052,38 @@ git commit -m "Stop the connector scan from waiting for connectors FlowDriven do
 Done by: Codex/gpt-6.1-terra, 2026-11-13. Evidence: pnpm format && pnpm check.
 
 ---
+
+Chair's note under Task 22 (2026-11-13): the walk failed the same way after this task, so the slow connector was not the whole cause. Task 23 holds the rest.
+
+### Task 23: Second fix from the repeated walk: the scan asks again while a connector it looks for is not listed yet
+
+Measured by the chair after Task 22: the stored scan of the walk still held no connector, although `claude mcp list` (5 seconds) showed Gmail connected and the chair's own probe found it `connected` at its second question, about 4 seconds after the start. The cause: `readConnectors` asks `mcp_status` at once, and a fresh Claude Code can answer before it has fetched the list of claude.ai connectors. That first answer lists no connector, or not Gmail; nothing in it is `pending`; and the scan ended with an empty list. The first walk passed by luck of timing.
+
+**Files:**
+- Modify: `packages/runner/src/claude/connector-scan.ts`, `packages/runner/src/claude/inventory.ts`, `packages/runner/src/service/claude-harness.ts` (only to pass one option through), `packages/runner/src/test-helpers/fake-claude.ts`, `packages/runner/src/test-helpers/fake-claude-script.ts`
+- Modify (tests): `packages/runner/src/claude/connector-scan.test.ts`, `packages/runner/src/test-helpers/fake-connector.test.ts`, and any test of this plan or a present test that rescans against the fake and would now wait (it gets the small value named below; its assertions do not change)
+
+**Interfaces:**
+- `readConnectors` gains `settleMs?: number` (default 8,000, never more than `waitMs`). The scan ends when one of these is true: (a) `names` is given and every name in it is listed and not `pending`; (b) `settleMs` has passed since the start and no connector that counts is `pending` (with `names`: a named one; without: any); (c) the deadline `waitMs` has passed. Before `settleMs`, an answer that lacks a named connector, or that lists no connector at all, is not the end: the scan asks again after `pollMs`. Without `names`, rule (a) never applies. Everything else stays: one child, no prompt, the kill, the size limit, the parser.
+- `readInventory` gains `connectorSettleMs?: number` and passes it as `settleMs`; the harness service passes its own option of the same name the way `mcpTimeoutMs` reaches `readInventory` today (default: none, so 8,000 applies in the app).
+- The fake: `FakeScript.connectorAbsent?: number`: the first N `mcp_status` answers of one process list no connector at all, as a real start does before the list is fetched; after them the answers are as scripted, and `connectorPending` counts from there.
+- No test may wait on the 8 seconds: every test that rescans against the fake, or calls `readConnectors` where a named connector is not listed, passes a small `settleMs` or `connectorSettleMs` (put it in the shared test helper where one builds the service). This changes no assertion.
+
+- [ ] **Step 1: Write the failing tests.** In `connector-scan.test.ts` (small `settleMs`, `pollMs` and `waitMs`):
+  1. "an answer that does not list a named connector yet is not the end: the scan asks again and returns the connector once it is listed and connected (connectorAbsent)";
+  2. "a named connector that never appears ends the scan after settleMs with the list it has, well before the deadline";
+  3. "when every named connector is listed and connected the scan stops at once, before settleMs";
+  4. "without names an empty first answer before settleMs is asked again, and the scan ends after settleMs when nothing is pending";
+  5. "settleMs is never more than waitMs".
+  In `fake-connector.test.ts`:
+  6. "connectorAbsent makes the first answers list no connector, and the next answer lists the scripted ones".
+- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/connector-scan.test.ts packages/runner/src/test-helpers/fake-connector.test.ts`. Expected: FAIL on the new tests.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude packages/runner/src/service packages/runner/src/test-helpers`. Expected: PASS, and no test file takes seconds longer than before.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src
+git commit -m "Ask the connector list again while a connector the scan looks for is not listed yet" -m "Assisted-by: Claude Code"
+```
