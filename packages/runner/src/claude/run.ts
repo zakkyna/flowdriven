@@ -2,7 +2,7 @@ import type { Value } from "@flowdriven/sdk";
 import type { CallInfo, RateLimit } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
 import { BROWSER_DENY } from "./browser.ts";
-import { decidePost, type PostResult, postLine, STOP } from "./browser-post.ts";
+import { decidePost, POST_TEXT, type PostResult, postLine, STOP } from "./browser-post.ts";
 import { startChannel } from "./channel.ts";
 import { startChild } from "./child.ts";
 import { createControlDir, removeControlDir } from "./control.ts";
@@ -206,6 +206,25 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             }, deps.exitWaitMs);
         } catch {}
       },
+      onUnanswered: ({ tool }) => {
+        try {
+          if (
+            !policy.browser ||
+            (tool !== undefined && tool !== "get_page_text") ||
+            pageRows >= MAX_PAGE_ROWS
+          )
+            return;
+          pageRows++;
+          audit("page_withheld", {
+            ...detail,
+            requirementId: policy.browser.requirementId,
+            tool: tool ?? "unknown",
+            address: "",
+            why: "unchecked",
+            sentence: POST_TEXT.unchecked,
+          });
+        } catch {}
+      },
       pollMs: deps.pollMs,
       onCall: ({ decision }) => {
         if (!decision.allow && deniedEntries < (deps.maxDeniedEntries ?? MAX_DENIED_ENTRIES)) {
@@ -252,7 +271,11 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       if (forced || interrupted) return;
       const read = reader.push(chunk);
       if (read.overflow) {
-        forced = { kind: "failed", text: "Claude Code sent a line that was too long." };
+        if (policy.browser) {
+          // A line over the limit may hold a result that was never checked: block, never retry.
+          audit("tool_unchecked", { ...detail, tool: "unknown" });
+          forced = { kind: "block", sentence: tripSentence("unknown") };
+        } else forced = { kind: "failed", text: "Claude Code sent a line that was too long." };
         child?.kill();
         return;
       }

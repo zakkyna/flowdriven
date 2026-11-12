@@ -1,10 +1,33 @@
-import { existsSync, lstatSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  lstatSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { CHROME_PREFIX } from "./browser.ts";
 import type { ControlDir } from "./control.ts";
 import type { Decision } from "./decide.ts";
 export const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
 export const MAX_POST_BYTES = 2 * 1024 * 1024;
+const PEEK_BYTES = 4096;
+const POST_EVENT = /"hook_event_name"\s*:\s*"PostToolUse"/;
+function peek(path: string): string {
+  const fd = openSync(path, "r");
+  try {
+    const buffer = Buffer.alloc(PEEK_BYTES);
+    const read = readSync(fd, buffer, 0, PEEK_BYTES, 0);
+    return buffer.subarray(0, read).toString("utf8");
+  } finally {
+    closeSync(fd);
+  }
+}
 export const CHANNEL = {
   unreadable: "FlowDriven could not read this request.",
   tooLarge: "This request is too large.",
@@ -26,6 +49,7 @@ export function startChannel(options: {
   onCall?: (record: CallRecord) => void;
   post?: (call: unknown) => { text: string; line: string } | undefined;
   onPost?: (record: { toolUseId: string; text: string }) => void;
+  onUnanswered?: (record: { toolUseId?: string; tool?: string }) => void;
   pollMs?: number;
 }): Channel {
   const { dir } = options;
@@ -33,6 +57,8 @@ export function startChannel(options: {
   const answers = new Map<string, string>();
   const allowedIds = new Set<string>();
   const chromeIds = new Set<string>();
+  const chromeTools = new Map<string, string>();
+  const unanswered = new Set<string>();
   const posted = new Map<string, string>();
   let allowed = 0;
   let denied = 0;
@@ -80,8 +106,21 @@ export function startChannel(options: {
         }
         const stat = lstatSync(path);
         if (!stat.isFile()) decision = deny(CHANNEL.unreadable);
-        else if (stat.size > MAX_REQUEST_BYTES) decision = deny(CHANNEL.tooLarge);
-        else {
+        else if (stat.size > MAX_REQUEST_BYTES) {
+          let head = "";
+          try {
+            head = peek(path);
+          } catch {}
+          if (POST_EVENT.test(head)) {
+            // An oversized post request gets no answer and counts as nothing; the hook prints its fixed sentence.
+            rmSync(path, { recursive: true, force: true });
+            try {
+              options.onUnanswered?.({});
+            } catch {}
+            continue;
+          }
+          decision = deny(CHANNEL.tooLarge);
+        } else {
           let call: unknown;
           let valid = true;
           try {
@@ -95,17 +134,13 @@ export function startChannel(options: {
               const request = call as Record<string, unknown>;
               if (request.hook_event_name === "PostToolUse") {
                 const postId = request.tool_use_id;
-                if (
-                  stat.size <= MAX_POST_BYTES &&
-                  typeof postId === "string" &&
-                  allowedIds.has(postId) &&
-                  !posted.has(postId) &&
-                  options.post
-                ) {
+                if (typeof postId === "string" && allowedIds.has(postId) && !posted.has(postId)) {
                   let result: { text: string; line: string } | undefined;
-                  try {
-                    result = options.post(call);
-                  } catch {}
+                  if (stat.size <= MAX_POST_BYTES && options.post) {
+                    try {
+                      result = options.post(call);
+                    } catch {}
+                  }
                   if (result !== undefined) {
                     const answer = `${result.line}\n`;
                     const tmp = join(dir.res, `.${name}.tmp`);
@@ -115,6 +150,12 @@ export function startChannel(options: {
                     posted.set(postId, result.text);
                     try {
                       options.onPost?.({ toolUseId: postId, text: result.text });
+                    } catch {}
+                  } else if (chromeIds.has(postId) && !unanswered.has(postId)) {
+                    unanswered.add(postId);
+                    try {
+                      const tool = chromeTools.get(postId);
+                      options.onUnanswered?.({ toolUseId: postId, ...(tool === undefined ? {} : { tool }) });
                     } catch {}
                   }
                 }
@@ -149,8 +190,10 @@ export function startChannel(options: {
                   request.hook_event_name === "PreToolUse" &&
                   typeof request.tool_name === "string" &&
                   request.tool_name.startsWith(CHROME_PREFIX)
-                )
+                ) {
                   chromeIds.add(id);
+                  chromeTools.set(id, request.tool_name.slice(CHROME_PREFIX.length));
+                }
               }
             }
           }

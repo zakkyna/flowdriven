@@ -1283,23 +1283,25 @@ The rules R1, R2, R3, R5, R6 and R11 each have proofs that fail when the rule is
 
 The reviewer's kept proofs show both defects on the present code: `.workflow/scratch/plan-05/review/zz-review-05-B-1.test.ts` and `zz-review-05-B-4.test.ts`. Use their set-up (the fake `claude`, the fake Chrome, a failing post hook) as the pattern.
 
-- [ ] **Step 1: Write the failing tests** in `review-05-b.test.ts`:
+- [x] **Step 1: Write the failing tests** in `review-05-b.test.ts`:
   1. "B-1: in a browser step a result line over the line limit blocks the step with the unchecked-tool sentence, audits tool_unchecked and is not tried again" (a small `maxLineBytes`, a failing post hook and a page longer than that)
   2. "B-1: without a browser policy a line over the limit is the present failed outcome"
   3. "B-4: a page text over 2 MiB is withheld and gives exactly one page_withheld line with why unchecked, no tool_denied line, and denied 0"
   4. "B-4: a post request over 8 MiB gets no answer, counts nothing, and gives one page_withheld line with the tool unknown and no tool_denied line"
   5. "B-4: a request over 8 MiB that is not a post request is refused as before"
   6. "a post request that the post function answers with nothing reports the id once, and a second post request for that id reports nothing"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/review-05-b.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/review-05-b.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Block an oversized stream line in a browser step and record a withheld oversized page" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
