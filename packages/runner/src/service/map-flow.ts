@@ -14,7 +14,9 @@ import {
   type Step,
   type Trigger,
 } from "@flowdriven/sdk";
+import { UNOFFICIAL_SENTENCE } from "../router/route.ts";
 import type { FlowRow, RunRow, StepRow } from "../storage.ts";
+import { WEB_FIX, webReadiness } from "./readiness-web.ts";
 
 export function coreVersion(version: string): string {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:[-+].*)?$/.exec(version);
@@ -180,7 +182,11 @@ export function toFlowDetail(row: FlowRow, runs: RunRow[], lastRunSteps: StepRow
     ),
   });
 }
-export function toReadinessReport(row: FlowRow, checkedAt: string): ReadinessReport {
+export function toReadinessReport(
+  row: FlowRow,
+  checkedAt: string,
+  web?: { chromeFlag: boolean; hostFile: boolean },
+): ReadinessReport {
   const m = manifestOf(row);
   const items = m.requirements.map((r) => ({
     requirementId: r.id,
@@ -195,6 +201,17 @@ export function toReadinessReport(row: FlowRow, checkedAt: string): ReadinessRep
     autoInstall: "guided" as const,
     guide: { steps: ["Nothing to do yet."], commands: [], verified: false },
     checkedAt,
+    ...(web && r.type === "web" && r.mode === "read" && r.session === "own"
+      ? {
+          ...webReadiness(web),
+          route: {
+            via: "Claude in Chrome inside Claude Code",
+            risk: "unofficial" as const,
+            note: UNOFFICIAL_SENTENCE,
+          },
+          guide: { steps: [WEB_FIX], commands: ["claude --chrome"], verified: false },
+        }
+      : {}),
   }));
   return ReadinessReport.parse({ flowId: m.id, flowName: m.name, checkedAt, ready: isReady(items), items });
 }

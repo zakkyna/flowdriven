@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { type Notice, operations, type RunnerTopic } from "@flowdriven/contracts";
 import { demoFlow } from "../demo/demo-flow.ts";
@@ -16,6 +17,7 @@ import { createDemoHarness } from "./demo-harness.ts";
 import { createDispatcher, createHandlers } from "./handlers.ts";
 import { type Every, wireKeeper } from "./keeper-wiring.ts";
 import { createNotifier, observeStore } from "./notify-wiring.ts";
+import { nativeHostPath } from "./readiness-web.ts";
 import { wireTriggers } from "./trigger-wiring.ts";
 import { createWeekly } from "./weekly-limit.ts";
 
@@ -27,6 +29,8 @@ export type ServiceOptions = {
   newId?: (prefix: string) => string;
   harness?: HarnessAdapter;
   env?: Record<string, string | undefined>;
+  exists?: (path: string) => boolean;
+  webCheck?: () => { chromeFlag: boolean; hostFile: boolean };
   claudePath?: string;
   scanTimeoutMs?: number;
   keeper?: { probes?: Probes; every?: Every };
@@ -118,6 +122,16 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     projectDir,
     now,
     harnesses: hs,
+    webCheck:
+      options.webCheck ??
+      (hs
+        ? () => ({
+            chromeFlag: hs.facts().chrome === true,
+            hostFile: options.env?.HOME
+              ? (options.exists ?? existsSync)(nativeHostPath(options.env.HOME))
+              : false,
+          })
+        : undefined),
     capabilities: createCapabilities({
       store,
       now,

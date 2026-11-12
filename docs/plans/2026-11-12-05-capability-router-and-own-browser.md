@@ -912,26 +912,36 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 **Interfaces:**
 - `readiness-web.ts`: `nativeHostPath(home: string): string` (`<home>/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json`); `WEB_FIX = "Install the Claude extension in Chrome, then run `claude --chrome` once."`; `webReadiness(i: { chromeFlag: boolean; hostFile: boolean }): { state: "ok" | "missing"; detail: string }` (`ok` only when both; `detail` is the fix text when missing and "Claude Code can use Chrome and the extension is installed. Chrome itself must be open." when ok).
 - `map-flow.ts`: `toReadinessReport(row, checkedAt, web?: { chromeFlag: boolean; hostFile: boolean })`; with `web` given, each `web` requirement with `mode: read` and `session: own` gets the state and detail of `webReadiness`, `route: { via: "Claude in Chrome inside Claude Code", risk: "unofficial", note: UNOFFICIAL_SENTENCE }`, `guide: { steps: [WEB_FIX], commands: ["claude --chrome"], verified: false }`; every other item stays as today (`unchecked`); without `web` the report is exactly today's.
-- `handlers.ts`: `HandlerContext` gains `webCheck?: () => { chromeFlag: boolean; hostFile: boolean }`; `"readiness.check"` passes `webCheck?.()`; `"triggers.setEnabled"` with `enabled: true` first checks `needsAllow` and the capability service's `consentOf` and throws `not_allowed` with `ALLOW_FIRST` unless the consent is `given`.
+- `handlers.ts`: `HandlerContext` gains `webCheck?: () => { chromeFlag: boolean; hostFile: boolean }`; `"readiness.check"` passes `webCheck?.()`; `"triggers.setEnabled"` with `enabled: true` checks `needsAllow` and the capability service's `consentOf` before it calls the trigger service and refuses with `not_allowed` unless the consent is `given`; the sentence is the trigger's own reason when the flow cannot be enabled anyway, and `ALLOW_FIRST` otherwise (see the chair's decision under this task).
 - `service.ts`: `webCheck: () => ({ chromeFlag: hs?.facts().chrome === true, hostFile: exists(nativeHostPath(home)) })` only in live mode with a harness service; `ServiceOptions` gains `webCheck?` (overrides it in tests) and the file check takes `exists` and the home folder (`options.env?.HOME`) as injected values.
 
-- [ ] **Step 1: Write the failing tests** in `readiness-web.test.ts`:
+- [x] **Step 1: Write the failing tests** in `readiness-web.test.ts`:
   1. "webReadiness is ok with the flag and the file and missing with the fix text otherwise (three cases)"
   2. "nativeHostPath is the F13 path under the injected home"
   3. "readiness.check marks the own-browser web row ok or missing with the unofficial route and the guide, and every other row stays unchecked"
   4. "without a check function the report is the present one" (the present `map-flow.test.ts` assertions hold)
   5. "triggers.setEnabled(true) for a flow that needs the allow is refused with `Allow what this flow may touch on its screen first.` until it is given" (through `createHandlers` with the capability service)
   6. "for a flow that does not need the allow, and for turning a trigger off, nothing changes"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/readiness-web.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the files and edits.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/readiness-web.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the files and edits.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Check readiness of the own-browser route and ask for the allow before a trigger" -m "Assisted-by: Codex"
 ```
+
+Chair's decision (2026-11-12), after the executor stopped on a conflict between this task and the present test "R4 at enable and at run start: a flow with a send tool before its first ask cannot be enabled" in `packages/runner/src/review-04-r.test.ts`: the plan was wrong, the test stays as it is. A flow that can never be enabled must hear its own reason, not a request to allow it first. The rule for `"triggers.setEnabled"` with `enabled: true` in `handlers.ts` is:
+
+- When `needsAllow(manifest)` is true and `capabilities?.consentOf(flowId)` is not `given`, the call is always refused with `not_allowed` and the trigger service's `setEnabled` is not called. With no capability service the call is refused too.
+- The sentence of that refusal: read the trigger's own view (`triggers.list(flowId)`, the entry with this `index`); when it has `canEnable: false` and a `reason`, the message is that `reason` (for the R4 flow: "This flow cannot run unattended: unattended prefix at steps.0"); in every other case it is `ALLOW_FIRST`.
+- Nothing else changes: with the consent given, and for a flow that does not need the allow, the trigger service decides as today.
+
+No rule of the unattended check is copied into the handler (no `validateManifest` there). The files of the earlier call are in the working tree; keep them and change only this order. Add one test to `readiness-web.test.ts`: 7. "a flow that needs the allow and cannot run unattended is refused with its own reason, not with the allow sentence" (the R4 flow of `test-helpers/trigger-rig.ts`).
+
+Done by: Codex (gpt-6.1-terra), 2026-11-12, for the files of the task and tests 1 to 6; the order of the two refusal sentences and test 7 by the chair (Claude Fable 5.2), because Codex reached its usage limit before the second call. Evidence: `pnpm format && pnpm check` (207 test files, 1,363 tests).
 
 ---
 

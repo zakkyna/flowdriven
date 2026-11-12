@@ -16,10 +16,12 @@ import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
 import type { Engine } from "../engine.ts";
 import type { HarnessQuota, Keeper } from "../keeper/types.ts";
 import { renderRunReport, reportLines } from "../report.ts";
+import { needsAllow } from "../router/route.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { TriggerService } from "../triggers/service.ts";
 import type { createCapabilities } from "./capabilities.ts";
 import type { HarnessService } from "./claude-harness.ts";
+import { ALLOW_FIRST } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
 import { defaultSettings, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
@@ -41,6 +43,7 @@ export type HandlerContext = {
   keeper?: Keeper;
   weekly?: ReturnType<typeof createWeekly>;
   capabilities?: ReturnType<typeof createCapabilities>;
+  webCheck?: () => { chromeFlag: boolean; hostFile: boolean };
 };
 export type Handlers = {
   [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> | Promise<OperationOutput<N>>;
@@ -111,6 +114,7 @@ export function createHandlers({
   keeper,
   weekly,
   capabilities,
+  webCheck,
 }: HandlerContext): Handlers {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
@@ -323,7 +327,7 @@ export function createHandlers({
         runTrigger(begun.run, flowNameOf),
       );
     },
-    "readiness.check": ({ flowId }) => toReadinessReport(flow(flowId), now().toISOString()),
+    "readiness.check": ({ flowId }) => toReadinessReport(flow(flowId), now().toISOString(), webCheck?.()),
     "readiness.install": () => unavailable("Installing a requirement arrives with the readiness engine."),
     "approvals.list": ({ state }) =>
       [
@@ -399,6 +403,18 @@ export function createHandlers({
     "triggers.setEnabled": ({ flowId, index, enabled, hash }) => {
       if (enabled && mode === "demo") throw new RunnerError("not_allowed", "Triggers stay off in the demo.");
       if (!triggers) return unavailable("Trigger service is unavailable.");
+      if (enabled) {
+        const row = flow(flowId);
+        const manifest = FlowManifest.parse(row.manifest);
+        if (needsAllow(manifest) && capabilities?.consentOf(flowId) !== "given") {
+          // Without the allow the call is always refused. A trigger that cannot be enabled anyway says its own reason.
+          const own = triggers.list(flowId).find((entry) => entry.index === index);
+          throw new RunnerError(
+            "not_allowed",
+            own && !own.canEnable && own.reason ? own.reason : ALLOW_FIRST,
+          );
+        }
+      }
       return toTriggerStatus(triggers.setEnabled(flowId, index, enabled, hash));
     },
     "settings.update": ({ patch }) => {
