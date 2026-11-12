@@ -812,7 +812,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `claude-harness.ts`: `export const ALLOW_FIRST = "Allow what this flow may touch on its screen first."`; `harnessFacts(scan: ClaudeScan | undefined): HarnessFacts` returns `{ hooks: true, chrome: scan.chrome === true }` when the scan is `detected` with no `missingFlags`, else `{ hooks: false, chrome: false }`; `gateRoutes(manifest: FlowManifest, facts: HarnessFacts, route: (requirements: Requirement[], facts: HarnessFacts) => Routed[] = routeAll): string | undefined` returns `NOT_ENFORCED_UNATTENDED` when `unattendedProviderErrors(manifest, route(manifest.requirements, facts))` is not empty, else `undefined` (the provider half of R4; the default parameter is the production route function, a test passes a made-up one). `gate(input)` gains optional `facts?: HarnessFacts` (default `{ hooks: false, chrome: false }`) and `allowed?: boolean` (default false) and, after the present harness checks, builds `cannot`, `sensitive` and new `drops` as today except that a `web` requirement used by a worker step does not enter `cannot`: it goes through `routeRequirement(req, facts)`; a drop adds its `reason` (first by requirement id) to `drops`; a routed one is a `web` row used. Result order: `cannot` (`GATE.cannotEnforce`), then the first drop reason, then (a routed `web` row used and `allowed` is not true) `ALLOW_FIRST`, then `gateRoutes(manifest, facts)`, then `sensitive` (`GATE.sensitive`) for every sensitive used requirement that is not a routed, allowed `web` row. With no `web` requirement the result is exactly today's.
 - No present assertion changes: `claude-harness.test.ts:100`, `:146` and `:511` pass as they are (Decision 9).
 
-- [ ] **Step 1: Write the failing tests** in `claude-harness-web.test.ts` (the helpers of `claude-harness.test.ts`: `manifest(...)`, `scan` with `chrome: true`):
+- [x] **Step 1: Write the failing tests** in `claude-harness-web.test.ts` (the helpers of `claude-harness.test.ts`: `manifest(...)`, `scan` with `chrome: true`):
   1. "a routed web requirement without the allow blocks with `Allow what this flow may touch on its screen first.`, and with the allow the gate is ready" (`facts { hooks: true, chrome: true }`, `allowed` false and true)
   2. "R11: without hooks the gate says `This needs a harness that can check each call.`, without Chrome `This Claude Code cannot use Chrome.`, and the drop comes before the allow sentence"
   3. "a sensitive web requirement passes when routed and allowed; a sensitive path requirement is still blocked by the sensitive sentence in the same flow (Decision 9c)"
@@ -821,16 +821,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   6. "gateRoutes: a made-up route function that returns a route labelled not enforced makes a flow with a schedule trigger and a use before the first ask give `This step would run unattended on a provider FlowDriven cannot enforce.`; after the ask, with a manual trigger only, or with the production route function, it gives undefined"
   7. "harnessFacts: detected with no missing flags and chrome true gives hooks and chrome; chrome absent gives no chrome; a missing binary or missing flags give neither"
   8. "the present gate tests still pass with no facts and no allow" (the gate of `claude-harness.test.ts:100`'s base input has `{ ready: true }`)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/claude-harness-web.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the edits.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/service`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/claude-harness-web.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the edits.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/service`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Gate web requirements on the router, the owner's allow and the harness facts" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

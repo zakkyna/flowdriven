@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { type HarnessCard, RunnerError } from "@flowdriven/contracts";
-import type { FlowManifest, Value } from "@flowdriven/sdk";
+import type { FlowManifest, Requirement, Value } from "@flowdriven/sdk";
 import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapter.ts";
 import { controlRoot, sweepControlRoot } from "../claude/control.ts";
 import { isSafeControlPath } from "../claude/hook-script.ts";
@@ -8,10 +8,32 @@ import { type InventoryEntry, readInventory } from "../claude/inventory.ts";
 import { isProjectRef } from "../claude/policy.ts";
 import { type ClaudeScan, scanClaude } from "../claude/scan.ts";
 import type { HarnessAdapter } from "../harness.ts";
+import {
+  NOT_ENFORCED_UNATTENDED,
+  routeAll,
+  routeRequirement,
+  unattendedProviderErrors,
+} from "../router/route.ts";
+import type { HarnessFacts, Routed } from "../router/types.ts";
 import type { HarnessStateRow, Store } from "../storage.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 
 export const CLAUDE_ID = "claude-code";
+export const ALLOW_FIRST = "Allow what this flow may touch on its screen first.";
+export function harnessFacts(scan: ClaudeScan | undefined): HarnessFacts {
+  return scan?.detected && scan.missingFlags.length === 0
+    ? { hooks: true, chrome: scan.chrome === true }
+    : { hooks: false, chrome: false };
+}
+export function gateRoutes(
+  manifest: FlowManifest,
+  facts: HarnessFacts,
+  route: (requirements: Requirement[], facts: HarnessFacts) => Routed[] = routeAll,
+): string | undefined {
+  return unattendedProviderErrors(manifest, route(manifest.requirements, facts)).length
+    ? NOT_ENFORCED_UNATTENDED
+    : undefined;
+}
 export const CONSENT_TEXT =
   "FlowDriven starts Claude Code on this Mac, and it works on the Claude plan you are signed in to. Anthropic's terms do not let other parties route requests through a plan login, while its help centre says that running Claude Code this way draws from your plan. So this route is gray: it could stop working, and Anthropic could limit your account. Each step gets only the tools and folders its flow declares, and FlowDriven checks every tool call before it runs. You can take this consent back at any time.";
 export const GATE = {
@@ -52,13 +74,22 @@ export function harnessGate(input: {
   else if (input.consent !== "given") reason = GATE.noConsent;
   return reason;
 }
-export function gate(input: Parameters<typeof harnessGate>[0] & { manifest: FlowManifest }): {
+export function gate(
+  input: Parameters<typeof harnessGate>[0] & {
+    manifest: FlowManifest;
+    facts?: HarnessFacts;
+    allowed?: boolean;
+  },
+): {
   ready: boolean;
   reason?: string;
 } {
   const reason = harnessGate(input);
   if (reason !== undefined) return { ready: false, reason };
   const { manifest } = input;
+  const facts = input.facts ?? { hooks: false, chrome: false };
+  const drops = new Map<string, string>();
+  let routedWeb = false;
   const cannot = new Set<string>(),
     sensitive = new Set<string>();
   for (const step of manifest.steps.flatMap((s) => ("steps" in s ? s.steps : [s]))) {
@@ -70,6 +101,15 @@ export function gate(input: Parameters<typeof harnessGate>[0] & { manifest: Flow
     if (step.do !== "worker") continue;
     for (const id of step.uses) {
       const req = manifest.requirements.find((r) => r.id === id);
+      if (req?.type === "web") {
+        const route = routeRequirement(req, facts);
+        if (!route || !route.routed) drops.set(id, route?.reason ?? "FlowDriven cannot provide this yet.");
+        else {
+          routedWeb = true;
+          if (req.sensitive && input.allowed !== true) sensitive.add(id);
+        }
+        continue;
+      }
       if (
         !req ||
         !(
@@ -82,6 +122,11 @@ export function gate(input: Parameters<typeof harnessGate>[0] & { manifest: Flow
     }
   }
   if (cannot.size) return { ready: false, reason: GATE.cannotEnforce([...cannot].sort()) };
+  const firstDrop = [...drops.keys()].sort().at(0);
+  if (firstDrop !== undefined) return { ready: false, reason: drops.get(firstDrop) };
+  if (routedWeb && input.allowed !== true) return { ready: false, reason: ALLOW_FIRST };
+  const routeReason = gateRoutes(manifest, facts);
+  if (routeReason !== undefined) return { ready: false, reason: routeReason };
   if (sensitive.size) return { ready: false, reason: GATE.sensitive([...sensitive].sort()) };
   return { ready: true };
 }
