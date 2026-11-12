@@ -99,3 +99,8 @@ test("auditCounts counts the three kinds and prints no detail", () => {
   ).toBe("counts: connector_call=1 call_held=1 tool_denied=1");
   expect(auditCounts(null, ["call_held"])).toBe("counts: call_held=0");
 });
+
+test("every step of the check flow has a required check, so the flow can be imported", () => {
+  expect(CONNECTOR_WALK_FLOW.match(/^ {4}checks:$/gm)?.length).toBe(2);
+  expect(CONNECTOR_WALK_FLOW.match(/^ {6}- \{ type: not_contains, patterns: \["@"\] \}$/gm)?.length).toBe(2);
+});

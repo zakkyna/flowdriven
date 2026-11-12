@@ -894,16 +894,24 @@ Done by: Codex/gpt-6.1-terra, then the chair (Claude Code) for three lines of th
 
 **Not for the executor.** The owner said yes to this walk on 2026-11-12 (the third answer at the head of this plan: one read that counts the alert emails, and one "hapus draf" with an id that does not exist, which must be held and is rejected). The chair does not ask again; it tells the owner when the walk runs and what it showed. Nothing is sent, changed or deleted: the one risky call is held and then rejected.
 
-- [ ] **Step 1: Chair step (GUI): the demo again.** `node packages/runner/src/test-helpers/connector-demo.ts`. Expected: the eight lines of Task 18 (a fake-only script; the executor ran it already).
-- [ ] **Step 2: Chair step (GUI): the pictures.** `pnpm build && pnpm capture`. Expected: `captured 26 screens`, exit 0 (this plan adds no screen; the Inbox card of a held call is a picture of the walk).
-- [ ] **Step 3: Chair step (GUI): the walk.** After the owner's yes: `pnpm build`, then `pnpm --filter @flowdriven/desktop exec electron dist-electron/connector-walk.js` (the command of the plan 05 walk). Expected, in this order: the check flow is imported; Allow is pressed (the sensitive Gmail requirement passes because it is routed and allowed); the step `alerts` reads through the connector (`connector_call` 1); the step `hold` is held; the run is `waiting_approval`; the Inbox card shows the action Delete, the step `Hold test`, the call `delete_draft` with the draft id as indented JSON, and Reject; the walk rejects it; the lines `run <id> held`, `run <id> ended failed`, `counts: connector_call=1 call_held=1 tool_denied=1`, `Pictures: <dir>`. Check by hand in Gmail that no draft or thread changed.
-- [ ] **Step 4: Record** next to the ledger: the run ids, seconds, turns and tokens of the walk, the three counts, the pictures looked at, and the real shape of one connector result (already G6). If the Gmail connector was `pending` at the first scan and the step blocked with the connector-down sentence, scan again and repeat; that is a pass for the start proof, not for the read.
-- [ ] **Step 5: Chair step (commit)** of the records:
+- [x] **Step 1: Chair step (GUI): the demo again.** `node packages/runner/src/test-helpers/connector-demo.ts`. Expected: the eight lines of Task 18 (a fake-only script; the executor ran it already).
+- [x] **Step 2: Chair step (GUI): the pictures.** `pnpm build && pnpm capture`. Expected: `captured 26 screens`, exit 0 (this plan adds no screen; the Inbox card of a held call is a picture of the walk).
+- [x] **Step 3: Chair step (GUI): the walk.** After the owner's yes: `pnpm build`, then `pnpm --filter @flowdriven/desktop exec electron dist-electron/connector-walk.js` (the command of the plan 05 walk). Expected, in this order: the check flow is imported; Allow is pressed (the sensitive Gmail requirement passes because it is routed and allowed); the step `alerts` reads through the connector (`connector_call` 1); the step `hold` is held; the run is `waiting_approval`; the Inbox card shows the action Delete, the step `Hold test`, the call `delete_draft` with the draft id as indented JSON, and Reject; the walk rejects it; the lines `run <id> held`, `run <id> ended failed`, `counts: connector_call=1 call_held=1 tool_denied=1`, `Pictures: <dir>`. Check by hand in Gmail that no draft or thread changed.
+- [x] **Step 4: Record** next to the ledger: the run ids, seconds, turns and tokens of the walk, the three counts, the pictures looked at, and the real shape of one connector result (already G6). If the Gmail connector was `pending` at the first scan and the step blocked with the connector-down sentence, scan again and repeat; that is a pass for the start proof, not for the read.
+- [x] **Step 5: Chair step (commit)** of the records:
 
 ```bash
 git add docs/plans/2026-11-12-05b-native-connector-and-held-calls.md docs/plans/ROADMAP.md
 git commit -m "Record plan 05b and the roadmap" -m "Assisted-by: Claude Code"
 ```
+
+Record (chair, 2026-11-12):
+- The demo printed its eight lines: `list read: search_threads (read)`, `undeclared tool refused: This step does not declare the tool mcp__claude_ai_Gmail__get_thread.`, `risky call held: Hold test: delete_draft on Gmail`, `approved call ran: delete_draft (call)`, `changed input held again: 2 approvals for the step`, `pick released one item: j1 ran, j2 held`, `non-text result withheld: unchecked`, `tab closed after a withheld page: tab 1001 closed, step stopped: The page moved to an address this step does not declare.`
+- `pnpm build && pnpm capture`: `captured 26 screens`, exit 0.
+- The walk, first try: it stopped at the import of its check flow, before any call to Claude Code or Gmail. The flow had no required check on its two steps (`no_required_check`). The chair gave each step one check (`not_contains` with the pattern `@`) and added a test for it in `connector-walk-steps.test.ts`.
+- The walk, second try (25 seconds): run `run-171da831fdd0`. The route of `gmail` was `claude-ai-connector`, enforced by "FlowDriven hook in Claude Code", label official. Step `alerts` passed in one attempt on `claude-haiku-5-5` (3 turns, 8.8 seconds, 0.0041 USD), marked outside, with one `connector_call` (`search_threads`, class read), 2 calls allowed and none denied; its output was the count 20. Step `hold`: `delete_draft` was refused with "FlowDriven is holding this call until the owner approves it." (`call_held` 1, `tool_denied` 1, 0 calls allowed), the run waited, the Inbox card read "Hold test: delete_draft on Gmail", action Delete, with the input `{"draftId": "flowdriven-hold-test-no-such-draft"}`, and the walk rejected it (`call_rejected`); the step failed with "You rejected this call." and the run ended `failed`, as expected. The walk printed `counts: connector_call=1 call_held=1 tool_denied=1`. No audit row holds the connector's id or url. No delete call reached Gmail, and no email text was printed or stored by the walk. Pictures looked at: `04-inbox-held.png`. Store and pictures: `.workflow/scratch/plan-05b/walk/`.
+
+Done by: Claude Code/chair, 2026-11-12. Evidence: `.workflow/scratch/plan-05b/walk-2.log`.
 
 ---
 
@@ -915,3 +923,96 @@ For plan 05c (skill calls, R9, R14, long steps, `cli_tool`, extra folders, the p
 - **Left.** The prototype host is the next catalog entry (it needs its own probe of the real tool names and annotations, and an owner's yes for the publish test). Plain writes (`create_draft`, `label_thread`, ...) need a class and a rule; today they drop the route. Waiting inside the hook for an approval needs an asynchronous decision and a longer `rounds` (up to 600; the 120 s hook timeout is the outer bound); today a hold ends the step and re-runs it. `needs_login` in the middle of a run is not seen because a failed call is not hooked. "Approve all similar", editing a held payload and `connect: gateway` are not built. A withheld connector result has no row on the run screen. The seen-store question of plan 05 is still open.
 - **Chair's call for plan 05c (Fact 11; owner may override).** `ask.approves` grants by the pick key, and a loop over the choice has item keys `#0`, `#1` unless it declares `key`. The spec's own job-review flow has that shape, so M1 needs it closed: plan 05c makes the runner give a loop over `${steps.<ask>.outputs.choice}` that declares no `key` the pick keys of its items, with a test on the spec's flow, and leaves the SDK as it is. Until then such a loop is never released by a pick and its risky call is held, which is safe.
 - **Still true from plan 05.** The router has one place to add a route, the gate has one place that reads routes and the allow, the preview rows come from the same router, and the post hook, the channel and the tripwire key on a list of prefixes and a set of allowed ids.
+
+---
+
+## Review of the finished plan
+
+The change was reviewed at commit `34f8802` on 2026-11-12 by ONE fresh reviewer (Claude Code, Opus), with no second round. Findings and kept proofs: `.workflow/scratch/plan-05b/review/review.md` and `review-proof.test.ts` (4 tests, each passing on the reviewed code because it asserts the defect). Review Focus 1, 3, 4, 6 and 7 held. No present test was weakened beyond the one line Task 15 names, and no file outside the plan's list changed.
+
+| Id | Severity | Finding | What was done |
+|---|---|---|---|
+| R-1 | major | The card of a held call was cut at 4,000 characters with no sign, while the grant and the repeat covered the whole input (up to 16,000 bytes), so the owner could approve a send whose `bcc` they never saw (`exec/leaf.ts`). | Task 20 |
+| R-2 | major | A pick grant names only the run, the tool and the item key. An option id taken from outside text can be `#0`, and a later loop with no `key` calls its first item `#0`, so a pick could release a risky tool for an item the owner did not pick (`exec/ask.ts`, `engine.ts`, `exec/loop.ts`). The Known limit "never released by a pick" was untrue. | Task 20 |
+| R-3 | minor | The sign-off card of a step marked outside had no outside mark (`exec/leaf.ts`). | Task 21 |
+| R-4 | minor | `${steps.<loop>.items}` of a loop over marked text reached a later step unmarked when the nested steps did not use the item (`exec/outside.ts`). | Task 21 |
+
+Taken from the reviewer's notes: a failure note is cleaned of connector ids (Task 21). Written down and left (Known limits below): a call grant is not bound to the step that was held, and an expired held call does less tidying than a rejected one.
+
+### Known limits added by the review
+
+- An approval card shows at most 4,000 characters, and nothing is cut: a risky call whose input does not fit is not offered for approval and its step fails. A pick can still release that tool for an item.
+- A pick grant names the run, the tool and the item key, not the loop. Positional keys (`#0`, `#1`, ...) and the empty key are never released by a pick. Two items with the same declared key in two loops of one run still share a pick; plan 05c binds a pick grant to the loop over the choice.
+- A call grant is bound to the run, the item, the tool and the exact input, not to the step that was held. If the re-run does not repeat the call, a later step of the same run and item that uses the same requirement can make that exact call once.
+- When the approval of a held call expires, the step and the run fail, but a loop item of that step is not marked failed and other pending approvals of the run are left to expire by their own time (a reject does both).
+
+### Task 20: Review fixes: a held call is shown whole or not offered, and a pick never releases a positional or top-level item
+
+**Files:**
+- Modify: `packages/runner/src/exec/held.ts`, `packages/runner/src/exec/leaf.ts`, `packages/runner/src/connectors/grants.ts`, `packages/runner/src/engine.ts`
+- Modify (tests): `packages/runner/src/exec/leaf-hold.test.ts`, `packages/runner/src/connectors/grants.test.ts`, `packages/runner/src/engine-held.test.ts`
+- Create: `packages/runner/src/claude/review-05b-fix.test.ts`
+
+**Interfaces:**
+- `exec/held.ts`: `MAX_HELD_CHARS = 4000`; `HOLD_TEXT.tooLarge = "This call is too large to show for your approval."`; `heldPayload(input: Value): string | undefined` returns the indented JSON of the input (`JSON.stringify(input, null, 2)`), each line through `visible` as `visibleLines` does but with no cut, when that text has at most `MAX_HELD_CHARS` characters, and `undefined` when it is longer. Nothing cuts the text of a held call. `visibleLines` in `claude/text.ts` and its tests stay as they are; the leaf no longer uses it for a held call.
+- `exec/leaf.ts`: a result with `hold` whose `heldPayload(hold.input)` is `undefined` creates no approval and no grant: the attempt ends `failed`, the step fails and the run is blocked with `HOLD_TEXT.tooLarge`, exactly the way the fourth hold does with `HOLD_TEXT.tooMany`. This check comes first, before a pending approval is reused and before the holds are counted. Otherwise the approval's payload is that text. Everything else of Task 11 stays.
+- `connectors/grants.ts`: `pickKeyUsable(itemKey: string): boolean` is true when the key is not empty and does not start with `#`. In `createGrantBook`, `has` and `use` return false for a pick grant (a grant name with no `#`) when `pickKeyUsable(itemKey)` is false; call grants (a name with `#`) are unchanged, so a held call inside a loop with no `key` can still be approved one by one.
+- `engine.ts` `beginAnswer`: `store.addGrant` is skipped for a pick whose key is not `pickKeyUsable`. The pick is still stored, the step still passes with the picked items, and the audit entry `ask_answered` is unchanged. `isApproved` is unchanged.
+- A test of this plan changes: in `leaf-hold.test.ts`, "the payload shows hidden characters as <U+...>, keeps its line breaks, and is cut at 4,000 characters (visibleLines)" becomes "the payload shows hidden characters as <U+...>, keeps its line breaks, and is never cut": it keeps its assertions on hidden characters and line breaks, and its last assertion (a text cut to 4,000 characters) becomes the assertions of test 1 below. No other present test changes.
+
+The reviewer's kept proofs show both defects on the reviewed code: `.workflow/scratch/plan-05b/review/review-proof.test.ts`, tests "R-1: ..." and "R-2: ...". Use their flows and plays as the pattern for tests 2 and 9.
+
+- [ ] **Step 1: Write the failing tests.** In `leaf-hold.test.ts`:
+  1. "a held call whose input does not fit the card is not offered: no approval row, no grant, and the step fails with This call is too large to show for your approval.";
+  2. "an input that fits is shown whole: the last key of the input is in the card text";
+  3. "the too-large check comes before reuse and before the count of holds".
+  In `grants.test.ts`:
+  4. "heldPayload returns the text for 4,000 characters and undefined for 4,001, counting the characters that visible adds";
+  5. "a pick grant is not honoured for an item key that starts with #, and not for the empty key";
+  6. "a pick grant is honoured for a declared key as before, and use still does not count it";
+  7. "a call grant is honoured and used once for a positional item key".
+  In `engine-held.test.ts`:
+  8. "beginAnswer stores no grant for a pick whose key starts with # or is empty, and still passes the step with the picked items".
+  In `review-05b-fix.test.ts` (set up like `review-05b-r.test.ts`):
+  9. "R-1: a held send with a long body and a bcc after it cannot be approved: there is no card, and the send never runs";
+  10. "R-2: picking an item whose id is #0 does not release delete_draft for item #0 of a loop with no key: that call is held".
+- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/leaf-hold.test.ts packages/runner/src/connectors/grants.test.ts packages/runner/src/engine-held.test.ts packages/runner/src/claude/review-05b-fix.test.ts`. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/connectors packages/runner/src/claude packages/runner/src/engine-ask.test.ts packages/runner/src/test-helpers`. Expected: PASS.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src
+git commit -m "Show a held call whole or do not offer it, and never release a positional item by a pick" -m "Assisted-by: Claude Code"
+```
+
+### Task 21: Review fixes: the outside mark on sign-off cards and on a loop's items, and no connector id in a failure note
+
+**Files:**
+- Modify: `packages/runner/src/exec/leaf.ts`, `packages/runner/src/exec/outside.ts`, `packages/runner/src/claude/connector.ts`, and the one file under `packages/runner/src/claude/` where the text of a failed outcome is taken from Claude Code's error output (`run.ts` or `adapter.ts`)
+- Modify (tests): `packages/runner/src/exec/outside.test.ts`, `packages/runner/src/exec/leaf-outside.test.ts`, `packages/runner/src/claude/decide-connector.test.ts`, `packages/runner/src/claude/adapter-connector.test.ts`
+
+**Interfaces:**
+- `exec/leaf.ts`: the `result_sign_off` approval row gets `outside: true` when the step's row is marked, and no `outside` key when it is not, as the ask and the held call do.
+- `exec/outside.ts`: in the branch for a reference to a loop (`"for_each" in top`), `takesOutsideText` also returns true when the loop's own `for_each` text takes outside text, by the same function with the loop's id and the empty item key. The rule for a nested row that is marked stays.
+- `claude/connector.ts`: `hideConnectorIds(text: string): string` replaces every match of `/mcpsrv_[A-Za-z0-9]+/g` with `mcpsrv_[hidden]`. It is applied where the text of a failed outcome comes from Claude Code's error output, before that text is returned or stored, for every step (not only connector steps). Nothing else about that text changes.
+
+The reviewer's kept proofs "R-3: ..." and "R-4: ..." in `.workflow/scratch/plan-05b/review/review-proof.test.ts` show the two marks missing on the reviewed code. Use their flows as the pattern.
+
+- [ ] **Step 1: Write the failing tests.**
+  1. (`leaf-outside.test.ts`) "a sign-off approval of a step marked outside carries outside true, and one of an unmarked step has no outside key";
+  2. (`outside.test.ts`) "a later step that takes the items of a loop over marked text is marked, also when the nested steps do not use the item";
+  3. (`outside.test.ts`) "a loop over unmarked text does not mark a later step that takes its items";
+  4. (`decide-connector.test.ts`) "hideConnectorIds replaces every connector id and leaves other text as it is";
+  5. (`adapter-connector.test.ts`) "a connector step that fails with the connector id in Claude Code's error output returns and stores a text without the id".
+- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/outside.test.ts packages/runner/src/exec/leaf-outside.test.ts packages/runner/src/claude/decide-connector.test.ts packages/runner/src/claude/adapter-connector.test.ts`. Expected: FAIL on the new tests.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/exec packages/runner/src/claude packages/runner/src/engine-ask.test.ts`. Expected: PASS.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src
+git commit -m "Mark sign-off cards and loop items that carry outside text, and keep connector ids out of failure notes" -m "Assisted-by: Claude Code"
+```

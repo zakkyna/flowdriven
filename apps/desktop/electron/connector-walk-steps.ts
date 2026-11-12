@@ -67,6 +67,8 @@ steps:
       Return only the number of threads as the output count. Copy no email text.
     outputs:
       - { id: count, type: text }
+    checks:
+      - { type: not_contains, patterns: ["@"] }
   - id: hold
     title: Hold test
     do: worker
@@ -75,6 +77,8 @@ steps:
     instructions: >-
       Call delete_draft once with the draft id flowdriven-hold-test-no-such-draft.
       FlowDriven is expected to hold the call; if it is held, stop and report that it is held.
+    checks:
+      - { type: not_contains, patterns: ["@"] }
 `;
 export const CONNECTOR_WALK_README = `# Gmail check
 
