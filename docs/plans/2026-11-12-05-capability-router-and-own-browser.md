@@ -1149,17 +1149,19 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 6. `challenge blocked the run: This site asked for a login or a robot check. FlowDriven stopped and will not try to pass it.`
 The lines are read from the audit and the run rows (`page_read`, `tool_denied`, `page_withheld`, `blockedReason`), never composed from constants alone. `browser-demo.ts` is `#!/usr/bin/env node` and prints each line with `process.stdout.write`. All temporary folders are removed. The script uses only the fake `claude`; the executor runs it in step 4 and the chair runs it again in Task 29.
 
-- [ ] **Step 1: Write the failing test** `browser-demo.test.ts`: 1. "the demo prints the six lines in order" (`expect(await runBrowserDemo()).toEqual([...six lines])`); 2. "each line comes from the audit or the run row: removing the page table makes line 1 fail" (a variant that runs with an empty page table and asserts line 1 is not `page read: https://example.com/`); 3. "the demo leaves no control folder and no temporary folder behind".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/test-helpers/browser-demo.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the two files.
-- [ ] **Step 4: Run** the same command and `node packages/runner/src/test-helpers/browser-demo.ts`. Expected: PASS; the script prints the six lines and exits 0.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 1: Write the failing test** `browser-demo.test.ts`: 1. "the demo prints the six lines in order" (`expect(await runBrowserDemo()).toEqual([...six lines])`); 2. "each line comes from the audit or the run row: removing the page table makes line 1 fail" (a variant that runs with an empty page table and asserts line 1 is not `page read: https://example.com/`); 3. "the demo leaves no control folder and no temporary folder behind".
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/test-helpers/browser-demo.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the two files.
+- [x] **Step 4: Run** the same command and `node packages/runner/src/test-helpers/browser-demo.ts`. Expected: PASS; the script prints the six lines and exits 0.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/test-helpers
 git commit -m "Add the evidence script for the own-browser route on the fake claude" -m "Assisted-by: Codex"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
