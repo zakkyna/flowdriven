@@ -65,6 +65,10 @@ Chair's call (owner may override). Row 05 of spec 20.8 is too large for one plan
 
 Rules of spec 20.7 proved in plan 05: R1 (the mark and the denial test), R2, R3, R5, R6, R11 and the provider half of R4. Plan 05b adds R10; plan 05c adds R9 and R14. Out of scope for 05 and written into it: `web` with `session: none` or `managed`; `mode: act`; `desktop`; the `mcp_server`, `plugin`, `cli_tool`, `skill`, `account`, `gui_app` and `browser_session` providers; holding a call for the owner; extra-folder grants; the `new_item`, `link` and `webhook` triggers; the socket; other harnesses; real Upwork pages (the chair tests those later with the owner watching, at most 2).
 
+## Plan 05b detailed on 2026-11-12
+
+Chair's call (owner may override). Plan 05b is detailed in `2026-11-12-05b-native-connector-and-held-calls.md`, and it is cut smaller than the row above says. It covers one connector only: the Gmail connector of Claude Code (`mcp_server` with `ref: connector:gmail` and `connect: native`), with its six read tools running and its seven send and delete tools held until the owner approves them in the Inbox. A pick in an `ask` (`ask.approves`) releases only the named tools, for the picked items, in that run (R10). The prototype host, every other connector, plain writes (draft and label tools), `connect: gateway`, waiting inside the hook, editing a held payload and "approve all similar" move to plan 05c or later. The plan also closes two leftovers of plan 05: the worker may close its own tab before a withheld page stops the step, and the outside mark follows text built from outside text (loop item values, check patterns, the trigger payload, connector results, and the Inbox card of an ask or a held call). It needs three "Ask first" yeses from the owner before it is built: the approvals code, the sandbox limits, and the owner's Gmail in two tests.
+
 ## Plans
 
 ### 01 Foundation and screens on sample data (detailed: `2026-11-10-01-foundation-and-screens.md`)
