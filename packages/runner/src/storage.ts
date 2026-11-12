@@ -1,6 +1,6 @@
 import type { Requirement, Value } from "@flowdriven/sdk";
 import type { Routed } from "./router/types.ts";
-import type { ApprovalState, CheckVerdict, ExitClass, RunState, StepState } from "./states.ts";
+import type { ApprovalState, CheckVerdict, ExitClass, RiskyAction, RunState, StepState } from "./states.ts";
 
 export type Attempt = {
   number: number;
@@ -63,7 +63,7 @@ export type ItemRow = {
 };
 export type ApprovalRow = {
   id: string;
-  kind: "ask" | "result_sign_off";
+  kind: "ask" | "result_sign_off" | "risky_action";
   runId: string;
   stepId: string;
   itemKey: string;
@@ -77,6 +77,9 @@ export type ApprovalRow = {
   state: ApprovalState;
   picks?: string[];
   resolvedAt?: string;
+  riskyAction?: RiskyAction;
+  outside?: boolean;
+  call?: { tool: string; input: Value };
 };
 export type AuditEntry = { at: string; kind: string; runId?: string; detail: Value };
 export type HarnessStateRow = {

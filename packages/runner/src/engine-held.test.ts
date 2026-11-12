@@ -1,0 +1,168 @@
+import { parseManifest } from "@flowdriven/sdk";
+import { afterEach, expect, test } from "vitest";
+import { callGrant, digestCall, grantUsedKey } from "./connectors/grants.ts";
+import type { ApprovalRow, Store } from "./storage.ts";
+import { setup } from "./test-helpers/engine.ts";
+
+const stores: Store[] = [];
+afterEach(() => {
+  for (const store of stores.splice(0)) store.close();
+});
+const parsed = parseManifest({
+  format: "flowdriven-flow/1.1",
+  id: "local.held",
+  name: "Held",
+  kind: "build",
+  steps: [
+    {
+      id: "send",
+      title: "Send",
+      do: "worker",
+      instructions: "Send",
+      checks: [{ type: "contains", pattern: "ok" }],
+    },
+  ],
+});
+if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+const manifest = parsed.manifest;
+const input = { id: "draft-1" };
+const grant = callGrant("mail", "delete_draft", digestCall("delete_draft", input));
+async function ready(itemKey = "") {
+  const c = await setup(manifest, { steps: { send: { text: "ok" } } });
+  stores.push(c.store);
+  const run = {
+    id: "run-1",
+    flowId: manifest.id,
+    flowHash: `sha256:${"0".repeat(64)}`,
+    flowVersion: manifest.version,
+    state: "waiting_approval" as const,
+    project: ".",
+    inputs: {},
+    params: {},
+    requirements: [],
+    startedAt: c.clock.now().toISOString(),
+  };
+  c.store.createRun(run);
+  c.store.upsertStep({
+    runId: run.id,
+    stepId: "send",
+    itemKey,
+    state: "waiting_approval",
+    attempts: [],
+    outputs: {},
+    checks: [],
+  });
+  const approval: ApprovalRow = {
+    id: "ap-1",
+    kind: "risky_action",
+    runId: run.id,
+    stepId: "send",
+    itemKey,
+    summary: "Delete draft",
+    payload: "Delete draft",
+    approves: [grant],
+    onExpiry: "fail",
+    createdAt: run.startedAt,
+    expiresAt: "2026-11-12T09:00:00.000Z",
+    state: "pending",
+    riskyAction: "delete",
+    call: { tool: "delete_draft", input },
+  };
+  c.store.createApproval(approval);
+  return { ...c, run, approval };
+}
+test("approve: the approval is approved, a grant <requirement>.<tool>#<digest> is stored at the item key, the audit has call_approved with approvalId, stepId, itemKey and tool, and the run is running again", async () => {
+  const c = await ready("j1");
+  const begun = c.engine.beginDecide(c.approval.id, "approve");
+  expect(begun.run.state).toBe("running");
+  expect(c.store.getApproval(c.approval.id)).toMatchObject({
+    state: "approved",
+    resolvedAt: c.clock.now().toISOString(),
+  });
+  expect(c.store.hasGrant(c.run.id, grant, "j1")).toBe(true);
+  expect(c.store.hasGrant(c.run.id, grant, "other")).toBe(false);
+  expect(c.store.listAudit(c.run.id)).toContainEqual(
+    expect.objectContaining({
+      kind: "call_approved",
+      detail: { approvalId: "ap-1", stepId: "send", itemKey: "j1", tool: "delete_draft" },
+    }),
+  );
+  expect(c.store.getStep(c.run.id, "send", "j1")?.state).toBe("pending");
+  await begun.settled;
+});
+test("after approve the step is run again by the walk and the run ends done, and no grant is counted as used", async () => {
+  const c = await ready();
+  expect((await c.engine.decide("ap-1", "approve")).state).toBe("done");
+  expect(c.harness.calls.map((call) => call.stepId)).toEqual(["send"]);
+  expect(c.store.counter(grantUsedKey(c.run.id, "", grant), "run")).toBe(0);
+});
+test("reject: the approval is rejected, the audit has call_rejected, the step is failed with the note You rejected this call., the run is failed, and other pending approvals of the run are expired", async () => {
+  const c = await ready();
+  c.store.createApproval({ ...c.approval, id: "ap-2" });
+  const result = await c.engine.decide("ap-1", "reject");
+  expect(result).toMatchObject({ state: "failed", endedAt: c.clock.now().toISOString() });
+  expect(c.store.getApproval("ap-1")).toMatchObject({
+    state: "rejected",
+    resolvedAt: c.clock.now().toISOString(),
+  });
+  expect(c.store.getApproval("ap-2")?.state).toBe("expired");
+  expect(c.store.getStep(c.run.id, "send")).toMatchObject({
+    state: "failed",
+    note: "You rejected this call.",
+  });
+  expect(c.store.listAudit(c.run.id)).toContainEqual(
+    expect.objectContaining({
+      kind: "call_rejected",
+      detail: { approvalId: "ap-1", stepId: "send", itemKey: "", tool: "delete_draft" },
+    }),
+  );
+  expect(c.harness.calls).toHaveLength(0);
+});
+test("reject for a loop item fails that item", async () => {
+  const c = await ready("j1");
+  c.store.upsertItem({
+    runId: c.run.id,
+    loopId: "loop",
+    key: "j1",
+    position: 0,
+    item: {},
+    status: "running",
+  });
+  await c.engine.decide("ap-1", "reject");
+  expect(c.store.listItems(c.run.id).at(0)?.status).toBe("failed");
+});
+test("a second decision and a decision after expiry are refused with the present sentences", async () => {
+  const c = await ready();
+  await c.engine.decide("ap-1", "reject");
+  expect(() => c.engine.beginDecide("ap-1", "approve")).toThrow("This approval was already decided.");
+  const d = await ready();
+  d.clock.advance(24 * 3_600_000 + 1);
+  expect(() => d.engine.beginDecide("ap-1", "approve")).toThrow("This approval expired.");
+});
+test("a decision for a run that is not waiting is refused with Run is not waiting for approval.", async () => {
+  const c = await ready();
+  c.store.updateRun(c.run.id, { state: "failed" });
+  expect(() => c.engine.beginDecide("ap-1", "approve")).toThrow("Run is not waiting for approval.");
+});
+test("beginDecide on an ask still throws Not a result sign-off.", async () => {
+  const c = await ready();
+  c.store.updateApproval("ap-1", { kind: "ask" });
+  expect(() => c.engine.beginDecide("ap-1", "approve")).toThrow("Not a result sign-off.");
+});
+test("a held call whose approval expires after 24 hours fails the step with The approval expired after 24 hours. and fails the run (sweepExpired)", async () => {
+  const c = await ready();
+  c.clock.advance(24 * 3_600_000 + 1);
+  await c.engine.sweepExpired();
+  expect(c.store.getApproval("ap-1")?.state).toBe("expired");
+  expect(c.store.getStep(c.run.id, "send")).toMatchObject({
+    state: "failed",
+    note: "The approval expired after 24 hours.",
+  });
+  expect(c.store.getRun(c.run.id)?.state).toBe("failed");
+});
+test("recoverAfterCrash leaves a run that waits for a held call in waiting_approval with its approval pending", async () => {
+  const c = await ready();
+  expect(await c.engine.recoverAfterCrash()).toEqual([]);
+  expect(c.store.getRun(c.run.id)?.state).toBe("waiting_approval");
+  expect(c.store.getApproval("ap-1")?.state).toBe("pending");
+});

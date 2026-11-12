@@ -551,7 +551,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `engine.ts` `beginDecide`: the kind check becomes "not `result_sign_off` and not `risky_action`" with the same sentence `Not a result sign-off.`; every other present sentence and the sign-off branches stay. For `risky_action`: **approve**, in one transaction: the approval is `approved` with `resolvedAt`; for each entry of `a.approves` `store.addGrant(run.id, entry, a.itemKey)`; the audit `call_approved` with `detail: { approvalId, stepId, itemKey, tool }` (`tool` is `a.call?.tool ?? ""`); the step row `{ ...row, state: "pending" }`; the run `running`; then `enqueue(updated, () => walk(updated))`. **Reject**, in one transaction: the approval is `rejected`; the audit `call_rejected` with the same detail; the step row `failed` with `note: "You rejected this call."`; a running loop item of that key `failed`; the run `failed` with `endedAt`; every other pending approval of the run `expired`; no walk. `sweep` is unchanged: a held call whose approval expires fails the step with `The approval expired after 24 hours.` and the run. `isApproved` is unchanged. Crash recovery is unchanged (Fact 12).
 - `map-approval.ts`: for a non-ask row `riskyAction` is copied from the row when set, and `outside: true` is copied when the row has it (also for an ask); the payload stays the string text. The result still passes `Approval.parse`.
 
-- [ ] **Step 1: Write the failing tests.** `engine-held.test.ts` (the engine of `test-helpers/engine.ts` with a scripted harness; a run, its flow, a waiting step row and a pending `risky_action` approval built through the store):
+- [x] **Step 1: Write the failing tests.** `engine-held.test.ts` (the engine of `test-helpers/engine.ts` with a scripted harness; a run, its flow, a waiting step row and a pending `risky_action` approval built through the store):
   1. "approve: the approval is approved, a grant <requirement>.<tool>#<digest> is stored at the item key, the audit has call_approved with approvalId, stepId, itemKey and tool, and the run is running again";
   2. "after approve the step is run again by the walk and the run ends done, and no grant is counted as used";
   3. "reject: the approval is rejected, the audit has call_rejected, the step is failed with the note You rejected this call., the run is failed, and other pending approvals of the run are expired";
@@ -565,16 +565,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "a risky_action row becomes a risky_action approval with riskyAction, the step title, a text payload and outside when the row has it";
   11. "an ask row with outside true gives outside true, and without it the key is absent";
   12. "a risky_action row without riskyAction is refused by the contract".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/engine-held.test.ts packages/runner/src/service/map-approval-held.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/engine-ask.test.ts packages/runner/src/engine-steps.test.ts packages/runner/src/engine-loop.test.ts packages/runner/src/service/map-approval.test.ts packages/runner/src/service/handlers.test.ts`. Expected: PASS, unchanged.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/engine-held.test.ts packages/runner/src/service/map-approval-held.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/engine-ask.test.ts packages/runner/src/engine-steps.test.ts packages/runner/src/engine-loop.test.ts packages/runner/src/service/map-approval.test.ts packages/runner/src/service/handlers.test.ts`. Expected: PASS, unchanged.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/storage.ts packages/runner/src/engine.ts packages/runner/src/service/map-approval.ts packages/runner/src/engine-held.test.ts packages/runner/src/service/map-approval-held.test.ts
 git commit -m "Decide held-call approvals: approve writes grants, reject fails the run" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

@@ -418,7 +418,8 @@ export function createEngine(input: EngineDeps): Engine {
     sweep();
     const a = store.getApproval(id);
     if (!a) throw new EngineError("not_found", "Approval not found.");
-    if (a.kind !== "result_sign_off") throw new EngineError("invalid_input", "Not a result sign-off.");
+    if (a.kind !== "result_sign_off" && a.kind !== "risky_action")
+      throw new EngineError("invalid_input", "Not a result sign-off.");
     if (a.state === "expired") throw new EngineError("not_allowed", "This approval expired.");
     if (a.state !== "pending") throw new EngineError("not_allowed", "This approval was already decided.");
     const run = runById(a.runId);
@@ -429,6 +430,35 @@ export function createEngine(input: EngineDeps): Engine {
     const row = store.getStep(a.runId, a.stepId, a.itemKey);
     if (!row) throw new EngineError("not_found", "Step not found.");
     const at = now().toISOString();
+    if (a.kind === "risky_action") {
+      store.transaction(() => {
+        store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
+        if (decision === "approve") for (const entry of a.approves) store.addGrant(run.id, entry, a.itemKey);
+        store.appendAudit({
+          at,
+          kind: decision === "approve" ? "call_approved" : "call_rejected",
+          runId: run.id,
+          detail: { approvalId: id, stepId: a.stepId, itemKey: a.itemKey, tool: a.call?.tool ?? "" },
+        });
+        if (decision === "approve") {
+          store.upsertStep({ ...row, state: "pending" });
+          store.updateRun(run.id, { state: "running" });
+        } else {
+          store.upsertStep({ ...row, state: "failed", note: "You rejected this call." });
+          if (a.itemKey) {
+            const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
+            if (item) store.upsertItem({ ...item, status: "failed" });
+          }
+          store.updateRun(run.id, { state: "failed", endedAt: at });
+          for (const pending of store.listApprovals({ runId: run.id, state: "pending" }))
+            store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
+        }
+      });
+      const updated = runById(run.id);
+      return decision === "approve"
+        ? enqueue(updated, () => walk(updated))
+        : { run: updated, settled: Promise.resolve(updated) };
+    }
     store.transaction(() => {
       store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
       if (decision === "approve") {

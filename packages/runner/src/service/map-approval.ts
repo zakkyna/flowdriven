@@ -49,5 +49,7 @@ export function toApproval(row: ApprovalRow, run: RunRow, manifest: FlowManifest
     state: row.state,
     resolvedAt: row.resolvedAt,
     picks: row.picks,
+    ...(row.kind !== "ask" && row.riskyAction !== undefined ? { riskyAction: row.riskyAction } : {}),
+    ...(row.outside === true ? { outside: true } : {}),
   });
 }
