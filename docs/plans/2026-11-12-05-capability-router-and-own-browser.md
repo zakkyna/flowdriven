@@ -437,7 +437,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   - Any other tool name: `unchecked`.
 - `postLine(text: string): string`: the one-line JSON the hook prints, `{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedMCPToolOutput":[{"type":"text","text":<text>}]}}` through `JSON.stringify` (no newline inside), exactly the shape of F5.
 
-- [ ] **Step 1: Write the failing tests** in `decide-post.test.ts` (made-up pages, the spec's Upwork template; helper `page(url, title, body)` builds the three blocks of F6 with the four-line header):
+- [x] **Step 1: Write the failing tests** in `decide-post.test.ts` (made-up pages, the spec's Upwork template; helper `page(url, title, body)` builds the three blocks of F6 with the four-line header):
   1. "a page on a template passes as its first block only, and the tab list and the reminder are dropped"
   2. "tabs_context_mcp is rewritten to ids only and teaches the ids: a moved tab with a login title and an off-template address shows neither its title nor its address, and a response that does not parse, has a string tab id or more than 50 tabs is unchecked"
   3. "tabs_create_mcp is rewritten from an exact first block and teaches its id; `Created new tab. Tab ID: 12345678901234567` (17 digits), extra words and a second line are unchecked"
@@ -450,16 +450,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "the get_page_text header must be exactly the four lines of F14: a missing `Source element:` line, a title that continues on a second line, `\r`, the lines in another order and a missing `---` are all unchecked with the fixed sentence"
   11. "no answer for a PreToolUse request, another session, a tool that is not a Chrome tool, a missing `tool_use_id` or a non-object `tool_input`; and a response that is not an array, an empty array or a first block that is not text is unchecked"
   12. "postLine is one line of JSON in the shape of F5 and survives quotes, newlines and unicode in the text"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-post.test.ts`. Expected: FAIL ("Cannot find module ./browser-post.ts").
-- [ ] **Step 3: Implement** `browser-post.ts` (imports `BrowserPolicy`, `CHROME_PREFIX`, `MAX_PAGE_CHARS` from `./browser.ts`, `matchTemplate` from `@flowdriven/sdk`, `visible` from `./text.ts`).
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-post.test.ts`. Expected: FAIL ("Cannot find module ./browser-post.ts").
+- [x] **Step 3: Implement** `browser-post.ts` (imports `BrowserPolicy`, `CHROME_PREFIX`, `MAX_PAGE_CHARS` from `./browser.ts`, `matchTemplate` from `@flowdriven/sdk`, `visible` from `./text.ts`).
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude
 git commit -m "Add the post-tool check that rewrites results and withholds moved pages and challenges" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
