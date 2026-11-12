@@ -5,6 +5,7 @@ import { demoFlow } from "../demo/demo-flow.ts";
 import { createEngine, type Engine } from "../engine.ts";
 import type { HarnessAdapter } from "../harness.ts";
 import type { Probes } from "../keeper/types.ts";
+import { routeAll } from "../router/route.ts";
 import type { Store } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
 import type { TriggerDeps, TriggerService } from "../triggers/service.ts";
@@ -66,6 +67,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
           env: options.env ?? {},
           claudePath: options.claudePath,
           now,
+          dayOf,
           newId,
           scanTimeoutMs: options.scanTimeoutMs,
         })
@@ -89,6 +91,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     dayOf,
     harness: wired?.harness ?? harness,
     queue: wired?.keeper,
+    ...(hs ? { routeOf: (reqs) => routeAll(reqs, hs.facts()) } : {}),
     readiness: hs
       ? hs.readiness
       : mode === "demo"

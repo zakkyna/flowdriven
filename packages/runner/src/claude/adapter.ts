@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { describeTemplate, type Value } from "@flowdriven/sdk";
-import { type CallInfo, type HarnessAdapter, HarnessCallError } from "../harness.ts";
+import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
 import type { PageCounter } from "./pages.ts";
 import { buildPolicy } from "./policy.ts";
 import {
@@ -15,6 +15,7 @@ import {
 import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
+  admit?: (req: StepRequest) => string | undefined;
   pages?: PageCounter;
   effortModels?: () => { low: string; medium: string; high: string } | undefined;
   nowMs?: () => number;
@@ -76,6 +77,8 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       const reason = guard();
       if (stopped) return { exit: "interrupted", text: "", outputs: {} };
       if (reason !== undefined) return { exit: "failed", text: reason, outputs: {}, block: reason };
+      const admission = options.admit?.(req);
+      if (admission !== undefined) return { exit: "failed", text: admission, outputs: {}, block: admission };
       if (req.kind === "skill")
         return { exit: "failed", text: "", outputs: {}, block: "Skill steps are not run yet." };
       const path = options.claudePath();

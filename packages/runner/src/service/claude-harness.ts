@@ -5,6 +5,7 @@ import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapte
 import { controlRoot, sweepControlRoot } from "../claude/control.ts";
 import { isSafeControlPath } from "../claude/hook-script.ts";
 import { type InventoryEntry, readInventory } from "../claude/inventory.ts";
+import { createPageCounter } from "../claude/pages.ts";
 import { isProjectRef } from "../claude/policy.ts";
 import { type ClaudeScan, scanClaude } from "../claude/scan.ts";
 import type { HarnessAdapter } from "../harness.ts";
@@ -16,6 +17,7 @@ import {
 } from "../router/route.ts";
 import type { HarnessFacts, Routed } from "../router/types.ts";
 import type { HarnessStateRow, Store } from "../storage.ts";
+import { localDay } from "../triggers/schedule.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 
 export const CLAUDE_ID = "claude-code";
@@ -201,7 +203,11 @@ export type HarnessService = {
   list(): HarnessCard[];
   rescan(): Promise<HarnessCard[]>;
   setConsent(harnessId: string, consent: "given" | "revoked"): HarnessCard;
-  readiness(manifest: FlowManifest): { ready: boolean; reason?: string };
+  facts(): HarnessFacts;
+  readiness(
+    manifest: FlowManifest,
+    ctx?: { flowId: string; hash: string },
+  ): { ready: boolean; reason?: string };
   stop(): void;
 };
 export function createHarnessService(options: {
@@ -212,6 +218,7 @@ export function createHarnessService(options: {
   claudePath?: string;
   platform?: string;
   now: () => Date;
+  dayOf?: (date: Date) => string;
   newId: (prefix: string) => string;
   scanTimeoutMs?: number;
   mcpTimeoutMs?: number;
@@ -285,6 +292,14 @@ export function createHarnessService(options: {
     },
     newId: options.newId,
     ...options.adapter,
+    pages: createPageCounter({ store: options.store, dayOf: options.dayOf ?? localDay, now: options.now }),
+    admit: (req) => {
+      if (!req.requirements.some((r) => r.type === "web")) return undefined;
+      const run = options.store.getRun(req.runId);
+      return run && options.store.getCapabilityConsent(run.flowId)?.hash === run.flowHash
+        ? undefined
+        : ALLOW_FIRST;
+    },
     effortModels: () => readKeeperSettings(options.store).effortModels["claude-code"],
     allowed: () =>
       harnessGate({
@@ -326,7 +341,8 @@ export function createHarnessService(options: {
       });
       return list()[0] as HarnessCard;
     },
-    readiness(manifest) {
+    facts: () => harnessFacts(cache?.scan),
+    readiness(manifest, ctx) {
       return gate({
         platform: options.platform ?? process.platform,
         dataDir: options.dataDir,
@@ -335,6 +351,8 @@ export function createHarnessService(options: {
         fileExists: existsSync,
         consent: state()?.consent ?? "not_given",
         manifest,
+        facts: harnessFacts(cache?.scan),
+        allowed: ctx !== undefined && options.store.getCapabilityConsent(ctx.flowId)?.hash === ctx.hash,
       });
     },
     stop() {

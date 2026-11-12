@@ -844,23 +844,25 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** `HarnessService` gains `facts(): HarnessFacts` (from `harnessFacts(cache?.scan)`) and `readiness(manifest, ctx?: { flowId: string; hash: string })`, which passes `facts` and `allowed: store.getCapabilityConsent(ctx.flowId)?.hash === ctx.hash` (false without a context). `ClaudeAdapterOptions` gains `admit?: (req: StepRequest) => string | undefined` (called in `runStep` after the present `guard`; a sentence returns `{ exit: "failed", text, outputs: {}, block: sentence }`); `createHarnessService` passes `admit`: a step whose `req.requirements` has a `web` requirement needs the allow row of the run's flow to hold the run's `flowHash`, else `ALLOW_FIRST`. `createHarnessService` also passes `pages: createPageCounter({ store, dayOf, now })` to the adapter (its options gain `dayOf?: (date: Date) => string`, default `localDay`) and `service.ts` passes `routeOf: (reqs) => routeAll(reqs, hs.facts())` to the engine (only with a harness service) and its `dayOf` to the harness service.
 
-- [ ] **Step 1: Write the failing tests** in `claude-harness-wiring.test.ts` (service started in live mode on the fake `claude` with `chrome: true`, as the end-to-end test of `claude-harness.test.ts:394`):
+- [x] **Step 1: Write the failing tests** in `claude-harness-wiring.test.ts` (service started in live mode on the fake `claude` with `chrome: true`, as the end-to-end test of `claude-harness.test.ts:394`):
   1. "a flow with a web requirement is blocked before the allow row exists, runs after `store.putCapabilityConsent` stores it, and is blocked again at the next attempt after the row is deleted" (the step plays one `tabs_context_mcp` call and a result)
   2. "a changed hash makes the stored allow stale: the run of the new hash is blocked, the old hash's run row is unaffected"
   3. "a run stores routes from the facts at its start (`engine.getRun(...).run.routes`), and a requirement of a type the router drops is stored dropped"
   4. "facts: a service whose scan has no chrome flag drops the web requirement with the Chrome sentence; one whose scan lacks `--settings` drops it with the hook sentence"
   5. "readiness without a context never counts as allowed"
   6. "page counters live in the store: after a run that read one page `store.counter('pages-run:<runId>:<requirementId>', 'run')` is 1 and the day counter is 1 for the injected day"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/claude-harness-wiring.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the edits.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/service packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/service/claude-harness-wiring.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the edits.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/service packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Give the harness service the facts, the allow context and the check before every attempt" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
