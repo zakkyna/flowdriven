@@ -145,3 +145,27 @@ test("a paused trigger notifies once, even right after a blocked-run notice of t
   expect(policy.decide(event)).toBeUndefined();
   expect(policy.decide({ ...event, index: -1 })).toBeUndefined();
 });
+
+test("the notice of a challenge pause names the login or robot check, and the notice of a three-blocked pause is the present one", () => {
+  const { policy } = setup();
+  const event = {
+    kind: "trigger_paused" as const,
+    flowId: "flow-1",
+    index: 2,
+    flowName: "Flow",
+    pausedAt: "2026-11-12T00:00:00.000Z",
+  };
+  expect(policy.decide({ ...event, why: "challenge" })).toMatchObject({
+    kind: "trigger_paused",
+    title: "Trigger paused",
+    body: "Flow was switched off because a site asked for a login or a robot check.",
+    target: { screen: "builder", flowId: "flow-1" },
+  });
+  expect(policy.decide({ ...event, index: 3, why: "blocked_runs" })?.body).toBe(
+    "Flow was switched off after 3 blocked runs in a row.",
+  );
+  expect(policy.decide({ ...event, index: 4 })?.body).toBe(
+    "Flow was switched off after 3 blocked runs in a row.",
+  );
+  expect(policy.decide({ ...event, index: 5, why: "other" as never })).toBeUndefined();
+});

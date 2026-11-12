@@ -23,6 +23,7 @@ test("an hourly schedule fires once an hour, as a triggered run with its slot, a
   expect(run?.trigger).toEqual({
     kind: "schedule",
     payload: { slot: "2026-11-11T12:00:00.000Z", missed: 0 },
+    index: 0,
   });
   expect(run?.state).toBe("done");
   r.clock.advance(H);

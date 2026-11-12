@@ -57,14 +57,16 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     onApproval: notifier.onApproval,
     onWeekly: notifier.onWeekly,
     onRunState: (id, state) => {
-      notifier.onRunState(id, state);
+      let paused = false;
       if (mode === "live" && state === "blocked") {
         try {
-          if (options.store.getRun(id)?.blockedReason === STOP.challenge) triggers.pauseByRun(id);
+          if (options.store.getRun(id)?.blockedReason === STOP.challenge) paused = triggers.pauseByRun(id);
         } catch {
           /* pausing is best effort */
         }
       }
+      // A challenge that paused its trigger is told once, by the trigger-paused notice.
+      if (!paused) notifier.onRunState(id, state);
       if (mode === "live" && (state === "done" || state === "failed" || state === "blocked")) triggers.poke();
     },
   });

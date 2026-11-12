@@ -6,7 +6,14 @@ export type NoticeEvent =
   | { kind: "run_blocked"; runId: string; flowId: string; flowName: string }
   | { kind: "weekly_limit"; harnessId: string; percent: number; resetsAtMs: number }
   | { kind: "flood_cap"; flowId: string; flowName: string; day: string; cap: number }
-  | { kind: "trigger_paused"; flowId: string; index: number; flowName: string; pausedAt: string };
+  | {
+      kind: "trigger_paused";
+      flowId: string;
+      index: number;
+      flowName: string;
+      pausedAt: string;
+      why?: "blocked_runs" | "challenge";
+    };
 export type NoticeTarget =
   | { screen: "inbox"; approvalId?: string }
   | { screen: "run"; runId: string }
@@ -123,7 +130,8 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
             typeof event.flowName !== "string" ||
             !Number.isSafeInteger(event.index) ||
             event.index < 0 ||
-            !validId(event.pausedAt)
+            !validId(event.pausedAt) ||
+            (event.why !== undefined && event.why !== "blocked_runs" && event.why !== "challenge")
           )
             return undefined;
           const name = sanitizeText(event.flowName, NAME_MAX) || "A flow";
@@ -131,7 +139,10 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
             id: `paused:${createHash("sha256").update(event.flowId).digest("hex").slice(0, 16)}:${event.index}:${event.pausedAt}`,
             kind: event.kind,
             title: "Trigger paused",
-            body: `${name} was switched off after 3 blocked runs in a row.`,
+            body:
+              event.why === "challenge"
+                ? `${name} was switched off because a site asked for a login or a robot check.`
+                : `${name} was switched off after 3 blocked runs in a row.`,
             target: validId(event.flowId) ? { screen: "builder", flowId: event.flowId } : { screen: "inbox" },
           };
           break;

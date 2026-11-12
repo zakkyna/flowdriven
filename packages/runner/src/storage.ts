@@ -34,7 +34,7 @@ export type RunRow = {
   project: string;
   inputs: Record<string, Value>;
   params: Record<string, Value>;
-  trigger?: { kind: string; payload?: Value };
+  trigger?: { kind: string; payload?: Value; index?: number };
   requirements: Requirement[];
   routes?: Routed[];
   startedAt: string;
@@ -131,6 +131,7 @@ export type TriggerRow = {
   cursorMs?: number;
   recentRuns?: string[];
   pausedAt?: string;
+  pausedWhy?: "blocked_runs" | "challenge";
   lastFire?: { at: string; outcome: TriggerOutcome; runId?: string; detail?: string };
 };
 export type CapabilityConsentRow = { flowId: string; hash: string; at: string };

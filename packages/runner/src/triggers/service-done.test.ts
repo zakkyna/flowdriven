@@ -47,6 +47,7 @@ test("a finished upstream run starts the downstream flow once, with payload flow
   expect(r.runsOf(down).at(0)?.trigger).toEqual({
     kind: "flow_done",
     payload: { flow: up, run: id, status: "done", depth: 1 },
+    index: 0,
   });
   await r.svc.tick();
   expect(r.runsOf(down)).toHaveLength(1);

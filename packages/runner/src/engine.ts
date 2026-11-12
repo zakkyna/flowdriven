@@ -54,7 +54,7 @@ export type StartOptions = {
   project: string;
   inputs?: Record<string, Value>;
   params?: Record<string, Value>;
-  trigger?: { kind: string; payload?: Value };
+  trigger?: { kind: string; payload?: Value; index?: number };
 };
 export type RunView = {
   run: RunRow;

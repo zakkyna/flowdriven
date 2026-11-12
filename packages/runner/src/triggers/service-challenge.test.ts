@@ -17,6 +17,9 @@ afterEach(() => {
   cleanup();
 });
 const id = "local.challenge";
+const CHALLENGE_REASON =
+  "Paused: a site asked for a login or a robot check. Open the site in your browser, then turn it on.";
+const BLOCKED_REASON = "Paused: the last 3 runs were blocked. Fix what blocks it, then turn it on.";
 const blocked = () => ({ ready: false as const, reason: "No harness is connected yet." });
 async function rig(options: { onPaused?: () => void; triggers?: number } = {}) {
   const count = options.triggers ?? 1;
@@ -49,7 +52,7 @@ function runOf(r: Rig, index = 0): string {
   return run;
 }
 
-test("pauseByRun pauses the trigger that started the run: the row is off with pausedAt and empty recentRuns, one trigger_paused audit line, onPaused once, the view is off with the Paused reason", async () => {
+test("a challenge pause stores why, and the view says a site asked for a login or a robot check (pauseByRun pauses the trigger that started the run: the row is off with pausedAt and empty recentRuns, one trigger_paused audit line, onPaused once)", async () => {
   const r = await rig();
   r.svc.start();
   await r.svc.settled();
@@ -57,15 +60,101 @@ test("pauseByRun pauses the trigger that started the run: the row is off with pa
   const run = runOf(r);
   r.pauseByRun(run);
   const at = r.clock.now().toISOString();
-  expect(r.store.getTrigger(id, 0)).toMatchObject({ enabled: false, pausedAt: at, recentRuns: [] });
+  expect(r.store.getTrigger(id, 0)).toMatchObject({
+    enabled: false,
+    pausedAt: at,
+    pausedWhy: "challenge",
+    recentRuns: [],
+  });
   expect(r.store.listAudit().filter((a) => a.kind === "trigger_paused")).toMatchObject([
     { detail: { flowId: id, index: 0 } },
   ]);
-  expect(r.pauses).toEqual([{ flowId: id, index: 0, flowName: "Test", pausedAt: at }]);
+  expect(r.pauses).toEqual([{ flowId: id, index: 0, flowName: "Test", pausedAt: at, why: "challenge" }]);
   expect(r.svc.list(id).at(0)).toMatchObject({
     state: "off",
-    reason: "Paused: the last 3 runs were blocked. Fix what blocks it, then turn it on.",
+    reason: CHALLENGE_REASON,
   });
+});
+test("the three-blocked-runs pause still says the last 3 runs were blocked, and a row paused before this task (no why) says the same", async () => {
+  const r = await rig();
+  r.svc.start();
+  await r.svc.settled();
+  await fire(r, 3);
+  r.svc.poke();
+  await r.svc.settled();
+  expect(r.store.getTrigger(id, 0)).toMatchObject({ enabled: false, pausedWhy: "blocked_runs" });
+  expect(r.svc.list(id).at(0)?.reason).toBe(BLOCKED_REASON);
+  const row = r.store.getTrigger(id, 0);
+  if (!row) throw new Error("missing row");
+  const { pausedWhy: _why, ...old } = row;
+  r.store.putTrigger(old);
+  expect(r.store.getTrigger(id, 0)?.pausedWhy).toBeUndefined();
+  expect(r.svc.list(id).at(0)).toMatchObject({ state: "off", reason: BLOCKED_REASON });
+});
+test("a challenge in a run older than the trigger's last three runs still pauses that trigger", async () => {
+  const r = await rig();
+  r.svc.start();
+  await r.svc.settled();
+  const runs: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    await fire(r);
+    const run = runOf(r);
+    runs.push(run);
+    // Finished runs keep the three-blocked-runs rule out of the way, as runs waiting at an ask would.
+    r.store.updateRun(run, { state: "done" });
+  }
+  const first = runs.at(0);
+  if (!first) throw new Error("no first run");
+  expect(r.store.getTrigger(id, 0)?.recentRuns).toEqual(runs.slice(-3));
+  expect(r.store.getTrigger(id, 0)?.recentRuns).not.toContain(first);
+  expect(r.pauseByRun(first)).toBe(true);
+  expect(r.store.getTrigger(id, 0)).toMatchObject({ enabled: false, pausedWhy: "challenge" });
+  expect(r.pauses).toMatchObject([{ flowId: id, index: 0, why: "challenge" }]);
+});
+test("a run stored before this task (no index) is still found in recentRuns, and a manual run pauses nothing", async () => {
+  const r = await rig();
+  r.svc.start();
+  await r.svc.settled();
+  await fire(r);
+  const run = runOf(r);
+  const stored = r.store.getRun(run);
+  if (!stored?.trigger) throw new Error("the run has no trigger");
+  expect(stored.trigger.index).toBe(0);
+  const { index: _index, ...bare } = stored.trigger;
+  r.store.updateRun(run, { trigger: bare });
+  expect(r.store.getRun(run)?.trigger?.index).toBeUndefined();
+  expect(r.pauseByRun(run)).toBe(true);
+  expect(r.store.getTrigger(id, 0)).toMatchObject({ enabled: false, pausedWhy: "challenge" });
+  const manual = r.engine.beginStart(id, { project: r.project });
+  expect(r.pauseByRun(manual.run.id)).toBe(false);
+  await manual.settled;
+});
+test("a whole-number index that is not on the run is not guessed: a bad index finds nothing in the other rows", async () => {
+  const r = await rig({ triggers: 2 });
+  r.svc.start();
+  await r.svc.settled();
+  await fire(r);
+  const run = runOf(r, 0);
+  const stored = r.store.getRun(run);
+  if (!stored?.trigger) throw new Error("the run has no trigger");
+  r.store.updateRun(run, { trigger: { ...stored.trigger, index: 5 } });
+  expect(r.pauseByRun(run)).toBe(false);
+  expect(r.store.getTrigger(id, 0)).toMatchObject({ enabled: true });
+  expect(r.store.getTrigger(id, 1)).toMatchObject({ enabled: true });
+});
+test("turning the trigger on again clears the pause and its why", async () => {
+  const r = await rig();
+  r.svc.start();
+  await r.svc.settled();
+  await fire(r);
+  r.pauseByRun(runOf(r));
+  expect(r.store.getTrigger(id, 0)?.pausedWhy).toBe("challenge");
+  r.enable(id, 0);
+  const row = r.store.getTrigger(id, 0);
+  expect(row).toMatchObject({ enabled: true });
+  expect(row?.pausedAt).toBeUndefined();
+  expect(row?.pausedWhy).toBeUndefined();
+  expect(r.svc.list(id).at(0)?.state).toBe("on");
 });
 test("a run that no trigger started, a row that is already off and an unknown run id do nothing and do not throw", async () => {
   const r = await rig();
@@ -218,4 +307,69 @@ test("through the runner service: a run that becomes blocked with exactly the ch
   expect(inner.getTrigger(flow.id, 0)).toMatchObject({ enabled: false, recentRuns: [] });
   expect(inner.getTrigger(flow.id, 0)?.pausedAt).toBeDefined();
   expect(paused()).toHaveLength(1);
+});
+test("a run blocked by a challenge that pauses its trigger sends one notice, and one that no trigger started sends the present Run blocked notice", async () => {
+  const inner = await openSqliteStore(":memory:");
+  const store: Store = new Proxy(inner, {
+    get(target, key, receiver) {
+      const value: unknown = Reflect.get(target, key, receiver);
+      if (key !== "updateRun" || typeof value !== "function") return value;
+      return (runId: string, patch: Record<string, unknown>) =>
+        Reflect.apply(value, target, [
+          runId,
+          patch.state === "blocked" ? { ...patch, blockedReason: STOP.challenge } : patch,
+        ]);
+    },
+  });
+  let time = Date.parse("2026-11-12T00:00:00.000Z");
+  let next = 0;
+  const jobs: (() => void)[] = [];
+  const notices: { kind: string; body: string }[] = [];
+  const service = createRunnerService({
+    store,
+    dataDir: dirname(tempPath()),
+    mode: "live",
+    now: () => new Date(time),
+    newId: (prefix) => `${prefix}-${++next}`,
+    harness: scriptedHarness({ steps: { a: { block: STOP.challenge } } }),
+    keeper: { every: () => () => {} },
+    notify: (notice) => notices.push({ kind: notice.kind, body: notice.body }),
+    triggers: {
+      every: (_ms, fn) => {
+        jobs.push(fn);
+        return () => {
+          const i = jobs.indexOf(fn);
+          if (i >= 0) jobs.splice(i, 1);
+        };
+      },
+      watch: () => () => {},
+    },
+  });
+  active.push({ service, store: inner });
+  const hash = `sha256:${"2".repeat(64)}`;
+  const flush = async () => {
+    for (let i = 0; i < 100; i++) await Promise.resolve();
+  };
+  await service.start().settled;
+  const triggered = triggerFlow("local.notice-triggered", [{ kind: "schedule", every: "1h" }]);
+  service.engine.registerFlow(triggered, hash);
+  await service.call("triggers.setEnabled", { flowId: triggered.id, index: 0, enabled: true, hash });
+  time += 3_600_000;
+  jobs.at(0)?.();
+  await flush();
+  expect(inner.getTrigger(triggered.id, 0)).toMatchObject({ enabled: false, pausedWhy: "challenge" });
+  expect(notices).toEqual([
+    {
+      kind: "trigger_paused",
+      body: "Test was switched off because a site asked for a login or a robot check.",
+    },
+  ]);
+  notices.length = 0;
+  const manual = triggerFlow("local.notice-manual", [{ kind: "manual" }]);
+  service.engine.registerFlow(manual, `sha256:${"3".repeat(64)}`);
+  const begun = service.engine.beginStart(manual.id, { project: dirname(tempPath()) });
+  await begun.settled;
+  await flush();
+  expect(inner.getRun(begun.run.id)).toMatchObject({ state: "blocked", blockedReason: STOP.challenge });
+  expect(notices).toEqual([{ kind: "run_blocked", body: "Test is blocked and needs a look." }]);
 });

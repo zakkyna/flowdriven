@@ -1474,23 +1474,25 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 The reviewer's kept proofs: `.workflow/scratch/plan-05/review/` (the files whose names start with `zz-review-05-C-`); the notes are in `.workflow/scratch/plan-05/review/lens-C.md` under C-3 and C-4.
 
-- [ ] **Step 1: Write the failing tests** in `service-challenge.test.ts` (and the notify test file for 4 and 5):
+- [x] **Step 1: Write the failing tests** in `service-challenge.test.ts` (and the notify test file for 4 and 5):
   1. "a challenge pause stores why, and the view says a site asked for a login or a robot check" (the changed test 1)
   2. "the three-blocked-runs pause still says the last 3 runs were blocked, and a row paused before this task (no why) says the same"
   3. "a challenge in a run older than the trigger's last three runs still pauses that trigger" (overlap `queue`, runs waiting at an ask, a late pick)
   4. "the notice of a challenge pause names the login or robot check, and the notice of a three-blocked pause is the present one"
   5. "a run blocked by a challenge that pauses its trigger sends one notice, and one that no trigger started sends the present Run blocked notice"
   6. "turning the trigger on again clears the pause and its why"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-challenge.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/triggers packages/runner/src/service packages/runner/src/notify`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-challenge.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/triggers packages/runner/src/service packages/runner/src/notify`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Say why a challenge paused a trigger, send one notice and find the trigger by its index" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

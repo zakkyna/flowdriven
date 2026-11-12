@@ -45,7 +45,19 @@ export type TriggerView = {
   dailyCap: number;
 };
 export type FloodEvent = { flowId: string; flowName: string; day: string; cap: number };
-export type PausedEvent = { flowId: string; index: number; flowName: string; pausedAt: string };
+export type PausedWhy = "blocked_runs" | "challenge";
+export type PausedEvent = {
+  flowId: string;
+  index: number;
+  flowName: string;
+  pausedAt: string;
+  why?: PausedWhy;
+};
+export const PAUSE_REASON = {
+  blocked_runs: "Paused: the last 3 runs were blocked. Fix what blocks it, then turn it on.",
+  challenge:
+    "Paused: a site asked for a login or a robot check. Open the site in your browser, then turn it on.",
+} as const;
 export type TriggerDeps = {
   store: Store;
   now: () => Date;
@@ -65,7 +77,7 @@ export interface TriggerService {
   stop(): void;
   tick(): Promise<void>;
   poke(): void;
-  pauseByRun(runId: string): void;
+  pauseByRun(runId: string): boolean;
   settled(): Promise<void>;
 }
 export function createTriggerService(deps: TriggerDeps): TriggerService {
@@ -135,7 +147,9 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
         : state === "needs_ok"
           ? "This flow changed. Turn the trigger on again to approve this version."
           : state === "off" && row?.pausedAt
-            ? "Paused: the last 3 runs were blocked. Fix what blocks it, then turn it on."
+            ? row.pausedWhy === "challenge"
+              ? PAUSE_REASON.challenge
+              : PAUSE_REASON.blocked_runs
             : undefined;
     if (!valid.ok && state !== "needs_ok") reason = valid.reason;
     const watcher = watchers.get(`${flow.id}:${index}`);
@@ -334,7 +348,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       const begun = deps.begin(flow.id, {
         project: deps.projectDir,
         inputs: inputs.inputs,
-        trigger: { kind: trigger.kind, payload },
+        trigger: { kind: trigger.kind, payload, index: row.index },
       });
       return record(
         { ...row, recentRuns: [...(row.recentRuns ?? []), begun.run.id].slice(-3) },
@@ -353,26 +367,42 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       return record(row, outcome, message);
     }
   }
-  function pauseRow(row: TriggerRow, flowName: string): void {
+  function pauseRow(row: TriggerRow, flowName: string, why: PausedWhy): void {
     const pausedAt = deps.now().toISOString();
-    store.putTrigger({ ...row, enabled: false, pausedAt, recentRuns: [] });
+    store.putTrigger({ ...row, enabled: false, pausedAt, pausedWhy: why, recentRuns: [] });
     close(row.flowId, row.index);
     audit("trigger_paused", { flowId: row.flowId, index: row.index });
     try {
-      deps.onPaused?.({ flowId: row.flowId, index: row.index, flowName, pausedAt });
+      deps.onPaused?.({
+        flowId: row.flowId,
+        index: row.index,
+        flowName,
+        pausedAt,
+        ...(why === "challenge" ? { why } : {}),
+      });
     } catch {
       /* notification is optional */
     }
   }
-  function pauseByRun(runId: string): void {
+  function pauseByRun(runId: string): boolean {
+    let paused = false;
     try {
-      for (const candidate of store.listTriggers()) {
-        const row = store.getTrigger(candidate.flowId, candidate.index);
-        if (!row?.enabled || !row.recentRuns?.includes(runId)) continue;
+      const run = store.getRun(runId);
+      const index = run?.trigger?.index;
+      const rows =
+        run && typeof index === "number" && Number.isSafeInteger(index) && index >= 0
+          ? [store.getTrigger(run.flowId, index)]
+          : store
+              .listTriggers()
+              .map((candidate) => store.getTrigger(candidate.flowId, candidate.index))
+              .filter((row) => row?.recentRuns?.includes(runId));
+      for (const row of rows) {
+        if (!row?.enabled) continue;
         const found = flowOf(row.flowId);
         if (!found) continue;
         try {
-          pauseRow(row, found.manifest.name);
+          pauseRow(row, found.manifest.name, "challenge");
+          paused = true;
         } catch {
           /* one row failing must not keep the others from pausing */
         }
@@ -380,6 +410,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     } catch {
       /* pausing is best effort and never throws */
     }
+    return paused;
   }
   function section(candidate: TriggerRow) {
     let row = store.getTrigger(candidate.flowId, candidate.index);
@@ -392,7 +423,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
         row.recentRuns?.length === 3 &&
         row.recentRuns.every((id) => store.getRun(id)?.state === "blocked")
       ) {
-        pauseRow(row, manifest.name);
+        pauseRow(row, manifest.name, "blocked_runs");
         return;
       }
       const trigger = manifest.triggers.at(row.index);
