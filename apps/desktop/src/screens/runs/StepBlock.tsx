@@ -7,6 +7,7 @@ import { BlockedCalls } from "./BlockedCalls";
 import { ItemList } from "./ItemList";
 import styles from "./Runs.module.css";
 import { StepUsageLine } from "./StepUsageLine";
+import { StepWeb } from "./StepWeb";
 import { WaitingLine } from "./WaitingLine";
 export function StepBlock({ step, index }: { step: StepRun; index: number }): ReactElement {
   const id = useId();
@@ -47,6 +48,7 @@ export function StepBlock({ step, index }: { step: StepRun; index: number }): Re
           </div>
         )}
         {step.usage && <StepUsageLine usage={step.usage} />}
+        <StepWeb step={step} />
         {step.note && <p>{step.note}</p>}
         <CheckList checks={step.checks} />
         {step.blocked && <BlockedCalls calls={step.blocked} />}

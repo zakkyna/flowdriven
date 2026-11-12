@@ -1086,21 +1086,23 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** `StepWeb({ step }: { step: Pick<LeafStepRun, "outside" | "pagesRead"> })` renders nothing when `outside` is not true and `pagesRead` is not above 0; otherwise a line with `Icon post` and the words "Has text from outside" when `outside` is true, and the line "Pages read: <n>" when `pagesRead` is above 0. `StepBlock` shows it among the step details (after the usage line, `StepBlock.tsx:49-52`) and `ItemList` shows it for each item step (after `StepUsageLine`, next to `step.blocked` at `ItemList.tsx:67`), because the steps of a loop are drawn by `ItemList` (Fact 21). A withheld page already appears in "Blocked calls" through `BlockedCalls` (no change).
 
-- [ ] **Step 1: Write the failing tests** in `RunWeb.test.tsx` (`renderApp("#/runs/run-0008", { scenario: "looped" })`):
+- [x] **Step 1: Write the failing tests** in `RunWeb.test.tsx` (`renderApp("#/runs/run-0008", { scenario: "looped" })`):
   1. "the page step of the first job, inside the loop, shows `Has text from outside` with an icon, `Pages read: 1` and the refused click under Blocked calls with its sentence"
   2. "a top-level step marked in `client.state` (as `Runs.test.tsx:375` edits it) shows the same two lines in `StepBlock`"
   3. "a step without the mark shows neither line, and `Pages read: 0` is never shown"
   4. "the lines have an icon and words and no colour alone carries them"
-- [ ] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens/runs/RunWeb.test.tsx`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run apps/desktop/src`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run apps/desktop/src/screens/runs/RunWeb.test.tsx`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run apps/desktop/src`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add apps/desktop/src
 git commit -m "Show outside text and pages read on the run screen, for loop steps too" -m "Assisted-by: Codex"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

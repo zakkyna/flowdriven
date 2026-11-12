@@ -196,3 +196,17 @@
 .queue {
   margin-bottom: var(--space-5);
 }
+
+.webLines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.webLine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}

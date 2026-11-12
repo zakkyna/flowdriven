@@ -6,6 +6,7 @@ import { statusOf } from "../../ui/status";
 import { BlockedCalls } from "./BlockedCalls";
 import styles from "./Runs.module.css";
 import { StepUsageLine } from "./StepUsageLine";
+import { StepWeb } from "./StepWeb";
 import { WaitingLine } from "./WaitingLine";
 
 const reasons: Record<SkipReason, string> = {
@@ -63,6 +64,7 @@ export function ItemList({ title, items }: { title: string; items: RunItem[] }):
                   )}
                 </div>
                 {step.usage && <StepUsageLine usage={step.usage} />}
+                <StepWeb step={step} />
                 {step.checks.length > 0 && <CheckList checks={step.checks} />}
                 {step.blocked && <BlockedCalls calls={step.blocked} />}
               </li>
