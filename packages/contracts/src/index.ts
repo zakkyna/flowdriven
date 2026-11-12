@@ -1,3 +1,5 @@
+export * from "./capability.ts";
+
 import "./config.ts";
 
 export * from "./approval.ts";

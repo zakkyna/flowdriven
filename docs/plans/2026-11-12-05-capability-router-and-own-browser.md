@@ -274,23 +274,25 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - Stubs: runner `"flows.capabilities": () => unavailable("The preview arrives in this plan.")` and the two writers the same; fixtures the same through `throw new RunnerError("unavailable", ...)`.
 - **Present assertion that changes** (`operations.test.ts`, "version 1 has exactly these operations", the sorted list): old: `... "approvals.resolve", "audit.list", "flows.build", "flows.get", "flows.import", "flows.list", "flows.run", "flows.update", "harnesses.list", ...`; new: `... "audit.list", "flows.allowCapabilities", "flows.build", "flows.capabilities", "flows.get", "flows.import", "flows.list", "flows.run", "flows.update", "flows.withdrawCapabilities", "harnesses.list", ...`. The MCP list in the next test is not changed, which proves the three are off MCP.
 
-- [ ] **Step 1: Write the failing tests** in `capability.test.ts`:
+- [x] **Step 1: Write the failing tests** in `capability.test.ts`:
   1. "a routed row has a provider, who enforces it and a label, and a dropped row has a reason" (parse one of each; refuse an unknown enforcer, an extra key, a 2,500 character sentence; accept a 2,000 character one)
   2. "the four enforcers are the four of spec 20.2, in that order"
   3. "a capabilities value has rows, caps, triggers, needsAllow and a consent state" (parse full and minimal; refuse `maxRunsPerDay: 0` and consent `"maybe"`)
   4. "the three operations take a flow id, the allow also takes a content hash, and all three are off MCP" (refuse `hash: "abc"`)
   5. "a requirement keeps session, url_patterns, rate and on_challenge, and a rate of 0 is refused"
   6. "a step run keeps outside and pagesRead and is valid without them" (refuse `pagesRead: -1`)
-- [ ] **Step 2: Run:** `pnpm vitest run packages/contracts/src/capability.test.ts`. Expected: FAIL ("Cannot find module ./capability.ts").
-- [ ] **Step 3: Implement** the files above and the stubs; change `operations.test.ts` as named. Export `capability.ts` from `index.ts`.
-- [ ] **Step 4: Run** `pnpm vitest run packages/contracts packages/fixtures`. Expected: PASS (the new fields are optional).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/contracts/src/capability.test.ts`. Expected: FAIL ("Cannot find module ./capability.ts").
+- [x] **Step 3: Implement** the files above and the stubs; change `operations.test.ts` as named. Export `capability.ts` from `index.ts`.
+- [x] **Step 4: Run** `pnpm vitest run packages/contracts packages/fixtures`. Expected: PASS (the new fields are optional).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts packages/runner/src/service/handlers.ts packages/fixtures/src/client.ts
 git commit -m "Add the web fields, the capabilities read model and the allow operations to the contract" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

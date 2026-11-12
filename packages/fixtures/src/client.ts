@@ -310,6 +310,15 @@ export function createFixtureRunnerClient(
       return { markdown: `${lines.join("\n")}\n` };
     },
     "flows.list": () => state.flows.map(summary),
+    "flows.capabilities": () => {
+      throw new RunnerError("unavailable", "The preview arrives in this plan.");
+    },
+    "flows.allowCapabilities": () => {
+      throw new RunnerError("unavailable", "The preview arrives in this plan.");
+    },
+    "flows.withdrawCapabilities": () => {
+      throw new RunnerError("unavailable", "The preview arrives in this plan.");
+    },
     "flows.get": ({ flowId }) => detail(flow(flowId)),
     "flows.build": ({ flowId, message }) => {
       const f = flowId ? flow(flowId) : undefined;

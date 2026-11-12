@@ -251,6 +251,9 @@ export function createHandlers({
   }
   return {
     "flows.list": () => store.listFlows().map((r) => toFlowSummary(r, store.listRuns({ flowId: r.id }))),
+    "flows.capabilities": () => unavailable("The preview arrives in this plan."),
+    "flows.allowCapabilities": () => unavailable("The preview arrives in this plan."),
+    "flows.withdrawCapabilities": () => unavailable("The preview arrives in this plan."),
     "flows.get": ({ flowId }) => detail(flow(flowId)),
     "flows.build": () => unavailable("Building a flow from chat arrives with the agent."),
     "flows.update": () => unavailable("Editing a flow in the app arrives with the agent."),

@@ -85,6 +85,12 @@ export const Requirement = z.object({
   tools: z.array(z.string()).optional(),
   commands: z.array(z.string()).optional(),
   domains: z.array(z.string()).optional(),
+  session: z.enum(["none", "managed", "own"]).optional(),
+  url_patterns: z.array(z.string()).optional(),
+  rate: z
+    .object({ per_run: z.number().int().min(1).optional(), per_day: z.number().int().min(1).optional() })
+    .optional(),
+  on_challenge: z.literal("stop").optional(),
   access: z.enum(["read", "read_write"]).optional(),
   routes: z.array(RouteOption).default([]),
   mode: z.enum(["open", "read", "act"]).optional(),

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Approval, ApprovalDecision, ApprovalState } from "./approval.ts";
+import { FlowCapabilities } from "./capability.ts";
 import type { RunnerTopic } from "./client.ts";
 import { ContentHash, Id, IsoDateTime } from "./common.ts";
 import { ChatMessage, FlowDetail, FlowEdit, FlowSummary } from "./flow.ts";
@@ -50,6 +51,30 @@ export type OperationDef = {
   writes: readonly RunnerTopic[];
 } & ({ mcp: "restricted"; mcpRule: string } | { mcp: "yes" | "no"; mcpRule?: string });
 export const operations = {
+  "flows.capabilities": {
+    input: z.object({ flowId: Id }),
+    output: FlowCapabilities,
+    mcp: "no",
+    errors: ["invalid_input", "not_found", "not_allowed"],
+    reads: ["flows"],
+    writes: [],
+  },
+  "flows.allowCapabilities": {
+    input: z.object({ flowId: Id, hash: ContentHash }),
+    output: FlowCapabilities,
+    mcp: "no",
+    errors: ["invalid_input", "not_found", "not_allowed"],
+    reads: [],
+    writes: ["flows", "readiness"],
+  },
+  "flows.withdrawCapabilities": {
+    input: z.object({ flowId: Id }),
+    output: FlowCapabilities,
+    mcp: "no",
+    errors: ["invalid_input", "not_found", "not_allowed"],
+    reads: [],
+    writes: ["flows", "readiness"],
+  },
   "flows.list": {
     input: z.object({}),
     output: z.array(FlowSummary),
