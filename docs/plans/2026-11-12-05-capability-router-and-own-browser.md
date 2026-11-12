@@ -195,7 +195,7 @@ docs/plans/ROADMAP.md                                                           
 - `describeTemplate(template: UrlTemplate): string`: the literal text with each capture shown as `{name}` (`https://www.upwork.com/jobs/~{id}`).
 - `webRates(req: { rate?: { per_run?: number; per_day?: number } }): { perRun: number; perDay: number }` (defaults 3 and 10, spec 20.5).
 
-- [ ] **Step 1: Write the failing tests** in `template.test.ts`:
+- [x] **Step 1: Write the failing tests** in `template.test.ts`:
   1. "the spec's example parses, describes itself with capture names only and matches an id of 18 to 24 characters" (`https://www.upwork.com/jobs/~{id:[0-9a-z]{18,24}}`; `describeTemplate` gives `https://www.upwork.com/jobs/~{id}`; a 20 character id gives `{ id }`; 17 and 25 characters, an upper-case id and an id with `-` give `undefined`)
   2. "a template without captures is valid and matches only its own address" (`https://example.com/`; `https://example.com` without the slash and `https://example.com/a` do not match)
   3. "R2: a capture value `~abc/../x`, an encoded dot, a query, an empty query, a fragment, an empty fragment, a percent sign, `%7e`, and a second host after @ never match" (table over the spec example and `https://example.com/p/{n:[a-z]{1,5}}` and `https://example.com/`; include `https://example.com/?`, `https://example.com/#` and `https://example.com/%7e`, which are their own `href` and must still not match)
@@ -206,16 +206,18 @@ docs/plans/ROADMAP.md                                                           
   8. "a hostile address of 600 characters matches in a blink and one of 601 is refused" (a time-free check: it returns, and the 601 character one is `undefined`)
   9. "isValidHost accepts `www.upwork.com` and refuses upper case, a port, an IP address, `localhost`, a trailing dot, an empty label and a 254 character host"
   10. "webRates defaults to 3 per run and 10 per day, and keeps what the flow says, one field at a time"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/sdk/src/web/template.test.ts`. Expected: FAIL ("Cannot find module ./template.ts").
-- [ ] **Step 3: Implement** `template.ts` and the export.
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/sdk/src/web/template.test.ts`. Expected: FAIL ("Cannot find module ./template.ts").
+- [x] **Step 3: Implement** `template.ts` and the export.
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/sdk/src/web packages/sdk/src/index.ts
 git commit -m "Add URL templates with typed captures to the SDK" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

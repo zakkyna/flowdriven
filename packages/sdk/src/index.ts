@@ -11,3 +11,5 @@ export * from "./issues.ts";
 export * from "./validate/risky.ts";
 export * from "./validate/validate.ts";
 export * from "./vocab.ts";
+
+export * from "./web/template.ts";
