@@ -241,9 +241,10 @@ test("a loop step lists its items with key, label, state word and note", async (
 });
 test("an item shows its own steps", async () => {
   renderApp("#/runs/run-0008", { scenario: "looped" });
-  expect(
-    within(await screen.findByRole("list", { name: "Steps of j1" })).getAllByRole("listitem"),
-  ).toHaveLength(3);
+  const stepRows = within(await screen.findByRole("list", { name: "Steps of j1" }))
+    .getAllByRole("listitem")
+    .filter((row) => !row.closest('section[aria-label="Blocked calls"]'));
+  expect(stepRows).toHaveLength(3);
   expect(within(screen.getByRole("list", { name: "Steps of j2" })).getAllByText("Skipped")).toHaveLength(2);
 });
 test("skip reasons are shown in words", async () => {
@@ -380,7 +381,9 @@ test("an item lists its blocked calls too, and a hidden character in a tool name
   step.blocked = [{ tool: `Re${String.fromCodePoint(0x202e)}ad`, reason: "x", count: 1 }];
   const list = await screen.findByRole("list", { name: "Steps of j1" });
   expect(within(list).getByText("<U+202E>")).toBeTruthy();
-  expect(within(list).getByText("(1 time)")).toBeTruthy();
+  const row = within(list).getByText("<U+202E>").closest("li")?.parentElement?.closest("li");
+  if (!row) throw new Error("Missing step row");
+  expect(within(row).getByText("(1 time)")).toBeTruthy();
 });
 
 test("waiting labels use the spec's words", () => {

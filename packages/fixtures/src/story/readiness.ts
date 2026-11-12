@@ -30,6 +30,16 @@ export function readiness(flows: FlowRecord[]): Record<string, ReadinessReport> 
         guide: { steps: [`Set up ${req.ref}.`, "Choose Check again."], commands: [], verified: true },
         checkedAt: FIXTURE_NOW,
       }));
+      for (const req of manifest.requirements) {
+        if (req.type !== "web" || req.mode !== "read" || req.session !== "own") continue;
+        const item = items.find((i) => i.requirementId === req.id);
+        if (item)
+          item.route = {
+            via: "Claude in Chrome inside Claude Code",
+            risk: "unofficial",
+            note: "This uses your personal browser. Every site you are logged into is reachable from it.",
+          };
+      }
       if (manifest.id.endsWith("figma-to-flutter")) {
         const item = items.find((i) => i.requirementId === "figma");
         if (item) {

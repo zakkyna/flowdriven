@@ -1021,7 +1021,7 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `client.ts`: `"flows.capabilities"`, `"flows.allowCapabilities"` (refuses a hash that is not the flow's with `not_allowed`) and `"flows.withdrawCapabilities"` use `capabilitiesOf` and `state.capabilityConsents`; the stubs of Task 3 go.
 - `story/readiness.ts` gives the item of a `web` requirement with `mode: read` and `session: own` the route `{ via: "Claude in Chrome inside Claude Code", risk: "unofficial", note: "This uses your personal browser. Every site you are logged into is reachable from it." }` and the state `ok`; `readiness.check` for the job-alert flow comes from `readiness([flow])` and so has the new rows.
 
-- [ ] **Step 1: Write the failing tests** in `capabilities.test.ts`:
+- [x] **Step 1: Write the failing tests** in `capabilities.test.ts`:
   1. "the job-alert flow has a routed web row, a routed path row and two dropped rows, in that order, and every row parses against the contract"
   2. "consent starts as none; allow with the flow's hash gives given and the Allow state; a wrong hash is not_allowed; withdraw gives none again"
   3. "a changed flow hash makes a given consent stale"
@@ -1029,16 +1029,18 @@ Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
   5. "the capabilities of an unknown flow are not_found"
   6. "run-0008 validates with the outside mark, one page read and one blocked call, and the looped scenario still has 6 flows, 8 runs and 6 pending approvals"
   7. "the readiness report of the job-alert flow has an ok Chrome row with an unofficial route"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/fixtures/src/capabilities.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `pnpm vitest run packages/fixtures apps/desktop/src`. Expected: PASS. Any present assertion that counts the job-alert flow's requirements or readiness rows changes to the equally strict new value and is named in the report; the plan-time search found none (`looped.test.ts`, `triggers.test.ts` and `Builder.test.tsx` do not count requirements).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/fixtures/src/capabilities.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `pnpm vitest run packages/fixtures apps/desktop/src`. Expected: PASS. Any present assertion that counts the job-alert flow's requirements or readiness rows changes to the equally strict new value and is named in the report; the plan-time search found none (`looped.test.ts`, `triggers.test.ts` and `Builder.test.tsx` do not count requirements).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/fixtures
 git commit -m "Add sample capabilities, a web requirement on the job-alert flow and the allow operations to the fixtures" -m "Assisted-by: Codex"
 ```
+
+Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

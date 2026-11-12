@@ -41,6 +41,7 @@ export function addLooped(state: FixtureState): void {
   rough.outputs = [{ id: "score", type: "json" }];
   const page = {
     ...leaf("page", "Read the full post", "worker", "contains", "The full post is present"),
+    uses: ["worker", "jobs_web"],
     when: "rough.score.value >= params.min_score",
   };
   const full = {
@@ -56,6 +57,7 @@ export function addLooped(state: FixtureState): void {
     "not_contains",
     "The proposal has no placeholders",
   );
+  proposal.uses = ["worker", "data"];
   proposal.checks.push({ type: "user", required: true, summary: "You approve the proposal" });
   const question = "Which jobs get a prototype?";
   const steps: Step[] = [
@@ -128,6 +130,52 @@ export function addLooped(state: FixtureState): void {
   });
   const requirement = flow.manifest.requirements.at(0);
   if (requirement) requirement.why = "Does the scoring and the drafting.";
+  flow.manifest.requirements.push(
+    {
+      id: "jobs_web",
+      type: "web",
+      ref: "web:upwork-jobs",
+      required: true,
+      sensitive: true,
+      why: "Reads the full text of a job post in your own browser.",
+      routes: [],
+      mode: "read",
+      session: "own",
+      domains: ["www.upwork.com"],
+      url_patterns: ["https://www.upwork.com/jobs/~{id:[0-9a-z]{18,24}}"],
+      rate: { per_run: 3, per_day: 10 },
+    },
+    {
+      id: "data",
+      type: "path",
+      ref: "job-review",
+      required: true,
+      sensitive: false,
+      why: "Holds the drafts and the notes of this flow.",
+      routes: [],
+      access: "read_write",
+    },
+    {
+      id: "gmail",
+      type: "mcp_server",
+      ref: "connector:gmail",
+      required: true,
+      sensitive: false,
+      why: "Finds the job alert emails.",
+      routes: [],
+      connect: "native",
+      tools: ["search_threads", "get_thread"],
+    },
+    {
+      id: "builder",
+      type: "skill",
+      ref: "claude-code:prototype-builder",
+      required: true,
+      sensitive: false,
+      why: "Builds the prototype of a chosen job.",
+      routes: [],
+    },
+  );
   flow.playback = {
     goal: "Review new job alerts and prototype the best ones.",
     touches: ["claude-code"],
@@ -155,6 +203,14 @@ export function addLooped(state: FixtureState): void {
       verdict: status === "passed" ? "passed" : status === "failed" ? "failed" : "pending",
     })),
     ...(note ? { note } : {}),
+  });
+  const pageRead = (run: LeafStepRun): LeafStepRun => ({
+    ...run,
+    outside: true,
+    pagesRead: 1,
+    blocked: [
+      { tool: "mcp__claude-in-chrome__computer", reason: "This step may only read pages.", count: 1 },
+    ],
   });
   const review = steps.at(1);
   const pick = steps.at(2);
@@ -184,7 +240,7 @@ export function addLooped(state: FixtureState): void {
             key: "j1",
             label: "Job one",
             state: "passed",
-            steps: [runStep(rough, "passed"), runStep(page, "passed"), runStep(full, "passed")],
+            steps: [runStep(rough, "passed"), pageRead(runStep(page, "passed")), runStep(full, "passed")],
           },
           {
             key: "j2",

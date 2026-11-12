@@ -30,6 +30,7 @@ import {
   type FlowRecord,
   type Scenario,
 } from "./state";
+import { capabilitiesOf } from "./story/capabilities";
 import { triggerStatuses } from "./story/triggers";
 
 export const PREVIEW_AGENT_REPLY =
@@ -310,14 +311,24 @@ export function createFixtureRunnerClient(
       return { markdown: `${lines.join("\n")}\n` };
     },
     "flows.list": () => state.flows.map(summary),
-    "flows.capabilities": () => {
-      throw new RunnerError("unavailable", "The preview arrives in this plan.");
+    "flows.capabilities": ({ flowId }) => {
+      const f = flow(flowId);
+      return capabilitiesOf(f, state.capabilityConsents[flowId]);
     },
-    "flows.allowCapabilities": () => {
-      throw new RunnerError("unavailable", "The preview arrives in this plan.");
+    "flows.allowCapabilities": ({ flowId, hash }) => {
+      const f = flow(flowId);
+      if (hash !== f.hash)
+        throw new RunnerError(
+          "not_allowed",
+          "This flow changed since you looked at it. Reload and check it again.",
+        );
+      state.capabilityConsents[flowId] = { hash };
+      return capabilitiesOf(f, state.capabilityConsents[flowId]);
     },
-    "flows.withdrawCapabilities": () => {
-      throw new RunnerError("unavailable", "The preview arrives in this plan.");
+    "flows.withdrawCapabilities": ({ flowId }) => {
+      const f = flow(flowId);
+      delete state.capabilityConsents[flowId];
+      return capabilitiesOf(f, undefined);
     },
     "flows.get": ({ flowId }) => detail(flow(flowId)),
     "flows.build": ({ flowId, message }) => {
