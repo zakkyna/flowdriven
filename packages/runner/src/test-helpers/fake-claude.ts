@@ -49,6 +49,7 @@ const help =
     "--settings",
     "--add-dir",
     "--json-schema",
+    "--no-chrome",
   ].join("\n") + "\n";
 const command = args.includes("-p")
   ? "play"

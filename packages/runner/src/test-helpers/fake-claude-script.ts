@@ -85,6 +85,7 @@ export const FAKE_HELP =
     "--settings",
     "--add-dir",
     "--json-schema",
+    "--no-chrome",
   ].join("\n") + "\n";
 export function makeFakeHome(script: FakeScript = {}): string {
   const home = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven- ")));

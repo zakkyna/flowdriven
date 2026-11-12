@@ -12,6 +12,7 @@ export type ClaudeScan = {
   configFolder: boolean;
   login: "logged_in" | "logged_out" | "unknown";
   authMethod?: string;
+  chrome?: boolean;
   scannedAt: string;
 };
 function folder(path: string): boolean {
@@ -91,6 +92,7 @@ export async function scanClaude(options: {
           (flag) => !new RegExp(`(?:^|[^a-zA-Z0-9-])${flag}(?![a-zA-Z0-9-])`).test(help.stdout),
         )
       : [...REQUIRED_FLAGS];
+    if (ok(help) && /(?:^|[^a-zA-Z0-9-])--chrome(?![a-zA-Z0-9-])/.test(help.stdout)) result.chrome = true;
     if (!auth.timedOut && !auth.truncated) {
       try {
         const data: unknown = JSON.parse(auth.stdout);

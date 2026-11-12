@@ -31,6 +31,7 @@ test("the argument list for a step with no tools and no schema", () => {
     "none",
     "--settings",
     input.settingsPath,
+    "--no-chrome",
   ]);
 });
 test("tools, further folders and a schema are added in order, and every long flag is one the help check covers", () => {
@@ -67,6 +68,7 @@ test("tools, further folders and a schema are added in order, and every long fla
     "--settings",
     "--add-dir",
     "--json-schema",
+    "--no-chrome",
   ]);
   for (const flag of args.filter((arg) => arg.startsWith("--"))) expect(REQUIRED_FLAGS).toContain(flag);
   expect(FAKE_HELP.trim().split("\n")).toEqual(REQUIRED_FLAGS);

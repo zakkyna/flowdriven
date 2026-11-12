@@ -13,6 +13,7 @@ export const REQUIRED_FLAGS: readonly string[] = [
   "--settings",
   "--add-dir",
   "--json-schema",
+  "--no-chrome",
 ];
 export const REFUSED_FLAGS = [
   "--dangerously-skip-permissions",
@@ -29,6 +30,7 @@ export type ArgsInput = {
   settingsPath: string;
   addDirs: string[];
   schema?: object;
+  chrome?: boolean;
 };
 export function assertSafeArgs(args: readonly string[]): void {
   for (const arg of args)
@@ -58,6 +60,7 @@ export function buildClaudeArgs(input: ArgsInput): string[] {
     "none",
     "--settings",
     input.settingsPath,
+    input.chrome ? "--chrome" : "--no-chrome",
   ];
   for (const dir of input.addDirs) args.push("--add-dir", dir);
   if (input.schema !== undefined) args.push("--json-schema", JSON.stringify(input.schema));

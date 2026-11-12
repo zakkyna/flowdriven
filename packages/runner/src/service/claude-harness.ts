@@ -115,7 +115,7 @@ export function toHarnessCard(
     },
   };
 }
-function storedScan(value: unknown): StoredScan | undefined {
+export function storedScan(value: unknown): StoredScan | undefined {
   if (!value || typeof value !== "object" || !("scan" in value) || !("inventory" in value)) return undefined;
   const { scan, inventory } = value as { scan: unknown; inventory: unknown };
   if (!scan || typeof scan !== "object" || !inventory || typeof inventory !== "object") return undefined;
@@ -123,6 +123,7 @@ function storedScan(value: unknown): StoredScan | undefined {
     i = inventory as Record<string, unknown>;
   if (
     typeof s.detected !== "boolean" ||
+    ("chrome" in s && typeof s.chrome !== "boolean") ||
     (s.path !== undefined && typeof s.path !== "string") ||
     (s.version !== undefined && typeof s.version !== "string") ||
     !Array.isArray(s.missingFlags) ||

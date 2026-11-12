@@ -478,23 +478,25 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `prompt.ts`: `buildPrompt` input gains `browser?: { templates: string[]; pagesLeft: number }` (`templates` already through `describeTemplate`). With it, after the first line and before the data warning, the lines: `This step may read web pages in the owner's own Chrome, and nothing else in the browser.`; `To read a page: call tabs_context_mcp with createIfEmpty set to true to get your tab, call navigate with an address of one of the forms below and that tab's id, call get_page_text with the same tab id, and close the tab with tabs_close_mcp when you are done. Use only tab ids that those calls gave you, and open at most 2 tabs.`; `Allowed address forms: <templates joined with ", ">.`; `Clicking, typing, scrolling, screenshots and every other browser tool are refused.`; `You can read at most <n> more page(s) in this step.` (`page` when n is 1). When `browser` is set and `cwd` is not, the second line reads `You have no file tools and no working folder in this step.` instead of the present no-tools sentence. Without `browser` the prompt is byte-identical to today.
 - **Present assertions that change** (`claude/args.test.ts`, same assertions for the new list): "the argument list for a step with no tools and no schema": a last element `"--no-chrome"` is added after `input.settingsPath`; "tools, further folders and a schema are added in order, ...": the `REQUIRED_FLAGS` list gains `"--no-chrome"` after `"--json-schema"` (the next lines, `args.slice(-6)`, the `toContain` loop and the `FAKE_HELP` equality, stay as they are and now hold for the new list).
 
-- [ ] **Step 1: Write the failing tests** in `browser-flags.test.ts`:
+- [x] **Step 1: Write the failing tests** in `browser-flags.test.ts`:
   1. "the argument list has --chrome with a browser and --no-chrome without, after --settings and before --add-dir"
   2. "the scan finds the --chrome flag in a help text, ignores --no-chrome on its own, and leaves `chrome` absent otherwise"
   3. "storedScan reads a scan with chrome true and one without the field, and refuses chrome that is not a boolean"
   4. "REQUIRED_FLAGS ends with --no-chrome and a help text without it lists it as missing"
   5. "the prompt paragraph shows the forms with capture names only, the two-tab limit, the pages left, and the singular for one page"
   6. "a prompt without a browser is unchanged, and a browser step with no folder says it has no file tools"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/browser-flags.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement**; change `args.test.ts` and both help texts as named.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude packages/runner/src/service/claude-harness.test.ts packages/runner/src/test-helpers`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/browser-flags.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement**; change `args.test.ts` and both help texts as named.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude packages/runner/src/service/claude-harness.test.ts packages/runner/src/test-helpers`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Add the Chrome flags, the chrome scan fact and the prompt paragraph" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
