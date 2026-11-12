@@ -1367,3 +1367,151 @@ git commit -m "Say your own browser on the screens and in the prompt, and store 
 
 
 Done by: Claude Code/sonnet, 2026-11-12. Evidence: pnpm format && pnpm check.
+
+---
+
+### Lenses A and C (reviewed at `ce642bf`, with the fixes of Tasks 30 to 32 in place)
+
+Lens A tried 200,000 addresses against the match and 111,110 class bodies against the class reader, and found no address or character that gets through beyond what a template says. It has one finding. Lens C has five. All six were confirmed by the second agent, and all are minor.
+
+| Id | Finding | What was done |
+|---|---|---|
+| A-1 | The rule before a call allowed `max_chars` on `get_page_text`, a part the extension's own tool does not declare. If the extension cut the text to it, a long page on a declared address with a poster's title could look like a challenge (under 800 characters) and pause the trigger, against the rule that a title alone never stops a run there. | Task 33: only `tabId` is allowed. Step 3 of Task 29 is thereby moot. |
+| C-1 | The Allow button sent the hash of `flows.get`, not the hash of the preview on the screen (`flows.capabilities`), so for one render after a re-import the owner could allow a version whose rows were not shown. | Task 34 |
+| C-2 | The owner could allow while the web row was shown as "Not available" (Claude Code without the Chrome option or without hooks), and that allow later covered the unofficial own-browser route once the facts changed. | Task 34 |
+| C-3 | A challenge pause told the owner, in two notifications and on the Triggers panel, that the trigger was switched off after 3 blocked runs. | Task 35 |
+| C-4 | A challenge in a run older than its trigger's last three runs did not pause the trigger. | Task 35 |
+| C-5 | Rule R1: the outside mark stayed on the step that opened the page; a later step whose instructions take that step's output was not marked. | Task 36 |
+
+Also taken from lens A's note: the Details of a web row showed a capture as `{name}` without its class and length, so the owner could not see how wide a template is. Task 34 shows the template as the flow wrote it.
+
+Noted by the reviewers and not changed in this plan:
+
+- One step may hold the browser and a writable folder together, so a worker that read page text can write files of the declared folder in the same unattended step. No rule of spec 20.7 forbids it; holding and tainting what follows outside text is for plan 05b (R10) and the later rules.
+- The address check trusts the site itself: a page that can run its own script on a declared host can show any text under a declared address of that host.
+- The allow is bound to the flow's hash, and Task 34 makes sure every used web row is routed and labelled when it is given. When a later plan adds a second provider for a requirement type, the allow must be bound to the routes shown as well.
+- "Pages read" on the run screen counts page texts that passed; the page limit counts allowed `navigate` calls, so the two numbers can differ.
+- A run that started before the first scan of Claude Code ended stores dropped routes; when it is resumed, the gate passes and the adapter blocks it with "cannot enforce yet". It fails closed.
+- Whether a real job page, as `get_page_text` returns it, always has 800 characters or more is not known; a shorter page with a marker in its title or the word "captcha" in its text is taken for a challenge. The chair's two real pages with the owner watching (Handover) will show it.
+
+### Task 33: Review fix: get_page_text takes a tab id and nothing else
+
+**Files:**
+- Modify: `packages/runner/src/claude/browser.ts`, `packages/runner/src/claude/decide-browser.test.ts`, and any other present test that sends `max_chars` to the rule before a call (find them with `grep -rn "max_chars" packages --include="*.ts"`)
+
+**Interface:** in `decideBrowser`, `get_page_text` allows the key `tabId` only. Any `max_chars`, whatever its value, is a part FlowDriven does not recognise (`BROWSER_DENY.part`). The checks of the value of `max_chars` go away. `MAX_PAGE_CHARS` stays: it is the cut of the post check.
+
+**Present assertions that change:** every present case that expects a `get_page_text` call with a `max_chars` of 1 to 40,000 to be allowed now expects `{ allow: false, reason: BROWSER_DENY.part }`; the cases that already expect a refusal for `max_chars` 0, 40001, 1.5 or a text keep their expectation. A fake play that sends `max_chars` on a read that must pass drops that key. The prompt does not name `max_chars`; if a present prompt test does, it changes the same way.
+
+The reviewer's kept proof: `.workflow/scratch/plan-05/review/zz-review-05-A-1.test.ts`.
+
+- [ ] **Step 1: Write the failing tests** in `decide-browser.test.ts`:
+  1. "get_page_text with max_chars 500 or 40000 is refused as a part FlowDriven does not recognise, and with the tab id alone it is allowed"
+  2. change the present cases named above
+- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/decide-browser.test.ts`. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src
+git commit -m "Let get_page_text take a tab id and nothing else" -m "Assisted-by: Claude Code"
+```
+
+---
+
+### Task 34: Review fixes: the allow covers exactly what the screen shows
+
+**Files:**
+- Modify: `packages/runner/src/service/capabilities.ts`, `packages/fixtures/src/story/capabilities.ts`, `packages/fixtures/src/client.ts` (only if the fixture's allow must refuse the same case), `apps/desktop/src/screens/builder/BuilderScreen.tsx`, `apps/desktop/src/screens/builder/CapabilitiesPanel.tsx`, and their present tests (`packages/runner/src/service/capabilities.test.ts`, `packages/fixtures/src/capabilities.test.ts`, `apps/desktop/src/screens/builder/Capabilities.test.tsx`)
+
+**Interfaces:**
+- `capabilities.ts`: `ALLOW_NOT_ROUTED = "FlowDriven cannot provide the web pages this flow reads yet, so there is nothing to allow."`. `allow(flowId, hash)` throws `not_allowed` with that sentence when a requirement of type `web` that a step uses has a row that is not routed (it reads the rows the way `get` does, at the moment of the call). Every other check of `allow` stays first.
+- `capabilities.ts`: the `details` of a web row list each template as the flow wrote it (the source text, with its classes and lengths, through `visible(..., 300)`), not the shortened form of `describeTemplate`. The fixture's copy does the same. The worker's prompt keeps the shortened form.
+- `BuilderScreen.tsx`: the hash that `CapabilitiesPanel` sends with Allow is the hash of the `flows.capabilities` answer whose rows are on the screen, not the hash of `flows.get`.
+- `CapabilitiesPanel.tsx`: when a web row that needs the allow is not routed, the panel shows `ALLOW_NOT_ROUTED`'s sentence as words with its icon, and no Allow button. The sentence comes from the read model if the contract has a place for it; if it has not, the panel holds the same sentence as a constant and a test pins both to be equal. The contract does not change in this task.
+
+**Present assertions that change:** the assertions that pin the Details of a web row to the shortened form `{name}` pin the source text instead; no other present assertion changes.
+
+- [ ] **Step 1: Write the failing tests:**
+  1. `capabilities.test.ts`: "allow is refused with the not-routed sentence while a used web row is dropped, and accepted once it is routed" (facts without the Chrome option, then with it)
+  2. `capabilities.test.ts`: "a web requirement that no step uses does not stop the allow"
+  3. `capabilities.test.ts`: "the details of a web row show each template as the flow wrote it"
+  4. `Capabilities.test.tsx`: "a web row that is not routed shows the not-routed sentence and no Allow button"
+  5. `Capabilities.test.tsx`: "Allow sends the hash of the capabilities answer on the screen" (a `flows.get` answer with a newer hash than the capabilities answer; the call carries the capabilities hash)
+  6. `packages/fixtures/src/capabilities.test.ts`: the fixture rows show the source text of the templates
+- [ ] **Step 2: Run** the three test files. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/service packages/fixtures apps/desktop/src`. Expected: PASS. Run `pnpm build:web`. Expected: exit 0.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages apps
+git commit -m "Bind the allow to the preview on the screen and refuse it while the web route is missing" -m "Assisted-by: Claude Code"
+```
+
+---
+
+### Task 35: Review fixes: a challenge pause says why, once, and finds its trigger
+
+**Files:**
+- Modify: `packages/runner/src/triggers/service.ts`, `packages/runner/src/storage.ts`, `packages/runner/src/engine.ts` (only the `trigger` field of the start options and of the run row), `packages/runner/src/notify/policy.ts`, `packages/runner/src/service/service.ts`, `packages/runner/src/service/notify-wiring.ts` (only if the single notice needs it), `packages/runner/src/triggers/service-challenge.test.ts`, and the present notify test file that holds the `trigger_paused` case
+- No new migration. The trigger row and the run row are stored as they are today; if the new optional fields cannot be stored without a migration, stop with `STATUS: BLOKIR`.
+
+**Interfaces:**
+- `storage.ts`: `TriggerRow` gains `pausedWhy?: "blocked_runs" | "challenge"`; the `trigger` of a run row and of the start options gains `index?: number`.
+- `triggers/service.ts`: every run a trigger starts carries that trigger's `index`. `pauseRow(row, flowName, why)` stores `pausedWhy`; the three-blocked-runs pause passes `"blocked_runs"`, `pauseByRun` passes `"challenge"`. Turning the trigger on again clears `pausedWhy` with `pausedAt`. `pauseByRun(runId)` first reads the run: when its `trigger.index` is a whole number, it pauses the enabled row of that flow and index; otherwise, and for runs stored before this task, it looks in `recentRuns` as today. The view's reason for a row paused by a challenge is "Paused: a site asked for a login or a robot check. Open the site in your browser, then turn it on."; for `blocked_runs` and for a row without `pausedWhy` it stays "Paused: the last 3 runs were blocked. Fix what blocks it, then turn it on." `PausedEvent` gains `why`.
+- `notify/policy.ts`: the `trigger_paused` event gains `why`; for `"challenge"` the body is `<flow name> was switched off because a site asked for a login or a robot check.`; otherwise the present body stays.
+- One notice: a run that is blocked with exactly `STOP.challenge` and pauses a trigger sends the trigger-paused notice and no "Run blocked" notice for that run. A run blocked by a challenge that no trigger started sends the present "Run blocked" notice. Every other run is notified as today.
+
+**Present assertions that change:** in `service-challenge.test.ts` test 1 ("pauseByRun pauses the trigger that started the run: ...") the expected reason of the view becomes the challenge sentence above. No other present assertion changes.
+
+The reviewer's kept proofs: `.workflow/scratch/plan-05/review/` (the files whose names start with `zz-review-05-C-`); the notes are in `.workflow/scratch/plan-05/review/lens-C.md` under C-3 and C-4.
+
+- [ ] **Step 1: Write the failing tests** in `service-challenge.test.ts` (and the notify test file for 4 and 5):
+  1. "a challenge pause stores why, and the view says a site asked for a login or a robot check" (the changed test 1)
+  2. "the three-blocked-runs pause still says the last 3 runs were blocked, and a row paused before this task (no why) says the same"
+  3. "a challenge in a run older than the trigger's last three runs still pauses that trigger" (overlap `queue`, runs waiting at an ask, a late pick)
+  4. "the notice of a challenge pause names the login or robot check, and the notice of a three-blocked pause is the present one"
+  5. "a run blocked by a challenge that pauses its trigger sends one notice, and one that no trigger started sends the present Run blocked notice"
+  6. "turning the trigger on again clears the pause and its why"
+- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/triggers/service-challenge.test.ts`. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/triggers packages/runner/src/service packages/runner/src/notify`. Expected: PASS.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src
+git commit -m "Say why a challenge paused a trigger, send one notice and find the trigger by its index" -m "Assisted-by: Claude Code"
+```
+
+---
+
+### Task 36: Review fix: the outside mark follows the text into the next step
+
+**Files:**
+- Modify: `packages/runner/src/exec/leaf.ts`, `packages/runner/src/exec/leaf-noretry.test.ts` (or the present test file of `leaf.ts` that holds the outside tests)
+
+**Interface:** in `runLeaf`, before the harness is called: when the step's instructions take an output of an earlier step (the `steps.<id>.outputs.<name>` form that the engine fills in) and that step's row in this run is marked `outside` (the row with the same item key for a step inside a loop, else the top-level row), the present step's row is marked `outside` and saved at once, like the mark of Task 12. A step that takes no such output is not marked. The mark is never removed. Nothing else reads the mark in this plan.
+
+Known limit to keep in mind (do not solve it here): a loop whose items come from a list that a marked step returned is not marked through its items.
+
+- [ ] **Step 1: Write the failing tests:**
+  1. "a step whose instructions take an output of a step marked outside is marked outside too, before its harness call"
+  2. "a step that takes an output of an unmarked step, or no output at all, is not marked"
+  3. "inside a loop the mark follows the row of the same item, and an item whose page step was not marked stays unmarked"
+  4. "the mark is kept when the marked step fails, blocks or is tried again"
+- [ ] **Step 2: Run** the test file. Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/exec packages/runner/src/engine*.test.ts`. Expected: PASS.
+- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src
+git commit -m "Mark a step outside when its instructions take the output of a marked step" -m "Assisted-by: Claude Code"
+```
+
