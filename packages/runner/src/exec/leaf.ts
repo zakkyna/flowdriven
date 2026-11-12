@@ -130,6 +130,8 @@ export async function runLeaf(
         text: string;
         outputs: Record<string, Value>;
         block?: string;
+        noRetry?: string;
+        outside?: boolean;
       };
       if (step.do === "builtin") {
         const fn = deps.builtins[step.builtin];
@@ -153,6 +155,11 @@ export async function runLeaf(
             uses: step.uses,
             project: run.project,
             requirements: step.uses.flatMap((id) => run.requirements.filter((r) => r.id === id)),
+            routes: run.routes ?? [],
+            onOutside: () => {
+              row.outside = true;
+              save();
+            },
             ...(mediumAt !== undefined && n >= mediumAt
               ? { effort: "medium" as const }
               : step.worker?.effort === undefined
@@ -168,10 +175,16 @@ export async function runLeaf(
           ctl.signal,
         );
       }
+      if (result.outside === true) row.outside = true;
       if (result.block !== undefined) {
         Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
         block(result.block);
         return "halt";
+      }
+      if (result.noRetry !== undefined) {
+        Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+        block(result.noRetry);
+        return "failed";
       }
       if (timedOut) failure = "time limit exceeded";
       else if (result.exit === "quota" || result.exit === "auth") {

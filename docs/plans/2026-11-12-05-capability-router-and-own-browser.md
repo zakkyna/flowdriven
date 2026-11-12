@@ -619,7 +619,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `exec/leaf.ts`: the request carries `routes: run.routes ?? []` and `onOutside: () => { row.outside = true; save(); }` (so a mark is stored at the moment the adapter reports it, and survives a time limit or an exception that ends the attempt in the `catch (e)` at `leaf.ts:256` with no result). Right after `harness.runStep` returns a result: `if (result.outside === true) row.outside = true;`. When `result.noRetry !== undefined` (checked after the `block` branch at `leaf.ts:171-174` and before the timeout and exit handling): the attempt ends (`endedAt`, `exit: "failed"`), `block(result.noRetry)` is called (the step is `failed`, its note and the run's `blockedReason` are the sentence) and the function returns `"failed"`; there is no retry and no re-plan. In a loop the item fails and `on_item_fail` decides, as for an exhausted step.
 - `engine.ts`: `EngineDeps` gains `routeOf?: (requirements: Requirement[]) => Routed[]`; `beginStart` stores `routes: deps.routeOf(manifest.requirements)` on the new run when `routeOf` is set (frozen with `requirements`, `engine.ts:323`); a resumed or recovered run keeps its stored routes. `EngineDeps.readiness` becomes `(m: FlowManifest, ctx?: { flowId: string; hash: string }) => { ready: boolean; reason?: string }` and `checkAndWalk` (`engine.ts:245`) calls it with `{ flowId: run.flowId, hash: run.flowHash }`. A present caller that passes `(m) => ...` keeps working.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   `leaf-noretry.test.ts` (scripted harness, `test-helpers/engine.ts` `setup`):
   1. "a result with noRetry fails the step at once: one attempt, no re-plan, the step note and the run's blocked reason are the sentence"
   2. "in a loop with on_item_fail skip the item fails and the next item still runs; with stop the run is blocked"
@@ -632,16 +632,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   8. "a resumed run keeps its stored routes and does not call routeOf"
   9. "without routeOf no routes are stored"
   10. "readiness is called with the flow id and the content hash of the run, and a one-argument readiness function still works"
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/leaf-noretry.test.ts packages/runner/src/engine-routes.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the four edits.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/exec/leaf-noretry.test.ts packages/runner/src/engine-routes.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement** the four edits.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src
 git commit -m "Let a step fail without a retry, mark outside text and freeze the routes of a run" -m "Assisted-by: Codex"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

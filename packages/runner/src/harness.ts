@@ -1,4 +1,5 @@
 import type { Requirement, Value } from "@flowdriven/sdk";
+import type { Routed } from "./router/types.ts";
 import type { ExitClass } from "./states.ts";
 import type { ModelUsage } from "./storage.ts";
 export type LimitWindow = { utilization?: number; resetsAt?: number; status?: string };
@@ -37,6 +38,8 @@ export type StepRequest = {
   uses: string[];
   project: string;
   requirements: Requirement[];
+  routes?: Routed[];
+  onOutside?: () => void;
   effort?: "low" | "medium" | "high";
   skill?: string;
   outputs: { id: string; type: string }[];
@@ -51,6 +54,8 @@ export type StepResult = {
   text: string;
   outputs: Record<string, Value>;
   block?: string;
+  noRetry?: string;
+  outside?: boolean;
   call?: CallInfo;
 };
 export type ReplanRequest = {

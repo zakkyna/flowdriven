@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { type FlowManifest, hasErrors, type Value, validateManifest } from "@flowdriven/sdk";
+import {
+  type FlowManifest,
+  hasErrors,
+  type Requirement,
+  type Value,
+  validateManifest,
+} from "@flowdriven/sdk";
 import type { CommandRunner } from "./checks/command.ts";
 import { EngineError } from "./errors.ts";
 import { runAsk } from "./exec/ask.ts";
@@ -10,6 +16,7 @@ import { createRecovery } from "./exec/recovery.ts";
 import { makeScope } from "./exec/scope.ts";
 import type { HarnessAdapter } from "./harness.ts";
 import type { Waiting } from "./keeper/types.ts";
+import type { Routed } from "./router/types.ts";
 import type { ApprovalState, RunState } from "./states.ts";
 import type {
   ApprovalRow,
@@ -29,7 +36,11 @@ export type EngineDeps = {
   dayOf?: (date: Date) => string;
   newId?: (prefix: string) => string;
   builtins?: Record<string, (args: Record<string, Value>, run: RunRow) => Promise<Record<string, Value>>>;
-  readiness?: (m: FlowManifest) => { ready: boolean; reason?: string };
+  routeOf?: (requirements: Requirement[]) => Routed[];
+  readiness?: (
+    m: FlowManifest,
+    ctx?: { flowId: string; hash: string },
+  ) => { ready: boolean; reason?: string };
   runCommand?: CommandRunner;
   queue?: { waitingOf(runId: string): { stepId: string; itemKey: string; waiting: Waiting }[] };
 };
@@ -242,7 +253,10 @@ export function createEngine(input: EngineDeps): Engine {
   async function checkAndWalk(run: RunRow): Promise<RunRow> {
     try {
       store.updateRun(run.id, { state: "checking" });
-      const ready = deps.readiness?.(flowFor(run).manifest as FlowManifest);
+      const ready = deps.readiness?.(flowFor(run).manifest as FlowManifest, {
+        flowId: run.flowId,
+        hash: run.flowHash,
+      });
       if (ready && !ready.ready) {
         store.updateRun(run.id, { state: "blocked", blockedReason: ready.reason ?? "Not ready." });
         return runById(run.id);
@@ -321,6 +335,7 @@ export function createEngine(input: EngineDeps): Engine {
       params: Object.fromEntries(entries),
       ...(options.trigger ? { trigger: options.trigger } : {}),
       requirements: structuredClone(manifest.requirements),
+      ...(deps.routeOf ? { routes: structuredClone(deps.routeOf(manifest.requirements)) } : {}),
       startedAt: now().toISOString(),
     };
     const day = deps.dayOf(now());

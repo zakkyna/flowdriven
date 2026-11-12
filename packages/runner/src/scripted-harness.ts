@@ -15,6 +15,8 @@ export type Reply = {
   outputs?: Record<string, Value>;
   hang?: boolean;
   block?: string;
+  noRetry?: string;
+  outside?: boolean;
 };
 export type Script = {
   steps?: Record<string, Reply | Reply[] | ((req: StepRequest) => Reply)>;
@@ -62,6 +64,8 @@ export function scriptedHarness(script: Script): ScriptedHarness {
         text: reply.text ?? "",
         outputs: reply.outputs ?? {},
         ...(reply.block === undefined ? {} : { block: reply.block }),
+        ...(reply.noRetry === undefined ? {} : { noRetry: reply.noRetry }),
+        ...(reply.outside === undefined ? {} : { outside: reply.outside }),
       };
     },
     async replan(req) {
