@@ -1,11 +1,13 @@
 import type { Value } from "@flowdriven/sdk";
 import type { CallInfo, RateLimit } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
-import { BROWSER_DENY } from "./browser.ts";
+import { BROWSER_DENY, CHROME_PREFIX } from "./browser.ts";
 import { decidePost, POST_TEXT, type PostResult, postLine, STOP } from "./browser-post.ts";
 import { startChannel } from "./channel.ts";
 import { startChild } from "./child.ts";
-import { createControlDir, removeControlDir } from "./control.ts";
+import { CONNECTOR_STOP, mcpConfigText } from "./connector.ts";
+import { type ConnectorPostResult, decideConnectorPost } from "./connector-post.ts";
+import { createControlDir, removeControlDir, writeMcpConfig } from "./control.ts";
 import { DENY, decide } from "./decide.ts";
 import { childEnv } from "./env.ts";
 import { createAttemptState, type PageCounter } from "./pages.ts";
@@ -38,6 +40,7 @@ export type RunInput = {
   signal: AbortSignal;
   onStart?: (pid: number) => void;
   browser?: boolean;
+  connectorPrefix?: string;
   onOutside?: () => void;
   makePolicy: (control: { root: string; cwd: string }, sessionId: string) => Policy;
   makePrompt: (policy: Policy) => string;
@@ -71,7 +74,13 @@ export type RunDeps = {
 export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome> {
   const id = deps.newId("cc");
   const sessionId = deps.newSessionId();
-  const dir = createControlDir({ root: deps.controlRoot, id, rounds: deps.rounds, browser: input.browser });
+  const dir = createControlDir({
+    root: deps.controlRoot,
+    id,
+    rounds: deps.rounds,
+    browser: input.browser,
+    connectorPrefix: input.connectorPrefix,
+  });
   let channel: ReturnType<typeof startChannel> | undefined;
   let child: ReturnType<typeof startChild> | undefined;
   let interrupted = false;
@@ -112,8 +121,22 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         sentence: error instanceof Error ? error.message : "FlowDriven could not check this step.",
       };
     }
+    let mcpConfigPath: string | undefined;
+    if (policy.connector) {
+      if (input.connectorPrefix !== policy.connector.prefix)
+        return { kind: "block", sentence: LIMITS_NOT_APPLIED };
+      try {
+        mcpConfigPath = writeMcpConfig(dir, mcpConfigText(policy.connector));
+      } catch {
+        return { kind: "block", sentence: LIMITS_NOT_APPLIED };
+      }
+    } else if (input.connectorPrefix !== undefined) return { kind: "block", sentence: LIMITS_NOT_APPLIED };
     let attempt: ReturnType<typeof createAttemptState> | undefined;
     const posts = new Map<string, PostResult>();
+    const connectorPosts = new Map<string, ConnectorPostResult>();
+    let connectorCalls = 0;
+    let connectorRows = 0;
+    let withheldRows = 0;
     if (policy.browser) {
       if (!deps.pages) return { kind: "block", sentence: LIMITS_NOT_APPLIED };
       try {
@@ -140,9 +163,24 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     let pageRows = 0;
     channel = startChannel({
       dir,
+      prefixes: [CHROME_PREFIX, ...(policy.connector ? [policy.connector.prefix] : [])],
       decide: (call) => {
         if (pendingStop) return { allow: false, tool: "unknown", reason: DENY.badRequest };
-        const decision = decide(policy, call, attempt?.state());
+        const decision = decide(policy, call, attempt?.state(), {
+          calls: connectorCalls,
+          granted: () => false,
+        });
+        if (decision.allow && decision.effect === "connector" && decision.connector) {
+          connectorCalls++;
+          if (connectorCalls === 1) input.onOutside?.();
+          if (connectorRows++ < 50)
+            audit("connector_call", {
+              ...detail,
+              requirementId: decision.connector.requirementId,
+              tool: decision.connector.tool,
+              class: decision.connector.class,
+            });
+        }
         if (decision.allow && decision.effect === "page" && policy.browser && deps.pages && attempt) {
           deps.pages.take(input.runId, policy.browser.requirementId);
           attempt.takePage();
@@ -159,6 +197,19 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         return decision;
       },
       post: (call) => {
+        const connectorResult = policy.connector
+          ? decideConnectorPost(policy.connector, sessionId, call)
+          : undefined;
+        if (
+          connectorResult &&
+          call !== null &&
+          typeof call === "object" &&
+          "tool_use_id" in call &&
+          typeof call.tool_use_id === "string"
+        ) {
+          connectorPosts.set(call.tool_use_id, connectorResult);
+          return { text: connectorResult.text, line: postLine(connectorResult.text) };
+        }
         const r = policy.browser ? decidePost(policy.browser, sessionId, call) : undefined;
         if (
           !r ||
@@ -174,6 +225,17 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       },
       onPost: ({ toolUseId }) => {
         try {
+          const connectorResult = connectorPosts.get(toolUseId);
+          if (connectorResult && policy.connector) {
+            if (connectorResult.kind === "unchecked" && withheldRows++ < 50)
+              audit("connector_withheld", {
+                ...detail,
+                requirementId: policy.connector.requirementId,
+                tool: connectorResult.tool,
+                why: "unchecked",
+              });
+            return;
+          }
           const r = posts.get(toolUseId);
           if (!r || r.tool !== "get_page_text" || !policy.browser) return;
           if (pageRows < MAX_PAGE_ROWS) {
@@ -208,6 +270,16 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       },
       onUnanswered: ({ tool }) => {
         try {
+          if (policy.connector) {
+            if (withheldRows++ < 50)
+              audit("connector_withheld", {
+                ...detail,
+                requirementId: policy.connector.requirementId,
+                tool: tool ?? "unknown",
+                why: "unchecked",
+              });
+            return;
+          }
           if (
             !policy.browser ||
             (tool !== undefined && tool !== "get_page_text") ||
@@ -243,6 +315,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       sessionId,
       tools: policy.tools,
       settingsPath: dir.settings,
+      ...(mcpConfigPath === undefined ? {} : { mcpConfigPath }),
       chrome: policy.browser !== undefined,
       addDirs: policy.addDirs,
       ...(input.schema === undefined ? {} : { schema: input.schema }),
@@ -259,7 +332,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     const reader = new LineReader(deps.maxLineBytes);
     const tripwire = createTripwire(
       channel.allowedIds,
-      policy.browser ? { ids: channel.chromeIds, posted: channel.posted } : undefined,
+      policy.browser || policy.connector ? { ids: channel.chromeIds, posted: channel.posted } : undefined,
     );
     let first = true;
     let startEvents = 0;
@@ -271,7 +344,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       if (forced || interrupted) return;
       const read = reader.push(chunk);
       if (read.overflow) {
-        if (policy.browser) {
+        if (policy.browser || policy.connector) {
           // A line over the limit may hold a result that was never checked: block, never retry.
           audit("tool_unchecked", { ...detail, tool: "unknown" });
           forced = { kind: "block", sentence: tripSentence("unknown") };
@@ -293,6 +366,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
               }
             : checkFirstEvent(event, {
                 browser: policy.browser !== undefined,
+                ...(policy.connector ? { connector: policy.connector } : {}),
                 tools: policy.tools,
                 schema: input.schema !== undefined,
                 sessionId,
@@ -305,7 +379,13 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             });
             forced = {
               kind: "block",
-              sentence: proof.why === STOP.chromeDown ? STOP.chromeDown : LIMITS_NOT_APPLIED,
+              sentence:
+                proof.why === STOP.chromeDown ||
+                (policy.connector &&
+                  (proof.why === CONNECTOR_STOP.changed ||
+                    proof.why === CONNECTOR_STOP.down(policy.connector.label)))
+                  ? proof.why
+                  : LIMITS_NOT_APPLIED,
             };
             child?.kill();
             break;

@@ -1,6 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { describeTemplate, type Value } from "@flowdriven/sdk";
+import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
 import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
+import type { ConnectorFact } from "./connector-scan.ts";
 import type { PageCounter } from "./pages.ts";
 import { buildPolicy } from "./policy.ts";
 import {
@@ -17,6 +19,8 @@ import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
   admit?: (req: StepRequest) => string | undefined;
   pages?: PageCounter;
+  connectors?: () => ConnectorFact[];
+  catalog?: ConnectorEntry[];
   effortModels?: () => { low: string; medium: string; high: string } | undefined;
   nowMs?: () => number;
   claudePath: () => string | undefined;
@@ -84,6 +88,10 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       const path = options.claudePath();
       if (path === undefined)
         return { exit: "failed", text: "", outputs: {}, block: "Claude Code was not found." };
+      const catalog = options.catalog ?? CONNECTORS;
+      const connectorPrefix = req.requirements
+        .flatMap((r) => (r.type === "mcp_server" ? catalog.filter((entry) => entry.ref === r.ref) : []))
+        .at(0)?.prefix;
       const schema = outputSchema(req.outputs);
       let call: CallInfo | undefined;
       let outside = false;
@@ -98,6 +106,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           signal: req.signal,
           onStart: req.onStart,
           browser: req.requirements.some((r) => r.type === "web"),
+          ...(connectorPrefix === undefined ? {} : { connectorPrefix }),
           onOutside: () => {
             outside = true;
             req.onOutside?.();
@@ -107,6 +116,8 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
               kind: req.kind === "agent" ? "agent" : "worker",
               requirements: req.requirements,
               routes: req.routes ?? [],
+              connectors: options.connectors?.() ?? [],
+              catalog,
               project: req.project,
               controlRoot: control.root,
               controlCwd: control.cwd,
@@ -132,6 +143,14 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
               } catch {}
             }
             return buildPrompt({
+              ...(policy.connector
+                ? {
+                    connector: {
+                      label: policy.connector.label,
+                      tools: policy.connector.tools.map((t) => `${policy.connector?.prefix ?? ""}${t}`),
+                    },
+                  }
+                : {}),
               ...(policy.browser
                 ? { browser: { templates: policy.browser.templates.map(describeTemplate), pagesLeft } }
                 : {}),

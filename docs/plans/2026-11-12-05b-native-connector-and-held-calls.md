@@ -629,7 +629,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 - `adapter.ts`: `ClaudeAdapterOptions` gains `connectors?: () => ConnectorFact[]` and `catalog?: ConnectorEntry[]` (default `CONNECTORS`). `runStep` passes `connectorPrefix` (the `prefix` of the first requirement of the step that is an `mcp_server` with a catalog entry) to `run`, `connectors: options.connectors?.() ?? []` and `catalog` to `buildPolicy`, and, in `makePrompt`, `connector: { label, tools: policy.connector.tools.map((t) => policy.connector.prefix + t) }` when `policy.connector` is set. The outside flag already covers `onOutside`.
 - `run.ts`: `RunInput` gains `connectorPrefix?: string`. `createControlDir` gets it. After `makePolicy`, when `policy.connector` is set: `writeMcpConfig(dir, mcpConfigText(policy.connector))` (a failure, or `connectorPrefix` that differs from `policy.connector.prefix`, returns `{ kind: "block", sentence: LIMITS_NOT_APPLIED }`) and the path goes to `buildClaudeArgs({ mcpConfigPath })`. The channel is started with `prefixes: [CHROME_PREFIX, ...(policy.connector ? [policy.connector.prefix] : [])]`. The `decide` wrapper passes a connector state `{ calls: connectorCalls, granted: () => false }` (grants are Task 13; until then a risky call is refused with `CONNECTOR_DENY.held` like any refusal, the worker goes on, and `held` is ignored); on an allow with `effect: "connector"` it increments `connectorCalls`, calls `input.onOutside?.()` the first time (D12), and audits `connector_call` with `{ stepId, itemKey, attempt, requirementId, tool, class }` (at most 50 per attempt). `post` for a connector step calls `decideConnectorPost`, remembers the result by `tool_use_id`, and answers `{ text, line: postLine(text) }`; `onPost` audits `connector_withheld` with `{ stepId, itemKey, attempt, requirementId, tool, why: "unchecked" }` for an `unchecked` result, and `onUnanswered` does the same for a connector id (both share the 50-row cap). The tripwire gets `{ ids: channel.chromeIds, posted: channel.posted }` when `policy.browser || policy.connector`. `checkFirstEvent` gets `connector: { name, label, prefix, tools }`; a proof that fails with `CONNECTOR_STOP.changed` or the `CONNECTOR_STOP.down(label)` sentence blocks with that sentence (like `STOP.chromeDown`), every other failure keeps `LIMITS_NOT_APPLIED`. The id and the url are in `mcp.json` only; they are in no audit row, prompt or sentence.
 
-- [ ] **Step 1: Write the failing tests** (`adapter-connector.test.ts`, set up like `adapter-browser.test.ts`: the fake with `connectors: { "claude.ai Gmail": { url, id, tools: the six read tools with readOnly true and the seven risky ones } }`, a run row, a Gmail requirement with `tools: ["search_threads", "delete_draft"]`, the route from `routeRequirement` with matching facts, `connectors: () => [fact with id]`, `rounds: 20`; the child's arguments and the config file are read with `vi.spyOn(childModule, "startChild")`):
+- [x] **Step 1: Write the failing tests** (`adapter-connector.test.ts`, set up like `adapter-browser.test.ts`: the fake with `connectors: { "claude.ai Gmail": { url, id, tools: the six read tools with readOnly true and the seven risky ones } }`, a run row, a Gmail requirement with `tools: ["search_threads", "delete_draft"]`, the route from `routeRequirement` with matching facts, `connectors: () => [fact with id]`, `rounds: 20`; the child's arguments and the config file are read with `vi.spyOn(childModule, "startChild")`):
   1. "a connector step starts the child with --mcp-config pointing at a file that holds one claudeai-proxy entry with the id and toolPermissions blocking every scan tool that is not declared";
   2. "the config file is mode 0600 and the control folder is gone when the step ends";
   3. "a declared read tool is allowed, its result reaches the worker as the runner's answer, and the step ends ok with outside true";
@@ -642,16 +642,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   10. "a connector that is pending, failed or needs-auth at the start blocks the step with The Gmail connector is not connected in Claude Code. Scan again on the Harnesses screen. and no tool runs";
   11. "an extra tool in the init event (play.init) blocks the step with The connector's tools changed since the last scan. Scan again on the Harnesses screen.";
   12. "with no fact for the connector the step is blocked before any child starts".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-connector.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude`. Expected: PASS, unchanged (every present adapter, browser and limits test).
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/adapter-connector.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** the same command, then `pnpm vitest run packages/runner/src/claude`. Expected: PASS, unchanged (every present adapter, browser and limits test).
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude/run.ts packages/runner/src/claude/adapter.ts packages/runner/src/claude/adapter-connector.test.ts
 git commit -m "Run a connector step in a scoped call with checked results" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 
