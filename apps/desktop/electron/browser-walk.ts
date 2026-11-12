@@ -39,6 +39,8 @@ void app
     serveApp(path.join(__dirname, "../dist"));
     const { output, dataDir, flowDir } = browserWalkPaths(path.resolve(__dirname, "../../.."));
     await rm(output, { recursive: true, force: true });
+    // Every walk starts from an empty data folder, so that "Allow" is there to press (chair's edit, Task 29).
+    await rm(dataDir, { recursive: true, force: true });
     await mkdir(output, { recursive: true });
     await mkdir(flowDir, { recursive: true });
     await writeFile(path.join(flowDir, "flow.yaml"), BROWSER_WALK_FLOW);
@@ -67,6 +69,10 @@ void app
         await delay(500);
       }
       if (!imported) throw new Error("Could not import the check flow.");
+      // The harness consent is the owner's act on the Harnesses screen. The walk gives it in its own scratch
+      // data folder, which starts empty, so that the run reaches the browser step (chair's edit, Task 29).
+      await bridge.link.call("harnesses.rescan", {});
+      await bridge.link.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
       const first = BROWSER_WALK_STEPS.at(0);
       const second = BROWSER_WALK_STEPS.at(1);
       const third = BROWSER_WALK_STEPS.at(2);
