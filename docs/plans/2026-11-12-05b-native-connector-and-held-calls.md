@@ -515,7 +515,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 **Interfaces:** `checkFirstEvent(event, expect)`'s `expect` gains `connector?: { name: string; label: string; prefix: string; tools: string[] }` (`tools` are the declared short names). With `connector`: (a) `mcp_servers` must hold exactly one entry, whose `name` is `connector.name` and whose `status` is `"connected"` (other keys of the entry are ignored: the real program adds `source: "dynamic"`, G6), else `fail(CONNECTOR_STOP.down(connector.label))`; (b) the event's tools must be unique strings; the ones that start with `connector.prefix` must equal exactly `connector.tools` with the prefix (as a set), else `fail(CONNECTOR_STOP.changed)`; the others must equal `expect.tools` (plus `StructuredOutput` with a schema), else `fail("The tools do not match.")`; (c) `skills` and `slash_commands` must be empty arrays (`mcp_servers` is not required to be empty); (d) the session id, the start hook and `permissionMode` rules are as before. `connector` together with `browser` fails `"The tools do not match."`. Without `connector` the function is as today (`browser-start.test.ts` and `stream.test.ts` pass unchanged).
 
-- [ ] **Step 1: Write the failing tests** (an init event as `browser-start.test.ts` builds one, with the server `claude.ai Gmail` and the two tools `mcp__claude_ai_Gmail__search_threads` and `mcp__claude_ai_Gmail__delete_draft`):
+- [x] **Step 1: Write the failing tests** (an init event as `browser-start.test.ts` builds one, with the server `claude.ai Gmail` and the two tools `mcp__claude_ai_Gmail__search_threads` and `mcp__claude_ai_Gmail__delete_draft`):
   1. "exactly the declared connector tools with one connected server pass";
   2. "no server, two servers, a server with another name and a server that is not connected each fail with the connector-down sentence for Gmail";
   3. "a missing declared tool, an extra connector tool and a connector tool of another connector each fail with The connector's tools changed since the last scan. Scan again on the Harnesses screen.";
@@ -525,16 +525,18 @@ Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
   7. "a Chrome tool in a connector step fails as a built-in mismatch";
   8. "connector and browser together fail";
   9. "the session id, the start hook and permissionMode rules still apply".
-- [ ] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/stream-connector.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement.** The mapping of these `why` sentences to a block outcome is Task 12.
-- [ ] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
-- [ ] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 2: Run:** `pnpm vitest run packages/runner/src/claude/stream-connector.test.ts`. Expected: FAIL.
+- [x] **Step 3: Implement.** The mapping of these `why` sentences to a block outcome is Task 12.
+- [x] **Step 4: Run** `pnpm vitest run packages/runner/src/claude`. Expected: PASS.
+- [x] **Step 5: Gate** `pnpm format && pnpm check`. Expected: PASS.
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude/stream.ts packages/runner/src/claude/stream-connector.test.ts
 git commit -m "Prove at the start of a connector step that exactly the declared tools are loaded" -m "Assisted-by: Claude Code"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-12. Evidence: pnpm format && pnpm check.
 
 ---
 

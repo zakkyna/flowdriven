@@ -2,6 +2,7 @@ import type { LimitWindow, RateLimit } from "../harness.ts";
 import type { ModelUsage } from "../storage.ts";
 import { CHROME_PREFIX } from "./browser.ts";
 import { POST_TEXT, STOP } from "./browser-post.ts";
+import { CONNECTOR_STOP } from "./connector.ts";
 import { visible } from "./text.ts";
 
 export const MAX_START_HOOK_EVENTS = 8;
@@ -65,13 +66,60 @@ export function parseEvent(line: string): StreamEvent | undefined {
 }
 export function checkFirstEvent(
   event: StreamEvent | undefined,
-  expect: { tools: string[]; schema: boolean; sessionId: string; started: boolean; browser?: boolean },
+  expect: {
+    tools: string[];
+    schema: boolean;
+    sessionId: string;
+    started: boolean;
+    browser?: boolean;
+    connector?: { name: string; label: string; prefix: string; tools: string[] };
+  },
 ): { ok: true } | { ok: false; why: string } {
   const fail = (why: string): { ok: false; why: string } => ({ ok: false, why });
   if (!event || event.type !== "system" || event.subtype !== "init")
     return fail("The first event is not init.");
   if (!expect.started) return fail("The start hook did not run.");
   if (event.session_id !== expect.sessionId) return fail("The session id does not match.");
+  if (expect.connector) {
+    if (expect.browser) return fail("The tools do not match.");
+    const connector = expect.connector;
+    const servers = event.mcp_servers;
+    const server = Array.isArray(servers) && servers.length === 1 ? servers.at(0) : undefined;
+    if (!object(server) || server.name !== connector.name || server.status !== "connected")
+      return fail(CONNECTOR_STOP.down(connector.label));
+    const tools = event.tools;
+    if (
+      !Array.isArray(tools) ||
+      tools.some((tool: unknown) => typeof tool !== "string") ||
+      new Set(tools).size !== tools.length
+    )
+      return fail("The tools do not match.");
+    const connectorTools = tools.filter((tool: string) => tool.startsWith(connector.prefix));
+    const declared = new Set(connector.tools.map((tool) => connector.prefix + tool));
+    if (
+      connectorTools.length !== declared.size ||
+      connectorTools.some((tool: string) => !declared.has(tool)) ||
+      tools.some(
+        (tool: string) =>
+          tool.startsWith("mcp__") && !tool.startsWith(connector.prefix) && !tool.startsWith(CHROME_PREFIX),
+      )
+    )
+      return fail(CONNECTOR_STOP.changed);
+    const expected = new Set(expect.tools);
+    if (expect.schema) expected.add("StructuredOutput");
+    const builtIn = tools.filter((tool: string) => !tool.startsWith(connector.prefix));
+    if (
+      (!expect.schema && expected.has("StructuredOutput")) ||
+      builtIn.length !== expected.size ||
+      builtIn.some((tool: string) => !expected.has(tool))
+    )
+      return fail("The tools do not match.");
+    for (const key of ["skills", "slash_commands"]) {
+      if (!Array.isArray(event[key]) || event[key].length !== 0) return fail(`${key} is not empty.`);
+    }
+    if (event.permissionMode !== "default") return fail("The permission mode is not default.");
+    return { ok: true };
+  }
   if (expect.browser) {
     const servers = event.mcp_servers;
     const server = Array.isArray(servers) && servers.length === 1 ? servers.at(0) : undefined;
