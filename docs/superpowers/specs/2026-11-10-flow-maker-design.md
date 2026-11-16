@@ -61,6 +61,7 @@ Method: keep and improve FDD. Its core line is "Flow is the invariant contract. 
 - **First user: the owner.** They want to build apps, research topics, manage projects, brainstorm, continue unfinished work, and make branding, marketing and viral content.
 - **Two-sided from the start.** Users create flows, publish them (private or public), and browse and install other people's flows. **Owner decision (2026-11-10)**.
 - **Audience:** laypeople worldwide as well as developers. Everything (code, UI, docs, flows, commit messages) is in English. **Owner decision (2026-11-09)**.
+- **Everyday users from the first release.** People who do not write code are users of the first release, not of a later one. **Owner decision (2026-11-17)** (22.1).
 
 ### 3.2 Success measure
 Three months after release, the owner uses FlowDriven every day and their own flows run smoothly. **Owner decision (2026-11-10)**. No public adoption target has been set.
@@ -96,13 +97,13 @@ Each one is a failure even if the feature technically works. Anti-goals 1 to 4: 
 ### 4.2 Non-goals (explicitly out of v1)
 - Paid flows, license keys, checkout and payouts (later phase). **Owner decision (2026-11-10)**. Private sharing of paid flows comes with them; private sharing of free flows (all three levels) is in phase 2 (section 14.4).
 - A hosted cloud runtime. Flows always run on the user's machine. **Owner decision (2026-11-10)**.
-- Chat channels (Telegram, WhatsApp, Discord). The app is the only surface. **Owner decision (2026-11-10)**.
-- Windows and Linux. They come after v1 is stable. **Owner decision (2026-11-10)**.
+- Chat channels (Telegram, WhatsApp, Discord). The app is the only surface. **Owner decision (2026-11-10)**. Changed on 2026-11-17: Telegram and Discord bots ship in phase 1 and a FlowDriven phone app after the first release; WhatsApp stays out (22.3).
+- Windows and Linux. They come after v1 is stable. **Owner decision (2026-11-10)**. Changed on 2026-11-17: Windows comes right after the first release (22.1).
 - A visual canvas editor. **Owner decision (2026-11-10)**.
 - FlowDriven-built connectors to third-party apps. FlowDriven is a flow maker, not an integrator. **Owner decision (2026-11-10)**. Using the connectors, plugins and skills the user already has in a harness is in scope (section 11.7).
 - A target release date or a human build team. The product is built entirely by AI coding agents directed by the owner (section 17.1). **Owner decision (2026-11-10)**.
-- Harness adapters beyond Codex, Claude Code and Antigravity in phase 1. Others follow from phase 2. **Chair's call (owner may override)**: these three are the most common daily harnesses.
-- MCP-server mode in phase 1. It ships in phase 2 (section 8.7). **Chair's call (owner may override)**.
+- Harness adapters beyond Codex, Claude Code and Antigravity in phase 1. Others follow from phase 2. **Chair's call (owner may override)**: these three are the most common daily harnesses. Changed on 2026-11-17: phase 1 ships Claude Code and Codex only; Antigravity, OpenCode, Hermes and OpenClaw follow the first release (22.4).
+- MCP-server mode in phase 1. It ships in phase 2 (section 8.7). **Chair's call (owner may override)**. Reversed on 2026-11-17: MCP-server mode ships in phase 1 (22.3, 22.6).
 - Manual human review of published flows. **Owner decision (2026-11-10)**.
 - Verified publisher badge (later). **Owner decision (2026-11-10)**.
 - Project management or goal boards as the centre of the product. These belonged to an earlier concept that the 2026-11-10 direction replaced.
@@ -172,6 +173,17 @@ Decisions from 2026-11-08 and 2026-11-09 belong to an earlier concept ("one assi
 | 2026-11-11 | The engine stays TypeScript on Node. Its effort goes into making FlowDriven more efficient and sparing with tokens, without lowering the quality of the work. The owner decided this after measurements showed that with 50 AI steps running at once the harness processes hold about 97% of the memory and the engine about 1% (section 21). |
 | 2026-11-11 | The one agent gets a good memory, one that can remember without wasting tokens, of every flow, project, task and goal in FlowDriven, and manages memory and skills well, "like Hermes agent" (21.5, 21.6). |
 | 2026-11-11 | Section 21 (efficiency, token saving, and the agent's memory and skills) is approved as a whole, with the chair's calls C1 to C7 listed in 21.9. |
+| 2026-11-17 | People who do not write code are users from the first release (22.1). |
+| 2026-11-17 | The app detects installed AI agents. A user with none gets a choice of agents, each with an Install button. Every supported agent is shown side by side, a risky route with its label and consent (22.2). |
+| 2026-11-17 | Mac first; Windows right after the first release, with OS-specific code kept behind interfaces (22.1). |
+| 2026-11-17 | Flows can be run by chat from the app, from other agents through MCP-server mode, and from a phone. MCP-server mode and Telegram and Discord bots move into phase 1; a FlowDriven phone app for iPhone and Android follows the first release; no WhatsApp (22.3). |
+| 2026-11-17 | A paired phone can do what the chat pane does: run flows and see results, answer choices and approve risky actions, build and change flows, make one-time requests (22.3). |
+| 2026-11-17 | Order: M1, then the chat agent (plan 06) and its memory, then MCP-server mode and the bots, before any new adapter (22.6). |
+| 2026-11-17 | The first release ships the Claude Code and Codex adapters only, because the other agents are mostly not used by everyday people. Codex comes next. The owner writes every adapter before the release; outside pull requests open after it (22.4). |
+| 2026-11-17 | An adapter kit ships with the Codex adapter, to make adapters for other agents easy, above all open-source and low-cost ones. Community adapters come by pull request to the main repository; a plugin path opens only after the phase-2 scanning and signing (22.4). |
+| 2026-11-17 | FlowDriven is the foreman over the user's AI agents, not a new assistant. The one-line description is "FlowDriven is an open-source app that turns your routine into a step-by-step AI workflow, runs it on the AI agent you choose, and checks every step." (22.5) |
+
+Where a later row differs from an earlier one, the later row wins.
 
 ---
 
@@ -185,7 +197,7 @@ From private research notes (2026-11-09). This is a reading of vendor text, not 
 | Codex CLI with the user's own ChatGPT login (app-server or `codex exec`) on the user's machine | official | App-server auth is explicitly allowed for local or open-source apps; OpenAI recommends moving to Sign in with ChatGPT. `exec` is inferred, not stated. The ChatGPT 5-hour allowance is shared across all apps, so the brain and Codex workers compete for it. From December 2026 the allowance is also shared with ChatGPT chat. |
 | Sign in with ChatGPT (open-source app, self-registered) | official | Needs no partner approval for open-source local apps. Does not support hosted MCP or connectors. |
 | Any API key (Anthropic, OpenAI, Gemini paid tier) | official | Gemini free tier: prompts may be read by human reviewers. Use the paid tier for user data. |
-| Claude Code started by the user, with FlowDriven as an MCP server it calls | official (inferred) | FlowDriven never touches the login. This is MCP-server mode (section 8.7, phase 2), the official route for Claude subscriptions. |
+| Claude Code started by the user, with FlowDriven as an MCP server it calls | official (inferred) | FlowDriven never touches the login. This is MCP-server mode (section 8.7; phase 1 since 2026-11-17, 22.3), the official route for Claude subscriptions. |
 | FlowDriven starts `claude -p` on a subscription login | gray | Anthropic forbids third parties from routing requests through plan credentials, yet its help centre says `claude -p` still draws from plan limits. Anthropic also says `--bare` will become the default for `-p`, and bare mode does not read OAuth credentials. That would break this route on a future release with no date. |
 | FlowDriven starts `agy -p` (Antigravity) on a consumer Google plan | unofficial (vendor-prohibited) | Google's FAQ says wrapping `agy` in third-party apps is not supported; its terms call it a breach that can lead to suspension. |
 | Gemini CLI with a Google login | gray, leaning prohibited | Mostly moot: Google AI Pro access moved to Antigravity on 2026-06-18. |
@@ -215,8 +227,8 @@ The `unofficial` label covers both vendor-prohibited routes and unpublished inte
 - Agents are weapons: the npm "s1ngularity" attack ran AI CLIs with permission-skipping flags (`--dangerously-skip-permissions`, `--yolo`, `--trust-all-tools`) to steal files.
 
 ### 6.4 Platform and language
-- Mac first. **Owner decision (2026-11-10)**. Design the core so Windows and Linux can follow: keep OS-specific code (keychain, launch agent, app detection) behind interfaces.
-- A phone app comes later as a remote for progress and approvals, not as a second full client. **Owner decision (2026-11-10)**. It needs its own design first (18.3).
+- Mac first. **Owner decision (2026-11-10)**. Design the core so Windows and Linux can follow: keep OS-specific code (keychain, launch agent, app detection) behind interfaces. Changed on 2026-11-17: Windows comes right after the first release (22.1).
+- A phone app comes later as a remote for progress and approvals, not as a second full client. **Owner decision (2026-11-10)**. It needs its own design first (18.3). Changed on 2026-11-17: from a paired phone the owner can also build and run flows by chat; Telegram and Discord bots come in phase 1 and the phone app after the first release (22.3).
 - English everywhere. **Owner decision (2026-11-09)**.
 
 ---
@@ -248,7 +260,7 @@ The `unofficial` label covers both vendor-prohibited routes and unpublished inte
 | **Native connector** | An MCP server, plugin or skill the user already installed in a harness, used by a flow through that harness (section 11.7). |
 | **Scoped harness config** | The per-run, per-step configuration FlowDriven generates for a worker: only the declared MCP servers, plugins, skills and tools, plus the gateway endpoint and approval hooks where the harness supports them (section 11.7). |
 | **Gateway** | FlowDriven's local MCP server and proxy. It serves the tools FlowDriven provides, sits in front of MCP servers it can proxy, enforces the requirement list on those calls, and holds risky calls for approval (sections 8.2, 11.7). |
-| **MCP-server mode** | FlowDriven running as an MCP server inside the user's own harness session, exposing build, run and approval operations (section 8.7, phase 2). |
+| **MCP-server mode** | FlowDriven running as an MCP server inside the user's own harness session, exposing build, run and approval operations (section 8.7; phase 1 since 2026-11-17, 22.3). |
 
 ---
 
@@ -282,14 +294,14 @@ flowchart LR
       GW["MCP gateway<br/>own tools, proxied servers,<br/>allow-list + approvals"]
       SCF["Scoped harness config<br/>per run and step"]
       HD["Harness detector + quota"]
-      API2["Runner API<br/>(JSON-RPC; MCP-server mode, phase 2)"]
+      API2["Runner API<br/>(JSON-RPC; MCP-server mode, phase 1)"]
       DB[("SQLite")]
     end
     KC[("macOS Keychain")]
     H1["Harness CLIs as workers<br/>claude, codex, agy, opencode ..."]
     NAT["Native connectors, plugins, skills<br/>installed in each harness"]
     MCP["Proxied MCP servers, CLIs,<br/>GUI apps, browser profile"]
-    US["User's own harness session<br/>(MCP-server mode, phase 2)"]
+    US["User's own harness session<br/>(MCP-server mode, phase 1)"]
   end
   subgraph Cloud["Marketplace (closed)"]
     API["Workers API"]
@@ -442,6 +454,8 @@ MCP-server mode (the "inverted" mode):
 - Worker steps go either back to the calling session as tasks it carries out itself (the fully official option), or to other harnesses the user has consented to, under the normal routing rules (11.6).
 - Approvals: a model must never approve its own risky action. `approvals.resolve` over MCP can resolve flow sign-offs and result sign-offs. For risky actions (send, post, pay, delete, merge) it only opens the item in the FlowDriven app (or a macOS notification) for one-click confirmation by the user. The docs tell users never to auto-allow `approvals.resolve` in their harness.
 - Brain/backends table: listed as a mode in 10.3.
+
+**Changed on 2026-11-17 (22.3)**: MCP-server mode ships in phase 1. The same operations also serve FlowDriven's own Telegram and Discord bots and, after the first release, its phone app. A paired phone is a human approval surface, so a risky action can be approved there; over MCP the rule above stands.
 
 ---
 
@@ -759,11 +773,11 @@ Backends (**Chair's call (owner may override)**: covers every route the owner al
 | Claude Code CLI | `claude -p` with JSON or stream-JSON output | gray on a plan login; official with an API key | 1 |
 | API keys | Anthropic, OpenAI, Gemini (paid tier) | official | 1 |
 | Sign in with ChatGPT | FlowDriven registers as an open-source app | official | 2 |
-| Antigravity | `agy -p` | unofficial (vendor-prohibited) | 1, behind consent |
+| Antigravity | `agy -p` | unofficial (vendor-prohibited) | after the first release, behind consent (22.4) |
 | Others (OpenCode, Copilot CLI, Grok, Hermes) | adapters as researched | unknown or gray | 2+ |
-| MCP-server mode (a mode, not a backend) | The user's own harness session (for example Claude Code) calls FlowDriven as an MCP server and acts as the brain itself (8.7) | official (inferred) | 2 |
+| MCP-server mode (a mode, not a backend) | The user's own harness session (for example Claude Code) calls FlowDriven as an MCP server and acts as the brain itself (8.7) | official (inferred) | 1 (since 2026-11-17, 22.3) |
 
-Phase-1 harness adapters, as brain and as worker: Codex, Claude Code and Antigravity, the most common daily harnesses. Others follow from phase 2. **Chair's call (owner may override)**.
+Phase-1 harness adapters, as brain and as worker: Codex, Claude Code and Antigravity, the most common daily harnesses. Others follow from phase 2. **Chair's call (owner may override)**. Changed on 2026-11-17: Claude Code and Codex only; Antigravity and the others follow the first release (22.4).
 
 The brain gets no tools. It receives context and returns JSON matching a schema (flow drafts, plans, judge verdicts, short reports). FlowDriven carries out the result. **Chair's call (owner may override)**: tool-free calls are cheap, predictable and portable across backends.
 
@@ -852,8 +866,9 @@ Known harness table (binary names and probes to verify at build time; the resear
 | Hermes | to verify | to verify | gray |
 | Grok | to verify | to verify | unknown |
 | Gemini CLI | `gemini` | `~/.gemini` | gray, leaning prohibited |
+| OpenClaw | to verify | to verify | unknown |
 
-The adapter registry is data-driven, so adding a harness means adding one adapter file and one table row. Phase 1 ships full adapters (detection, inventory, brain, worker, scoped config) for Codex, Claude Code and Antigravity; the other rows get detection only until their adapters follow. **Chair's call (owner may override)** (10.3).
+The adapter registry is data-driven, so adding a harness means adding one adapter file and one table row. Phase 1 ships full adapters (detection, inventory, brain, worker, scoped config) for Codex, Claude Code and Antigravity; the other rows get detection only until their adapters follow. **Chair's call (owner may override)** (10.3). Changed on 2026-11-17: phase 1 ships Claude Code and Codex, and further adapters are written with the adapter kit (22.4). The Claude Code adapter of plan 03 showed that an adapter with enforcement is a module of its own, not one file.
 
 ### 11.2 Inventory: skills, plugins and MCP servers
 **Owner decision (2026-11-10)**: FlowDriven detects what each harness already has installed.
@@ -888,6 +903,8 @@ Each `WorkerTask` carries: step instructions, inputs, memory digest, the declare
 
 Adapters are tested against fake harness CLIs (scripted binaries that replay recorded event streams, exit codes and error text), so every adapter can be tested without a real subscription (17.1).
 
+Changed on 2026-11-17: the adapter kit (22.4) makes this interface and the runner's `HarnessAdapter` one interface, with capability tiers and a conformance suite.
+
 ### 11.4 Permission modes
 **Owner decision (2026-11-09)**: workers are limited to the project folder, and no permission-bypass mode runs by default.
 
@@ -906,6 +923,7 @@ Because a worker runs headless, it can't ask the user mid-step through its own U
 - First auto-run of a gray or unofficial harness shows a consent screen in plain words, with the vendor's own sentence where the research has one. Consent is stored per harness, can be revoked, and is shown on the harness card. **Chair's call (owner may override)**, proposed 2026-11-09: the warning is useless if the user never sees it at the moment it matters.
 - In the brain picker and the router, official routes sort first. The router never moves work to a gray or unofficial harness the user has not consented to.
 - The marketplace and any FlowDriven server never run harnesses.
+- Changed on 2026-11-17 (22.2): the consent text is written for people who have never read terms of service.
 
 ### 11.6 Quota tracking and routing
 - Record per call: harness, model if known, tokens if the harness reports them, wall time, exit class.
@@ -950,7 +968,7 @@ The readiness engine works like a doctor: it checks every requirement before ins
 
 | Type | Detector (is it there?) | Probe (does it work?) | Auto-install possible |
 |---|---|---|---|
-| `harness` | PATH and binary version | login-status command or a tiny no-op call | guided only (vendor installers) |
+| `harness` | PATH and binary version | login-status command or a tiny no-op call | for supported agents, yes: the vendor's own installer after the user confirms (changed on 2026-11-17, 22.2); otherwise guided |
 | `skill` | harness inventory, or bundled in the flow | file present and parsable | yes: copy from a verified package |
 | `plugin` | harness inventory | harness reports it enabled | yes, through the harness's own install command, if it has one |
 | `mcp_server` | harness inventory (native), or gateway config | connect and list tools; one real read-only tool call | yes for catalog entries (through the harness's own MCP add command, or added to the gateway config); OAuth needs the user |
@@ -1170,7 +1188,7 @@ Phasing (**Chair's call (owner may override)**: the words a crawler sees on the 
 
 - **Name**: FlowDriven. **Owner decision (2026-11-10)**. Evidence from the chair's check on 2026-11-10 (GitHub, npm, PyPI, domain registries and a web search): no product with that name was found in the AI-agent or workflow space, so an LLM is unlikely to confuse it with another product. Trademarks were not checked (18.2). **Chair's call (owner may override)**: the name is written as one word everywhere, and because it carries no category keyword such as "agent" or "workflow", it always appears with the approved one-line description (below), which carries those keywords.
 - **llms.txt** (phase 1): the docs site serves `/llms.txt` (a short Markdown index of what FlowDriven is and links to the key docs) and `/llms-full.txt` (the full docs as one Markdown file).
-- **One description everywhere** (phase 1): one approved one-line description, used word for word on the GitHub repo description, the README, the SDK package description and the docs home page. From phase 2 it is used on the marketplace site and listing pages too. Draft wording (**Chair's call (owner may override)**): "FlowDriven is an open-source flow maker: one agent turns your work into reusable AI workflows and runs them on the AI agents you already have."
+- **One description everywhere** (phase 1): one approved one-line description, used word for word on the GitHub repo description, the README, the SDK package description and the docs home page. From phase 2 it is used on the marketplace site and listing pages too. Wording, **Owner decision (2026-11-17)** (22.5): "FlowDriven is an open-source app that turns your routine into a step-by-step AI workflow, runs it on the AI agent you choose, and checks every step." It replaces the chair's draft "FlowDriven is an open-source flow maker: one agent turns your work into reusable AI workflows and runs them on the AI agents you already have."
 - **Indexable docs and flow pages**: the docs site (phase 1) and the marketplace listing pages (phase 2) are server-rendered HTML (not client-only), with stable URLs, a sitemap, and structured data (schema.org `SoftwareApplication` for the app, and a suitable type such as `HowTo` or `CreativeWork` for flows; final choice to the builder).
 - **Flow manifests that describe themselves** (phase 2, with publishing): `name`, `summary` and `description` (9.2) are required, plain English, and checked at publish for a clear title and a description that says what the flow does and which apps it uses. Listing pages are generated from them.
 - **Public, crawlable flow catalog** (phase 2): a public catalog of public flows on the web, browsable without login (14.2) and open to crawlers, with one page per flow and per category. Private flows are never in it, in the sitemap or in llms.txt.
@@ -1193,7 +1211,7 @@ This table covers threats while the product runs on a user's machine. Threats to
 | Publisher account takeover | Attacker publishes a bad version under a trusted name | Phone and email verification, new-device sign-in alerts, new versions re-scanned, users re-consent on new permissions |
 | Local attacker or other app on the Mac | Another process talks to the runner socket | Socket permissions limited to the user; per-run gateway tokens |
 | Prompt injection widens a one-time flow's boundary | Injected content in an email makes the brain add a mail-send or file requirement partway through a one-time run | The requirement list is frozen when the run starts; any addition needs an approval inbox item before it takes effect; the plan in chat lists every `sensitive` requirement (10.7, 13.7) |
-| Self-approval through MCP-server mode | Injected content makes the user's own harness session call `approvals.resolve` on a risky send | Risky actions resolved over MCP only open a confirmation in the FlowDriven app; settings, budget and consent are app-only (8.7) |
+| Self-approval through MCP-server mode | Injected content makes the user's own harness session call `approvals.resolve` on a risky send | Risky actions resolved over MCP only open a confirmation in the FlowDriven app; settings, budget and consent are app-only (8.7); since 2026-11-17 a paired phone is also a human approval surface (22.3) |
 
 ### 15.2 Non-negotiable runtime protections
 Always on, cannot be switched off. **Owner decision (2026-11-10)**:
@@ -1212,7 +1230,7 @@ Added protections (**Chair's call (owner may override)**, drawn from the researc
 7. A managed, separate browser profile by default (12.6).
 8. Signature and revocation checks before each run of a marketplace flow.
 9. An append-only audit log of risky actions, approvals, installs and permission changes.
-10. A model can't approve its own risky action: in MCP-server mode, risky approvals need the user's click in the FlowDriven app (8.7).
+10. A model can't approve its own risky action: in MCP-server mode, risky approvals need the user's click in the FlowDriven app (8.7). Since 2026-11-17 a tap on a paired phone also counts (22.3).
 11. Approval hooks on native connectors fail closed (11.7).
 
 ### 15.3 Honest limits of scanning
@@ -1274,6 +1292,8 @@ These limits go into the docs and into the install preview's short text:
 Build order inside phase 1, so each stage can be verified on its own before the next: (0) repository groundwork, meaning the rule files, GitHub settings and CI checks of 17.2 to 17.6, with its local half done before any product code is written and its GitHub half before the first push; (a) core engine with Documents and reports, which needs no outside account; (b) Figma to Flutter; (c) Gmail and spreadsheet readiness, then Email triage and Lead follow-up; (d) social draft routes, then One source into many social posts; (e) release, meaning the protected release path of 17.5 and a signed, notarized pre-release build made from a tag. One-time flows arrive with stage (a), because they use only the core engine. **Chair's call (owner may override)**: the order follows the research's difficulty ranking (section 16) and adds one outside dependency per stage. Stage (0) comes first because the build agents need their rules and guard rails before they write product code.
 
 **Changed on 2026-11-11**: the engine comes first. The order of the plans after the first one is in section 20.8, and the job-alert review flow joins the exit test as a sixth flow (three runs, nothing sent). **Chair's call (owner may override)** for the order and the sixth flow; the priority itself is the owner's (section 5).
+
+**Changed on 2026-11-17** (section 22): phase 1 ships the Claude Code and Codex adapters with the adapter kit, instead of Codex, Claude Code and Antigravity. MCP-server mode and the Telegram and Discord bots move into phase 1, from phase 2 and "Later". Phase 1 gains the first-run path with Install buttons, and its exit test gains the layperson test of 22.1. The phone app and Windows move from "Later" to right after the first release. The order is in 22.6.
 
 **Owner decision (2026-11-10)**: the app comes first. **Chair's call (owner may override)**: so stage (0) is split in two, and only its cheap half stands in front of the app. The local half (the instruction files, the local checks and the dependency allowlist) is done at once, because the build agents need it from their first task. The GitHub half (settings, rulesets, accounts and the release path of 17.5 and 17.6) is applied before the repository is first pushed to GitHub, and it waits on the owner's tasks in 18.2 items 6 and 7. Until that push the code lives in the local repository only, on work branches: the build agents never commit to the default branch, each task passes the local checks and a different agent's review, and nothing counts as merged. The owner's gate for all of it is the first push (17.5). Stages (a) to (d) go ahead meanwhile, and the session rules of 17.4 and 17.6 (the boundary lists, the rule of two, the pre-push check) apply from the first session. Stage (a) opens with the app's screens built on sample data, so the owner can see and correct the design before the engine behind it is finished.
 
@@ -1528,7 +1548,7 @@ Section 15 covers threats while a flow runs on a user's Mac. This section covers
 | Phase 1 is large: five flows, three adapters, Gmail, spreadsheets and social routes | Phase 1 drags on with no date to force cuts | Staged build order (stage 0, then a to e) inside phase 1, each stage verified alone; flows share one engine; outside dependencies added one at a time (17) |
 | AI-built code drifts or breaks silently | Regressions, inconsistent components | Small verifiable tasks, contracts first, fake-harness test kit, CI gates, cross-agent review (17.1) |
 | A harness changes its CLI, config or hook format | Adapters or scoped configs stop working | Adapter capability flags; fake-harness fixtures re-recorded per harness release; readiness shows the harness as `failed` instead of guessing |
-| Self-approval in MCP-server mode | A model approves its own risky action | Risky approvals need a click in the app (8.7) |
+| Self-approval in MCP-server mode | A model approves its own risky action | Risky approvals need a click in the app or a tap on a paired phone (8.7, 22.3) |
 | Hostile text in an issue or pull request steers a coding agent | Leaked secrets or a planted backdoor | Outside text is data; no AI agent in CI; the rule of two for agent sessions (17.2, 17.4, 17.6) |
 | A flood of low-quality AI pull requests once pull requests open | The one reviewer is swamped and real work waits | Staged opening, issue first, pull-request cap, interaction limits, the consequence ladder (17.2, 17.3) |
 | A poisoned instruction file or agent configuration | Every agent that reads it is steered | CODEOWNERS, the hidden-character scan, hard rules in settings rather than prose (17.4, 17.5) |
@@ -1537,23 +1557,23 @@ Section 15 covers threats while a flow runs on a user's Mac. This section covers
 | GitHub's settings or plan limits differ from the research | A planned control is missing or works differently | Every control is confirmed at build time; fallbacks are named in 17.3 and 17.5; open points are listed in 18.3 |
 
 ### 18.2 Open items for the owner
-1. Before release: a trademark search for "FlowDriven"; register the domain (planned: `flowdriven.ai`); approve the wording of the one-line description (14.9).
+1. Before release: a trademark search for "FlowDriven"; register the domain (planned: `flowdriven.ai`); approve the wording of the one-line description (14.9; resolved on 2026-11-17, 22.5).
 2. Paid flows: confirm with Stripe sales that sellers in countries outside the self-serve Express list (Indonesia is one example) can be paid, and that an AI-flow marketplace is acceptable; set up the US entity; get tax advice.
 3. What a "verified" publisher must prove for the badge.
 4. Confirm or override the chair's calls, especially:
    - native connectors with per-run scoped configs (11.7);
    - how one-time flows skip the flow sign-off (10.7);
    - the frozen requirement list for one-time flows: the plan lists every `sensitive` requirement, and anything added later needs an approval inbox item (10.7, 13.7);
-   - MCP-server mode in phase 2 with app-only risky approvals (8.7);
+   - MCP-server mode in phase 2 with app-only risky approvals (8.7). Changed on 2026-11-17: phase 1, and a paired phone may approve (22.3);
    - all three private levels for free flows in phase 2 (14.4);
    - email sign-in for invitees of private flows, and for installing any private flow (8.6, 14.4);
-   - the phase-1 adapter choice: Codex, Claude Code and Antigravity (10.3, 11.1). Antigravity is included although its vendor prohibits wrapping on consumer plans, under the owner's "run every detected harness, with warnings" decision (6.1, 11.5);
+   - the phase-1 adapter choice: Codex, Claude Code and Antigravity (10.3, 11.1). Antigravity is included although its vendor prohibits wrapping on consumer plans, under the owner's "run every detected harness, with warnings" decision (6.1, 11.5). Changed on 2026-11-17: Claude Code and Codex only (22.4);
    - the discoverability measures and their split: description and docs site with llms.txt in phase 1, catalog and listing pages in phase 2 (14.9, 17);
    - the lighter phase-1 exit test: three runs per flow with every step check passing, real work where it exists and test data or sandbox accounts where it does not, no fixed duration (17);
    - no permission-bypass opt-in at all, per flow or global (11.4, 15.2);
    - the extra-folder grant (9.4) and the "no sandbox" rule for harnesses that cannot be limited to the project folder (11.4, 15.3), which are the two exceptions to the project-folder limit;
    - editor additions: risky approvals requested over MCP only open a confirmation in the app (8.7); approval hooks on native connectors fail closed (11.7); one-time flows cannot be scheduled or published until saved (10.7, 13.7); until a TikTok draft-upload scope is approved, the phase-1 TikTok output is a file plus caption the user uploads (16.5); the phase-1 build order, stages (0) to (e) (17);
-   - the planned domain `flowdriven.ai` (8.6), the lowercase `flowdriven` spelling in identifiers, and the draft one-line description that always accompanies the name (14.9);
+   - the planned domain `flowdriven.ai` (8.6), the lowercase `flowdriven` spelling in identifiers, and the one-line description that always accompanies the name (14.9; approved on 2026-11-17, 22.5);
    - the rules for AI agents in the repository (17.2 to 17.6), especially: what "first release" means, and that opening pull requests is a separate owner action after it (17.2); mandatory AI disclosure, AI-drafted prose allowed when read and disclosed, plan tasks standing in for issues for the build agents, and the consequence ladder with no public list (17.3); the starting pull-request cap of 2 (17.3); one root `AGENTS.md` as the single rule source, with its "Ask first" and "Never" lists, including the rule of two for agent sessions (17.4); the owner as code owner of every path, the two-step dependency allowlist, the protected release path, and a separate machine account for the build agents with the no-approval fallback (17.5); where the build agents run and the narrow token they hold, which costs the owner some setup (17.6); and no AI agent in CI in v1 (17.6);
    - the build/light split, leads from a sheet, and the numeric defaults.
 
@@ -1567,8 +1587,8 @@ Resolved on 2026-11-10 and no longer open: one-off work (one-time flows), build 
 
 ### 18.3 Research still needed
 - Gmail (and other mail providers) access for harnesses other than Claude, and automated-access rules. Needed before phase-1 stage (c).
-- Spreadsheet access (for example Google Sheets) for Codex and Antigravity. Needed before phase-1 stage (c).
-- Per-harness scoped-config and approval mechanisms for Codex, Claude Code and Antigravity: per-run MCP config, ignoring the user's other servers, allowed-tools lists, plugin and skill enabling, pre-tool hooks (11.7). Needed before phase-1 stage (a).
+- Spreadsheet access (for example Google Sheets) for Codex and Antigravity (Antigravity after the first release since 2026-11-17, 22.4). Needed before phase-1 stage (c).
+- Per-harness scoped-config and approval mechanisms for Codex, Claude Code and Antigravity (Antigravity after the first release, 22.4): per-run MCP config, ignoring the user's other servers, allowed-tools lists, plugin and skill enabling, pre-tool hooks (11.7). Needed before phase-1 stage (a).
 - Draft or schedule APIs for YouTube, Instagram and WordPress as used from phase-1 harnesses. Needed before phase-1 stage (d).
 - Meta lead ads access.
 - TikTok draft-upload app review details for FlowDriven as the client app.
@@ -1577,9 +1597,10 @@ Resolved on 2026-11-10 and no longer open: one-off work (one-time flows), build 
 - Higgsfield output resale terms (relevant once paid flows exist).
 - How a phone app reaches the runner on the user's computer safely: pairing a device, a relay or a direct connection, end-to-end encryption, and what an approval made on the phone must show to meet the approval rules (13.3, 15.2). Needed before the phone app is designed.
 - The GitHub settings named in 17.5 for an organization-owned public repository: exact names, menu paths and Free-plan availability, in particular the pull-request cap, interaction limits and issue restriction; whether a role below write can open pull requests under "Collaborators only"; how required approvals behave with one human reviewer; environment protection, tag rulesets, immutable releases and push protection on the Free plan; fine-grained token scopes and which kinds of account can use them; whether the machine account counts as an external contributor in a repository it cannot access; whether Copilot's cloud agent and automatic review can be switched off; and whether the dependency-update bot can open pull requests under "Collaborators only". Needed before the GitHub half of phase-1 stage (0).
-- Hard controls for the "Never" list in Codex and Antigravity, to match Claude Code's hooks and deny rules, and which modes of each harness count as no-ask modes (17.4). Needed at the start of phase 1; until it is done, the closing sentences of "Advice is not enforcement" in 17.4 apply.
+- Hard controls for the "Never" list in Codex and Antigravity (Antigravity after the first release, 22.4), to match Claude Code's hooks and deny rules, and which modes of each harness count as no-ask modes (17.4). Needed at the start of phase 1; until it is done, the closing sentences of "Advice is not enforcement" in 17.4 apply.
 - Package-manager protections for the chosen stack: clean lockfile installs, a minimum release age, install scripts off (17.6).
 - Contribution policies the research did not read (Kubernetes and CNCF, Rust, Servo and others) and the OWASP guidance on agentic applications. Needed before pull requests open to everyone.
+- Added on 2026-11-17: the research of 22.7.
 
 ### 18.4 Left to the builder
 - Exact CLI flags per harness for sandbox, allowed tools, MCP config and JSON output, verified against each harness's current docs.
@@ -1635,7 +1656,7 @@ Resolved on 2026-11-10 and no longer open: one-off work (one-time flows), build 
 | llms.txt | A Markdown file at a website's root that tells LLMs what the site is and where the key docs are; `llms-full.txt` holds the full docs. |
 | Machine account | A separate GitHub account used by automation, with a human who is responsible for it. Proposed for the build agents (17.5). |
 | MCP | Model Context Protocol: the standard way an agent uses tools and data from other programs. |
-| MCP-server mode | FlowDriven running as an MCP server inside the user's own harness session (phase 2). |
+| MCP-server mode | FlowDriven running as an MCP server inside the user's own harness session (phase 1 since 2026-11-17, 22.3). |
 | Native connector | A connector, plugin or skill already installed in a harness and used through it. |
 | One-time flow | An unsaved flow run right away from a one-off chat request, which can be saved afterwards. |
 | Merchant of record | A company that legally sells on your behalf and handles tax. The ones researched forbid marketplaces. |
@@ -1678,7 +1699,7 @@ Status of the three decisions in 20.9: D1 and D3 follow the owner's words of 202
 | Waiting for the owner | Risky approvals and `user` checks (13.3), 24 h expiry. | No "pick from this list" step whose answer drives the rest of the run. |
 | State across runs | Memory (10.5), resume (13.5). | No seen-items store or cursor; every hourly run would re-score the same jobs. |
 | Limits | Retries (13.3), 30 min per attempt (11.3), budget (10.4). | No item, page, run-per-day or duration caps per step. The prototype skill of the driving example takes 27 to 48 minutes, sometimes over 130, so 30 minutes fails it. |
-| Run from a harness | MCP-server mode in phase 2 (8.7); export without gates (9.7). | No phase-1 path; the Upwork flow is being built on Claude Code first. |
+| Run from a harness | MCP-server mode in phase 2 (8.7); export without gates (9.7). | No phase-1 path; the Upwork flow is being built on Claude Code first. Changed on 2026-11-17: MCP-server mode is phase 1 (22.3). |
 
 ### 20.2 Capability model
 
@@ -1868,12 +1889,12 @@ First engine milestone **M1**: the Upwork flow runs end to end from the app, wit
 | 06 | Agent core and chat builder (old 03), one-time flows | The Upwork flow rebuilt by chat matches the hand-written one |
 | 07 onward | Codex and Antigravity adapters (rest of old 04), gateway and managed browser (old 05), Documents and reports (old 06), then old 07 to 11 | as in ROADMAP.md |
 
-Moves earlier: Claude Code adapter and hooks, triggers, the own-browser provider, `ask`, installed-skill calls. Moves later: the chat agent (old 03), Codex and Antigravity, the gateway's proxying, the managed browser, catalog auto-install. Out of phase 1: push triggers from connectors (need a public endpoint, contradicts no cloud, 4.2), harness computer use in unattended runs, FlowDriven automation beyond open and named Shortcuts, marketplace flows with `session: own` (R13). Engine-backed harness mode (20.6, way 2) follows decision D1.
+Moves earlier: Claude Code adapter and hooks, triggers, the own-browser provider, `ask`, installed-skill calls. Moves later: the chat agent (old 03), Codex and Antigravity, the gateway's proxying, the managed browser, catalog auto-install. Out of phase 1: push triggers from connectors (need a public endpoint, contradicts no cloud, 4.2), harness computer use in unattended runs, FlowDriven automation beyond open and named Shortcuts, marketplace flows with `session: own` (R13). Engine-backed harness mode (20.6, way 2) follows decision D1. Changed on 2026-11-17: the order after M1 is in 22.6.
 
 ### 20.9 Owner decisions and architect calls
 
 Owner decisions:
-- **D1. Running a flow from inside Claude Code with the engine's checks: when?** (a) Right after M1, in phase 1: the two new operations plus the FlowDriven Claude Code plugin. (b) Phase 2, with the rest of MCP-server mode (4.2, 8.7). (c) Never; export only. **Recommend (a)**: the owner named "from a harness" as equal to "from the app".
+- **D1. Running a flow from inside Claude Code with the engine's checks: when?** (a) Right after M1, in phase 1: the two new operations plus the FlowDriven Claude Code plugin. (b) Phase 2, with the rest of MCP-server mode (4.2, 8.7). (c) Never; export only. **Recommend (a)**: the owner named "from a harness" as equal to "from the app". **Owner decision (2026-11-17)**: (a), in phase 1, after plans 06 and 06b (22.6).
 - **D2. "Access the PC" vs "workers are limited to the project folder" (15.2 item 2, your own non-negotiable).** (a) Files stay folder-limited plus granted folders (9.4); PC access means named apps and named actions, each shown in the preview. (b) Allow a flow to ask for read access to the whole home folder, with a strong label. (c) No app control in phase 1. **Recommend (a)**.
 - **D3. May an unattended run use your own logged-in Chrome?** (a) Yes, read-only, under R1 to R6 and R11 (what the Upwork flow needs). (b) Only after a click: the run pauses before the first page read. (c) Never; managed browser only. **Recommend (a)**, with the risk under Upwork's terms shown on the flow (those terms are not yet confirmed from Upwork's own pages).
 
@@ -2082,3 +2103,106 @@ Chair's calls the owner approved and is most likely to revisit (everything else 
 - **C7.** Plan 03b goes before 04; memory and skills get their own plans, 06b and 06c.
 
 Known limits: the memory of a real step with tools is not measured, so the default weights are a first guess that the keeper corrects from what it sees. Taint is coarse: one outside line in a call marks everything that call returns, which is the safe side and will stage more proposals than strictly needed. The lines at 0.9, the 3-times line and the 90-day and 30-day periods have no data behind them yet.
+
+---
+
+## 22. Everyday users, agents, chat from a phone, and the adapter kit (addendum, 2026-11-17)
+
+On 2026-11-17 the owner asked the chair to check the design against its purpose, a place where anyone writes procedures for AI agents and runs them on request or on a schedule, and then answered the questions the check raised, one at a time. This section records the answers. Where it differs from an earlier section, this section wins, and each earlier passage it changes carries a short pointer here. Owner decisions are labelled; everything else is a **Chair's call (owner may override)** with its reason. The owner's own words are quoted in English translation.
+
+What the check found on branch `work/plan-05c` (2026-11-13), so the decisions can be read against it: the engine runs flows with loops, conditions, choices, checks, approvals and resume; triggers fire on a schedule, on a file change and when another flow finishes, while the app is open; steps read web pages through the owner's Chrome and read Gmail through Claude Code's connector. Not built yet: building, editing and running one-time flows from chat (the chat screen exists, but the runner refuses these calls until plan 06), memory (06b), MCP-server mode, chat channels, a second adapter, and a README at the repository root. M1 on real data waits for plan 05c. The design had no comparison with personal assistants such as Hermes Agent and OpenClaw.
+
+### 22.1 Who it is for
+
+- **Owner decision (2026-11-17)**: people who do not write code are users of the first release, next to the owner and developers. 3.1 already named laypeople as the audience; this makes them a first-release target.
+- **Chair's call (owner may override)**, because a first release for such users needs it:
+  - Screens use everyday words. The UI says "AI agent" where this document says harness, and keeps brain, worker, gateway and scoped config behind "Details". Code and this document keep their own words.
+  - A first-run path for a Mac with no AI agent (22.2).
+  - A layperson test joins the phase-1 exit test (17): a person who does not write code, on a Mac with no AI agent, installs one through the app, signs in, builds a flow by chat and runs it, with no help beyond the app. The owner watches and writes down every point where the person got stuck.
+- **Owner decision (2026-11-17)**: Mac first, and Windows right after the first release. From now on OS-specific code stays behind interfaces, as 6.4 asks: the secrets store, background start, the sandbox, file watching and app detection.
+
+### 22.2 Getting an AI agent
+
+- **Owner decision (2026-11-17)**: "Detect automatically. The user must have an AI agent; if there is none, give a choice", with an Install button for each agent. The owner first listed Codex, Claude Code, OpenCode, Hermes, OpenClaw and Antigravity, then kept Claude Code and Codex for the first release (22.4).
+- Detection stays as in 11.1. With no agent found, the first screen shows one card per supported agent: an Install button, the account it needs (Codex: a ChatGPT account; Claude Code: a Claude account or an API key), and its risk label (11.5).
+- **Chair's call (owner may override)**, changing 12.1, where a harness was "guided only": the app runs the vendor's own installer after the user confirms, and shows the exact command first (12.3). The catalog entry pins where the installer comes from. Signing in stays with the user, in the agent's own sign-in, and FlowDriven never reads the agent's credentials (6.1). Why: a person who has never opened a terminal cannot follow a guide, and the vendor's installer keeps updates and support with the vendor.
+- **Owner decision (2026-11-17)**: every supported agent is shown side by side. A gray or vendor-prohibited route carries its label and the consent screen of 11.5 at first use. **Chair's call (owner may override)**: the consent text is written for someone who has never read terms of service: one sentence on what can happen to the account, then the vendor's own sentence where the research has one.
+- With the first release limited to Claude Code and Codex, the one labelled route left is Claude Code on a plan login (gray, 6.1). Codex on a ChatGPT login is official.
+
+### 22.3 Chat: in the app, from other agents, and from a phone
+
+- **Owner decision (2026-11-17)**: flows can be run by chat from three places: the chat pane in the app; any agent that can call an MCP server, through MCP-server mode (8.7); and FlowDriven's own chat channels on a phone. MCP-server mode moves from phase 2 into phase 1. The non-goal "chat channels" of 4.2 is reversed for the channels below.
+- **Owner decision (2026-11-17)**: the channels are a Telegram bot and a Discord bot in phase 1, and a FlowDriven phone app for iPhone and Android after the first release. WhatsApp is not one of them: its official route needs a Meta business account, a number of its own and a server reachable from the internet, and connecting through WhatsApp Web breaks WhatsApp's terms and puts the user's number at risk.
+- **Owner decision (2026-11-17)**: from a paired phone the owner can do what the chat pane does: run saved flows and see progress and the three-line report; answer `ask` choices and approve risky actions; build and change flows by chat; make one-time requests (10.7). Only the account paired with the Mac may control it, and a risky approval shows the full payload and needs a second tap; both came with the question the owner answered.
+- **Owner decision (2026-11-17)**: the bots ship with MCP-server mode after plans 06 and 06b (22.6). The phone app ships after the first release, with the phase-2 marketplace server as its relay.
+
+How the bots work. **Chair's call (owner may override)**: this way needs no FlowDriven server and no open port on the Mac.
+- Each bot connects outward from the runner to Telegram's or Discord's servers. The user creates the bot once with a guide in the app (Telegram through @BotFather, Discord through its developer portal), and the bot's token goes into the Keychain (8.5).
+- Pairing, for the owner's rule that only the paired account may control FlowDriven: the app shows a one-time code, and the account that sends it to the bot becomes the only account the bot obeys. Messages from any other account, group or channel are dropped and logged without their text.
+- The bots are a third transport for the operations of 8.7, beside the app and MCP, with the same rules and no logic of their own. They answer while the runner runs: while the app is open (its window may be closed), and after plan 04b also after the app is quit. The Mac must be on and awake. The phone is a remote and never runs a flow.
+- A command that reaches the runner more than 10 minutes after it was sent is not carried out, and the bot asks the owner to send it again. Why: a message that waited while the Mac slept should not start a run hours later.
+- What the owner types to a bot counts as the owner's own words, as in the chat pane. Forwarded messages, and files and links inside messages, are outside text (R1) and carry the `outside` mark (R15).
+- The bots and the phone get no memory or history operations (21.5) unless the owner turns them on for that channel, as R18 does for MCP. Everything a bot sends or receives passes through Telegram's or Discord's servers; the phone app's relay is end-to-end encrypted (below).
+
+Approvals from a phone. This changes 8.7, where risky approvals were app-only.
+- A model still never approves its own risky action. Over MCP, `approvals.resolve` still only opens the item in the app.
+- A paired phone is a human approval surface. As the owner decided, a risky approval shows the full payload and needs a second tap. **Chair's call (owner may override)**: an `ask` pick and a flow sign-off need one tap. Why: they are choices, not risky actions.
+- **Chair's call (owner may override)**: bot chats on Telegram and Discord are not end-to-end encrypted (to confirm in 22.7), so for a run that holds a `sensitive` requirement the bots carry only the flow, the step and a short summary, and the payload is opened and approved in the app (later also in the phone app). Why: a `sensitive` flow touches data the owner keeps on the Mac.
+
+The phone app (**Chair's call (owner may override)**; designed before it is built, 18.3): the relay carries end-to-end encrypted messages between the paired phone and the runner, so the marketplace server cannot read them, and push notifications carry no content. Why: the relay is part of FlowDriven's closed server, and the owner's runs hold private data.
+
+Tests in the manner of 20.7 (**Chair's call (owner may override)**): a message from an unpaired account is dropped; a forwarded message that says "approve everything" approves nothing; a risky approval without the second tap resolves nothing; a `sensitive` payload never appears in a bot message; a command older than 10 minutes starts no run.
+
+### 22.4 Agents in the first release, the adapter kit and contributions
+
+- **Owner decision (2026-11-17)**: the first release ships adapters for Claude Code and Codex only, and the Install choice offers those two. The owner first asked for all six agents of 22.2 before the release, then narrowed it: Hermes, OpenClaw and OpenCode "are mostly not used by everyday people, so Claude and Codex first". OpenCode, Hermes, OpenClaw and Antigravity follow the first release. **Chair's call (owner may override)**: Antigravity is read as following too, since the owner kept "Claude and Codex" only, and the four come in the order OpenCode, Hermes, OpenClaw, Antigravity, the order shown to the owner when Codex was chosen as the next adapter.
+- **Owner decision (2026-11-17)**: Codex is the next adapter. It is the official route on a ChatGPT login (6.1), and a ChatGPT account is the one everyday people most often have.
+- **Owner decision (2026-11-17)**: the owner and the owner's build agents write every adapter before the first release. Outside pull requests open after it, as 17.2 says.
+- **Owner decision (2026-11-17)**: an adapter kit is built with the Codex adapter, as a deliverable of its own, "to make it easier to build adapters for other AI agents, above all open-source and low-cost ones".
+- **Owner decision (2026-11-17)**: community adapters arrive after the first release as pull requests to the main repository, reviewed by the owner, and ship inside the app. A plugin path, with adapters as separate packages the user installs, opens only once the scanning and signing of the phase-2 marketplace exist (14.5). The reason given with the choice: adapter code runs inside the runner with its full access.
+
+What the kit holds. **Chair's call (owner may override)**: a third adapter should cost less than the second, and its guarantees should be written down.
+- One stable interface, taken from what the Claude Code and Codex adapters share once both exist. The `WorkerAdapter` of 11.3 and the runner's `HarnessAdapter` become one interface, with the capability flags of 11.3.
+- A fake agent that replays recorded event streams (17.1), a conformance suite every adapter must pass, a template adapter and a contributor guide.
+- Capability tiers with honest labels, since many open-source agents have no pre-tool hook or tool allow-list: "enforced" (scoped config, allow-list, pre-tool hook), "folder-limited" (a sandbox or the working directory, no hook) and "label only". A step that needs a guarantee the agent's tier cannot give is refused or routed elsewhere, and `sensitive` flows stay off the lower tiers unless the owner allows it (11.4).
+- Usage and cost per call in the shape of `usage_events` (21.4), so the router (11.6) can send light steps to cheap agents and the owner sees what each agent costs.
+- The interface and the test kit are published under MIT, like the SDK, so the later plugin path can build on them. Why: an interface under AGPL only would keep plugin authors away.
+- Before a third adapter, a check of one generic adapter over the Agent Client Protocol (ACP): several agents speak it, so one adapter might serve several. Whether ACP lets the client deny a tool call before it runs decides that adapter's tier (22.7).
+
+### 22.5 Positioning and the one-line description
+
+- **Owner decision (2026-11-17)**: FlowDriven is the foreman over the user's AI agents, not a new assistant. Personal assistants such as Hermes Agent and OpenClaw keep a procedure as a skill, text that a model reads and follows. FlowDriven keeps it as ordered steps that its runner carries out, counts a step done only when a check the worker does not control passes, lets a step use only what it declares, and checks readiness before a run. Those assistants can be agents FlowDriven runs (adapters, after the first release) or callers that start flows through MCP-server mode.
+- **Owner decision (2026-11-17)**: the one-line description of 14.9 is "FlowDriven is an open-source app that turns your routine into a step-by-step AI workflow, runs it on the AI agent you choose, and checks every step."
+- The full comparison with Hermes Agent, OpenClaw, n8n and Multica, for the README and the docs site, waits for the research of 22.7. The private notes of 2026-11-08 to 2026-11-11 do not cover OpenClaw's workflow features (the chair recalls one named Lobster; unconfirmed) or ACP.
+
+### 22.6 Build order
+
+**Owner decision (2026-11-17)**: M1 first, then the chat agent and its memory, then chat from other agents and from the phone, before any new adapter. Where the table places a plan the owner did not name, the place is a **Chair's call (owner may override)**, with its reason in the last column.
+
+| Order | Plan | Content | Why here |
+|---|---|---|---|
+| 1 | 05c | Skill calls, then M1 end to end (ROADMAP.md) | As planned |
+| 2 | 04b | The socket and the launch agent (ROADMAP.md), once the owner answers its two questions | MCP-server mode needs a local endpoint that processes the app did not start can reach. Rows 3 and 4 may run before it while its questions are open; it must come before row 5 |
+| 3 | 06 | Agent core, chat builder, one-time flows (21.8) | The owner's order |
+| 4 | 06b | The agent's memory (21.5) | The owner's order: the chat agent and its memory |
+| 5 | MCP and bots (new) | MCP-server mode (8.7, 20.6 way 2, 20.9 D1) and the Telegram and Discord bots (22.3), with pairing and phone approvals | The owner's order |
+| 6 | 06c | History search and the skill library (21.5, 21.6) | Chair's call: it improves the agent, and neither MCP-server mode nor the bots need it |
+| 7 | Codex and the adapter kit (new) | The Codex adapter and the kit of 22.4; both adapters pass the conformance suite | The owner's order: Codex next |
+| 8 | Getting an agent (new) | The first-run path and Install buttons for Claude Code and Codex, everyday words on screen, the layperson test (22.1, 22.2) | Chair's call: it needs both adapters |
+| 9 | The rest of phase 1 | The gateway and the managed browser, the five example flows, the GitHub half of stage (0), the release path (ROADMAP.md) | As planned |
+| After the first release | | The phone app with its relay (with phase 2), Windows, adapters for OpenCode, Hermes, OpenClaw and Antigravity, community adapters by pull request, the plugin path once 14.5 exists | The owner's order: after the first release. The order of the four adapters is a chair's call (22.4) |
+
+### 22.7 Research needed (added to 18.3)
+
+Each item is web research. Under the rule of two (17.4) it runs in a session that holds no private data, or one that asks before every action.
+- Codex as a worker: headless mode and its event stream, per-run MCP config, tool allow-list or approval hook, sandbox, model choice by effort (21.3), usage and rate-limit reports. Needed before the Codex plan; 18.3 already asks for the scoped-config part.
+- Installing Claude Code and Codex on a Mac with no Node or Homebrew, and how each signs in. Needed before "Getting an agent".
+- Telegram and Discord: bot terms, rate limits, message size, how a bot receives direct messages, and whether bot chats are end-to-end encrypted. Needed before the bots.
+- Which agents can call a local MCP server: Claude Code and Codex now; OpenCode, Hermes and OpenClaw later. Needed before MCP-server mode.
+- OpenClaw's workflow features and ACP support, Hermes Agent's current release, which agents speak ACP, and whether an ACP client can deny a tool call before it runs. Needed before the comparison of 22.5 and before a third adapter.
+- For OpenCode, Hermes, OpenClaw and Antigravity: install, sign-in, headless mode, per-run controls and vendor terms. Needed before their adapters, after the first release.
+
+### 22.8 Open owner decisions this section depends on
+
+- The two questions of plan 04b (ROADMAP.md, 2026-11-12): who may approve over the socket (15.2 item 10), and the permanent launch agent. Row 5 of 22.6 waits for them.
+- The contribution terms (18.2 item 5), before outside pull requests open after the first release. Community adapters are likely to be the first of them.

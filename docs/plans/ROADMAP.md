@@ -69,6 +69,24 @@ Rules of spec 20.7 proved in plan 05: R1 (the mark and the denial test), R2, R3,
 
 Chair's call (owner may override). Plan 05b is detailed in `2026-11-12-05b-native-connector-and-held-calls.md`, and it is cut smaller than the row above says. It covers one connector only: the Gmail connector of Claude Code (`mcp_server` with `ref: connector:gmail` and `connect: native`), with its six read tools running and its seven send and delete tools held until the owner approves them in the Inbox. A pick in an `ask` (`ask.approves`) releases only the named tools, for the picked items, in that run (R10). The prototype host, every other connector, plain writes (draft and label tools), `connect: gateway`, waiting inside the hook, editing a held payload and "approve all similar" move to plan 05c or later. The plan also closes two leftovers of plan 05: the worker may close its own tab before a withheld page stops the step, and the outside mark follows text built from outside text (loop item values, check patterns, the trigger payload, connector results, and the Inbox card of an ask or a held call). It needs three "Ask first" yeses from the owner before it is built: the approvals code, the sandbox limits, and the owner's Gmail in two tests.
 
+## Order changed on 2026-11-17: everyday users, chat from a phone, two agents
+
+The owner decided the points of spec section 22 on 2026-11-17: people who do not write code are users of the first release; with no AI agent installed, the app offers Install buttons; flows run by chat from the app, from other agents through MCP-server mode, and from a phone through Telegram and Discord bots; the first release ships the Claude Code and Codex adapters with an adapter kit; the phone app, Windows and further adapters follow the first release. Where this section and the earlier ones differ, this section wins. Order is a position, not a plan number: plans without a number get one when they are detailed, and their names here are working titles. Chair's calls (owner may override): the place of rows 2, 6 and 8, and the details in rows 5, 7 and 8 (the 10-minute rule, summaries only for `sensitive` runs, the capability tiers, the layperson test); spec 22.6 marks which is which.
+
+| Order | Plan | Content | Shows working |
+|---|---|---|---|
+| 1 | 05c | As in the section "Order changed on 2026-11-12: plan 05 before 04b, and plan 05 split" | M1 on real data, attended first, then on the schedule |
+| 2 | 04b | As before, once the owner answers its two questions. Rows 3 and 4 may run before it; it must come before row 5 | As before |
+| 3 | 06 | As in the section "Order changed again on 2026-11-11" | As before |
+| 4 | 06b | As before | As before |
+| 5 | MCP and bots (new) | MCP-server mode (spec 8.7, 20.6 way 2, 20.9 D1) and the Telegram and Discord bots (spec 22.3): pairing, the 10-minute rule, phone approvals with a second tap, summaries only for `sensitive` runs | A flow starts from a Claude Code session and from a Telegram message on the owner's phone; a held send is approved on the phone; a message from another account is dropped |
+| 6 | 06c | As before | As before |
+| 7 | Codex and the adapter kit (new) | The Codex adapter as brain and worker, and the kit of spec 22.4: one interface, a fake agent, the conformance suite, a template, a guide, capability tiers, usage reports | A Codex step runs from the app; the Claude Code and Codex adapters both pass the conformance suite |
+| 8 | Getting an agent (new) | The first-run path and Install buttons for Claude Code and Codex through the vendors' installers, everyday words on screen (spec 22.1, 22.2) | On a Mac with no AI agent, the app installs one and runs a first flow made by chat; the layperson test runs once with the owner watching |
+| 9 onward | The rest of phase 1 | The gateway and the managed browser, Documents and reports, the other example flows (old 07 to 09), the GitHub half of stage (0) (old 10), the release path and the exit test (old 11) | As outlined below |
+
+Until the coverage table below is rewritten: its row "Adapters for Codex, Claude Code and Antigravity" reads Claude Code (03) and Codex (order 7 above), and Antigravity, OpenCode, Hermes and OpenClaw move after the first release. It gains three rows: MCP-server mode and the bots (order 5), the adapter kit (order 7), and the first-run path with Install buttons (order 8). The exit test (old 11) gains the layperson test of spec 22.1.
+
 ## Plans
 
 ### 01 Foundation and screens on sample data (detailed: `2026-11-10-01-foundation-and-screens.md`)
@@ -190,4 +208,4 @@ Chair's call (owner may override). Plan 05b is detailed in `2026-11-12-05b-nativ
 | (d) social draft routes, One source into many social posts | 09 |
 | (e) release | 11 |
 
-Phase 2 (marketplace, MCP-server mode, Sign in with ChatGPT, further adapters) gets its own roadmap after the phase-1 exit test.
+Phase 2 (marketplace, the phone app with its relay, Windows, Sign in with ChatGPT, further adapters) gets its own roadmap after the phase-1 exit test. MCP-server mode moved into phase 1 on 2026-11-17 (spec 22.3).
