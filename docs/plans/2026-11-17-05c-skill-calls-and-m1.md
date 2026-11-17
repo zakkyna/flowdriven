@@ -816,7 +816,7 @@ Needs H2: the keys of `tool_input` for `Bash`. If H2 shows a key that is not nam
 
 **Files:**
 - Create: `packages/runner/src/claude/commands.ts`
-- Modify: `packages/runner/src/claude/decide.ts`, `packages/runner/src/claude/policy.ts`, `packages/runner/src/claude/prompt.ts`, `packages/runner/src/claude/adapter.ts` (passes `takesOutside` and the commands on), `packages/runner/src/harness.ts` (`StepRequest.takesOutside?`), `packages/runner/src/exec/leaf.ts` (sets it with `stepTakesOutsideText`), `packages/runner/src/service/claude-harness.ts` (gate: a routed `cli_tool` with commands is no longer `cannot`)
+- Modify: `packages/runner/src/claude/decide.ts`, `packages/runner/src/claude/policy.ts`, `packages/runner/src/claude/prompt.ts`, `packages/runner/src/claude/adapter.ts` (passes `takesOutside` and the commands on), `packages/runner/src/claude/run.ts` (the `command_run` audit row only), `packages/runner/src/harness.ts` (`StepRequest.takesOutside?`), `packages/runner/src/exec/leaf.ts` (sets it with `stepTakesOutsideText`), `packages/runner/src/service/claude-harness.ts` (gate: a routed `cli_tool` with commands is no longer `cannot`)
 - Test: `packages/runner/src/claude/decide-commands.test.ts`, `packages/runner/src/claude/policy-commands.test.ts`, `packages/runner/src/claude/adapter-commands.test.ts`
 
 **Interfaces:**
@@ -865,6 +865,8 @@ git commit -m "Let a step run its declared command lines through Bash, checked b
 ```
 
 Blocked: Task 13 requires adapter.ts to pass takesOutside to buildPolicy and command patterns to buildPrompt, but adapter.ts is not in the permitted files.
+Blocked (Codex, 2026-11-17, second call): Auditing every allowed and refused Bash call requires changes to claude/run.ts, which is outside the permitted files; the existing audit records only aggregate allowed calls and caps refused-call entries.
+Chair's decision (2026-11-17, second): `packages/runner/src/claude/run.ts` joins the files of this task for one thing only: in the decide wrapper, next to `connector_call`, each allowed `Bash` call writes one audit row `command_run` with the command line cut to 300 characters through `visible`; a refused `Bash` call is recorded by the present `tool_denied` path and counted under Blocked calls. Nothing else in `run.ts` changes.
 
 ### Task 14: Granted folders: the ref form, the resolve rule, the route and the preview, pinned at the allow, audited and taken back
 
