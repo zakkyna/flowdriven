@@ -56,6 +56,7 @@ Nothing else on the list is touched: no CI, no `tools/checks/`, no instruction f
 | M1 attended | the walk of Task 24, steps of Task 25 | the run ends `done`, the publish was released by the pick, the proposal passed its checks, nothing sent | **Chair step (GUI)**, owner watching, Task 25; waits for O5 and H1 |
 | M1 on the schedule | steps of Task 25 | one triggered run reaches the pick on its own and ends `done` after the owner's pick and sign-off | **Chair step (GUI)**, owner watching, Task 25; waits for O5 and H1 |
 | Commit | `git add ... && git commit ...` | commit created | **Chair step (commit)** |
+| Closing gate | `pnpm check`, one full run | green end to end, with no re-run of any test; recorded in the Handover as the plan's closing evidence | chair, before the plan closes and before any draft PR (the owner's decision of 2026-11-17: "Hijau sebelum ditutup"); if the Mac stays too loaded for a clean run, the chair tells the owner and does not close |
 
 ## Dependency changes
 
