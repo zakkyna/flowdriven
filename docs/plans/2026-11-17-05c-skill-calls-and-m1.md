@@ -1674,6 +1674,59 @@ git commit -m "Refuse the shell words that run or change a command, and two more
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 2 tests; pnpm format && pnpm lint && pnpm typecheck && pnpm check passed (1824 tests passed, 1 skipped; 109 tool tests passed).
 Chair (review, 2026-11-17): files the executor touched: `router/commands-route.ts`, `sdk/src/validate/risky.ts` and the two new test files; all on this task's list, and the lists match the Interfaces word for word. No present test or fixture declares one of the new words as a command. The chair's own full run of `pnpm format && pnpm check` was green end to end (285 test files, 1,824 tests passed and 1 skipped; 109 check-tool tests passed) at a load average of about 4 to 8.
 
+**After round 3 (2026-11-17).** The parent session read `risky.ts` and `commands-route.ts` and pointed at two more gaps of the same kind, and the chair found a third. The chair confirmed all three with the repository's own modules: under a declared `git *` or `cp *`, the hook allowed each of these calls.
+1. `git checkout .`, `git restore .`, `git stash drop`, `git stash clear` and `git worktree remove wt` throw away uncommitted work or stashes, as `git clean` and `git reset --hard` do (those are refused already). `git checkout notes.md` does the same to one file.
+2. `git config core.pager sh` and `git config core.hooksPath hooks` set a program that git runs later, also in the owner's own terminal. The setting stays after the flow.
+3. `cp x .git/hooks/pre-commit`, `cp x .claude/settings.json` and `mv x .mcp.json` overwrite files that the hook protects from the file tools but not from commands.
+
+The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya, blokir ketiganya (Disarankan)" and "Catat saja"): "Ya, blokir ketiganya (Disarankan)". That is the yes of "Ask first" for the fix task below. The closing gate of 75718bd ran before this change, so it runs again after it.
+
+### Review fix R4: git commands that throw work away or install programs, and commands that name protected paths
+
+**Files:**
+- Create: `packages/runner/src/claude/protected.ts` (`protectedPath`, moved unchanged from `claude/decide.ts`, which imports it from there)
+- Modify: `packages/sdk/src/validate/risky.ts` (`gitSubcommand`, `classifyCommand`), `packages/runner/src/router/commands-route.ts` (`commandRefusal`), `packages/runner/src/router/route.ts` (`DROP.protectedPath`), `packages/runner/src/claude/decide.ts` (the import only)
+- Test: `packages/sdk/src/validate/risky-git-discard.test.ts`, `packages/runner/src/router/route-commands-review4.test.ts`
+
+**Interfaces:**
+- Produces (1): `gitSubcommand(words: string[]): string | undefined` is the subcommand scan that `classifyCommand` already uses (the first word after `git` that does not start with `-`, skipping the value after the options of its skip list), now exported. `classifyCommand` also calls a `git` line a `delete` when its subcommand is `checkout` or `restore`, or is `stash` and a word is `drop` or `clear`, or is `worktree` and a word is `remove`. `git switch` is the way to change branches.
+- Produces (2): `commandRefusal` refuses a `git` line whose subcommand is `config` with `DROP.runsAnything`, whatever follows it.
+- Produces (3): `commandRefusal` refuses a line in which any word, with `=`, `:`, `,` and `@` read as `/`, names a protected path by `protectedPath` (a part `.git` or `.claude`, or a last part `.mcp.json`, after the fold that `claude/decide.ts` uses), with the new `DROP.protectedPath`: "A step cannot run a command that names .git, .claude or .mcp.json." Through the hook's re-check the same holds for a concrete call. `protectedPath` itself does not change, and `claude/decide.ts` refuses a Write or Edit there exactly as before.
+
+- [ ] **Step 1: Write the failing tests**
+
+  1. "git checkout, git restore, git stash drop and clear, and git worktree remove are a delete, and git switch, git stash, git worktree list and git status are not"
+  2. "git config drops the route and is refused at the hook, whatever follows it"
+  3. "a command that names .git, .claude or .mcp.json in any word drops the route and is refused at the hook, in any case and after = or :"
+
+No present test changes; the present tests of `claude/decide.ts` for protected paths pass unchanged.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm vitest run packages/sdk/src/validate/risky-git-discard.test.ts packages/runner/src/router/route-commands-review4.test.ts`
+Expected: FAIL
+
+- [ ] **Step 3: Implement the three fixes**
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: the command of Step 2
+Expected: PASS
+
+- [ ] **Step 5: Run the gate**
+
+Run: `pnpm format && pnpm check`
+Expected: PASS
+
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/sdk/src/validate packages/runner/src/router packages/runner/src/claude/protected.ts packages/runner/src/claude/decide.ts docs/plans/2026-11-17-05c-skill-calls-and-m1.md
+git commit -m "Refuse git commands that throw work away or install programs, and commands that name protected paths" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
 **Outcome of the review (2026-11-17).** Three rounds, the most the plan allows. Seven findings were fixed with their own tests: F1, F2 and F3 (R1, 440f5b0), R2-F1 and R2-F2 (R2, e60f773), and R3-F1 and R3-F2 (R3, bea4b11). R2-F3 (refusals that are too strict) is under Known limits by the owner's choice. So is the class behind R2-F1 and R3-F1: the refused programs are a list, and the rule that a program must be a file on PATH waits for a later plan. No other finding is open.
 
 ---
