@@ -54,7 +54,7 @@ describe("capability router", () => {
       label: "official",
       away: true,
     });
-    for (const ref of ["~/x", "/x", "../x"])
+    for (const ref of ["/x", "../x"])
       expect(routeRequirement(req({ id: "p", type: "path", ref }), facts)).toEqual({
         routed: false,
         requirementId: "p",

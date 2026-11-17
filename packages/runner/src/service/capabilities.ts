@@ -3,6 +3,7 @@ import { FlowCapabilities, RunnerError } from "@flowdriven/contracts";
 import { FlowManifest, parseTemplate } from "@flowdriven/sdk";
 import { visible } from "../claude/text.ts";
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
+import { isExtraRef, resolveExtraFolder } from "../folders/extra.ts";
 import { COST, capabilitySentence, needsAllow, routeAll } from "../router/route.ts";
 import type { HarnessFacts } from "../router/types.ts";
 import { bundledSkill, type LoadedSkill, readSkillFolder, skillSource } from "../skills/skill-folder.ts";
@@ -32,6 +33,15 @@ function allowIsBlocked(
   // known ref it does not block the allow (the gate still refuses such a flow).
   if (
     manifest.requirements.some(
+      (req) =>
+        req.type === "path" &&
+        isExtraRef(req.ref) &&
+        !rows.find((row) => row.requirementId === req.id && row.routed && row.pin),
+    )
+  )
+    return "FlowDriven cannot provide a folder this flow declares, so there is nothing to allow.";
+  if (
+    manifest.requirements.some(
       (req) => req.type === "cli_tool" && (req.commands?.length ?? 0) > 0 && missing(req),
     )
   )
@@ -58,12 +68,16 @@ export function createCapabilities(o: {
   now: () => Date;
   facts: () => HarnessFacts;
   catalog?: ConnectorEntry[];
+  home?: string;
+  dataDir?: string;
   readSkill?: (
     ref: string | undefined,
     flowId: string,
   ) => { ok: true; skill: LoadedSkill } | { ok: false; reason: string };
 }) {
   const catalog = o.catalog ?? CONNECTORS;
+  const folder = (ref: string) =>
+    resolveExtraFolder(ref, { home: o.home ?? homedir(), dataDir: o.dataDir ?? "" });
   function flow(flowId: string) {
     const row = o.store.getFlow(flowId);
     if (!row) throw new RunnerError("not_found", `There is no flow ${flowId}.`);
@@ -88,6 +102,11 @@ export function createCapabilities(o: {
       manifest.steps.flatMap((step) => ("steps" in step ? step.steps : [step]).flatMap((leaf) => leaf.uses)),
     );
     for (const req of manifest.requirements) {
+      if (req.type === "path" && req.ref && isExtraRef(req.ref)) {
+        const result = folder(req.ref);
+        const pin = consent.pins?.folders[req.id];
+        if (!result.ok || !pin || result.path !== pin.path || req.access !== pin.access) return "stale";
+      }
       if (req.type !== "skill" || !used.has(req.id) || !skillSource(req.ref, { home: "" })) continue;
       const result = readSkill(req.ref, flowId);
       if (!result.ok || result.skill.hash !== consent.pins?.skills[req.id]) return "stale";
@@ -120,13 +139,16 @@ export function createCapabilities(o: {
       if (!req) throw new RunnerError("not_allowed", PREVIEW);
       const common = { requirementId: req.id, type: req.type, sentence: capabilitySentence(req, catalog) };
       if (!route.routed) return { ...common, routed: false, reason: route.reason, away: false, details: [] };
+      const resolved = req.type === "path" && req.ref && isExtraRef(req.ref) ? folder(req.ref) : undefined;
+      if (resolved && !resolved.ok)
+        return { ...common, routed: false, reason: resolved.reason, away: false, details: [] };
       const loaded = route.provider === "flowdriven-skill" ? readSkill(req.ref, flowId) : undefined;
       if (loaded && !loaded.ok)
         return { ...common, routed: false, reason: visible(loaded.reason, 300), away: false, details: [] };
       const skill = loaded?.ok ? loaded.skill : undefined;
       return {
         ...common,
-        ...(skill ? { pin: skill.hash } : {}),
+        ...(skill ? { pin: skill.hash } : resolved?.ok ? { pin: resolved.path } : {}),
         routed: true,
         provider: route.providerName,
         enforcedBy: route.enforcedBy,
@@ -148,11 +170,13 @@ export function createCapabilities(o: {
               // installed skill shows when it changed.
               `Version ${skill.hash.slice(7, 19)}, ${skill.files.size} files, ${skill.body.length} characters${skillSource(req.ref, { home: "" })?.kind === "installed" ? `, changed ${skill.modifiedAt}` : ""}`,
             ]
-          : req.type === "cli_tool"
-            ? (req.commands ?? []).map((command) => visible(command, 300))
-            : req.type === "web"
-              ? (templates.get(req.id) ?? [])
-              : [],
+          : resolved?.ok
+            ? [resolved.path, "You can take this back with Withdraw."]
+            : req.type === "cli_tool"
+              ? (req.commands ?? []).map((command) => visible(command, 300))
+              : req.type === "web"
+                ? (templates.get(req.id) ?? [])
+                : [],
       };
     });
     const blocked = allowIsBlocked(manifest, rows, catalog);
@@ -190,24 +214,45 @@ export function createCapabilities(o: {
         );
       skills[row.requirementId] = row.pin;
     }
+    const folders: Record<string, { path: string; access: "read" | "read_write" }> = {};
+    const manifest = FlowManifest.parse(flow(flowId).manifest);
+    for (const req of manifest.requirements) {
+      if (req.type !== "path" || !req.ref || !isExtraRef(req.ref)) continue;
+      const row = preview.rows.find((item) => item.requirementId === req.id);
+      if (!row?.pin || pins?.[req.id] !== row.pin)
+        throw new RunnerError(
+          "not_allowed",
+          "Something this flow uses changed since you looked at it. Reload and check it again.",
+        );
+      folders[req.id] = { path: row.pin, access: req.access ?? "read" };
+    }
     const at = o.now().toISOString();
     const hasSkills = Object.keys(skills).length > 0;
     o.store.putCapabilityConsent({
       flowId,
       hash,
       at,
-      ...(hasSkills ? { pins: { skills, folders: {} } } : {}),
+      ...(hasSkills || Object.keys(folders).length ? { pins: { skills, folders } } : {}),
     });
     o.store.appendAudit({
       at,
       kind: "capabilities_allowed",
       detail: { flowId, hash, ...(hasSkills ? { skills } : {}) },
     });
+    for (const [requirementId, pin] of Object.entries(folders))
+      o.store.appendAudit({ at, kind: "folder_granted", detail: { flowId, requirementId, ...pin } });
     return get(flowId);
   }
   function withdraw(flowId: string): FlowCapabilities {
     flow(flowId);
+    const folders = o.store.getCapabilityConsent(flowId)?.pins?.folders ?? {};
     o.store.deleteCapabilityConsent(flowId);
+    for (const [requirementId, pin] of Object.entries(folders))
+      o.store.appendAudit({
+        at: o.now().toISOString(),
+        kind: "folder_revoked",
+        detail: { flowId, requirementId, ...pin },
+      });
     o.store.appendAudit({ at: o.now().toISOString(), kind: "capabilities_withdrawn", detail: { flowId } });
     return get(flowId);
   }

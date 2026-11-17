@@ -875,6 +875,8 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's 
 
 ### Task 14: Granted folders: the ref form, the resolve rule, the route and the preview, pinned at the allow, audited and taken back
 
+Blocked (Codex, 2026-11-17): Two gate attempts failed: Biome rejected control characters in a regex; after fixing that, typecheck rejected the route test requirement spread.
+
 **Files:**
 - Create: `packages/runner/src/folders/extra.ts`
 - Modify: `packages/runner/src/router/route.ts`, `packages/runner/src/service/capabilities.ts`, `packages/runner/src/service/service.ts` (wiring `home` and `dataDir`)
@@ -884,7 +886,7 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's 
 - Consumes: `ConsentPins.folders` (Task 3), the allow pins (Task 7), `resolveDeep` and `isInside` (`claude/paths.ts`).
 - Produces: `EXTRA_REF = /^~\/[^/]+(?:\/[^/]+)*$/`; `isExtraRef(ref: string | undefined): boolean`; `FOLDER_REASON = { form: "A granted folder is written ~/ and a folder name, with no hidden or parent parts.", outsideHome: "This folder is not inside your home folder.", wide: "This folder holds your whole home folder; grant a smaller one.", hidden: "This folder is a hidden folder or inside one.", library: "FlowDriven does not grant folders inside ~/Library.", own: "This folder holds FlowDriven's own data, or is inside it." }`; `resolveExtraFolder(ref: string, o: { home: string; dataDir: string }): { ok: true; path: string; exists: boolean } | { ok: false; reason: string }`; `createCapabilities({ ..., home?: string, dataDir?: string })` (the service passes `os.homedir()` and its data folder); the path route for an extra ref (`claude-code-files`, enforced by the FlowDriven hook, official, away); sentences `Reads files in <ref>, a folder outside the project that you grant.` and `Reads and changes files in <ref>, a folder outside the project that you grant.`; every declared extra folder's row has `pin` = the resolved path and `details` = the path and "You can take this back with Withdraw."; `needsAllow` is true when the flow declares an extra folder; audit `folder_granted` `{flowId, requirementId, path, access}` per folder at the allow and `folder_revoked` per pinned folder at Withdraw; `consentOf` is `stale` when a pinned folder now resolves to another path.
 
-- [ ] **Step 1: Write the failing tests, and change the present one**
+- [x] **Step 1: Write the failing tests, and change the present one**
 
   1. "~/job-review/work resolves under the home folder and is the files route with the granted-folder sentence"
   2. "~, ~/, /x, ../x, ~/a/../b, ~/.ssh, ~/a/.git and a part with a control or bidi character are refused with FOLDER_REASON.form"
@@ -899,29 +901,32 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's 
 
 Present test (item 6 of the owner approval): `router/route.test.ts:57` loops over `["~/x", "/x", "../x"]`; it becomes `["/x", "../x"]` with the same expectation, and test 1 above covers `~/...`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/folders packages/runner/src/service/capabilities-folders.test.ts packages/runner/src/router/route-folders.test.ts packages/runner/src/router/route.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement `resolveExtraFolder`, the route, the preview rows, the pins and the audit rows**
+- [x] **Step 3: Implement `resolveExtraFolder`, the route, the preview rows, the pins and the audit rows**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/folders packages/runner/src/router packages/runner/src/service
 git commit -m "Grant a folder outside the project at the allow, show it, log it and take it back" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Chair (review, 2026-11-17): Codex stopped after two gate runs (a Biome finding, then a type error in `router/route-folders.test.ts`). The chair finished it: the test builds its read-only requirement with `Requirement.parse`, and `isExtraRef` also refuses format characters such as zero-width spaces (`\p{Cf}`), with two more cases in `folders/extra.test.ts`. Files the executor touched: `folders/extra.ts` (new), `router/route.ts`, `service/capabilities.ts`, `service/service.ts`, `router/route.test.ts:57` (as Step 1 says) and the three new test files; all on this task's list.
+Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's full run of `pnpm format && pnpm check` was green end to end (266 test files, 1,767 tests passed and 1 skipped), at a load average of about 3 to 8.
 
 ### Task 15: Granted folders in the call: policy, gate and admit
 

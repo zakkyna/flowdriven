@@ -2,6 +2,7 @@ import { type FlowManifest, parseTemplate, type Requirement, type Step, webRates
 import { isProjectRef } from "../claude/policy.ts";
 import { visible } from "../claude/text.ts";
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
+import { isExtraRef } from "../folders/extra.ts";
 import { skillSource } from "../skills/skill-folder.ts";
 import { commandRefusal } from "./commands-route.ts";
 import type { HarnessFacts, Routed } from "./types.ts";
@@ -114,7 +115,7 @@ export function routeRequirement(
     }
   }
   if (req.type === "path") {
-    if (!isProjectRef(req.ref))
+    if (!isProjectRef(req.ref) && !isExtraRef(req.ref))
       return { ...base, routed: false, noun: "A folder outside the project", reason: DROP.notYet };
     return {
       ...base,
@@ -155,6 +156,7 @@ export function routeAll(
 }
 
 export function needsAllow(manifest: FlowManifest): boolean {
+  if (manifest.requirements.some((req) => req.type === "path" && isExtraRef(req.ref))) return true;
   const needs = new Set(
     manifest.requirements.filter((req) => req.type !== "path" && req.type !== "harness").map((req) => req.id),
   );
@@ -200,6 +202,8 @@ export function capabilitySentence(req: Requirement, catalog: ConnectorEntry[] =
       .map((host) => visible(host, 253))
       .join(", ")} in your own browser, at most ${perRun} per run and ${perDay} a day.`;
   }
+  if (req.type === "path" && isExtraRef(req.ref))
+    return `Reads${req.access === "read_write" ? " and changes" : ""} files in ${visible(req.ref ?? "", 120)}, a folder outside the project that you grant.`;
   if (req.type === "path")
     return `Reads${req.access === "read_write" ? " and writes" : ""} files in ${visible(req.ref ?? "the project folder", 120)}.`;
   const noun = req.type === "harness" ? "A harness" : NOUNS[req.type];

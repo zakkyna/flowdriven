@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { type Notice, operations, type RunnerTopic } from "@flowdriven/contracts";
 import { STOP } from "../claude/browser-post.ts";
@@ -159,6 +160,8 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
           })
         : undefined),
     capabilities: createCapabilities({
+      home: homedir(),
+      dataDir: options.dataDir,
       store,
       now,
       facts: () => hs?.facts() ?? { hooks: false, chrome: false },
