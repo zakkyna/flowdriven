@@ -304,7 +304,7 @@ Chair's decision (2026-11-17): the plan was wrong, not the executor. Pins go to 
 **Interfaces:**
 - Produces: `PINS_SCHEMA = "CREATE TABLE consent_pins (flow_id TEXT PRIMARY KEY, pins TEXT NOT NULL);"` in `schema.ts`; `type ConsentPins = { skills: Record<string, string>; folders: Record<string, { path: string; access: "read" | "read_write" }> }` and `CapabilityConsentRow.pins?: ConsentPins` in `storage.ts`; `putCapabilityConsent` writes the consent row and, in the same transaction, the `consent_pins` row as JSON, or removes that row when the consent has no pins; `deleteCapabilityConsent` removes both rows in one transaction; `getCapabilityConsent` returns `pins` only when the `consent_pins` row parses to that shape, else no `pins`.
 
-- [ ] **Step 1: Write the failing tests, and change the present version tests**
+- [x] **Step 1: Write the failing tests, and change the present version tests**
 
 New tests in `sqlite-store-capabilities.test.ts`:
   1. "a consent keeps its skill and folder pins"
@@ -315,31 +315,33 @@ New tests in `sqlite-store-capabilities.test.ts`:
 
 Present tests that change (item 6 of the owner approval), each to the equally strict new value: `sqlite-store.test.ts:159,169,174` `toBe(5)` becomes `toBe(6)`, and a title that says "version 5" (for example "a new database is created at version 5") says "version 6"; `sqlite-store.test.ts:177-180` "a database from version 6 is refused" becomes "a database from version 7 is refused" with `PRAGMA user_version = 7`; `sqlite-store-usage.test.ts:80` `toBe(5)` becomes `toBe(6)`; `sqlite-store-triggers.test.ts:96` "a version 3 database migrates to 5 and keeps its rows; version 6 is refused" becomes "a version 3 database migrates to 6 and keeps its rows; version 7 is refused", with `:107` `toBe(6)` and `:112` `PRAGMA user_version = 7`; `sqlite-store-capabilities.test.ts:65,76` `toBe(5)` becomes `toBe(6)`, and its title at `:7` that says it reaches 5 says 6.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/sqlite-store*.test.ts`
 Expected: FAIL (version is 5; no `pins`)
 
-- [ ] **Step 3: Implement version 6**
+- [x] **Step 3: Implement version 6**
 
 In `sqlite-store.ts:51-69` refuse `version > 6`, add `${PINS_SCHEMA}` and `user_version = 6` to every present branch, and add `if (version === 5)` with `PINS_SCHEMA`. Read validation as for the columns of `capability_consents`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run packages/runner/src/sqlite-store*.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/schema.ts packages/runner/src/storage.ts packages/runner/src/sqlite-store.ts packages/runner/src/sqlite-store*.test.ts
 git commit -m "Store pins with the capability consent (store version 6)" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
 
 ### Task 4: SDK: read a SKILL.md and write the copy without front matter (R14)
 

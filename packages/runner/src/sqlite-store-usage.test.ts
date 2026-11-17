@@ -65,7 +65,7 @@ test("settings are stored as JSON", async () => {
   store.putSetting("keeper", { ceiling: 1 });
   expect(store.getSetting("keeper")).toEqual({ ceiling: 1 });
 });
-test("a version 2 database migrates to 5 and keeps its rows; version 99 is still refused", async () => {
+test("a version 2 database migrates to 6 and keeps its rows; version 99 is still refused", async () => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven- ")));
   roots.push(dir);
   const path = join(dir, "db.sqlite");
@@ -77,7 +77,7 @@ test("a version 2 database migrates to 5 and keeps its rows; version 99 is still
   old.close();
   const store = await openSqliteStore(path);
   const versionDb = new DatabaseSync(path);
-  expect(versionDb.prepare("PRAGMA user_version").get()?.user_version).toBe(5);
+  expect(versionDb.prepare("PRAGMA user_version").get()?.user_version).toBe(6);
   versionDb.close();
   expect(store.getHarnessState("claude-code")?.consent).toBe("given");
   store.addUsage(event("r1"));

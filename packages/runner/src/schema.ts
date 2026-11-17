@@ -27,3 +27,5 @@ CREATE TABLE fire_keys (flow_id TEXT NOT NULL, idx INTEGER NOT NULL, key TEXT NO
 
 export const CAPABILITY_SCHEMA =
   "CREATE TABLE capability_consents (flow_id TEXT PRIMARY KEY, hash TEXT NOT NULL, at TEXT NOT NULL);";
+
+export const PINS_SCHEMA = "CREATE TABLE consent_pins (flow_id TEXT PRIMARY KEY, pins TEXT NOT NULL);";

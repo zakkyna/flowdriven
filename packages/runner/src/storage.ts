@@ -137,7 +137,11 @@ export type TriggerRow = {
   pausedWhy?: "blocked_runs" | "challenge";
   lastFire?: { at: string; outcome: TriggerOutcome; runId?: string; detail?: string };
 };
-export type CapabilityConsentRow = { flowId: string; hash: string; at: string };
+export type ConsentPins = {
+  skills: Record<string, string>;
+  folders: Record<string, { path: string; access: "read" | "read_write" }>;
+};
+export type CapabilityConsentRow = { flowId: string; hash: string; at: string; pins?: ConsentPins };
 export interface Store {
   getCapabilityConsent(flowId: string): CapabilityConsentRow | undefined;
   putCapabilityConsent(row: CapabilityConsentRow): void;

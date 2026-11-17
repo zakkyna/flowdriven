@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, expect, test } from "vitest";
 import type { Routed } from "./router/types.ts";
-import { HARNESS_STATE_SCHEMA, SCHEMA, TRIGGER_SCHEMA, USAGE_SCHEMA } from "./schema.ts";
+import { CAPABILITY_SCHEMA, HARNESS_STATE_SCHEMA, SCHEMA, TRIGGER_SCHEMA, USAGE_SCHEMA } from "./schema.ts";
 import { openSqliteStore } from "./sqlite-store.ts";
 import type { RunRow, StepRow, Store } from "./storage.ts";
 import { cleanup, tempPath } from "./test-helpers/tmp.ts";
@@ -51,7 +51,7 @@ test("a row that is not JSON or has the wrong field types reads as absent", asyn
   }
 });
 
-test("a version 4 database migrates to 5 and keeps its rows", async () => {
+test("a version 4 database migrates to 6 and keeps its rows", async () => {
   const path = tempPath();
   const db = new DatabaseSync(path);
   db.exec(`${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} PRAGMA user_version = 4;`);
@@ -62,18 +62,18 @@ test("a version 4 database migrates to 5 and keeps its rows", async () => {
   store.putCapabilityConsent(consent);
   expect(store.getCapabilityConsent("f")).toEqual(consent);
   const check = new DatabaseSync(path);
-  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(5);
+  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(6);
   check.close();
 });
 
-test("a version 1 database reaches 5 with every table, including capability_consents", async () => {
+test("a version 1 database reaches 6 with every table, including capability_consents", async () => {
   const path = tempPath();
   const db = new DatabaseSync(path);
   db.exec(`${SCHEMA} PRAGMA user_version = 1;`);
   db.close();
   await open(path);
   const check = new DatabaseSync(path);
-  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(5);
+  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(6);
   const tables = check
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
     .all()
@@ -146,4 +146,73 @@ test("routes on a run and outside on a step round-trip, and a run stored without
   store.createRun({ ...withoutRoutes, id: "old" });
   expect(store.getRun("old")).toEqual({ ...withoutRoutes, id: "old" });
   expect(store.getRun("old")).not.toHaveProperty("routes");
+});
+
+const pins = {
+  skills: { review: "sha256:123" },
+  folders: { work: { path: "/work", access: "read_write" as const } },
+};
+
+test("a consent keeps its skill and folder pins", async () => {
+  const store = await open();
+  store.putCapabilityConsent({ ...consent, pins });
+  expect(store.getCapabilityConsent("f")).toEqual({ ...consent, pins });
+});
+
+test("a version 5 database migrates to 6, keeps its consents, and they read with no pins", async () => {
+  const path = tempPath();
+  const db = new DatabaseSync(path);
+  db.exec(
+    `${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5;`,
+  );
+  db.prepare("INSERT INTO capability_consents VALUES (?, ?, ?)").run(
+    "f",
+    JSON.stringify(consent.hash),
+    JSON.stringify(consent.at),
+  );
+  db.close();
+  const store = await open(path);
+  expect(store.getCapabilityConsent("f")).toEqual(consent);
+  const check = new DatabaseSync(path);
+  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(6);
+  check.close();
+});
+
+test("a pins value that does not parse, or has the wrong shape, reads as no pins", async () => {
+  const path = tempPath();
+  const store = await open(path);
+  store.putCapabilityConsent(consent);
+  const db = new DatabaseSync(path);
+  for (const value of [
+    "not json",
+    "null",
+    "[]",
+    JSON.stringify({ skills: {}, folders: [] }),
+    JSON.stringify({ skills: { x: 1 }, folders: {} }),
+    JSON.stringify({ skills: {}, folders: { x: { path: "/x", access: "write" } } }),
+  ]) {
+    db.prepare("INSERT OR REPLACE INTO consent_pins VALUES (?, ?)").run("f", value);
+    expect(store.getCapabilityConsent("f")).toEqual(consent);
+  }
+  db.close();
+});
+
+test("a consent written without pins reads without pins, and writing it again without pins removes the earlier pins", async () => {
+  const store = await open();
+  store.putCapabilityConsent(consent);
+  expect(store.getCapabilityConsent("f")).toEqual(consent);
+  store.putCapabilityConsent({ ...consent, pins });
+  store.putCapabilityConsent(consent);
+  expect(store.getCapabilityConsent("f")).toEqual(consent);
+});
+
+test("deleting a consent removes its pins", async () => {
+  const path = tempPath();
+  const store = await open(path);
+  store.putCapabilityConsent({ ...consent, pins });
+  store.deleteCapabilityConsent("f");
+  const db = new DatabaseSync(path);
+  expect(db.prepare("SELECT * FROM consent_pins WHERE flow_id = ?").get("f")).toBeUndefined();
+  db.close();
+  expect(store.getCapabilityConsent("f")).toBeUndefined();
 });

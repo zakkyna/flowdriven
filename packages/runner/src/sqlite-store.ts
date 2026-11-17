@@ -1,9 +1,17 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { EngineError } from "./errors.ts";
-import { CAPABILITY_SCHEMA, HARNESS_STATE_SCHEMA, SCHEMA, TRIGGER_SCHEMA, USAGE_SCHEMA } from "./schema.ts";
+import {
+  CAPABILITY_SCHEMA,
+  HARNESS_STATE_SCHEMA,
+  PINS_SCHEMA,
+  SCHEMA,
+  TRIGGER_SCHEMA,
+  USAGE_SCHEMA,
+} from "./schema.ts";
 import type {
   ApprovalRow,
   AuditEntry,
+  ConsentPins,
   FlowRow,
   HarnessStateRow,
   ItemRow,
@@ -49,24 +57,27 @@ export async function openSqliteStore(
     }
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     const version = db.prepare("PRAGMA user_version").get()?.user_version;
-    if (typeof version !== "number" || version > 5 || version < 0)
+    if (typeof version !== "number" || version > 6 || version < 0)
       throw new EngineError("unavailable", "Unsupported database version.");
     if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
     if (version === 0)
       db.exec(
-        `BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`,
+        `BEGIN; ${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} ${PINS_SCHEMA} PRAGMA user_version = 6; COMMIT;`,
       );
     if (version === 1)
       db.exec(
-        `BEGIN; ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`,
+        `BEGIN; ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} ${PINS_SCHEMA} PRAGMA user_version = 6; COMMIT;`,
       );
     if (version === 2)
       db.exec(
-        `BEGIN; ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`,
+        `BEGIN; ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} ${PINS_SCHEMA} PRAGMA user_version = 6; COMMIT;`,
       );
     if (version === 3)
-      db.exec(`BEGIN; ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`);
-    if (version === 4) db.exec(`BEGIN; ${CAPABILITY_SCHEMA} PRAGMA user_version = 5; COMMIT;`);
+      db.exec(
+        `BEGIN; ${TRIGGER_SCHEMA} ${CAPABILITY_SCHEMA} ${PINS_SCHEMA} PRAGMA user_version = 6; COMMIT;`,
+      );
+    if (version === 4) db.exec(`BEGIN; ${CAPABILITY_SCHEMA} ${PINS_SCHEMA} PRAGMA user_version = 6; COMMIT;`);
+    if (version === 5) db.exec(`BEGIN; ${PINS_SCHEMA} PRAGMA user_version = 6; COMMIT;`);
   } catch (error) {
     db.close();
     throw error;
@@ -152,21 +163,55 @@ export async function openSqliteStore(
       try {
         const hash: unknown = JSON.parse(row.hash);
         const at: unknown = JSON.parse(row.at);
-        return typeof hash === "string" && typeof at === "string" ? { flowId, hash, at } : undefined;
+        if (typeof hash !== "string" || typeof at !== "string") return undefined;
+        const consent = { flowId, hash, at };
+        const pinRow = get("SELECT pins FROM consent_pins WHERE flow_id = ?", flowId);
+        if (typeof pinRow?.pins !== "string") return consent;
+        try {
+          const value: unknown = JSON.parse(pinRow.pins);
+          const isRecord = (v: unknown): v is Record<string, unknown> =>
+            v !== null && typeof v === "object" && !Array.isArray(v);
+          if (!isRecord(value) || !isRecord(value.skills) || !isRecord(value.folders)) return consent;
+          if (!Object.values(value.skills).every((v) => typeof v === "string")) return consent;
+          if (
+            !Object.values(value.folders).every(
+              (v) =>
+                isRecord(v) &&
+                typeof v.path === "string" &&
+                (v.access === "read" || v.access === "read_write"),
+            )
+          )
+            return consent;
+          return { ...consent, pins: value as ConsentPins };
+        } catch {
+          return consent;
+        }
       } catch {
         return undefined;
       }
     },
     putCapabilityConsent(row) {
-      execute(
-        "INSERT OR REPLACE INTO capability_consents (flow_id, hash, at) VALUES (?, ?, ?)",
-        row.flowId,
-        json(row.hash),
-        json(row.at),
-      );
+      store.transaction(() => {
+        execute(
+          "INSERT OR REPLACE INTO capability_consents (flow_id, hash, at) VALUES (?, ?, ?)",
+          row.flowId,
+          json(row.hash),
+          json(row.at),
+        );
+        if (row.pins === undefined) execute("DELETE FROM consent_pins WHERE flow_id = ?", row.flowId);
+        else
+          execute(
+            "INSERT OR REPLACE INTO consent_pins (flow_id, pins) VALUES (?, ?)",
+            row.flowId,
+            json(row.pins),
+          );
+      });
     },
     deleteCapabilityConsent(flowId) {
-      execute("DELETE FROM capability_consents WHERE flow_id = ?", flowId);
+      store.transaction(() => {
+        execute("DELETE FROM consent_pins WHERE flow_id = ?", flowId);
+        execute("DELETE FROM capability_consents WHERE flow_id = ?", flowId);
+      });
     },
     getTrigger(flowId, index) {
       return decodeTrigger(
