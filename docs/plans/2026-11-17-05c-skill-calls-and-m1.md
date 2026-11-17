@@ -176,6 +176,7 @@ Group A, groundwork: Tasks 0 to 3. Group B, skill calls: Tasks 4, 6, 7, 8, 9. Gr
 - A pick releases the named tool for the picked item for the whole step, so the step may publish more than once (for example after a fix).
 - "The first run is a dry run on the newest 3 items" (spec 20.5) is a procedure in M1 (the `newest` param), not a rule the app enforces. A manual run with inputs that have defaults still needs every input named (Fact 16); M1 uses a param instead.
 - When the approval of a held call expires, the step and run fail, but a loop item is not marked failed (plan 05b, unchanged).
+- The risky-word rules of a command line (`merge`, `delete`, `publish`, and for `git` also `clean`, `foreach`, `bisect` with `run`) match any word of the line, also at the hook since Review fix R1, so a harmless call whose argument is only named like that word (`git checkout clean`, `cat delete`) is refused with the risky-command sentence. It fails closed. Applying the word rules to the subcommand words only is left to a later plan with its own review (security review round 2, R2-F3; the owner's answer of 2026-11-17).
 
 ## Open items
 
@@ -1568,6 +1569,56 @@ git commit -m "Hold the command rule at the hook, refuse programs that run other
 ```
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 7 tests; pnpm format && pnpm check passed.
 Chair (review, 2026-11-17): files the executor touched: `sdk/src/validate/risky.ts`, `router/commands-route.ts`, `claude/commands.ts`, `service/claude-harness.ts` and the four new test files; all on this task's list. The chair's fix, under F1 and the owner's yes: `classifyCommand` matched whole words only, so `--force-with-lease=<ref>` and a bundle of short flags such as `-uf` (git reads it as `-u -f`) still passed as a plain push; now every word that starts with `--force`, and a bundle of short flags that holds `f` or `d`, makes a push line a delete, with the test "classifyCommand calls every --force form and a bundle of short flags with -f or -d a delete, and keeps other flags undefined". The chair's own full run of `pnpm format && pnpm check` was green end to end (281 test files, 1,818 tests passed and 1 skipped).
+
+**Round 2 (2026-11-17, the same reviewer, at 440f5b0).** Findings file `.workflow/scratch/plan-05c/security-review-2.md` (git-ignored). F1, F2 and F3 of round 1 are fixed (re-probed). New: 0 high, 1 medium, 2 low:
+- R2-F1 (medium, uncertain): `noglob` and `-` are zsh precommand words, so with a declared `noglob *` or `- *` the hook allows `noglob rm x` and `- rm x`, and if the Bash tool runs zsh (the macOS login shell) the next word runs as the program without the refusals that program would get. Uncertain because the real harness was not run; the step takes no outside text and the preview shows the pattern.
+- R2-F2 (low): the exact lines `git branch -D main`, `git tag -d v1` and `npm unpublish pkg` route, and through `git *` the hook allows `git rm notes.md`; each deletes or withdraws something.
+- R2-F3 (low): the risky-word rules match any word of the line, so harmless calls such as `git checkout clean` or `cat delete` are refused. It fails closed.
+- Checked and sound: the hook's re-check, the wider push rule, the longer program lists, the `git` `foreach` and `bisect run` refusal, and the `cli_tool` branch of `admit`.
+
+The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya, F1 dan F2; catat F3 (Disarankan)", "Perbaiki ketiganya" and "Catat semuanya"): "Ya, F1 dan F2; catat F3 (Disarankan)". That is the yes of "Ask first" for the fix task below and nothing else; R2-F3 is under Known limits.
+
+### Review fix R2: zsh precommand words and the git and npm deletes
+
+**Files:**
+- Modify: `packages/runner/src/router/commands-route.ts` (`commandRefusal`, `runsAnything`), `packages/sdk/src/validate/risky.ts` (`classifyCommand`)
+- Test: `packages/runner/src/router/route-commands-review2.test.ts`, `packages/sdk/src/validate/risky-delete.test.ts`
+
+**Interfaces:**
+- Produces (R2-F1): `runsAnything` gains `noglob` and `nocorrect`, and `commandRefusal` refuses a line whose program word starts with `-` with `DROP.runsAnything`; through the hook's re-check of Review fix R1 the same holds for a concrete call.
+- Produces (R2-F2): `classifyCommand` calls a `git` line a `delete` when its subcommand (the first word after `git` that does not start with `-`, skipping the word after `-C` or `-c`) is `rm`, or is `branch` or `tag` and a word is `--delete` or a bundle of short flags that holds `d` or `D`; and a line with the word `unpublish` a `delete`.
+
+- [ ] **Step 1: Write the failing tests**
+
+  1. "noglob, nocorrect and a program word starting with - drop the route and are refused at the hook"
+  2. "classifyCommand calls git branch -D, git branch --delete, git tag -d, git rm and npm unpublish a delete"
+  3. "git branch, git tag, git -C dir status and git rmdir-like words stay undefined"
+
+No present test changes.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm vitest run packages/runner/src/router/route-commands-review2.test.ts packages/sdk/src/validate/risky-delete.test.ts`
+Expected: FAIL
+
+- [ ] **Step 3: Implement the two fixes**
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: the command of Step 2
+Expected: PASS
+
+- [ ] **Step 5: Run the gate**
+
+Run: `pnpm format && pnpm check`
+Expected: PASS
+
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src/router packages/sdk/src/validate docs/plans/2026-11-17-05c-skill-calls-and-m1.md
+git commit -m "Refuse zsh precommand words and count git and npm deletes as deletes" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
