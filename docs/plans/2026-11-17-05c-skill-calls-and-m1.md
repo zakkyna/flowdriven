@@ -1640,36 +1640,38 @@ The owner's answer (2026-11-17, asked alone, in Indonesian). The first wording w
 - Produces (R3-F1): `runsAnything` gains the shell words that run a command or change how a later command runs: `repeat foreach select case if while until for function alias unalias hash rehash enable disable functions unfunction autoload zmodload emulate setopt unsetopt set shopt export typeset declare local readonly unset fc r cd pushd popd ulimit umask`. Through the hook's re-check the same holds for a concrete call.
 - Produces (R3-F2): the git option skip list gains `--attr-source` and `--shallow-file`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "repeat, alias, export and every other shell word on the list drop the route and are refused at the hook"
   2. "git --attr-source x rm and git --shallow-file x rm are a delete, and git --attr-source x status is not"
 
 No present test changes.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/router/route-commands-review3.test.ts packages/sdk/src/validate/risky-git-options.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the two fixes**
+- [x] **Step 3: Implement the two fixes**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/router packages/sdk/src/validate docs/plans/2026-11-17-05c-skill-calls-and-m1.md
 git commit -m "Refuse the shell words that run or change a command, and two more git options" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 2 tests; pnpm format && pnpm lint && pnpm typecheck && pnpm check passed (1824 tests passed, 1 skipped; 109 tool tests passed).
+Chair (review, 2026-11-17): files the executor touched: `router/commands-route.ts`, `sdk/src/validate/risky.ts` and the two new test files; all on this task's list, and the lists match the Interfaces word for word. No present test or fixture declares one of the new words as a command. The chair's own full run of `pnpm format && pnpm check` was green end to end (285 test files, 1,824 tests passed and 1 skipped; 109 check-tool tests passed) at a load average of about 4 to 8.
 
 ---
 

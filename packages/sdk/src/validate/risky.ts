@@ -28,9 +28,17 @@ export function classifyCommand(pattern: string): RiskyAction | undefined {
       if (word === undefined) break;
       // These options of git take their value as the next word, so that word is not the subcommand.
       if (
-        ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"].includes(
-          word,
-        )
+        [
+          "-C",
+          "-c",
+          "--git-dir",
+          "--work-tree",
+          "--namespace",
+          "--super-prefix",
+          "--config-env",
+          "--attr-source",
+          "--shallow-file",
+        ].includes(word)
       ) {
         i++;
       } else if (!word.startsWith("-")) {
