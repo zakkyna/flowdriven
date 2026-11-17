@@ -15,6 +15,31 @@ export function classifyTool(name: string): RiskyAction | undefined {
   ];
   return groups.find(([, names]) => names.some((word) => words.includes(word)))?.[0];
 }
+export function gitSubcommand(words: string[]): string | undefined {
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    if (word === undefined) break;
+    // These options of git take their value as the next word, so that word is not the subcommand.
+    if (
+      [
+        "-C",
+        "-c",
+        "--git-dir",
+        "--work-tree",
+        "--namespace",
+        "--super-prefix",
+        "--config-env",
+        "--attr-source",
+        "--shallow-file",
+      ].includes(word)
+    ) {
+      i++;
+    } else if (!word.startsWith("-")) {
+      return word;
+    }
+  }
+  return undefined;
+}
 export function classifyCommand(pattern: string): RiskyAction | undefined {
   const words = pattern.trim().split(/\s+/);
   const program = words[0]?.split(/[\\/]/).at(-1) ?? "";
@@ -22,32 +47,13 @@ export function classifyCommand(pattern: string): RiskyAction | undefined {
     return "delete";
   if (words.includes("merge")) return "merge";
   if (program === "git") {
-    let subcommand: string | undefined;
-    for (let i = 1; i < words.length; i++) {
-      const word = words[i];
-      if (word === undefined) break;
-      // These options of git take their value as the next word, so that word is not the subcommand.
-      if (
-        [
-          "-C",
-          "-c",
-          "--git-dir",
-          "--work-tree",
-          "--namespace",
-          "--super-prefix",
-          "--config-env",
-          "--attr-source",
-          "--shallow-file",
-        ].includes(word)
-      ) {
-        i++;
-      } else if (!word.startsWith("-")) {
-        subcommand = word;
-        break;
-      }
-    }
+    const subcommand = gitSubcommand(words);
     if (
       subcommand === "rm" ||
+      subcommand === "checkout" ||
+      subcommand === "restore" ||
+      (subcommand === "stash" && (words.includes("drop") || words.includes("clear"))) ||
+      (subcommand === "worktree" && words.includes("remove")) ||
       ((subcommand === "branch" || subcommand === "tag") &&
         words.some((word) => word === "--delete" || /^-[A-Za-z]*[dD][A-Za-z]*$/.test(word)))
     )

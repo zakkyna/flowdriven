@@ -1,4 +1,5 @@
-import { classifyCommand } from "@flowdriven/sdk";
+import { classifyCommand, gitSubcommand } from "@flowdriven/sdk";
+import { protectedPath } from "../claude/protected.ts";
 import { DROP } from "./route.ts";
 
 const runsAnything = new Set(
@@ -27,9 +28,11 @@ export function commandRefusal(pattern: string): string | undefined {
     return DROP.riskyCommand;
   if (
     runsAnything.has(program) ||
+    (program === "git" && gitSubcommand(words) === "config") ||
     (program === "git" && (words.includes("foreach") || (words.includes("bisect") && words.includes("run"))))
   )
     return DROP.runsAnything;
+  if (words.some((word) => protectedPath(word.replace(/[=:,@]/g, "/")))) return DROP.protectedPath;
   if (interpreters.has(program) && pattern.endsWith(" *")) return DROP.interpreterWildcard;
   return undefined;
 }

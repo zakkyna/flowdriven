@@ -14,6 +14,7 @@ export const DROP = {
   riskyCommand:
     "A step cannot run this command: it deletes, publishes or merges, and a step that needs that must ask first.",
   runsAnything: "A step cannot run this program: it can run other programs or reach the network.",
+  protectedPath: "A step cannot run a command that names .git, .claude or .mcp.json.",
   interpreterWildcard: "This program runs only as an exact command line.",
   noHooks: "This needs a harness that can check each call.",
   noChrome: "This Claude Code cannot use Chrome.",

@@ -1693,7 +1693,7 @@ The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya
 - Produces (2): `commandRefusal` refuses a `git` line whose subcommand is `config` with `DROP.runsAnything`, whatever follows it.
 - Produces (3): `commandRefusal` refuses a line in which any word, with `=`, `:`, `,` and `@` read as `/`, names a protected path by `protectedPath` (a part `.git` or `.claude`, or a last part `.mcp.json`, after the fold that `claude/decide.ts` uses), with the new `DROP.protectedPath`: "A step cannot run a command that names .git, .claude or .mcp.json." Through the hook's re-check the same holds for a concrete call. `protectedPath` itself does not change, and `claude/decide.ts` refuses a Write or Edit there exactly as before.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "git checkout, git restore, git stash drop and clear, and git worktree remove are a delete, and git switch, git stash, git worktree list and git status are not"
   2. "git config drops the route and is refused at the hook, whatever follows it"
@@ -1701,33 +1701,35 @@ The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya
 
 No present test changes; the present tests of `claude/decide.ts` for protected paths pass unchanged.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/sdk/src/validate/risky-git-discard.test.ts packages/runner/src/router/route-commands-review4.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the three fixes**
+- [x] **Step 3: Implement the three fixes**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/sdk/src/validate packages/runner/src/router packages/runner/src/claude/protected.ts packages/runner/src/claude/decide.ts docs/plans/2026-11-17-05c-skill-calls-and-m1.md
 git commit -m "Refuse git commands that throw work away or install programs, and commands that name protected paths" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 3 tests; pnpm format && pnpm lint && pnpm typecheck && pnpm check passed (1827 tests passed, 1 skipped; 109 tool tests passed).
+Chair (review, 2026-11-17): files the executor touched are `sdk/src/validate/risky.ts`, the new `claude/protected.ts` (the same function as before, moved), the import in `claude/decide.ts`, `router/commands-route.ts`, `router/route.ts` and the two new test files. All are on this task's list. The new tests check the route, the hook with the exact line, and the hook under a `*` pattern, and they show that `git status`, `git switch main` and `cp x notes.txt` still pass. The chair's full run of the gate is the closing gate in the Handover.
 
 ---
 
-**Outcome of the review (2026-11-17).** Three rounds, the most the plan allows. Seven findings were fixed with their own tests: F1, F2 and F3 (R1, 440f5b0), R2-F1 and R2-F2 (R2, e60f773), and R3-F1 and R3-F2 (R3, bea4b11). R2-F3 (refusals that are too strict) is under Known limits by the owner's choice. So is the class behind R2-F1 and R3-F1: the refused programs are a list, and the rule that a program must be a file on PATH waits for a later plan. No other finding is open.
+**Outcome of the review (2026-11-17).** Three rounds, the most the plan allows. Seven findings were fixed with their own tests: F1, F2 and F3 (R1, 440f5b0), R2-F1 and R2-F2 (R2, e60f773), and R3-F1 and R3-F2 (R3, bea4b11). After round 3, R4 fixed the three gaps that the parent session and the chair found (git commands that throw work away or install programs, and commands that name protected paths). R2-F3 (refusals that are too strict) is under Known limits by the owner's choice. So is the class behind R2-F1 and R3-F1: the refused programs are a list, and the rule that a program must be a file on PATH waits for a later plan. No other finding is open.
 
 ---
 
