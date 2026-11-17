@@ -27,6 +27,8 @@ Task 1 is already approved. Every other change below is on the "Ask first" list 
 
 **The owner's answers during Task 0 (2026-11-17).** Asked how the prototype skill puts a prototype on the internet, the owner chose "Lewat konektor claude.ai"; asked which connector, the host connector; asked which skill, "prototype-builder". Asked whether the skill limits may rise to 1,000 files, 64 MiB and 60,000 characters (H3), "Ya, naikkan (Disarankan)" (Decision 3). Asked whether, because the skill runs commands while it reads the job's text (H3, Decision 7), Tasks 1 to 19 and 21 are built now and Tasks 20 and 22 to 25 wait for a safe way to run such commands, "Ya, tunda M1 (Disarankan)". So the M1 tasks wait for a new decision of the owner, after the research of O2.
 
+**The owner's correction (2026-11-17).** The owner wrote: "Ya setuju semua tidak perlu satu persatu" and "Ulangi, Tadi saya salah pencet tidak". So the "Tidak" to item 7(b) was a mispress: the owner says yes to every item, 7(b) and 7(c) included, and asked not to be asked one by one again for these items. Task 25 no longer waits for a yes; it still waits, with Tasks 20 and 22 to 24, for a safe way to run the skill's commands (O5) and for the host connector's tools (H1), as the owner agreed above.
+
 Nothing else on the list is touched: no CI, no `tools/checks/`, no instruction file, no agent or MCP configuration, no CODEOWNERS, no secret or credential file, no change to `contentHash` or `canonicalListing`. The executor stops and writes `Blocked:` if a task seems to need anything else on that list.
 
 ## Global Constraints
@@ -51,8 +53,8 @@ Nothing else on the list is touched: no CI, no `tools/checks/`, no instruction f
 | M1 demo (fake `claude`) | `node packages/runner/src/test-helpers/m1-demo.ts` | prints the ten lines of Task 23 | executor (Task 23), then **Chair step (GUI)**, Task 25 |
 | Capture | `pnpm build && pnpm capture` | `captured 26 screens`, exit 0 | **Chair step (GUI)**, Task 25 |
 | Probes | the kit of Task 0 | facts H1 to H4 written under Facts | **Chair step (network)**, owner watching, Task 0 |
-| M1 attended | the walk of Task 24, steps of Task 25 | the run ends `done`, the publish was released by the pick, the proposal passed its checks, nothing sent | **Chair step (GUI)**, owner watching, Task 25; waits for a new yes to item 7(b) |
-| M1 on the schedule | steps of Task 25 | one triggered run reaches the pick on its own and ends `done` after the owner's pick and sign-off | **Chair step (GUI)**, owner watching, Task 25; waits for a yes to item 7(c) |
+| M1 attended | the walk of Task 24, steps of Task 25 | the run ends `done`, the publish was released by the pick, the proposal passed its checks, nothing sent | **Chair step (GUI)**, owner watching, Task 25; waits for O5 and H1 |
+| M1 on the schedule | steps of Task 25 | one triggered run reaches the pick on its own and ends `done` after the owner's pick and sign-off | **Chair step (GUI)**, owner watching, Task 25; waits for O5 and H1 |
 | Commit | `git add ... && git commit ...` | commit created | **Chair step (commit)** |
 
 ## Dependency changes
@@ -1399,7 +1401,7 @@ git commit -m "Add the M1 walk for the real app" -m "Assisted-by: Codex" -m "Co-
 
 ### Task 25: Chair steps (GUI), owner watching: M1 attended, then on the schedule (the executor skips this task)
 
-**Waiting for the owner.** On 2026-11-17 the owner answered "Tidak" to item 7(b), and 7(c) was not asked. After Task 24 the chair asks again, plainly and alone; Steps 2 to 6 run only after a new yes to 7(b), and Step 5 only after a yes to 7(c). Step 1 (the fake demo and the pictures) needs no real account and may run.
+**Waiting.** The owner said yes to items 7(b) and 7(c) (the correction of 2026-11-17, under "The owner's answers"). This task still waits, with Tasks 20 and 22 to 24, for a safe way to run the prototype skill's commands (O5) and for the host connector's tools (H1). The chair tells the owner before Step 3 starts. Step 1 (the fake demo and the pictures) needs no real account.
 
 **Not for the executor.** The chair tells the owner when each step starts and what it showed, and the owner makes every decision in the app. Logs go to `.workflow/scratch/plan-05c/walk/` (git-ignored).
 
