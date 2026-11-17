@@ -1,6 +1,7 @@
 import { isAbsolute } from "node:path";
 import type { HeldCall } from "../harness.ts";
 import { BROWSER_DENY, type BrowserState, CHROME_PREFIX, decideBrowser } from "./browser.ts";
+import { decideCommand } from "./commands.ts";
 import { type ConnectorAllow, type ConnectorState, decideConnector } from "./connector.ts";
 import { hasParentPart, isInside, resolveDeep } from "./paths.ts";
 import type { Policy } from "./policy.ts";
@@ -94,6 +95,12 @@ export function decide(
     return result.allow
       ? { allow: true, tool, effect: "connector", connector: result.connector }
       : { ...deny(result.reason), ...(result.held === undefined ? {} : { held: result.held }) };
+  }
+  // Bash goes through the command rule only in a step that declares commands; in any other step it
+  // is refused below as an undeclared tool, with the same sentence as before.
+  if (call.tool_name === "Bash" && policy.tools.includes("Bash")) {
+    const result = decideCommand(policy.commands, call.tool_input);
+    return result.allow ? { allow: true, tool } : deny(result.reason);
   }
   if (!policy.tools.includes(call.tool_name)) return deny(`This step does not declare the tool ${tool}.`);
   const name = call.tool_name;

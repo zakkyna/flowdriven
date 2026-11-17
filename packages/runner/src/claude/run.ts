@@ -238,6 +238,18 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
               class: decision.connector.class,
             });
         }
+        if (
+          decision.allow &&
+          decision.tool === "Bash" &&
+          call !== null &&
+          typeof call === "object" &&
+          "tool_input" in call &&
+          call.tool_input !== null &&
+          typeof call.tool_input === "object" &&
+          "command" in call.tool_input &&
+          typeof call.tool_input.command === "string"
+        )
+          audit("command_run", { ...detail, command: visible(call.tool_input.command, 300) });
         if (decision.allow && decision.effect === "page" && policy.browser && deps.pages && attempt) {
           deps.pages.take(input.runId, policy.browser.requirementId);
           attempt.takePage();

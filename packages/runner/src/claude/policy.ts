@@ -4,6 +4,7 @@ import { parseTemplate, type Requirement, type UrlTemplate, webRates } from "@fl
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
 import type { Routed } from "../router/types.ts";
 import type { BrowserPolicy } from "./browser.ts";
+import { COMMAND_STOP, type CommandPolicy } from "./commands.ts";
 import { CONNECTOR_STOP, type ConnectorPolicy } from "./connector.ts";
 import type { ConnectorFact } from "./connector-scan.ts";
 import { hasParentPart, isInside, resolveDeep } from "./paths.ts";
@@ -19,6 +20,7 @@ export type Policy = {
   sessionId: string;
   browser?: BrowserPolicy;
   connector?: ConnectorPolicy;
+  commands?: CommandPolicy;
 };
 
 export function isProjectRef(ref: string | undefined): boolean {
@@ -44,6 +46,7 @@ export function buildPolicy(input: {
   sessionId: string;
   schema: boolean;
   skillFolder?: string;
+  takesOutside?: boolean;
 }): Policy {
   const policy: Policy = {
     tools: [],
@@ -54,8 +57,23 @@ export function buildPolicy(input: {
     sessionId: input.sessionId,
   };
   if (input.kind === "agent") return policy;
+  const commands = input.requirements.filter((r) => r.type === "cli_tool");
+  if (
+    commands.length &&
+    (input.takesOutside !== false ||
+      input.requirements.some((r) => r.type === "web" || r.type === "mcp_server" || r.sensitive))
+  )
+    throw new Error(COMMAND_STOP.outside);
   const paths = input.requirements.filter((requirement) => {
     if (requirement.type === "path") return true;
+    if (requirement.type === "cli_tool") {
+      const route = input.routes?.find((entry) => entry.requirementId === requirement.id);
+      if (!route?.routed || route.provider !== "claude-code-commands" || !requirement.commands?.length)
+        throw new Error(`This step uses something FlowDriven cannot enforce yet (${requirement.id}).`);
+      policy.commands ??= { patterns: [] };
+      policy.commands.patterns.push(...requirement.commands);
+      return false;
+    }
     if (requirement.type === "harness" || requirement.type === "skill") return false;
     if (requirement.type === "web") {
       const fail = () =>
@@ -199,6 +217,10 @@ export function buildPolicy(input: {
       .map((folder) => folder.path);
     policy.tools = ["Read", "Glob", "Grep"];
     if (policy.folders.some((folder) => folder.write)) policy.tools.push("Write", "Edit");
+  }
+  if (policy.commands) {
+    if (!first) throw new Error(COMMAND_STOP.noFolder);
+    policy.tools.push("Bash");
   }
   if (skillPath && !first) {
     policy.addDirs = [skillPath];

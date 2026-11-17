@@ -124,6 +124,7 @@ export function gate(
       const req = manifest.requirements.find((r) => r.id === id);
       if (
         req?.type === "web" ||
+        (req?.type === "cli_tool" && !!req.commands?.length) ||
         (req?.type === "mcp_server" && catalogEntry(req.ref)) ||
         (req?.type === "skill" && skillSource(req.ref, { home: "" }))
       ) {

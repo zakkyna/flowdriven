@@ -823,7 +823,7 @@ Needs H2: the keys of `tool_input` for `Bash`. If H2 shows a key that is not nam
 - Consumes: `parseCommandLine`, `commandLineAllowed` (Task 5); Task 12's route.
 - Produces: `type CommandPolicy = { patterns: string[] }`; `Policy.commands?: CommandPolicy`; `COMMAND_DENY = { notDeclared: "This step does not declare this command.", badInput: "FlowDriven does not accept this command call.", background: "A command may not run in the background." }`; `COMMAND_STOP = { outside: "A step that reads outside text cannot run commands. Run them in a step of their own.", noFolder: "A step that runs commands needs a folder to run them in." }`; `decideCommand(policy: CommandPolicy | undefined, input: Record<string, unknown>): { allow: true } | { allow: false; reason: string }`, which accepts the keys `command` (string), `description` (string, at most 500 characters) and `timeout` (whole number, 1 to 600000), and `run_in_background` and `dangerouslyDisableSandbox` only as `false`; `buildPolicy` adds `Bash` to `tools` when the step uses a routed `cli_tool`, throws `COMMAND_STOP.outside` when such a step has `takesOutside` not `false` or uses a `web` or connector requirement or any `sensitive` requirement, and throws `COMMAND_STOP.noFolder` when it has no folder; its commands run in `policy.cwd`, the step's first folder.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "an exact declared command line is allowed"
   2. "a line with an extra word, or a command the step does not declare, is refused with This step does not declare this command."
@@ -838,35 +838,40 @@ Needs H2: the keys of `tool_input` for `Bash`. If H2 shows a key that is not nam
 Chair's decision (2026-11-17): the plan was not exact, not the executor. `packages/runner/src/claude/adapter.ts` joins the files of this task: it passes the request's `takesOutside` to `buildPolicy` and the step's command patterns and folder to `buildPrompt`, nothing else.
   11. "the gate passes a step with a routed cli_tool, and Bash in a step without one is refused as today"
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/claude/decide-commands.test.ts packages/runner/src/claude/policy-commands.test.ts packages/runner/src/claude/adapter-commands.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement `decideCommand`, the `Bash` branch of `decide`, the policy rules and the gate row**
+- [x] **Step 3: Implement `decideCommand`, the `Bash` branch of `decide`, the policy rules and the gate row**
 
 The `Bash` branch comes before the check of `decide.ts:98-100`, which stays for every other tool name. A `cli_tool` without commands stays in `cannot` (the present test `claude-harness-web.test.ts:93` passes unchanged).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2, then `pnpm vitest run packages/runner/src/service/claude-harness-web.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude packages/runner/src/harness.ts packages/runner/src/exec/leaf.ts packages/runner/src/service
 git commit -m "Let a step run its declared command lines through Bash, checked by the hook" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-Blocked: Task 13 requires adapter.ts to pass takesOutside to buildPolicy and command patterns to buildPrompt, but adapter.ts is not in the permitted files.
+Blocked (Codex, 2026-11-17, third call): Task 13 requires adapter.ts to pass takesOutside to buildPolicy and command patterns to buildPrompt, but adapter.ts is not in the permitted files.
 Blocked (Codex, 2026-11-17, second call): Auditing every allowed and refused Bash call requires changes to claude/run.ts, which is outside the permitted files; the existing audit records only aggregate allowed calls and caps refused-call entries.
 Chair's decision (2026-11-17, second): `packages/runner/src/claude/run.ts` joins the files of this task for one thing only: in the decide wrapper, next to `connector_call`, each allowed `Bash` call writes one audit row `command_run` with the command line cut to 300 characters through `visible`; a refused `Bash` call is recorded by the present `tool_denied` path and counted under Blocked calls. Nothing else in `run.ts` changes.
+
+Blocked (Codex, 2026-11-17, third call): The Task 13 test command failed twice after implementation; the web and connector test fixtures were missing required fields.
+
+Chair (review, 2026-11-17): Codex's third call stopped after two failed test runs; the chair finished the task. Files the executor touched: `claude/commands.ts` (new), `claude/decide.ts`, `claude/policy.ts`, `claude/prompt.ts`, `claude/adapter.ts`, `claude/run.ts`, `exec/leaf.ts`, `harness.ts`, `service/claude-harness.ts` and the three new test files; all are on this task's list after the chair's two decisions, none is on the untouchable list, and the chair checked each. The chair's fixes: the connector fixture of `policy-commands.test.ts` declares `tools`; the test keeps its route in a typed constant; `policy.ts` has no assignment inside an expression (Biome); and `decide.ts` sends `Bash` to the command rule only in a step whose tools include `Bash`, so in any other step it is refused with today's sentence "This step does not declare the tool Bash." (`claude/decide.test.ts:108` passes unchanged).
+Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's full run of `pnpm format && pnpm check` was green end to end (263 test files, 1,757 tests passed and 1 skipped; lint, typecheck, check:hidden and check:deps inside it), at a load average of about 6 to 14.
 
 ### Task 14: Granted folders: the ref form, the resolve rule, the route and the preview, pinned at the allow, audited and taken back
 

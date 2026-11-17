@@ -11,6 +11,7 @@ export function buildPrompt(input: {
   instructions: string;
   outputs: OutputDecl[];
   lastFailure?: string;
+  commands?: { patterns: string[]; cwd: string };
   browser?: { templates: string[]; pagesLeft: number };
   connector?: { label: string; tools: string[]; approved?: { tool: string; input: Value }[] };
 }): string {
@@ -21,6 +22,9 @@ export function buildPrompt(input: {
         ? "You have no file tools and no working folder in this step."
         : "You have no tools and no working folder in this step."
       : `Your working folder is ${input.cwd}. Work only inside it.`,
+    ...(input.commands
+      ? [`Allowed command lines: ${input.commands.patterns.join("; ")}. Run them in ${input.commands.cwd}.`]
+      : []),
     ...(input.browser
       ? [
           "This step may read web pages in the owner's own browser, and nothing else in it.",

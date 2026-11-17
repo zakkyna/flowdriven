@@ -145,6 +145,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                 const policy = buildPolicy({
                   kind: req.kind === "agent" ? "agent" : "worker",
                   requirements: req.requirements,
+                  takesOutside: req.takesOutside,
                   routes: req.routes ?? [],
                   connectors: options.connectors?.() ?? [],
                   catalog,
@@ -189,6 +190,9 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   } catch {}
                 }
                 return buildPrompt({
+                  ...(policy.commands
+                    ? { commands: { patterns: policy.commands.patterns, cwd: policy.cwd } }
+                    : {}),
                   ...(policy.connector
                     ? {
                         connector: {

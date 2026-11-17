@@ -179,6 +179,7 @@ export async function runLeaf(
             project: run.project,
             requirements: step.uses.flatMap((id) => run.requirements.filter((r) => r.id === id)),
             routes: run.routes ?? [],
+            takesOutside: stepTakesOutsideText(step, manifest, run, itemKey, store.listSteps(run.id)),
             ...(approvedCalls.length ? { approvedCalls } : {}),
             onOutside: () => {
               row.outside = true;
