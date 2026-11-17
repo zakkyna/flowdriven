@@ -36,7 +36,7 @@ Nothing else on the list is touched: no CI, no `tools/checks/`, no instruction f
 - Node `>=24.14.0`, pnpm `10.9.0`; English everywhere, ASCII only (no em dash, no curly quote) in this plan and in every file it creates.
 - **Plain-Node rule** (plan 02b): code in `packages/*/src` uses relative imports that end in `.ts` and erasable TypeScript only (no `enum`, no `namespace`, no parameter properties). No `any`; `noUncheckedIndexedAccess` is on (write `list.at(0)?.x`); a bare `!` needs a comment. No `eval`, no `Function(` (`packages/runner/src/source-rules.test.ts`). Hidden characters in tests are built with `String.fromCodePoint`.
 - **Imports.** The runner imports `@flowdriven/contracts` only under `service/`, in `main.ts` and in `test-helpers/`, so `router/`, `claude/`, `connectors/`, `skills/`, `folders/` and `exec/` define their own types and `service/` maps them. The SDK's main entry (`packages/sdk/src/index.ts`) stays free of `node:` imports; what needs them goes through `packages/sdk/src/node.ts`. No `console.log` in runner sources. `TZ=UTC` for every test.
-- **No wall-clock waits in tests that this plan adds**, except tests against the fake `claude`, which poll the child as the present adapter tests do, and tests that use Vitest's fake timers. The known load-sensitive tests of plan 03 ("S4b" in `claude/review-03-s4.test.ts`, "Missing pid" in `claude/adapter-limits.test.ts`) are not touched; if one fails in a full run it is re-run alone before it is blamed on this plan.
+- **No wall-clock waits in tests that this plan adds**, except tests against the fake `claude`, which poll the child as the present adapter tests do, and tests that use Vitest's fake timers. The known load-sensitive tests of plan 03 ("S4b" in `claude/review-03-s4.test.ts`, "Missing pid" in `claude/adapter-limits.test.ts`) and of plans 04 and 05b ("500 changed files with max_items 1 ..." in `triggers/service-files.test.ts`, which timed out once at 5 s in a full run of Task 2, and "a close of the withheld tab is allowed ..." in `claude/adapter-closing.test.ts`, which failed once in the next full run while the Mac's load average was about 40; each passed alone three times out of three) are not touched; if one fails in a full run it is re-run alone before it is blamed on this plan.
 - **Fail closed.** A request the rules do not recognise, a tool or command the flow did not declare, a skill that cannot be read, a folder that does not resolve, a pin that is missing, a field that is absent, a value that cannot be parsed: refuse, withhold or block; never allow.
 - **R14 holds everywhere.** A step's tools, folders, commands, sites, connectors and grants come from the manifest and the owner's consent only; a skill's text reaches the prompt and never the policy. FlowDriven never writes a skill's front matter to disk except `name` and `description`.
 - **Frozen at run start** (plan 05). Requirements, routes and tools are fixed when the run starts; a pin is read from the consent at the step and compared with what is on disk at that moment.
@@ -256,38 +256,41 @@ A contract change is its own task.
 **Interfaces:**
 - Produces: `CapabilityRow.pin?: string` (1 to 600 characters; a skill hash `sha256:<64 hex>` or an absolute folder path); `flows.allowCapabilities` input `{ flowId, hash, pins?: Record<string, string> }` (at most 50 entries, keys are requirement ids of 1 to 100 characters, values as `pin`); `LeafStepRun.limitMs?: number` (integer, at least 1).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "a capability row may carry a pin of at most 600 characters, and an empty pin is refused"
   2. "allowCapabilities takes optional pins keyed by requirement id, and refuses more than 50 pins"
   3. "a leaf step run may carry its time limit in milliseconds, a whole number of at least 1"
   4. "an old payload without pin, pins or limitMs still parses"
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/contracts/src`
 Expected: FAIL (unknown key `pin`, `pins`, `limitMs`)
 
-- [ ] **Step 3: Implement the three fields**
+- [x] **Step 3: Implement the three fields**
 
 Optional fields only; no present field changes.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run packages/contracts/src`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/contracts/src
 git commit -m "Add the capability pin, the allow with pins, and a step's time limit to the contract" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
+Chair: on a loaded Mac (load average about 40) one load-sensitive test failed in each of two full runs (named under Global Constraints), and each passed alone three times out of three; lint, typecheck, check:hidden and check:deps passed.
 
 ### Task 3: Store version 6: pins on the capability consent
 

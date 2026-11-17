@@ -137,3 +137,61 @@ test("a step run keeps outside and pagesRead and is valid without them", () => {
   expect(LeafStepRun.parse(step)).toEqual(step);
   expect(LeafStepRun.safeParse({ ...step, pagesRead: -1 }).success).toBe(false);
 });
+
+test("a capability row may carry a pin of at most 600 characters, and an empty pin is refused", () => {
+  for (const pin of ["a", "a".repeat(600)]) {
+    expect(CapabilityRow.parse({ ...routed, pin })).toEqual({ ...routed, pin });
+  }
+  for (const pin of ["", "a".repeat(601)]) {
+    expect(CapabilityRow.safeParse({ ...routed, pin }).success).toBe(false);
+  }
+});
+
+test("allowCapabilities takes optional pins keyed by requirement id, and refuses more than 50 pins", () => {
+  const input = operations["flows.allowCapabilities"].input;
+  const base = { flowId: "flow", hash };
+  const pins = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`id${i}`, "a".repeat(600)]));
+  expect(input.parse({ ...base, pins })).toEqual({ ...base, pins });
+  expect(input.safeParse({ ...base, pins: { ...pins, extra: "x" } }).success).toBe(false);
+  for (const invalid of [{ "": "x" }, { ["a".repeat(101)]: "x" }, { id: "" }, { id: "a".repeat(601) }]) {
+    expect(input.safeParse({ ...base, pins: invalid }).success).toBe(false);
+  }
+  expect(input.parse({ ...base, pins: { ["a".repeat(100)]: "x" } })).toEqual({
+    ...base,
+    pins: { ["a".repeat(100)]: "x" },
+  });
+});
+
+test("a leaf step run may carry its time limit in milliseconds, a whole number of at least 1", () => {
+  const step = {
+    stepId: "step",
+    title: "Step",
+    do: "worker",
+    state: "passed",
+    attempts: [],
+    maxAttempts: 1,
+    checks: [],
+  };
+  expect(LeafStepRun.parse({ ...step, limitMs: 1 })).toEqual({ ...step, limitMs: 1 });
+  for (const limitMs of [0, -1, 1.5]) {
+    expect(LeafStepRun.safeParse({ ...step, limitMs }).success).toBe(false);
+  }
+});
+
+test("an old payload without pin, pins or limitMs still parses", () => {
+  const step = {
+    stepId: "step",
+    title: "Step",
+    do: "worker",
+    state: "passed",
+    attempts: [],
+    maxAttempts: 1,
+    checks: [],
+  };
+  expect(CapabilityRow.parse(routed)).toEqual(routed);
+  expect(operations["flows.allowCapabilities"].input.parse({ flowId: "flow", hash })).toEqual({
+    flowId: "flow",
+    hash,
+  });
+  expect(LeafStepRun.parse(step)).toEqual(step);
+});

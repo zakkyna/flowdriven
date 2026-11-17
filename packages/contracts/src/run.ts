@@ -119,6 +119,7 @@ export const LeafStepRun = z.object({
   waiting: Waiting.optional(),
   outside: z.boolean().optional(),
   pagesRead: z.number().int().min(0).optional(),
+  limitMs: z.number().int().min(1).optional(),
 });
 export type LeafStepRun = z.infer<typeof LeafStepRun>;
 export const RunItem = z.object({

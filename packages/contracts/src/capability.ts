@@ -26,6 +26,7 @@ export const CapabilityRow = z
     away: z.boolean(),
     reason: z.string().max(200).optional(),
     cost: z.string().max(120).optional(),
+    pin: z.string().min(1).max(600).optional(),
     details: z.array(z.string().max(300)).max(8),
   })
   .refine((row) =>

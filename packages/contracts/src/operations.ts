@@ -60,7 +60,14 @@ export const operations = {
     writes: [],
   },
   "flows.allowCapabilities": {
-    input: z.object({ flowId: Id, hash: ContentHash }),
+    input: z.object({
+      flowId: Id,
+      hash: ContentHash,
+      pins: z
+        .record(z.string().min(1).max(100), z.string().min(1).max(600))
+        .refine((pins) => Object.keys(pins).length <= 50)
+        .optional(),
+    }),
     output: FlowCapabilities,
     mcp: "no",
     errors: ["invalid_input", "not_found", "not_allowed"],
