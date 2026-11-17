@@ -127,10 +127,12 @@ export function buildPolicy(input: {
       if (!fact || fact.status !== "connected") throw new Error(CONNECTOR_STOP.down(entry.label));
       const tools = [...new Set(requirement.tools ?? [])];
       const read: string[] = [];
+      const write: string[] = [];
       const risky: ConnectorPolicy["risky"] = {};
       for (const tool of tools) {
         const scanned = fact.tools.find((item) => item.name === tool);
         if (entry.read.includes(tool) && scanned?.readOnly === true) read.push(tool);
+        else if (entry.write?.includes(tool) && scanned && scanned.destructive !== true) write.push(tool);
         else if (Object.hasOwn(entry.risky, tool) && scanned) {
           const action = entry.risky[tool];
           if (action === undefined) throw fail();
@@ -151,6 +153,9 @@ export function buildPolicy(input: {
         prefix: entry.prefix,
         tools,
         read,
+        ...(write.length
+          ? { write, labelTools: (entry.labelTools ?? []).filter((tool) => write.includes(tool)) }
+          : {}),
         risky,
         blocked: fact.tools.map((item) => item.name).filter((name) => !tools.includes(name)),
       };

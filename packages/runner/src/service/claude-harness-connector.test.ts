@@ -17,7 +17,7 @@ const id = `mcpsrv_${"a".repeat(24)}`;
 const tools = [
   ...gmail.read.map((name) => ({ name, readOnly: true })),
   ...Object.keys(gmail.risky).map((name) => ({ name, readOnly: false })),
-  { name: "create_draft", readOnly: false },
+  { name: "create_label", readOnly: false },
 ];
 const fact = { name: gmail.name, url: gmail.url, id, status: "connected" as const, tools };
 const facts = { hooks: true, chrome: false, connectors: [fact] };
@@ -70,7 +70,7 @@ test("a missing fact, a fact with the right name and another url, and a declared
       gate({ ...base, facts: { ...facts, connectors }, manifest: manifest(), allowed: true }).reason,
     ).toBe("This connector is not connected in Claude Code.");
   expect(
-    gate({ ...base, facts, manifest: manifest(requirement({ tools: ["create_draft"] })), allowed: true })
+    gate({ ...base, facts, manifest: manifest(requirement({ tools: ["create_label"] })), allowed: true })
       .reason,
   ).toBe("FlowDriven cannot provide one of this connector's tools yet.");
 });

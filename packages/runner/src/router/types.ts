@@ -25,7 +25,7 @@ export type FactConnector = {
   name: string;
   url: string;
   status: string;
-  tools: { name: string; readOnly: boolean }[];
+  tools: { name: string; readOnly: boolean; destructive?: true }[];
 };
 export type HarnessFacts = {
   hooks: boolean;

@@ -7,6 +7,8 @@ export type ConnectorEntry = {
   prefix: string;
   label: string;
   read: string[];
+  write?: string[];
+  labelTools?: string[];
   risky: Record<string, RiskyAction>;
 };
 
@@ -18,6 +20,8 @@ export const CONNECTORS: ConnectorEntry[] = [
     prefix: "mcp__claude_ai_Gmail__",
     label: "Gmail",
     read: ["search_threads", "get_thread", "get_message", "list_labels", "list_drafts", "get_draft"],
+    write: ["create_draft", "label_thread", "label_message", "update_message_labels"],
+    labelTools: ["label_thread", "label_message", "update_message_labels"],
     risky: {
       send_message: "send",
       reply: "send",
@@ -26,6 +30,8 @@ export const CONNECTORS: ConnectorEntry[] = [
       trash_message: "delete",
       delete_draft: "delete",
       delete_label: "delete",
+      mark_thread_spam: "delete",
+      mark_message_spam: "delete",
     },
   },
 ];

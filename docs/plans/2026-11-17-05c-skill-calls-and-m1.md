@@ -1091,7 +1091,7 @@ Needs H4: the chair writes the exact `write` list under this task (the names of 
 
 Chair's decision (2026-11-17, before the executor's call), with the lists from H4: (1) Gmail's `write` is `create_draft`, `label_thread`, `label_message`, `update_message_labels`, and its `labelTools` are `label_thread`, `label_message`, `update_message_labels`. `unlabel_thread` and `unlabel_message` are not write tools (the scan marks them destructive), and `update_draft`, `create_label`, `update_label`, `untrash_thread`, `untrash_message`, `unmark_thread_spam` and `unmark_message_spam` keep no class. `risky` gains `mark_thread_spam: "delete"` and `mark_message_spam: "delete"`. (2) The route reads the mark: `FactConnector.tools` in `router/types.ts` gains `destructive?: true`, and the stored-scan check in `service/claude-harness.ts` accepts a stored tool only when `destructive` is absent or `true` (any other value makes the stored connectors invalid, as a bad `readOnly` does today); both files join this task for that only. (3) `buildPolicy` puts a declared write tool in `ConnectorPolicy.write` only when the scan lists it and its fact is not `destructive`, and sets `labelTools` to the entry's label tools that are in `write`. (4) `ConnectorAllow.class` gains `"write"`, and an allowed write call writes the present `connector_call` audit row with that class. (5) A label tool's call for which `throwsMailAway` is true is held with `action: "delete"` and released only by a pick grant or a call grant, exactly as a risky `delete` tool. (6) The preview: after "Reads with: ...", `capabilitySentence` adds "Changes with: <declared write tools, in declared order, joined by commas>." and, only when one of them is a label tool, ends with "Waits for your approval before a label change that moves mail to Trash or Spam."; the risky sentence stays where it is.
 
-- [ ] **Step 1: Write the failing tests, and change the present ones**
+- [x] **Step 1: Write the failing tests, and change the present ones**
 
   1. "create_draft and label_thread run without approval when declared, and the audit row says class write"
   2. "a label call that names TRASH or SPAM, in any case and anywhere in the input, is held as a delete"
@@ -1104,29 +1104,34 @@ Chair's decision (2026-11-17, before the executor's call), with the lists from H
 
 Present tests (item 6 of the owner approval): `router/route-connector.test.ts:59-68` uses `create_draft` as "a declared plain write"; it becomes `create_label` with the title "a tool with no class, an unknown tool, ...". `claude/review-05b-r.test.ts:333-338` "a step that asks for a plain write tool is blocked at the gate or the route, and no child is started" becomes "a step that asks for a Gmail tool with no class is blocked ..." with `create_label`. `claude/policy-connector.test.ts:22` and `service/claude-harness-connector.test.ts:20,73` use `create_draft` as a refused tool; they use `create_label`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/claude/decide-connector-write.test.ts packages/runner/src/router/route-connector-write.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the class**
+- [x] **Step 3: Implement the class**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2, then `pnpm vitest run packages/runner/src/claude packages/runner/src/router packages/runner/src/service`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/connectors packages/runner/src/claude packages/runner/src/router packages/runner/src/service
 git commit -m "Let declared Gmail draft and label tools run, and hold a label that moves mail to Trash or Spam" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Blocked (Codex, 2026-11-17, first call): connectors/catalog.test.ts expects the old exact risky list and must change to include the required spam tools.
+Chair's decision (2026-11-17, second): the plan was not exact, not the executor. (1) `connectors/catalog.test.ts:15-34` ("the read list is the six read-only tools of G5, the risky map is the seven send and delete tools, and no tool is in both") pins the risky map that this task changes on purpose. Under item 6 of the owner approval it expects the nine tools (the seven, and `mark_thread_spam` and `mark_message_spam`, both `delete`) and its title says "nine"; nothing else in it changes. (2) The prompt's connector paragraph names the declared write tools, and the Trash and Spam rule, only when the step has them, and says that the owner approves: `buildPrompt`'s connector input gains `write?` and `labelHold?`, and `claude/adapter.ts` joins this task to pass those two fields, nothing else. The chair made both changes and added the test "the prompt names the write tools and the Trash and Spam rule only when the step declares them" to `claude/decide-connector-write.test.ts`.
+Chair (review, 2026-11-17): Codex's call stopped at the gate on `connectors/catalog.test.ts`; the chair finished the task. Files the executor touched: `connectors/catalog.ts`, `router/route.ts`, `router/types.ts`, `claude/policy.ts`, `claude/connector.ts`, `claude/prompt.ts`, `service/claude-harness.ts` (the stored-scan check only), the two new test files, and the present tests named in Step 1 (`router/route-connector.test.ts` at its scan fixture and its row for a tool with no class, `claude/review-05b-r.test.ts:333-338`, `claude/policy-connector.test.ts:22`, `service/claude-harness-connector.test.ts:20,73`); all are on this task's list after the decisions, and the chair checked each. The chair's fixes: the catalog test and the prompt lines with `claude/adapter.ts`, as the second decision says, with one new test; and a readonly tuple in `router/route-connector.test.ts` that failed the typecheck (the scan fixture's extra tool is `create_label`, so that row reads `["create_label", fact.tools]`).
+Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's full run of `pnpm format && pnpm check` was green end to end (274 test files, 1,795 tests passed and 1 skipped).
 
 ### Task 19: A pick releases a loop without `key`, and only inside a loop over its choice
 

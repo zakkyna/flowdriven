@@ -202,6 +202,10 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                         connector: {
                           label: policy.connector.label,
                           tools: policy.connector.tools.map((t) => `${policy.connector?.prefix ?? ""}${t}`),
+                          write: (policy.connector.write ?? []).map(
+                            (t) => `${policy.connector?.prefix ?? ""}${t}`,
+                          ),
+                          labelHold: (policy.connector.labelTools?.length ?? 0) > 0,
                           approved: (req.approvedCalls ?? [])
                             .filter((call) => policy.connector?.tools.includes(call.tool))
                             .map((call) => ({

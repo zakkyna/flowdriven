@@ -19,7 +19,7 @@ const fact = {
   tools: [
     ...entry.read.map((name) => ({ name, readOnly: true })),
     ...Object.keys(entry.risky).map((name) => ({ name, readOnly: false })),
-    { name: "create_draft", readOnly: false },
+    { name: "create_label", readOnly: false },
   ],
 };
 const req = (extra: object = {}) =>

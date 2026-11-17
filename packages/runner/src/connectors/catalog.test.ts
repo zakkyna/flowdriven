@@ -12,7 +12,7 @@ test("the catalog has one entry, connector:gmail, with the name, url, prefix and
     label: "Gmail",
   });
 });
-test("the read list is the six read-only tools of G5, the risky map is the seven send and delete tools, and no tool is in both", () => {
+test("the read list is the six read-only tools of G5, the risky map is the nine send and delete tools, and no tool is in both", () => {
   const entry = CONNECTORS.at(0);
   expect(entry?.read).toEqual([
     "search_threads",
@@ -30,6 +30,8 @@ test("the read list is the six read-only tools of G5, the risky map is the seven
     trash_message: "delete",
     delete_draft: "delete",
     delete_label: "delete",
+    mark_thread_spam: "delete",
+    mark_message_spam: "delete",
   });
   expect(entry?.read.filter((tool) => tool in entry.risky)).toEqual([]);
 });

@@ -99,7 +99,9 @@ export function routeRequirement(
         const scanned = fact.tools.some(
           (item) =>
             item.name === tool &&
-            (Object.hasOwn(entry.risky, tool) || (entry.read.includes(tool) && item.readOnly)),
+            (Object.hasOwn(entry.risky, tool) ||
+              (entry.read.includes(tool) && item.readOnly) ||
+              (entry.write?.includes(tool) && item.destructive !== true)),
         );
         if (!scanned) return drop(DROP.connectorTool);
       }
@@ -192,8 +194,10 @@ export function capabilitySentence(req: Requirement, catalog: ConnectorEntry[] =
     if (entry) {
       const tools = [...new Set(req.tools ?? [])];
       const read = tools.filter((tool) => entry.read.includes(tool)).map((tool) => visible(tool, 60));
+      const write = tools.filter((tool) => entry.write?.includes(tool));
+      const labels = write.some((tool) => entry.labelTools?.includes(tool));
       const risky = tools.filter((tool) => Object.hasOwn(entry.risky, tool)).map((tool) => visible(tool, 60));
-      return `Uses your ${entry.label} through the ${entry.label} connector in Claude Code.${read.length ? ` Reads with: ${read.join(", ")}.` : ""}${risky.length ? ` Waits for your approval before each: ${risky.join(", ")}.` : ""}`;
+      return `Uses your ${entry.label} through the ${entry.label} connector in Claude Code.${read.length ? ` Reads with: ${read.join(", ")}.` : ""}${write.length ? ` Changes with: ${write.map((tool) => visible(tool, 60)).join(", ")}.` : ""}${risky.length ? ` Waits for your approval before each: ${risky.join(", ")}.` : ""}${labels ? " Waits for your approval before a label change that moves mail to Trash or Spam." : ""}`;
     }
   }
   if (req.type === "web" && req.mode === "read" && req.session === "own") {

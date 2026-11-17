@@ -245,7 +245,8 @@ export function storedScan(value: unknown): StoredScan | undefined {
             "name" in t &&
             typeof t.name === "string" &&
             "readOnly" in t &&
-            typeof t.readOnly === "boolean",
+            typeof t.readOnly === "boolean" &&
+            (!("destructive" in t) || t.destructive === true),
         )
       );
     });

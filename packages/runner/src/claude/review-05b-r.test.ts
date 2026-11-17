@@ -331,11 +331,11 @@ test(
     expect(pending(c.store)).toMatchObject({ kind: "risky_action", outside: true });
   },
 );
-test("a step that asks for a plain write tool is blocked at the gate or the route, and no child is started", async () => {
+test("a step that asks for a Gmail tool with no class is blocked at the gate or the route, and no child is started", async () => {
   const c = await real([worker("write", "Write")], [{ when: "Write", actions: [result] }], gmail, [
-    "create_draft",
+    "create_label",
   ]);
-  const fact = { ...c.fact, tools: [...c.fact.tools, { name: "create_draft", readOnly: false }] };
+  const fact = { ...c.fact, tools: [...c.fact.tools, { name: "create_label", readOnly: false }] };
   const readiness = gate({
     platform: "darwin",
     dataDir: c.root,

@@ -1,5 +1,6 @@
 import type { Value } from "@flowdriven/sdk";
 import { callGrant, digestCall, pickGrant } from "../connectors/grants.ts";
+import { throwsMailAway } from "../connectors/label-rule.ts";
 import type { HeldCall } from "../harness.ts";
 import type { RiskyAction } from "../states.ts";
 import { visible } from "./text.ts";
@@ -13,6 +14,8 @@ export type ConnectorPolicy = {
   prefix: string;
   tools: string[];
   read: string[];
+  write?: string[];
+  labelTools?: string[];
   risky: Record<string, RiskyAction>;
   blocked: string[];
 };
@@ -31,7 +34,7 @@ export const MAX_CONNECTOR_INPUT_BYTES = 16_000;
 export type ConnectorAllow = {
   requirementId: string;
   tool: string;
-  class: "read" | "risky";
+  class: "read" | "write" | "risky";
   grant?: { kind: "pick" | "call"; key: string };
 };
 export type ConnectorState = { calls: number; granted: (grant: string) => boolean };
@@ -59,7 +62,15 @@ export function decideConnector(
   if (state.calls >= MAX_CONNECTOR_CALLS) return { allow: false, reason: CONNECTOR_DENY.tooMany };
   if (connector.read.includes(name))
     return { allow: true, connector: { requirementId: connector.requirementId, tool: name, class: "read" } };
-  const action = Object.hasOwn(connector.risky, name) ? connector.risky[name] : undefined;
+  const write = connector.write?.includes(name) === true;
+  const heldLabel = write && connector.labelTools?.includes(name) === true && throwsMailAway(input);
+  if (write && !heldLabel)
+    return { allow: true, connector: { requirementId: connector.requirementId, tool: name, class: "write" } };
+  const action = heldLabel
+    ? "delete"
+    : Object.hasOwn(connector.risky, name)
+      ? connector.risky[name]
+      : undefined;
   if (action === undefined) return undeclared();
   const pick = pickGrant(connector.requirementId, name);
   if (state.granted(pick))

@@ -12,7 +12,7 @@ const fact = {
   tools: [
     ...entry.read.map((name) => ({ name, readOnly: true })),
     ...Object.keys(entry.risky).map((name) => ({ name, readOnly: false })),
-    { name: "create_draft", readOnly: false },
+    { name: "create_label", readOnly: false },
   ],
 };
 const facts = { hooks: true, chrome: false, connectors: [fact] };
@@ -57,9 +57,9 @@ test("no fact, a fact that is needs_login, failed or pending, and a fact with th
       reason: DROP.noConnector,
     });
 });
-test("a declared plain write, an unknown tool, a tool the scan does not list, and a read tool whose annotation is not read-only each drop with DROP.connectorTool", () => {
+test("a tool with no class, an unknown tool, a tool the scan does not list, and a read tool whose annotation is not read-only each drop with DROP.connectorTool", () => {
   for (const [tool, tools] of [
-    ["create_draft", fact.tools],
+    ["create_label", fact.tools],
     ["unknown", fact.tools],
     ["get_thread", fact.tools.filter((t) => t.name !== "get_thread")],
     ["search_threads", fact.tools.map((t) => ({ ...t, readOnly: false }))],
