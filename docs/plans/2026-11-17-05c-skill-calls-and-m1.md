@@ -1512,6 +1512,61 @@ git commit -m "Record M1 on real data, attended and on the schedule" -m "Co-Auth
 
 A fresh opus reviewer that did not build the work reads the diffs of the gate, hook and approval tasks as a security review: Tasks 8, 9 and 13 to 19 at least, and the other runner tasks (3, 6, 7, 10, 12, 14 to 16 and 21). It looks for a step that can do more than its declaration (R14), a changed skill that still runs (R9), a command line, folder, label or pick that reaches further than its rule, and any path that fails open. Each finding becomes a fix task under this section with its own test, and the reviewer reads the fixes again, at most three rounds. The outcome is written here: findings, decisions, fixes and commits. The owner's global instructions send security review to opus ("opus subagent: hanya untuk review keamanan"). This review comes before the closing gate of the Gates table.
 
+**Round 1 (2026-11-17, fresh opus, effort max, at ed43ce1).** Findings file `.workflow/scratch/plan-05c/security-review-1.md` (git-ignored); every finding was reproduced by running the repository's own modules. 0 high, 2 medium, 1 low:
+- F1 (medium, Tasks 5, 12, 13): the route refuses a risky pattern, but the hook never applies that rule to the concrete call, so the pattern `git push origin *` lets `git push origin +main` (a force-push) and `git push origin :main` (a remote branch delete) run without approval.
+- F2 (medium, Task 12): the list of programs that run other programs misses `xcrun`, `arch`, `caffeinate` and `ssh-agent`, so `xcrun python3 any.py` or `arch bash evil.sh` gets around both the shell refusal and the exact-line rule for interpreters. It cannot be reached from outside text, because a step that runs commands takes none.
+- F3 (low, Tasks 13, 15): after Withdraw, the next attempt of a running step that only runs commands in the project folder still runs them, because `admit` re-checks the consent only for web, connector and granted-folder steps.
+- Checked and sound: R14 (a skill's text widens nothing), R9 (three pin checks, no gap between hash and copy), the copy's content, the command-line parser, the granted-folder resolution, the Trash and Spam rule and the destructive mark from the scan to the policy, the scan's fail-closed paths, the keep-awake call, the consent pins, and picks. On the parent session's question, `claude/adapter-pick-loop.test.ts:201` does prove that a keyed loop over another list holds every item, the picked key included.
+
+The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya, perbaiki ketiganya (Disarankan)" and "Tidak, catat saja"): "Ya, perbaiki ketiganya (Disarankan)". That is the yes of "Ask first" for the fix task below and nothing else.
+
+### Review fix R1: the command rule holds at the hook, programs that run other programs are refused, and Withdraw stops a command step
+
+**Files:**
+- Modify: `packages/sdk/src/validate/risky.ts` (`classifyCommand`), `packages/runner/src/router/commands-route.ts` (`commandRefusal` and its two lists), `packages/runner/src/claude/commands.ts` (`decideCommand`), `packages/runner/src/service/claude-harness.ts` (`admit`)
+- Test: `packages/sdk/src/validate/risky-push.test.ts`, `packages/runner/src/router/route-commands-review.test.ts`, `packages/runner/src/claude/decide-commands-review.test.ts`, `packages/runner/src/service/claude-harness-withdraw-commands.test.ts`
+
+**Interfaces:**
+- Produces (F1): `classifyCommand` calls a line with the word `push` `delete` also when a word is `--delete`, `-d`, `--mirror`, `--prune` or `--force-if-includes`, or starts with `:` (today: `--force`, `-f`, `--force-with-lease`, or a word that starts with `+`). `decideCommand` refuses a call whose line matches a declared pattern when `commandRefusal` of the call's own words, joined by single spaces, gives a reason, and the refusal says that reason; so the hook applies to the concrete call the rule the route applies to the pattern.
+- Produces (F2): the programs that run other programs gain `xcrun arch caffeinate ssh-agent taskpolicy sandbox-exec launchctl shortcuts automator crontab at batch lldb gdb dtrace dtruss strace ltrace valgrind stdbuf setsid unbuffer flock screen tmux parallel chroot pkexec runuser busybox builtin coproc trap pwsh`; the interpreters that run only as an exact line gain `swift awk gawk mawk nawk tclsh Rscript`; and a `git` line with the word `foreach` (`git submodule foreach` runs a command), or with both `bisect` and `run`, is refused with `DROP.runsAnything`.
+- Produces (F3): `admit` treats a step that uses a `cli_tool` requirement with commands as it treats a web step: without a capability consent whose hash is the run's flow hash it returns `ALLOW_FIRST`.
+
+- [ ] **Step 1: Write the failing tests**
+
+  1. "classifyCommand calls git push with --delete, -d, --mirror, --prune, --force-if-includes or a :ref a delete, and keeps git push origin main undefined"
+  2. "a wildcard git pattern still refuses a force-push (+ref) and a remote branch delete (:ref) at the hook"
+  3. "the hook refuses a concrete line that the route would refuse as a pattern, with the route's reason"
+  4. "xcrun, arch, caffeinate and ssh-agent drop the route, and so does every other program on the list"
+  5. "swift and awk run only as an exact line, and git submodule foreach and git bisect run drop the route"
+  6. "after Withdraw the next attempt of a command step is refused"
+  7. "a command step whose consent is in place is admitted as before"
+
+No present test changes (`sdk/src/validate/validate.test.ts:151-164` stays as it is).
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm vitest run packages/sdk/src/validate/risky-push.test.ts packages/runner/src/router/route-commands-review.test.ts packages/runner/src/claude/decide-commands-review.test.ts packages/runner/src/service/claude-harness-withdraw-commands.test.ts`
+Expected: FAIL
+
+- [ ] **Step 3: Implement the three fixes**
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: the command of Step 2
+Expected: PASS
+
+- [ ] **Step 5: Run the gate**
+
+Run: `pnpm format && pnpm check`
+Expected: PASS
+
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/sdk/src/validate packages/runner/src/router packages/runner/src/claude/commands.ts packages/runner/src/claude/decide-commands-review.test.ts packages/runner/src/service/claude-harness.ts packages/runner/src/service/claude-harness-withdraw-commands.test.ts docs/plans/2026-11-17-05c-skill-calls-and-m1.md
+git commit -m "Hold the command rule at the hook, refuse programs that run other programs, and stop a command step after Withdraw" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
 ---
 
 ## Handover
