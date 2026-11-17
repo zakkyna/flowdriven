@@ -1,9 +1,11 @@
+import { homedir } from "node:os";
 import { FlowCapabilities, RunnerError } from "@flowdriven/contracts";
 import { FlowManifest, parseTemplate } from "@flowdriven/sdk";
 import { visible } from "../claude/text.ts";
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
 import { COST, capabilitySentence, needsAllow, routeAll } from "../router/route.ts";
 import type { HarnessFacts } from "../router/types.ts";
+import { bundledSkill, type LoadedSkill, readSkillFolder, skillSource } from "../skills/skill-folder.ts";
 import type { Store } from "../storage.ts";
 
 export const ALLOW_NOT_ROUTED =
@@ -15,7 +17,7 @@ const PREVIEW = "This flow declares more than the preview can show.";
 // `allow` (which refuses on it). Fail closed: a web requirement that a step uses must have a routed row.
 function allowIsBlocked(
   manifest: FlowManifest,
-  rows: { requirementId: string; routed: boolean }[],
+  rows: { requirementId: string; routed: boolean; pin?: string }[],
   catalog: ConnectorEntry[],
 ): string | undefined {
   const used = new Set(
@@ -33,6 +35,14 @@ function allowIsBlocked(
     )
   )
     return ALLOW_NOT_ROUTED_CONNECTOR;
+  if (
+    manifest.requirements.some((req) => {
+      if (req.type !== "skill" || !skillSource(req.ref, { home: "" }) || !used.has(req.id)) return false;
+      const row = rows.find((item) => item.requirementId === req.id);
+      return !row?.routed || !row.pin;
+    })
+  )
+    return "FlowDriven cannot provide the skill this flow uses yet, so there is nothing to allow.";
   return undefined;
 }
 export function createCapabilities(o: {
@@ -40,6 +50,10 @@ export function createCapabilities(o: {
   now: () => Date;
   facts: () => HarnessFacts;
   catalog?: ConnectorEntry[];
+  readSkill?: (
+    ref: string | undefined,
+    flowId: string,
+  ) => { ok: true; skill: LoadedSkill } | { ok: false; reason: string };
 }) {
   const catalog = o.catalog ?? CONNECTORS;
   function flow(flowId: string) {
@@ -47,10 +61,30 @@ export function createCapabilities(o: {
     if (!row) throw new RunnerError("not_found", `There is no flow ${flowId}.`);
     return row;
   }
+  const readSkill =
+    o.readSkill ??
+    ((ref: string | undefined, flowId: string) => {
+      const source = skillSource(ref, { home: homedir() });
+      if (!source) return { ok: false as const, reason: "This skill cannot be read." };
+      return source.kind === "installed"
+        ? readSkillFolder(source.dir, source.name)
+        : bundledSkill(flow(flowId).files, source.name);
+    });
   function consentOf(flowId: string): "none" | "given" | "stale" {
     const row = flow(flowId);
     const consent = o.store.getCapabilityConsent(flowId);
-    return !consent ? "none" : consent.hash === row.hash ? "given" : "stale";
+    if (!consent) return "none";
+    if (consent.hash !== row.hash) return "stale";
+    const manifest = FlowManifest.parse(row.manifest);
+    const used = new Set(
+      manifest.steps.flatMap((step) => ("steps" in step ? step.steps : [step]).flatMap((leaf) => leaf.uses)),
+    );
+    for (const req of manifest.requirements) {
+      if (req.type !== "skill" || !used.has(req.id) || !skillSource(req.ref, { home: "" })) continue;
+      const result = readSkill(req.ref, flowId);
+      if (!result.ok || result.skill.hash !== consent.pins?.skills[req.id]) return "stale";
+    }
+    return "given";
   }
   function get(flowId: string): FlowCapabilities {
     const row = flow(flowId);
@@ -76,21 +110,35 @@ export function createCapabilities(o: {
       if (!req) throw new RunnerError("not_allowed", PREVIEW);
       const common = { requirementId: req.id, type: req.type, sentence: capabilitySentence(req, catalog) };
       if (!route.routed) return { ...common, routed: false, reason: route.reason, away: false, details: [] };
+      const loaded = route.provider === "flowdriven-skill" ? readSkill(req.ref, flowId) : undefined;
+      if (loaded && !loaded.ok)
+        return { ...common, routed: false, reason: visible(loaded.reason, 300), away: false, details: [] };
+      const skill = loaded?.ok ? loaded.skill : undefined;
       return {
         ...common,
+        ...(skill ? { pin: skill.hash } : {}),
         routed: true,
         provider: route.providerName,
         enforcedBy: route.enforcedBy,
         label: route.label,
         ...(route.labelSentence === undefined ? {} : { labelSentence: route.labelSentence }),
         away: route.away,
-        cost:
-          route.provider === "claude-ai-connector"
+        cost: skill
+          ? COST.skill(skill.body.length)
+          : route.provider === "claude-ai-connector"
             ? COST.connector
             : route.provider === "claude-in-chrome"
               ? COST.chrome
               : COST.files,
-        details: req.type === "web" ? (templates.get(req.id) ?? []) : [],
+        details: skill
+          ? [
+              // A bundled skill has no file times (the flow's files are stored as text), so only an
+              // installed skill shows when it changed.
+              `Version ${skill.hash.slice(7, 19)}, ${skill.files.size} files, ${skill.body.length} characters${skillSource(req.ref, { home: "" })?.kind === "installed" ? `, changed ${skill.modifiedAt}` : ""}`,
+            ]
+          : req.type === "web"
+            ? (templates.get(req.id) ?? [])
+            : [],
       };
     });
     const blocked = allowIsBlocked(manifest, rows, catalog);
@@ -110,7 +158,7 @@ export function createCapabilities(o: {
       ...(blocked ? { allowBlocked: blocked } : {}),
     });
   }
-  function allow(flowId: string, hash: string): FlowCapabilities {
+  function allow(flowId: string, hash: string, pins?: Record<string, string>): FlowCapabilities {
     const preview = get(flowId);
     if (hash !== preview.hash)
       throw new RunnerError(
@@ -118,9 +166,29 @@ export function createCapabilities(o: {
         "This flow changed since you looked at it. Reload and check it again.",
       );
     if (preview.allowBlocked !== undefined) throw new RunnerError("not_allowed", preview.allowBlocked);
+    const skills: Record<string, string> = {};
+    for (const row of preview.rows) {
+      if (row.type !== "skill" || !row.routed) continue;
+      if (!row.pin || pins?.[row.requirementId] !== row.pin)
+        throw new RunnerError(
+          "not_allowed",
+          "Something this flow uses changed since you looked at it. Reload and check it again.",
+        );
+      skills[row.requirementId] = row.pin;
+    }
     const at = o.now().toISOString();
-    o.store.putCapabilityConsent({ flowId, hash, at });
-    o.store.appendAudit({ at, kind: "capabilities_allowed", detail: { flowId, hash } });
+    const hasSkills = Object.keys(skills).length > 0;
+    o.store.putCapabilityConsent({
+      flowId,
+      hash,
+      at,
+      ...(hasSkills ? { pins: { skills, folders: {} } } : {}),
+    });
+    o.store.appendAudit({
+      at,
+      kind: "capabilities_allowed",
+      detail: { flowId, hash, ...(hasSkills ? { skills } : {}) },
+    });
     return get(flowId);
   }
   function withdraw(flowId: string): FlowCapabilities {

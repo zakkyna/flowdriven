@@ -264,10 +264,10 @@ export function createHandlers({
       flow(flowId);
       return capabilities ? capabilities.get(flowId) : unavailable("The preview arrives in this plan.");
     },
-    "flows.allowCapabilities": ({ flowId, hash }) => {
+    "flows.allowCapabilities": ({ flowId, hash, pins }) => {
       flow(flowId);
       return capabilities
-        ? capabilities.allow(flowId, hash)
+        ? capabilities.allow(flowId, hash, pins)
         : unavailable("The preview arrives in this plan.");
     },
     "flows.withdrawCapabilities": ({ flowId }) => {

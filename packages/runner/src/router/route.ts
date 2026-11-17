@@ -2,6 +2,7 @@ import { type FlowManifest, parseTemplate, type Requirement, type Step, webRates
 import { isProjectRef } from "../claude/policy.ts";
 import { visible } from "../claude/text.ts";
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
+import { skillSource } from "../skills/skill-folder.ts";
 import type { HarnessFacts, Routed } from "./types.ts";
 
 export const UNOFFICIAL_SENTENCE =
@@ -10,10 +11,13 @@ export const DROP = {
   notYet: "FlowDriven cannot provide this yet.",
   noHooks: "This needs a harness that can check each call.",
   noChrome: "This Claude Code cannot use Chrome.",
+  noSkill: "This skill is not installed in Claude Code.",
   noConnector: "This connector is not connected in Claude Code.",
   connectorTool: "FlowDriven cannot provide one of this connector's tools yet.",
 } as const;
 export const COST = {
+  skill: (chars: number) =>
+    `Adds about ${(Math.ceil(chars / 400) * 100).toLocaleString("en-US")} tokens to each call of the step that uses it.`,
   chrome: "Adds about 12,000 tokens to each call of a step that uses it.",
   files: "Adds about 10,600 tokens to each call of a step that uses it.",
   connector: "Adds about 2,900 tokens for each of its tools to each call of a step that uses it.",
@@ -40,6 +44,22 @@ export function routeRequirement(
 ): Routed | undefined {
   if (req.type === "harness") return undefined;
   const base = { requirementId: req.id, type: req.type };
+  if (req.type === "skill") {
+    const source = skillSource(req.ref, { home: "" });
+    if (source) {
+      if (source.kind === "installed" && !facts.skills?.includes(source.name))
+        return { ...base, routed: false, noun: NOUNS.skill, reason: DROP.noSkill };
+      return {
+        ...base,
+        routed: true,
+        provider: "flowdriven-skill",
+        providerName: "FlowDriven skill",
+        enforcedBy: "FlowDriven",
+        label: "official",
+        away: true,
+      };
+    }
+  }
   if (req.type === "mcp_server") {
     const entry = catalogEntry(req.ref, catalog);
     if (entry && (req.connect === undefined || req.connect === "native")) {
@@ -129,6 +149,15 @@ export function capabilityHosts(req: Requirement): string[] {
 }
 
 export function capabilitySentence(req: Requirement, catalog: ConnectorEntry[] = CONNECTORS): string {
+  if (req.type === "skill") {
+    const source = skillSource(req.ref, { home: "" });
+    if (source) {
+      const name = visible(source.name, 64);
+      return source.kind === "installed"
+        ? `Uses your Claude Code skill ${name}, as it is when you allow this flow. Its text cannot add tools, sites or folders.`
+        : `Uses the skill ${name} that comes with this flow. Its text cannot add tools, sites or folders.`;
+    }
+  }
   if (req.type === "mcp_server") {
     const entry = catalogEntry(req.ref, catalog);
     if (entry) {

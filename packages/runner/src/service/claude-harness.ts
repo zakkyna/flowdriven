@@ -25,13 +25,18 @@ import { readKeeperSettings } from "./keeper-wiring.ts";
 
 export const CLAUDE_ID = "claude-code";
 export const ALLOW_FIRST = "Allow what this flow may touch on its screen first.";
-export function harnessFacts(scan: ClaudeScan | undefined, connectors?: ConnectorFact[]): HarnessFacts {
+export function harnessFacts(
+  scan: ClaudeScan | undefined,
+  connectors?: ConnectorFact[],
+  skills?: string[],
+): HarnessFacts {
   const facts: HarnessFacts =
     scan?.detected && scan.missingFlags.length === 0
       ? { hooks: true, chrome: scan.chrome === true }
       : { hooks: false, chrome: false };
   if (connectors !== undefined)
     facts.connectors = connectors.map(({ name, url, status, tools }) => ({ name, url, status, tools }));
+  if (skills?.length) facts.skills = skills;
   return facts;
 }
 export function gateRoutes(
@@ -393,7 +398,12 @@ export function createHarnessService(options: {
       });
       return list()[0] as HarnessCard;
     },
-    facts: () => harnessFacts(cache?.scan, cache?.inventory.connectors),
+    facts: () =>
+      harnessFacts(
+        cache?.scan,
+        cache?.inventory.connectors,
+        cache?.inventory.skills.filter((skill) => skill.scope === "user").map((skill) => skill.name),
+      ),
     readiness(manifest, ctx) {
       return gate({
         platform: options.platform ?? process.platform,
@@ -403,7 +413,11 @@ export function createHarnessService(options: {
         fileExists: existsSync,
         consent: state()?.consent ?? "not_given",
         manifest,
-        facts: harnessFacts(cache?.scan, cache?.inventory.connectors),
+        facts: harnessFacts(
+          cache?.scan,
+          cache?.inventory.connectors,
+          cache?.inventory.skills.filter((skill) => skill.scope === "user").map((skill) => skill.name),
+        ),
         allowed: ctx !== undefined && options.store.getCapabilityConsent(ctx.flowId)?.hash === ctx.hash,
       });
     },

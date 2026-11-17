@@ -84,9 +84,16 @@ export function CapabilitiesPanel({
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
+    const pins = Object.fromEntries(
+      capabilities.rows.flatMap((row) => (row.pin ? [[row.requirementId, row.pin]] : [])),
+    );
     const result =
       kind === "allow"
-        ? await action("flows.allowCapabilities", { flowId, hash })
+        ? await action("flows.allowCapabilities", {
+            flowId,
+            hash,
+            ...(Object.keys(pins).length ? { pins } : {}),
+          })
         : await action("flows.withdrawCapabilities", { flowId });
     if (result.ok) {
       setError(undefined);

@@ -7,7 +7,7 @@ export type Route = {
   routed: true;
   requirementId: string;
   type: string;
-  provider: "claude-code-files" | "claude-in-chrome" | "claude-ai-connector";
+  provider: "claude-code-files" | "claude-in-chrome" | "claude-ai-connector" | "flowdriven-skill";
   providerName: string;
   enforcedBy: Enforcer;
   label: "official" | "gray" | "unofficial";
@@ -22,4 +22,9 @@ export type FactConnector = {
   status: string;
   tools: { name: string; readOnly: boolean }[];
 };
-export type HarnessFacts = { hooks: boolean; chrome: boolean; connectors?: FactConnector[] };
+export type HarnessFacts = {
+  hooks: boolean;
+  chrome: boolean;
+  connectors?: FactConnector[];
+  skills?: string[];
+};

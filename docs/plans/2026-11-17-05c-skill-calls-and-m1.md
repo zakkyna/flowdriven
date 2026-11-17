@@ -502,50 +502,55 @@ Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
 
 ### Task 7: Router and preview: skills, with the pin at the allow
 
+Blocked (Codex, 2026-11-17): The required empty skills list changes hs.facts(), but claude-harness-wiring.test.ts requires the previous exact object and existing tests may not be changed. The gate also failed in `capabilities.test.ts` and `readiness-web.test.ts`, whose flows use a `skill` requirement with no ref.
+Chair's decision (2026-11-17): the plan was not exact, not the executor. (1) `harnessFacts` adds `skills` only when the list is given and not empty; an empty or missing list leaves the facts as today (an installed skill then drops with `DROP.noSkill` all the same). (2) `allowIsBlocked` blocks the allow only for a used `skill` requirement whose ref is `claude-code:<name>` or `flow:<name>` and whose row is not routed or has no pin; a skill with no ref or another ref keeps today's behaviour and does not block the allow, as other types FlowDriven cannot provide yet do not (the gate still refuses such a flow). With both, the three present tests pass unchanged.
+
 **Files:**
 - Modify: `packages/runner/src/router/types.ts`, `packages/runner/src/router/route.ts`, `packages/runner/src/service/capabilities.ts`, `packages/runner/src/service/handlers.ts`, `packages/runner/src/service/claude-harness.ts` (`harnessFacts` only), `apps/desktop/src/screens/builder/CapabilitiesPanel.tsx`
 - Test: `packages/runner/src/router/route-skill.test.ts`, `packages/runner/src/service/capabilities-skill.test.ts`, `apps/desktop/src/screens/builder/Capabilities.test.tsx` (one test added)
 
 **Interfaces:**
 - Consumes: `skillSource`, `readSkillFolder`, `bundledSkill` (Task 6); `ConsentPins` (Task 3); `CapabilityRow.pin`, allow `pins` (Task 2).
-- Produces: `Route.provider` adds `"flowdriven-skill"`; `HarnessFacts.skills?: string[]` (user-scope skill names of the last inventory); `harnessFacts(scan, connectors?, skills?)` gains a third parameter and adds `skills` only when given, and its two call sites in `service/claude-harness.ts` (about `:396` and `:406`) pass the user-scope names of `cache.inventory.skills`; `DROP.noSkill = "This skill is not installed in Claude Code."`; `COST.skill(chars: number): string` = `Adds about <n> tokens to each call of the step that uses it.`, with `n` = chars / 4 rounded up to a hundred and written with a thousands comma; `createCapabilities({ ..., readSkill?: (ref: string | undefined, flowId: string) => { ok: true; skill: LoadedSkill } | { ok: false; reason: string } })` (the service builds it from `os.homedir()` and the flow row's files; tests pass a temp home); `allow(flowId, hash, pins?: Record<string, string>)`; `consentOf` is `stale` also when a used skill's hash differs from its pin or has none; `CapabilitiesPanel.tsx:89` sends `{ flowId, hash, pins }` with the pins of the rows it shows.
+- Produces: `Route.provider` adds `"flowdriven-skill"`; `HarnessFacts.skills?: string[]` (user-scope skill names of the last inventory); `harnessFacts(scan, connectors?, skills?)` gains a third parameter and adds `skills` only when given and not empty, and its two call sites in `service/claude-harness.ts` (about `:396` and `:406`) pass the user-scope names of `cache.inventory.skills`; `DROP.noSkill = "This skill is not installed in Claude Code."`; `COST.skill(chars: number): string` = `Adds about <n> tokens to each call of the step that uses it.`, with `n` = chars / 4 rounded up to a hundred and written with a thousands comma; `createCapabilities({ ..., readSkill?: (ref: string | undefined, flowId: string) => { ok: true; skill: LoadedSkill } | { ok: false; reason: string } })` (the service builds it from `os.homedir()` and the flow row's files; tests pass a temp home); `allow(flowId, hash, pins?: Record<string, string>)`; `consentOf` is `stale` also when a used skill's hash differs from its pin or has none; `CapabilitiesPanel.tsx:89` sends `{ flowId, hash, pins }` with the pins of the rows it shows.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "an installed skill that the scan lists is the FlowDriven skill route: provider flowdriven-skill, enforced by FlowDriven, official, can run while away"
   2. "an installed skill the scan does not list drops with This skill is not installed in Claude Code."
   3. "a bundled skill (flow:<name>) is routed; a skill with no ref, another ref or a bad name keeps DROP.notYet" (the present row `{type: "skill"}` of `route.test.ts:93-115` stays as it is)
   4. "the sentence says Uses your Claude Code skill <name>, as it is when you allow this flow. Its text cannot add tools, sites or folders. and for a bundled skill Uses the skill <name> that comes with this flow. Its text cannot add tools, sites or folders."
   5. "the skill row carries its hash as pin, its size as cost, and the details Version <first 12 hex>, <n> files, <n> characters, changed <date>"
-  6. "a skill that cannot be read is a dropped row with the reading reason, and the allow is blocked"
+  6. "a claude-code or flow skill that cannot be read is a dropped row with the reading reason, and the allow is blocked; a skill with no ref does not block the allow"
   7. "allow reads the skill again and stores its pin when it equals the pin the screen sent, and refuses with Something this flow uses changed since you looked at it. Reload and check it again. when one differs or is missing"
   8. "R9: consentOf is stale after SKILL.md changes, and given again after a new allow"
   9. "the allow's audit row lists the pinned skills by requirement id and hash"
   10. "the screen sends the pins of the rows it shows when the owner presses Allow" (`Capabilities.test.tsx`)
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/router/route-skill.test.ts packages/runner/src/service/capabilities-skill.test.ts apps/desktop/src/screens/builder/Capabilities.test.tsx`
 Expected: FAIL (`skill` drops with `DROP.notYet`; no `pin`)
 
-- [ ] **Step 3: Implement the skill branch, the pins and the screen's pins**
+- [x] **Step 3: Implement the skill branch, the pins and the screen's pins**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/router packages/runner/src/service apps/desktop/src/screens/builder
 git commit -m "Route skills, show them in the preview, and pin their hash at the allow" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
 
 ### Task 8: Gate: a changed skill blocks the run until re-consent (R9 at run start), and skill steps pass the gate
 

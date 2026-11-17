@@ -235,3 +235,23 @@ test("Allow sends the hash of the capabilities answer on the screen", async () =
   await waitFor(() => expect(spy).toHaveBeenCalledWith("flows.allowCapabilities", { flowId, hash: shown }));
   expect(spy).not.toHaveBeenCalledWith("flows.allowCapabilities", { flowId, hash: newer });
 });
+test("the screen sends the pins of the rows it shows when the owner presses Allow", async () => {
+  const { client } = renderApp(builder, { scenario: "looped" });
+  const original = client.call.bind(client);
+  const pin = `sha256:${"a".repeat(64)}`;
+  const spy = vi.spyOn(client, "call").mockImplementation((async (name: string, input: unknown) => {
+    const answer = await original(name as never, input as never);
+    if (name !== "flows.capabilities") return answer;
+    const caps = answer as { rows: Record<string, unknown>[] };
+    return { ...caps, rows: caps.rows.map((row, index) => (index === 0 ? { ...row, pin } : row)) };
+  }) as typeof client.call);
+  const view = await section();
+  fireEvent.click(view.getByRole("button", { name: "Allow" }));
+  await waitFor(() =>
+    expect(spy).toHaveBeenCalledWith("flows.allowCapabilities", {
+      flowId,
+      hash: flowHash(client),
+      pins: expect.objectContaining({ jobs_web: pin }),
+    }),
+  );
+});
