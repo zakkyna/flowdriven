@@ -1531,7 +1531,7 @@ The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya
 - Produces (F2): the programs that run other programs gain `xcrun arch caffeinate ssh-agent taskpolicy sandbox-exec launchctl shortcuts automator crontab at batch lldb gdb dtrace dtruss strace ltrace valgrind stdbuf setsid unbuffer flock screen tmux parallel chroot pkexec runuser busybox builtin coproc trap pwsh`; the interpreters that run only as an exact line gain `swift awk gawk mawk nawk tclsh Rscript`; and a `git` line with the word `foreach` (`git submodule foreach` runs a command), or with both `bisect` and `run`, is refused with `DROP.runsAnything`.
 - Produces (F3): `admit` treats a step that uses a `cli_tool` requirement with commands as it treats a web step: without a capability consent whose hash is the run's flow hash it returns `ALLOW_FIRST`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "classifyCommand calls git push with --delete, -d, --mirror, --prune, --force-if-includes or a :ref a delete, and keeps git push origin main undefined"
   2. "a wildcard git pattern still refuses a force-push (+ref) and a remote branch delete (:ref) at the hook"
@@ -1543,29 +1543,31 @@ The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya
 
 No present test changes (`sdk/src/validate/validate.test.ts:151-164` stays as it is).
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/sdk/src/validate/risky-push.test.ts packages/runner/src/router/route-commands-review.test.ts packages/runner/src/claude/decide-commands-review.test.ts packages/runner/src/service/claude-harness-withdraw-commands.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the three fixes**
+- [x] **Step 3: Implement the three fixes**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/sdk/src/validate packages/runner/src/router packages/runner/src/claude/commands.ts packages/runner/src/claude/decide-commands-review.test.ts packages/runner/src/service/claude-harness.ts packages/runner/src/service/claude-harness-withdraw-commands.test.ts docs/plans/2026-11-17-05c-skill-calls-and-m1.md
 git commit -m "Hold the command rule at the hook, refuse programs that run other programs, and stop a command step after Withdraw" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 7 tests; pnpm format && pnpm check passed.
+Chair (review, 2026-11-17): files the executor touched: `sdk/src/validate/risky.ts`, `router/commands-route.ts`, `claude/commands.ts`, `service/claude-harness.ts` and the four new test files; all on this task's list. The chair's fix, under F1 and the owner's yes: `classifyCommand` matched whole words only, so `--force-with-lease=<ref>` and a bundle of short flags such as `-uf` (git reads it as `-u -f`) still passed as a plain push; now every word that starts with `--force`, and a bundle of short flags that holds `f` or `d`, makes a push line a delete, with the test "classifyCommand calls every --force form and a bundle of short flags with -f or -d a delete, and keeps other flags undefined". The chair's own full run of `pnpm format && pnpm check` was green end to end (281 test files, 1,818 tests passed and 1 skipped).
 
 ---
 

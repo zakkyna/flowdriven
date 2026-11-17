@@ -379,7 +379,12 @@ export function createHarnessService(options: {
       const folders = req.requirements.filter((r) => r.type === "path" && isExtraRef(r.ref));
       if (
         !folders.length &&
-        !req.requirements.some((r) => r.type === "web" || (r.type === "mcp_server" && catalogEntry(r.ref)))
+        !req.requirements.some(
+          (r) =>
+            r.type === "web" ||
+            (r.type === "cli_tool" && !!r.commands?.length) ||
+            (r.type === "mcp_server" && catalogEntry(r.ref)),
+        )
       )
         return undefined;
       const run = options.store.getRun(req.runId);

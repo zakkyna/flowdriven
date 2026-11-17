@@ -23,7 +23,16 @@ export function classifyCommand(pattern: string): RiskyAction | undefined {
   if (words.includes("merge")) return "merge";
   if (
     words.includes("push") &&
-    words.some((word) => ["--force", "-f", "--force-with-lease"].includes(word) || word.startsWith("+"))
+    words.some(
+      (word) =>
+        // Every --force form (--force-with-lease=<ref> included), a bundle of short flags that holds
+        // -f or -d (git reads -uf as -u -f), and the refspecs that force (+ref) or delete (:ref).
+        word.startsWith("--force") ||
+        ["--delete", "--mirror", "--prune"].includes(word) ||
+        /^-[A-Za-z]*[fd][A-Za-z]*$/.test(word) ||
+        word.startsWith("+") ||
+        word.startsWith(":"),
+    )
   )
     return "delete";
   if (words.includes("delete")) return "delete";

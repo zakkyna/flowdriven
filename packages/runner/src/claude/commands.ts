@@ -1,4 +1,5 @@
 import { commandLineAllowed, parseCommandLine } from "@flowdriven/sdk";
+import { commandRefusal } from "../router/commands-route.ts";
 
 export type CommandPolicy = { patterns: string[] };
 export const COMMAND_DENY = {
@@ -35,7 +36,8 @@ export function decideCommand(
     return { allow: false, reason: COMMAND_DENY.badInput };
   const parsed = parseCommandLine(input.command);
   if (!parsed.ok) return { allow: false, reason: COMMAND_DENY.badInput };
-  return policy && commandLineAllowed(policy.patterns, parsed.words)
-    ? { allow: true }
-    : { allow: false, reason: COMMAND_DENY.notDeclared };
+  if (!policy || !commandLineAllowed(policy.patterns, parsed.words))
+    return { allow: false, reason: COMMAND_DENY.notDeclared };
+  const reason = commandRefusal(parsed.words.join(" "));
+  return reason ? { allow: false, reason } : { allow: true };
 }
