@@ -28,6 +28,14 @@ function allowIsBlocked(
     const row = rows.find((item) => item.requirementId === req.id);
     return !row || !row.routed;
   };
+  // A cli_tool without commands is a shape FlowDriven cannot provide yet; like a skill without a
+  // known ref it does not block the allow (the gate still refuses such a flow).
+  if (
+    manifest.requirements.some(
+      (req) => req.type === "cli_tool" && (req.commands?.length ?? 0) > 0 && missing(req),
+    )
+  )
+    return "FlowDriven cannot run the commands this flow uses, so there is nothing to allow.";
   if (manifest.requirements.some((req) => req.type === "web" && missing(req))) return ALLOW_NOT_ROUTED;
   if (
     manifest.requirements.some(
@@ -93,6 +101,8 @@ export function createCapabilities(o: {
       throw new RunnerError("not_allowed", PREVIEW);
     const templates = new Map<string, string[]>();
     for (const req of manifest.requirements) {
+      if (req.type === "cli_tool" && (req.commands?.length ?? 0) > 8)
+        throw new RunnerError("not_allowed", PREVIEW);
       if (req.type !== "web") continue;
       if ((req.url_patterns?.length ?? 0) > 8) throw new RunnerError("not_allowed", PREVIEW);
       const details: string[] = [];
@@ -125,20 +135,24 @@ export function createCapabilities(o: {
         away: route.away,
         cost: skill
           ? COST.skill(skill.body.length)
-          : route.provider === "claude-ai-connector"
-            ? COST.connector
-            : route.provider === "claude-in-chrome"
-              ? COST.chrome
-              : COST.files,
+          : route.provider === "claude-code-commands"
+            ? COST.commands
+            : route.provider === "claude-ai-connector"
+              ? COST.connector
+              : route.provider === "claude-in-chrome"
+                ? COST.chrome
+                : COST.files,
         details: skill
           ? [
               // A bundled skill has no file times (the flow's files are stored as text), so only an
               // installed skill shows when it changed.
               `Version ${skill.hash.slice(7, 19)}, ${skill.files.size} files, ${skill.body.length} characters${skillSource(req.ref, { home: "" })?.kind === "installed" ? `, changed ${skill.modifiedAt}` : ""}`,
             ]
-          : req.type === "web"
-            ? (templates.get(req.id) ?? [])
-            : [],
+          : req.type === "cli_tool"
+            ? (req.commands ?? []).map((command) => visible(command, 300))
+            : req.type === "web"
+              ? (templates.get(req.id) ?? [])
+              : [],
       };
     });
     const blocked = allowIsBlocked(manifest, rows, catalog);

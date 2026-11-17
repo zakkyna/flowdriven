@@ -3,12 +3,17 @@ import { isProjectRef } from "../claude/policy.ts";
 import { visible } from "../claude/text.ts";
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
 import { skillSource } from "../skills/skill-folder.ts";
+import { commandRefusal } from "./commands-route.ts";
 import type { HarnessFacts, Routed } from "./types.ts";
 
 export const UNOFFICIAL_SENTENCE =
   "This uses your personal browser. Every site you are logged into is reachable from it.";
 export const DROP = {
   notYet: "FlowDriven cannot provide this yet.",
+  riskyCommand:
+    "A step cannot run this command: it deletes, publishes or merges, and a step that needs that must ask first.",
+  runsAnything: "A step cannot run this program: it can run other programs or reach the network.",
+  interpreterWildcard: "This program runs only as an exact command line.",
   noHooks: "This needs a harness that can check each call.",
   noChrome: "This Claude Code cannot use Chrome.",
   noSkill: "This skill is not installed in Claude Code.",
@@ -18,6 +23,7 @@ export const DROP = {
 export const COST = {
   skill: (chars: number) =>
     `Adds about ${(Math.ceil(chars / 400) * 100).toLocaleString("en-US")} tokens to each call of the step that uses it.`,
+  commands: "Adds about 2,000 tokens to each call of the step that uses it.",
   chrome: "Adds about 12,000 tokens to each call of a step that uses it.",
   files: "Adds about 10,600 tokens to each call of a step that uses it.",
   connector: "Adds about 2,900 tokens for each of its tools to each call of a step that uses it.",
@@ -44,6 +50,25 @@ export function routeRequirement(
 ): Routed | undefined {
   if (req.type === "harness") return undefined;
   const base = { requirementId: req.id, type: req.type };
+  if (req.type === "cli_tool" && req.commands?.length) {
+    const drop = (reason: string) => ({ ...base, routed: false as const, noun: NOUNS.cli_tool, reason });
+    if (!facts.hooks) return drop(DROP.noHooks);
+    for (const command of req.commands) {
+      const reason = commandRefusal(command);
+      if (reason) return drop(reason);
+    }
+    return {
+      ...base,
+      routed: true,
+      provider: "claude-code-commands",
+      providerName: "Claude Code commands",
+      enforcedBy: "FlowDriven hook in Claude Code",
+      label: "official",
+      labelSentence:
+        "FlowDriven checks each command line. What the program then does is not checked, and it runs with your rights.",
+      away: true,
+    };
+  }
   if (req.type === "skill") {
     const source = skillSource(req.ref, { home: "" });
     if (source) {
@@ -149,6 +174,8 @@ export function capabilityHosts(req: Requirement): string[] {
 }
 
 export function capabilitySentence(req: Requirement, catalog: ConnectorEntry[] = CONNECTORS): string {
+  if (req.type === "cli_tool" && req.commands?.length)
+    return `Runs these commands in this flow's folders: ${req.commands.map((command) => visible(command, 300)).join("; ")}.`;
   if (req.type === "skill") {
     const source = skillSource(req.ref, { home: "" });
     if (source) {

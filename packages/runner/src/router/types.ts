@@ -7,7 +7,12 @@ export type Route = {
   routed: true;
   requirementId: string;
   type: string;
-  provider: "claude-code-files" | "claude-in-chrome" | "claude-ai-connector" | "flowdriven-skill";
+  provider:
+    | "claude-code-commands"
+    | "claude-code-files"
+    | "claude-in-chrome"
+    | "claude-ai-connector"
+    | "flowdriven-skill";
   providerName: string;
   enforcedBy: Enforcer;
   label: "official" | "gray" | "unofficial";

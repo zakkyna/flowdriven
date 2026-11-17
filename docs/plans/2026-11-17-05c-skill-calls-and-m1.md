@@ -771,7 +771,7 @@ Needs H2 (the cost). The gate is not changed here (Task 13), so a step with a co
 - Consumes: `classifyCommand` (SDK).
 - Produces: `Route.provider` adds `"claude-code-commands"` (`providerName: "Claude Code commands"`, `enforcedBy: "FlowDriven hook in Claude Code"`, `label: "official"`, `labelSentence: "FlowDriven checks each command line. What the program then does is not checked, and it runs with your rights."`, `away: true`); `commandRefusal(pattern: string): string | undefined` in `router/commands-route.ts` (the program lists and patterns of Decision 7); `DROP.riskyCommand = "A step cannot run this command: it deletes, publishes or merges, and a step that needs that must ask first."`; `DROP.runsAnything = "A step cannot run this program: it can run other programs or reach the network."`; `DROP.interpreterWildcard = "This program runs only as an exact command line."`; the sentence `Runs these commands in this flow's folders: <c1>; <c2>.` with `details` = the commands (more than 8 commands refuse the preview, as for web templates); `COST.commands = "Adds about 2,000 tokens to each call of the step that uses it."` (H2); `findProgram(name: string, path: string, isExecutable: (file: string) => boolean): string | undefined`; `commandReadiness(req, o: { path: string }): { state: "ok" | "missing"; detail: string }` ("Found <program> at <file>." / "<program> is not on this Mac's PATH."); `allowIsBlocked` also blocks when a used `cli_tool` row is not routed ("FlowDriven cannot run the commands this flow uses, so there is nothing to allow.").
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "a cli_tool with commands is the Claude Code commands route, enforced by the FlowDriven hook, with the label sentence"
   2. "a cli_tool without commands keeps DROP.notYet" (the present row of `route.test.ts:93-115` stays as it is)
@@ -783,29 +783,32 @@ Needs H2 (the cost). The gate is not changed here (Task 13), so a step with a co
   8. "readiness says Found flutter at <file>. or flutter is not on this Mac's PATH."
   9. "a used cli_tool that is not routed blocks the allow"
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/router/route-commands.test.ts packages/runner/src/service/readiness-commands.test.ts packages/runner/src/service/capabilities-commands.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the route, the refusals, the sentence, the cost and readiness**
+- [x] **Step 3: Implement the route, the refusals, the sentence, the cost and readiness**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/router packages/runner/src/service
 git commit -m "Route command-line tools, refuse the ones that run anything, and look them up on PATH" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: Step 2 failed as expected; Step 4 passed 9 tests; pnpm format passed; pnpm check failed (5 tests): adapter-closing.test.ts "a close of the withheld tab is allowed by the present rules, and the child is stopped as soon as its result was answered: the action after it (id after) never runs", adapter-limits.test.ts "a child that ignores SIGTERM is killed after the grace when the step is aborted, and stop() ends every running step", review-03-s4.test.ts "S4b a tool that runs without the check after the abort still trips the wire and blocks", service-files.test.ts "500 changed files with max_items 1 and the default cap give 24 runs, 476 dropped and one flood event, and the next local day does not replay them", claude-harness.test.ts "a re-scan whose mcp list hangs keeps the list of the scan before"; each file passed once alone (10, 14, 2, 16, 11 tests respectively); pnpm lint, pnpm typecheck, pnpm check:hidden, pnpm check:deps and pnpm test:tools passed.
+Chair (review, 2026-11-17): two small fixes: `find` with `-execdir`, `-ok`, `-okdir`, `-fprint`, `-fprint0`, `-fprintf` or `-fls` is refused as well, and a `cli_tool` without commands (a shape FlowDriven cannot provide yet) does not block the allow, as a skill without a known ref does not. Evidence after the fixes: the router tests and the capability, readiness and gate tests (15 files, 94 tests, run one file at a time) green; lint, typecheck, check:hidden and check:deps green. The chair's full run of `pnpm check` was NOT green and not meaningful: 22 test files failed, the UI tests among them, while the Mac's load average rose to 154 (a cleaner app, macOS media analysis, another project's Python job and Spotlight).
 
 ### Task 13: Commands in the call: `Bash` with the hook's command rule, and the gate
 
