@@ -1470,6 +1470,12 @@ git commit -m "Record M1 on real data, attended and on the schedule" -m "Co-Auth
 
 ---
 
+## Review (before the plan closes)
+
+A fresh opus reviewer that did not build the work reads the diffs of the gate, hook and approval tasks as a security review: Tasks 8, 9 and 13 to 19 at least, and the other runner tasks (3, 6, 7, 10, 12, 14 to 16 and 21). It looks for a step that can do more than its declaration (R14), a changed skill that still runs (R9), a command line, folder, label or pick that reaches further than its rule, and any path that fails open. Each finding becomes a fix task under this section with its own test, and the reviewer reads the fixes again, at most three rounds. The outcome is written here: findings, decisions, fixes and commits. The owner's global instructions send security review to opus ("opus subagent: hanya untuk review keamanan"). This review comes before the closing gate of the Gates table.
+
+---
+
 ## Handover
 
 Written by the chair after Task 25: what M1 showed, what is left, and the open items for plan 04b and plan 06.
