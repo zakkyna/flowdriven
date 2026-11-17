@@ -816,7 +816,7 @@ Needs H2: the keys of `tool_input` for `Bash`. If H2 shows a key that is not nam
 
 **Files:**
 - Create: `packages/runner/src/claude/commands.ts`
-- Modify: `packages/runner/src/claude/decide.ts`, `packages/runner/src/claude/policy.ts`, `packages/runner/src/claude/prompt.ts`, `packages/runner/src/harness.ts` (`StepRequest.takesOutside?`), `packages/runner/src/exec/leaf.ts` (sets it with `stepTakesOutsideText`), `packages/runner/src/service/claude-harness.ts` (gate: a routed `cli_tool` with commands is no longer `cannot`)
+- Modify: `packages/runner/src/claude/decide.ts`, `packages/runner/src/claude/policy.ts`, `packages/runner/src/claude/prompt.ts`, `packages/runner/src/claude/adapter.ts` (passes `takesOutside` and the commands on), `packages/runner/src/harness.ts` (`StepRequest.takesOutside?`), `packages/runner/src/exec/leaf.ts` (sets it with `stepTakesOutsideText`), `packages/runner/src/service/claude-harness.ts` (gate: a routed `cli_tool` with commands is no longer `cannot`)
 - Test: `packages/runner/src/claude/decide-commands.test.ts`, `packages/runner/src/claude/policy-commands.test.ts`, `packages/runner/src/claude/adapter-commands.test.ts`
 
 **Interfaces:**
@@ -835,6 +835,7 @@ Needs H2: the keys of `tool_input` for `Bash`. If H2 shows a key that is not nam
   8. "Bash is in the tools only when the step uses a routed cli_tool, and the start proof expects it then"
   9. "the prompt lists the command lines the step may run and the folder they run in"
   10. "an allowed and a refused Bash call are written to the audit log, and the refusal is counted under Blocked calls"
+Chair's decision (2026-11-17): the plan was not exact, not the executor. `packages/runner/src/claude/adapter.ts` joins the files of this task: it passes the request's `takesOutside` to `buildPolicy` and the step's command patterns and folder to `buildPrompt`, nothing else.
   11. "the gate passes a step with a routed cli_tool, and Bash in a step without one is refused as today"
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -862,6 +863,8 @@ Expected: PASS
 git add packages/runner/src/claude packages/runner/src/harness.ts packages/runner/src/exec/leaf.ts packages/runner/src/service
 git commit -m "Let a step run its declared command lines through Bash, checked by the hook" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Blocked: Task 13 requires adapter.ts to pass takesOutside to buildPolicy and command patterns to buildPrompt, but adapter.ts is not in the permitted files.
 
 ### Task 14: Granted folders: the ref form, the resolve rule, the route and the preview, pinned at the allow, audited and taken back
 
