@@ -1,8 +1,12 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { describeTemplate, type Value } from "@flowdriven/sdk";
 import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
 import type { GrantBook } from "../connectors/grants.ts";
 import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
+import { type LoadedSkill, skillSource } from "../skills/skill-folder.ts";
 import { CONNECTOR_DENY } from "./connector.ts";
 import type { ConnectorFact } from "./connector-scan.ts";
 import type { PageCounter } from "./pages.ts";
@@ -17,8 +21,13 @@ import {
   readVerdict,
 } from "./prompt.ts";
 import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
+import { prepareSkillStep, SKILL_STOP } from "./skill-step.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
+  skillPin?: (runId: string, requirementId: string) => string | undefined;
+  home?: string;
+  flowFiles?: (runId: string) => Record<string, string>;
+  copyRoot?: string;
   admit?: (req: StepRequest) => string | undefined;
   pages?: PageCounter;
   grants?: GrantBook;
@@ -89,8 +98,19 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       if (reason !== undefined) return { exit: "failed", text: reason, outputs: {}, block: reason };
       const admission = options.admit?.(req);
       if (admission !== undefined) return { exit: "failed", text: admission, outputs: {}, block: admission };
-      if (req.kind === "skill")
-        return { exit: "failed", text: "", outputs: {}, block: "Skill steps are not run yet." };
+      const skillRequirement =
+        req.kind === "skill"
+          ? req.requirements.find((r) => r.id === req.skill && r.type === "skill" && req.uses.includes(r.id))
+          : undefined;
+      if (req.kind === "skill" && !skillRequirement)
+        return { exit: "failed", text: "", outputs: {}, block: SKILL_STOP.undeclared };
+      const home = options.home ?? homedir();
+      const source = skillRequirement && skillSource(skillRequirement.ref, { home });
+      if (skillRequirement && !source)
+        return { exit: "failed", text: "", outputs: {}, block: SKILL_STOP.undeclared };
+      const copyRoot = options.copyRoot ?? join(dirname(options.controlRoot), "skill-copies");
+      let copyParent: string | undefined;
+      let prepared: { folder: string; skill: LoadedSkill } | undefined;
       const path = options.claudePath();
       if (path === undefined)
         return { exit: "failed", text: "", outputs: {}, block: "Claude Code was not found." };
@@ -101,80 +121,112 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       const schema = outputSchema(req.outputs);
       let call: CallInfo | undefined;
       let outside = false;
-      const result = await run(
-        {
-          runId: req.runId,
-          stepId: req.stepId,
-          itemKey: req.itemKey,
-          attempt: req.attempt,
-          model: options.effortModels?.()?.[req.effort ?? "medium"] ?? modelFor(req.effort),
-          ...(schema === undefined ? {} : { schema }),
-          signal: req.signal,
-          onStart: req.onStart,
-          browser: req.requirements.some((r) => r.type === "web"),
-          ...(connectorPrefix === undefined ? {} : { connectorPrefix }),
-          onOutside: () => {
-            outside = true;
-            req.onOutside?.();
-          },
-          makePolicy: (control, sessionId) =>
-            buildPolicy({
-              kind: req.kind === "agent" ? "agent" : "worker",
-              requirements: req.requirements,
-              routes: req.routes ?? [],
-              connectors: options.connectors?.() ?? [],
-              catalog,
-              project: req.project,
-              controlRoot: control.root,
-              controlCwd: control.cwd,
-              sessionId,
-              schema: schema !== undefined,
-            }),
-          makePrompt: (policy) => {
-            let pagesLeft = 0;
-            if (policy.browser) {
-              try {
-                const count = options.pages?.count(req.runId, policy.browser.requirementId);
-                if (
-                  count &&
-                  Number.isSafeInteger(count.run) &&
-                  count.run >= 0 &&
-                  Number.isSafeInteger(count.day) &&
-                  count.day >= 0
-                )
-                  pagesLeft = Math.max(
-                    0,
-                    Math.min(policy.browser.perRun - count.run, policy.browser.perDay - count.day),
-                  );
-              } catch {}
-            }
-            return buildPrompt({
-              ...(policy.connector
-                ? {
-                    connector: {
-                      label: policy.connector.label,
-                      tools: policy.connector.tools.map((t) => `${policy.connector?.prefix ?? ""}${t}`),
-                      approved: (req.approvedCalls ?? [])
-                        .filter((call) => policy.connector?.tools.includes(call.tool))
-                        .map((call) => ({ ...call, tool: `${policy.connector?.prefix ?? ""}${call.tool}` })),
-                    },
-                  }
-                : {}),
-              ...(policy.browser
-                ? { browser: { templates: policy.browser.templates.map(describeTemplate), pagesLeft } }
-                : {}),
-              ...(policy.tools.length ? { cwd: policy.cwd } : {}),
-              instructions: req.instructions,
-              outputs: req.outputs,
-              ...(req.lastFailure === undefined ? {} : { lastFailure: req.lastFailure }),
-            });
-          },
-        },
-        path,
-        (info) => {
-          call = info;
-        },
-      );
+      const result = await (async () => {
+        try {
+          return await run(
+            {
+              runId: req.runId,
+              stepId: req.stepId,
+              itemKey: req.itemKey,
+              attempt: req.attempt,
+              model: options.effortModels?.()?.[req.effort ?? "medium"] ?? modelFor(req.effort),
+              ...(schema === undefined ? {} : { schema }),
+              signal: req.signal,
+              onStart: req.onStart,
+              browser: req.requirements.some((r) => r.type === "web"),
+              ...(connectorPrefix === undefined ? {} : { connectorPrefix }),
+              onOutside: () => {
+                outside = true;
+                req.onOutside?.();
+              },
+              makePolicy: (control, sessionId) => {
+                const id = basename(control.cwd === "" ? "" : dirname(control.cwd));
+                const folder = source ? join(copyRoot, id, source.name) : undefined;
+                const policy = buildPolicy({
+                  kind: req.kind === "agent" ? "agent" : "worker",
+                  requirements: req.requirements,
+                  routes: req.routes ?? [],
+                  connectors: options.connectors?.() ?? [],
+                  catalog,
+                  project: req.project,
+                  controlRoot: control.root,
+                  controlCwd: control.cwd,
+                  sessionId,
+                  schema: schema !== undefined,
+                  ...(folder ? { skillFolder: folder } : {}),
+                });
+                if (skillRequirement) {
+                  const result = prepareSkillStep({
+                    requirement: skillRequirement,
+                    pin: options.skillPin?.(req.runId, skillRequirement.id),
+                    home,
+                    flowFiles: options.flowFiles?.(req.runId) ?? {},
+                    copyRoot,
+                    id,
+                  });
+                  if (!result.ok) throw new Error(result.block);
+                  copyParent = join(copyRoot, id);
+                  prepared = result;
+                }
+                return policy;
+              },
+              makePrompt: (policy) => {
+                let pagesLeft = 0;
+                if (policy.browser) {
+                  try {
+                    const count = options.pages?.count(req.runId, policy.browser.requirementId);
+                    if (
+                      count &&
+                      Number.isSafeInteger(count.run) &&
+                      count.run >= 0 &&
+                      Number.isSafeInteger(count.day) &&
+                      count.day >= 0
+                    )
+                      pagesLeft = Math.max(
+                        0,
+                        Math.min(policy.browser.perRun - count.run, policy.browser.perDay - count.day),
+                      );
+                  } catch {}
+                }
+                return buildPrompt({
+                  ...(policy.connector
+                    ? {
+                        connector: {
+                          label: policy.connector.label,
+                          tools: policy.connector.tools.map((t) => `${policy.connector?.prefix ?? ""}${t}`),
+                          approved: (req.approvedCalls ?? [])
+                            .filter((call) => policy.connector?.tools.includes(call.tool))
+                            .map((call) => ({
+                              ...call,
+                              tool: `${policy.connector?.prefix ?? ""}${call.tool}`,
+                            })),
+                        },
+                      }
+                    : {}),
+                  ...(policy.browser
+                    ? { browser: { templates: policy.browser.templates.map(describeTemplate), pagesLeft } }
+                    : {}),
+                  ...(policy.tools.length ? { cwd: policy.cwd } : {}),
+                  ...(prepared ? { skill: { ...prepared.skill, folder: prepared.folder } } : {}),
+                  instructions: req.instructions,
+                  outputs: req.outputs,
+                  ...(req.lastFailure === undefined ? {} : { lastFailure: req.lastFailure }),
+                });
+              },
+            },
+            path,
+            (info) => {
+              call = info;
+            },
+          );
+        } finally {
+          if (copyParent) {
+            try {
+              rmSync(copyParent, { recursive: true, force: true });
+            } catch {}
+          }
+        }
+      })();
       const mark = outside ? { outside: true as const } : {};
       if (result.kind === "hold")
         return withCall(

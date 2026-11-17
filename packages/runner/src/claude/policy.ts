@@ -43,6 +43,7 @@ export function buildPolicy(input: {
   controlCwd: string;
   sessionId: string;
   schema: boolean;
+  skillFolder?: string;
 }): Policy {
   const policy: Policy = {
     tools: [],
@@ -55,7 +56,7 @@ export function buildPolicy(input: {
   if (input.kind === "agent") return policy;
   const paths = input.requirements.filter((requirement) => {
     if (requirement.type === "path") return true;
-    if (requirement.type === "harness") return false;
+    if (requirement.type === "harness" || requirement.type === "skill") return false;
     if (requirement.type === "web") {
       const fail = () =>
         new Error(`This step uses something FlowDriven cannot enforce yet (${requirement.id}).`);
@@ -129,7 +130,7 @@ export function buildPolicy(input: {
     }
     throw new Error(`This step uses something FlowDriven cannot enforce yet (${requirement.id}).`);
   });
-  if (paths.length === 0) return policy;
+
   const control = resolveDeep(input.controlRoot);
   const pending: { path: string; ref: string | undefined; write: boolean }[] = [];
   for (const requirement of paths) {
@@ -179,12 +180,29 @@ export function buildPolicy(input: {
     if (existing) existing.write ||= entry.write;
     else policy.folders.push({ path: folder, write: entry.write });
   }
-  const first = policy.folders.at(0);
+  // Compare resolved paths only: on macOS /var is a symlink to /private/var, so the unresolved
+  // skill folder can differ from the entry pushed below.
+  const skillPath = input.skillFolder === undefined ? undefined : resolveDeep(input.skillFolder);
+  if (input.skillFolder !== undefined) {
+    if (
+      !skillPath ||
+      policy.folders.some((entry) => isInside(entry.path, skillPath) || isInside(skillPath, entry.path))
+    )
+      throw new Error("The skill copy folder overlaps a folder of this step.");
+    policy.folders.push({ path: skillPath, write: false });
+  }
+  const first = policy.folders.find((folder) => folder.path !== skillPath);
   if (first) {
     policy.cwd = first.path;
-    policy.addDirs = policy.folders.slice(1).map((folder) => folder.path);
+    policy.addDirs = policy.folders
+      .filter((folder) => folder.path !== first.path)
+      .map((folder) => folder.path);
     policy.tools = ["Read", "Glob", "Grep"];
     if (policy.folders.some((folder) => folder.write)) policy.tools.push("Write", "Edit");
+  }
+  if (skillPath && !first) {
+    policy.addDirs = [skillPath];
+    policy.tools = ["Read", "Glob", "Grep"];
   }
   return policy;
 }

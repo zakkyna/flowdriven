@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { chromeTools, FakeChrome } from "./fake-chrome.ts";
@@ -59,8 +59,25 @@ if (command === "play") {
   for await (const chunk of process.stdin) input += String(chunk);
   prompt = input;
 }
+const skillFiles: Record<string, string> = {};
+for (let i = 0; i < args.length; i++) {
+  if (args[i] !== "--add-dir") continue;
+  const dir = args[i + 1];
+  if (!dir) continue;
+  try {
+    for (const path of [
+      join(dir, "SKILL.md"),
+      ...readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(dir, entry.name, "SKILL.md")),
+    ]) {
+      if (existsSync(path)) skillFiles[path] = readFileSync(path, "utf8");
+    }
+  } catch {}
+}
 log({
   kind: "call",
+  skillFiles,
   pid: process.pid,
   args,
   cwd: process.cwd(),

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { type HarnessCard, RunnerError } from "@flowdriven/contracts";
 import type { FlowManifest, Requirement, Value } from "@flowdriven/sdk";
 import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapter.ts";
@@ -10,6 +11,7 @@ import { type InventoryEntry, readInventory } from "../claude/inventory.ts";
 import { createPageCounter } from "../claude/pages.ts";
 import { isProjectRef } from "../claude/policy.ts";
 import { type ClaudeScan, scanClaude } from "../claude/scan.ts";
+import { sweepSkillCopies } from "../claude/skill-step.ts";
 import { catalogEntry } from "../connectors/catalog.ts";
 import { createGrantBook } from "../connectors/grants.ts";
 import type { HarnessAdapter } from "../harness.ts";
@@ -343,6 +345,17 @@ export function createHarnessService(options: {
     claudePath: () => (cache?.scan.detected ? cache.scan.path : undefined),
     env: () => options.env,
     controlRoot: controlRoot(options.dataDir),
+    copyRoot: join(options.dataDir, "skill-copies"),
+    home: options.env.HOME ?? homedir(),
+    skillPin: (runId, id) => {
+      const run = options.store.getRun(runId);
+      const consent = run && options.store.getCapabilityConsent(run.flowId);
+      return run && consent?.hash === run.flowHash ? consent.pins?.skills[id] : undefined;
+    },
+    flowFiles: (runId) => {
+      const run = options.store.getRun(runId);
+      return (run && options.store.getFlow(run.flowId)?.files) ?? {};
+    },
     audit: (kind, runId, detail) => {
       try {
         options.store.appendAudit({ at: options.now().toISOString(), kind, runId, detail });
@@ -376,6 +389,7 @@ export function createHarnessService(options: {
     adapter,
     start() {
       sweepControlRoot(controlRoot(options.dataDir));
+      sweepSkillCopies(join(options.dataDir, "skill-copies"));
       cache = storedScan(state()?.scan);
       return { settled: scan(false) };
     },

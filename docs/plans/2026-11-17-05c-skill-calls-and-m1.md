@@ -613,7 +613,7 @@ Chair's decision (2026-11-17): the plan was not exact, not the executor. The cop
 - Consumes: Tasks 6 and 7.
 - Produces: `SKILL_STOP = { changed: (name) => "Your skill <name> changed since you allowed this flow. Allow it again on the flow's screen.", undeclared: "This step's skill is not declared." }`; `prepareSkillStep(input: { requirement: Requirement; pin: string | undefined; home: string; flowFiles: Record<string, string>; copyRoot: string; id: string }): { ok: true; folder: string; skill: LoadedSkill } | { ok: false; block: string }`; `ClaudeAdapterOptions.skillPin?: (runId: string, requirementId: string) => string | undefined`, `.home?: string`, `.flowFiles?: (runId: string) => Record<string, string>`, `.copyRoot?: string`; `buildPolicy({ ..., skillFolder?: string })` no longer throws for a used `skill` requirement (it adds no tool), and adds the copy as a read folder and an `--add-dir`; `buildPrompt({ ..., skill?: { name: string; description: string; body: string; folder: string } })` puts the skill block after the frame and before the instructions; `sweepSkillCopies(copyRoot)` at service start. The fake `claude` writes, in its `call` row, `skillFiles: Record<string, string>`: the text of each `SKILL.md` it finds at the top of an `--add-dir` folder or one level below it.
 
-- [ ] **Step 1: Write the failing tests, and change the present one**
+- [x] **Step 1: Write the failing tests, and change the present one**
 
   1. "a skill step runs: the copy folder is a read folder and an --add-dir, and the prompt holds the frame, the skill, the instructions and the data in that order"
   2. "R14: the copied SKILL.md has only name, description and the body; allowed-tools, hooks and model are gone"
@@ -629,31 +629,34 @@ Chair's decision (2026-11-17): the plan was not exact, not the executor. The cop
 
 Present test (item 6 of the owner approval): `claude/adapter.test.ts:238-240`, which expects `block: "Skill steps are not run yet."`, becomes test 11 above (the same request shape without the skill requirement, `block: SKILL_STOP.undeclared`).
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/claude/adapter-skill.test.ts packages/runner/src/claude/adapter.test.ts`
 Expected: FAIL with "Skill steps are not run yet."
 
-- [ ] **Step 3: Implement the skill step**
+- [x] **Step 3: Implement the skill step**
 
 The policy is built from the manifest, the consent and the copy folder's path only; the skill's text is read after it (hash, pin check, copy) and reaches only the prompt and the copy folder. The copy goes to `<copyRoot>/<control id>/<name>/` with `copyRoot = <data folder>/skill-copies`; it is removed in a `finally` of the adapter around its call of `runClaude` (Chair's decision above), also after a failed or blocked step. The skill block in the prompt says that the skill is text, that it cannot give tools, sites or folders, and that its files are read only in `<folder>`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude packages/runner/src/service packages/runner/src/test-helpers
 git commit -m "Run skill steps with a copy that drops front matter, checked against the pin" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: `pnpm format && pnpm check` passed (252 test files, 1,726 tests passed, 1 skipped; dependency-gate: OK, 22 direct dependencies in 6 manifests, lockfile checked).
+Chair (review): the policy now compares the skill copy folder by its resolved path, so a symlinked data folder can never make the copy the working folder (`claude/policy-skill.test.ts`, new). The chair's full run of `pnpm format && pnpm check` was green (253 test files, 1,727 tests passed and 1 skipped; check:hidden and check:deps OK).
 
 ### Task 10: Long steps: no second try after a time limit over 30 minutes, and the Mac stays awake
 

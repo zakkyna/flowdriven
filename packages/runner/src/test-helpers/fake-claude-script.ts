@@ -79,7 +79,15 @@ export type FakeScript = {
   plays?: FakePlay[];
 };
 export type FakeCall =
-  | { kind: "call"; pid: number; args: string[]; cwd: string; env: string[]; prompt?: string }
+  | {
+      kind: "call";
+      pid: number;
+      args: string[];
+      cwd: string;
+      env: string[];
+      skillFiles?: Record<string, string>;
+      prompt?: string;
+    }
   | { kind: "post"; id: string; name: string; hookExit: number | null; replaced: boolean }
   | { kind: "control"; subtype: string; restricted: boolean }
   | { kind: "init" }
@@ -118,5 +126,12 @@ export function readFakeCalls(home: string): FakeCall[] {
     .trim()
     .split("\n")
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as FakeCall);
+    .map((line) => {
+      const call = JSON.parse(line) as FakeCall;
+      if (call.kind === "call" && call.skillFiles && Object.keys(call.skillFiles).length === 0) {
+        const { skillFiles: _skillFiles, ...rest } = call;
+        return rest;
+      }
+      return call;
+    });
 }

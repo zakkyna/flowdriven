@@ -237,7 +237,7 @@ test("a non-zero exit gives failed with the tail of standard error", { timeout: 
 test("what the adapter will not run is blocked with a sentence", { timeout: 20_000 }, async () => {
   const t = setup([]);
   const skill = await t.adapter.runStep({ ...t.request, kind: "skill" });
-  expect(skill).toMatchObject({ exit: "failed", block: "Skill steps are not run yet." });
+  expect(skill).toMatchObject({ exit: "failed", block: "This step's skill is not declared." });
   expect(
     await createClaudeAdapter({ ...t.options, claudePath: () => undefined }).runStep(t.request),
   ).toMatchObject({ exit: "failed", block: "Claude Code was not found." });
