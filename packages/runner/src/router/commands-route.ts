@@ -2,7 +2,7 @@ import { classifyCommand } from "@flowdriven/sdk";
 import { DROP } from "./route.ts";
 
 const runsAnything = new Set(
-  ". source sh bash zsh dash ksh csh tcsh fish env xargs nohup nice time timeout exec eval command sudo su doas osascript open script expect watch npx pnpx bunx curl wget ssh scp sftp rsync nc telnet ftp xcrun arch caffeinate ssh-agent taskpolicy sandbox-exec launchctl shortcuts automator crontab at batch lldb gdb dtrace dtruss strace ltrace valgrind stdbuf setsid unbuffer flock screen tmux parallel chroot pkexec runuser busybox builtin coproc trap pwsh".split(
+  ". source sh bash zsh dash ksh csh tcsh fish noglob nocorrect env xargs nohup nice time timeout exec eval command sudo su doas osascript open script expect watch npx pnpx bunx curl wget ssh scp sftp rsync nc telnet ftp xcrun arch caffeinate ssh-agent taskpolicy sandbox-exec launchctl shortcuts automator crontab at batch lldb gdb dtrace dtruss strace ltrace valgrind stdbuf setsid unbuffer flock screen tmux parallel chroot pkexec runuser busybox builtin coproc trap pwsh".split(
     " ",
   ),
 );
@@ -17,6 +17,7 @@ const FIND_ACTS = new Set("-delete -exec -execdir -ok -okdir -fprint -fprint0 -f
 export function commandRefusal(pattern: string): string | undefined {
   const words = pattern.split(" ");
   const program = words[0] ?? "";
+  if (program.startsWith("-")) return DROP.runsAnything;
   if (
     classifyCommand(pattern) ||
     program === "dd" ||

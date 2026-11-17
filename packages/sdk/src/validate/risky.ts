@@ -21,6 +21,30 @@ export function classifyCommand(pattern: string): RiskyAction | undefined {
   if (!program || program.includes("*") || ["rm", "rmdir", "unlink", "shred", "trash"].includes(program))
     return "delete";
   if (words.includes("merge")) return "merge";
+  if (program === "git") {
+    let subcommand: string | undefined;
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      if (word === undefined) break;
+      // These options of git take their value as the next word, so that word is not the subcommand.
+      if (
+        ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"].includes(
+          word,
+        )
+      ) {
+        i++;
+      } else if (!word.startsWith("-")) {
+        subcommand = word;
+        break;
+      }
+    }
+    if (
+      subcommand === "rm" ||
+      ((subcommand === "branch" || subcommand === "tag") &&
+        words.some((word) => word === "--delete" || /^-[A-Za-z]*[dD][A-Za-z]*$/.test(word)))
+    )
+      return "delete";
+  }
   if (
     words.includes("push") &&
     words.some(
@@ -35,7 +59,7 @@ export function classifyCommand(pattern: string): RiskyAction | undefined {
     )
   )
     return "delete";
-  if (words.includes("delete")) return "delete";
+  if (words.includes("delete") || words.includes("unpublish")) return "delete";
   if (words.includes("publish")) return "post";
   return undefined;
 }

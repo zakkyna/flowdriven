@@ -1588,7 +1588,7 @@ The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya
 - Produces (R2-F1): `runsAnything` gains `noglob` and `nocorrect`, and `commandRefusal` refuses a line whose program word starts with `-` with `DROP.runsAnything`; through the hook's re-check of Review fix R1 the same holds for a concrete call.
 - Produces (R2-F2): `classifyCommand` calls a `git` line a `delete` when its subcommand (the first word after `git` that does not start with `-`, skipping the word after `-C` or `-c`) is `rm`, or is `branch` or `tag` and a word is `--delete` or a bundle of short flags that holds `d` or `D`; and a line with the word `unpublish` a `delete`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "noglob, nocorrect and a program word starting with - drop the route and are refused at the hook"
   2. "classifyCommand calls git branch -D, git branch --delete, git tag -d, git rm and npm unpublish a delete"
@@ -1596,29 +1596,31 @@ The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya
 
 No present test changes.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/router/route-commands-review2.test.ts packages/sdk/src/validate/risky-delete.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the two fixes**
+- [x] **Step 3: Implement the two fixes**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/router packages/sdk/src/validate docs/plans/2026-11-17-05c-skill-calls-and-m1.md
 git commit -m "Refuse zsh precommand words and count git and npm deletes as deletes" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 3 tests; pnpm format && pnpm lint && pnpm typecheck && pnpm check passed.
+Chair (review, 2026-11-17): files the executor touched: `router/commands-route.ts`, `sdk/src/validate/risky.ts` and the two new test files; all on this task's list. The chair's fix, under R2-F2 and the owner's yes, after the parent session pointed at it: the subcommand scan skipped only the word after `-C` and `-c`, so the exact line `git --git-dir . rm notes.md` routed without being called a delete (under a declared `git *` the hook already refused it, since a wildcard word cannot start with `-`); now the scan also skips the value after `--git-dir`, `--work-tree`, `--namespace`, `--super-prefix` and `--config-env`, with the test "the value after --git-dir, --work-tree, --namespace, --super-prefix or --config-env is not read as the subcommand". The chair's full run of `pnpm format && pnpm check` at a load average of about 13 to 18 had one failure, `service/claude-harness-connectors.test.ts` "a rescan stores the connectors with the scan, a later scan without MCP keeps them, and a hung call keeps the cached list" (child processes and a timeout; not touched here), with 1,821 tests passed and 1 skipped; that file alone then passed (3 tests), and lint, typecheck, `check:hidden` and `check:deps` passed. So `pnpm check` did not pass end to end on this run; the closing gate needs that.
 
 ---
 
