@@ -980,6 +980,9 @@ Chair (review, 2026-11-17): files the executor touched: `claude/policy.ts`, `cla
 
 ### Task 16: A `file_change` trigger may watch a granted folder
 
+Blocked (Codex, 2026-11-17, first call): The existing resolveRoot test requires the old result shape and accepts absolute project paths; Task 16 requires within and refuses absolute paths, but changes to those expectations are not authorized.
+Chair's decision (2026-11-17, second): the plan was wrong, not the executor. Points (1) and (3) of the decision below are corrected: `within` is set only for a granted `~/...` path, and a project path, relative or absolute, keeps today's rule and today's result `{ ok: true, root }`. So `triggers/scan.test.ts:54` stays as it is apart from its sentence at line 67, one of the four lines named in Step 1.
+
 **Files:**
 - Modify: `packages/runner/src/triggers/scan.ts`, `packages/runner/src/triggers/rules.ts`, `packages/runner/src/triggers/service.ts`
 - Test: `packages/runner/src/triggers/scan-granted.test.ts`; present trigger tests that pin the old sentence changed as named in Step 1
@@ -987,6 +990,8 @@ Chair (review, 2026-11-17): files the executor touched: `claude/policy.ts`, `cla
 **Interfaces:**
 - Consumes: the consent pins (Task 14), `resolveExtraFolder` (Task 14).
 - Produces: `resolveRoot(project: string, path: string, granted?: { home: string; folders: string[] }): string` accepts a `~/...` path inside a folder granted to the flow (resolved as in Task 14); the sentence for every other path becomes "Only folders inside the project folder or a folder you granted to this flow can be watched."; the trigger service passes the flow's pinned folders and the home folder when it enables and re-checks.
+
+Chair's decision (2026-11-17, before the executor's call): the Interfaces above are not exact. (1) `resolveRoot` keeps its result form and gains an optional `within`: `resolveRoot(project, path, granted?)` returns `{ ok: true; root: string; within?: string } | { ok: false; reason: string }`, where `within` is set only for a `~/...` path and is the pinned path of the granted folder that holds it; a project path returns `{ ok: true, root }` exactly as today; both calls in `triggers/service.ts` pass `resolved.within ?? realpathSync(deps.projectDir)` to `scanFolder` as `within`, so a symlink inside a granted folder that leads out of it is `outside`, and both `scanned.outside` sentences become the new sentence. (2) `granted` is `{ home: string; dataDir: string; folders: string[] }`, because `resolveExtraFolder` needs FlowDriven's data folder (Task 14). (3) A path for which `isExtraRef` is true is resolved with `resolveExtraFolder`; it is accepted only when its resolved path is inside (folded as in `folders/extra.ts`) one of `folders`, then it must exist and be a folder, with today's two sentences; any other `~/...` path, and every `~/...` path when `granted` is missing, gets the new sentence. Every other path keeps today's project rule exactly: a relative or an absolute path inside the project folder is accepted as today, and a path outside it gets the new sentence. (4) The folders of a flow are the paths in `store.getCapabilityConsent(flowId)?.pins?.folders`, used only when that row's `hash` equals the flow's hash; otherwise the flow has none. (5) Files: `packages/runner/src/service/trigger-wiring.ts` and the `wireTriggers` call in `packages/runner/src/service/service.ts` join this task, to pass `home: homedir()` and `dataDir: options.dataDir` (`TriggerDeps` gains optional `home` and `dataDir`); `packages/runner/src/test-helpers/trigger-rig.ts` may gain the same two optional options; `fold` in `folders/extra.ts` may be exported, with no other change there.
 
 - [ ] **Step 1: Write the failing tests, and change the present ones**
 
