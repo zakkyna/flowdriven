@@ -7,6 +7,7 @@ import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
 import type { GrantBook } from "../connectors/grants.ts";
 import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
 import { type LoadedSkill, skillSource } from "../skills/skill-folder.ts";
+import type { ConsentPins } from "../storage.ts";
 import { CONNECTOR_DENY } from "./connector.ts";
 import type { ConnectorFact } from "./connector-scan.ts";
 import type { PageCounter } from "./pages.ts";
@@ -24,6 +25,7 @@ import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
 import { prepareSkillStep, SKILL_STOP } from "./skill-step.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
+  grantedFolders?: (runId: string) => ConsentPins["folders"] | undefined;
   skillPin?: (runId: string, requirementId: string) => string | undefined;
   home?: string;
   flowFiles?: (runId: string) => Record<string, string>;
@@ -150,6 +152,8 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   connectors: options.connectors?.() ?? [],
                   catalog,
                   project: req.project,
+                  home,
+                  grantedFolders: options.grantedFolders?.(req.runId),
                   controlRoot: control.root,
                   controlCwd: control.cwd,
                   sessionId,

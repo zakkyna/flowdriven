@@ -938,7 +938,7 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's 
 - Consumes: Task 14.
 - Produces: `buildPolicy({ ..., grantedFolders?: Record<string, { path: string; access: "read" | "read_write" }>, home?: string })`; without `grantedFolders` an extra ref still throws as today (the present tests `claude/policy.test.ts:80,115` stay as they are); `FOLDER_STOP = { notGranted: (id) => "This step uses a folder you have not granted (<id>).", moved: (id) => "The folder <id> now leads somewhere else. Allow the flow again on its screen.", project: (id) => "The folder <id> holds this run's project folder." }`; `ClaudeAdapterOptions.grantedFolders?: (runId: string) => ConsentPins["folders"]`; `admit` also refuses a step that uses an extra folder when the consent does not pin it; the gate treats a routed extra folder like a web requirement (needs the allow; `sensitive` passes once allowed).
 
-- [ ] **Step 1: Write the failing tests, and change the present one**
+- [x] **Step 1: Write the failing tests, and change the present one**
 
   1. "a granted folder becomes a folder of the call with its access, and an --add-dir when it is not the first"
   2. "an extra folder the consent does not pin is refused with FOLDER_STOP.notGranted"
@@ -951,29 +951,32 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's 
 
 Present test (item 6 of the owner approval): `service/claude-harness.test.ts:146` "the gate blocks what it cannot enforce, then what is marked sensitive, and names the ids sorted" expects "cannot enforce yet: builder, data, gmail, other."; it becomes "cannot enforce yet: builder, gmail, other." (`data`, which is `~/job-review`, is now a granted-folder route). Its other expectations stay as they are.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/claude/policy-folders.test.ts packages/runner/src/service/claude-harness-folders.test.ts packages/runner/src/service/claude-harness.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the granted-folder branch of `buildPolicy`, `admit` and the gate rows**
+- [x] **Step 3: Implement the granted-folder branch of `buildPolicy`, `admit` and the gate rows**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/claude packages/runner/src/service
 git commit -m "Give a step the folders the owner granted, checked again at each call" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run packages/runner/src/claude/policy-folders.test.ts packages/runner/src/service/claude-harness-folders.test.ts packages/runner/src/service/claude-harness.test.ts passed (19 tests); pnpm format && pnpm check passed.
+Chair (review, 2026-11-17): files the executor touched: `claude/policy.ts`, `claude/adapter.ts`, `service/claude-harness.ts`, `service/claude-harness.test.ts:146` (as Step 1 says) and the two new test files; all on this task's list. `buildPolicy` takes FlowDriven's data folder as the parent of the control root, which is how the service builds it. The chair's own full run of `pnpm format && pnpm check` was green end to end (268 test files, 1,775 tests passed and 1 skipped).
 
 ### Task 16: A `file_change` trigger may watch a granted folder
 

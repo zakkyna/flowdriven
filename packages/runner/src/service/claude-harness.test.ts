@@ -178,7 +178,7 @@ test("the gate blocks what it cannot enforce, then what is marked sensitive, and
     reqs,
   );
   expect(gate({ ...input, manifest: flow }).reason).toBe(
-    "This flow needs something FlowDriven cannot enforce yet: builder, data, gmail, other.",
+    "This flow needs something FlowDriven cannot enforce yet: builder, gmail, other.",
   );
   expect(gate({ ...input, manifest: manifest([worker("one", ["cc", "notes"])], reqs) })).toEqual({
     ready: true,

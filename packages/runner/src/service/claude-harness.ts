@@ -14,6 +14,7 @@ import { type ClaudeScan, scanClaude } from "../claude/scan.ts";
 import { sweepSkillCopies } from "../claude/skill-step.ts";
 import { catalogEntry } from "../connectors/catalog.ts";
 import { createGrantBook } from "../connectors/grants.ts";
+import { isExtraRef } from "../folders/extra.ts";
 import type { HarnessAdapter } from "../harness.ts";
 import {
   NOT_ENFORCED_UNATTENDED,
@@ -124,6 +125,7 @@ export function gate(
       const req = manifest.requirements.find((r) => r.id === id);
       if (
         req?.type === "web" ||
+        (req?.type === "path" && isExtraRef(req.ref)) ||
         (req?.type === "cli_tool" && !!req.commands?.length) ||
         (req?.type === "mcp_server" && catalogEntry(req.ref)) ||
         (req?.type === "skill" && skillSource(req.ref, { home: "" }))
@@ -348,6 +350,11 @@ export function createHarnessService(options: {
     controlRoot: controlRoot(options.dataDir),
     copyRoot: join(options.dataDir, "skill-copies"),
     home: options.env.HOME ?? homedir(),
+    grantedFolders: (runId) => {
+      const run = options.store.getRun(runId);
+      const consent = run && options.store.getCapabilityConsent(run.flowId);
+      return run && consent?.hash === run.flowHash ? consent.pins?.folders : undefined;
+    },
     skillPin: (runId, id) => {
       const run = options.store.getRun(runId);
       const consent = run && options.store.getCapabilityConsent(run.flowId);
@@ -368,12 +375,18 @@ export function createHarnessService(options: {
     ...options.adapter,
     pages: createPageCounter({ store: options.store, dayOf: options.dayOf ?? localDay, now: options.now }),
     admit: (req) => {
-      if (!req.requirements.some((r) => r.type === "web" || (r.type === "mcp_server" && catalogEntry(r.ref))))
+      const folders = req.requirements.filter((r) => r.type === "path" && isExtraRef(r.ref));
+      if (
+        !folders.length &&
+        !req.requirements.some((r) => r.type === "web" || (r.type === "mcp_server" && catalogEntry(r.ref)))
+      )
         return undefined;
       const run = options.store.getRun(req.runId);
-      return run && options.store.getCapabilityConsent(run.flowId)?.hash === run.flowHash
-        ? undefined
-        : ALLOW_FIRST;
+      const consent = run && options.store.getCapabilityConsent(run.flowId);
+      if (!run || consent?.hash !== run.flowHash) return ALLOW_FIRST;
+      if (folders.some((folder) => !Object.hasOwn(consent.pins?.folders ?? {}, folder.id)))
+        return ALLOW_FIRST;
+      return undefined;
     },
     effortModels: () => readKeeperSettings(options.store).effortModels["claude-code"],
     allowed: () =>
