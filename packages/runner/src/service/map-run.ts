@@ -142,6 +142,7 @@ export function toRunDetail(
       ...(blocked === undefined ? {} : { blocked }),
       ...(row?.outside === true ? { outside: true } : {}),
       ...(pages > 0 ? { pagesRead: pages } : {}),
+      ...(row?.limitMs === undefined ? {} : { limitMs: row.limitMs }),
       note: row?.note,
       picks,
       usage: sumUsage(

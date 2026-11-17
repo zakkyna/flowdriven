@@ -711,6 +711,10 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: Task 10's te
 
 ### Task 11: Long steps on the Run screen: the time limit and the running time
 
+Blocked (Codex, 2026-11-17): Two gate attempts failed typecheck; StepBlock.tsx reports that step.limitMs may be undefined.
+Chair (review, 2026-11-17): the remaining type error was a narrowing in `StepBlock.tsx` (`step.limitMs` possibly undefined inside JSX); the chair fixed it with a local `limitMin`. The minutes of the limit are rounded and the running minutes rounded down, as Codex chose.
+Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: Task 11's tests (`service/map-run-limit`, `screens/runs/StepLong`) 4 of 4; typecheck, lint, check:hidden and check:deps green. The chair's full run of `pnpm check` was NOT green: 5 timing tests failed (257 files, 253 passed; tests 1,732 passed, 5 failed, 1 skipped): two in `claude/connector-scan`, "S4b" in `claude/review-03-s4`, "a re-scan whose mcp list hangs ..." in `service/claude-harness` and "500 changed files ..." in `triggers/service-files`, at a load average of 26 to 32; each of those four files then passed alone (18, 2, 11 and 16 tests).
+
 **Files:**
 - Modify: `packages/runner/src/service/map-run.ts`, `apps/desktop/src/screens/runs/StepBlock.tsx`, `apps/desktop/src/screens/runs/Runs.module.css`
 - Test: `packages/runner/src/service/map-run-limit.test.ts`, `apps/desktop/src/screens/runs/StepLong.test.tsx`
@@ -719,7 +723,7 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: Task 10's te
 - Consumes: `StepRow.limitMs` (Task 10), `LeafStepRun.limitMs` (Task 2).
 - Produces: `toRun` maps `limitMs`; the step block shows "Time limit: 150 min" for a step with `limitMs`, and for a running step over 30 minutes also "Running for <n> min of at most 150 min" with a clock icon and, on macOS, "Your Mac stays awake until this step ends."
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "the run read model carries a step's time limit"
   2. "a step with a limit shows Time limit: 150 min"
@@ -728,26 +732,26 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: Task 10's te
 
 The UI tests render the step block with a run built in the test file; no shared fixture changes, so the capture stays at 26 screens.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/service/map-run-limit.test.ts apps/desktop/src/screens/runs/StepLong.test.tsx`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the mapping and the two lines**
+- [x] **Step 3: Implement the mapping and the two lines**
 
 The running time is computed from the last attempt's `startedAt` and the screen's clock at render.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service apps/desktop/src/screens/runs
