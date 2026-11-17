@@ -90,7 +90,7 @@ What the code looks like today (branch `claude/plan-05c-detail-29be69`, commit `
 
 - H1. The owner named a claude.ai connector as the host that publishes prototypes. On 2026-11-17 its status was `needs-auth`, so its tools are not known yet; the owner connects it again in claude.ai before Task 20, and the chair scans again with no prompt. Which tool makes a prototype public and what its address looks like are asked then. The scan itself sent no prompt and made no model call; it asked `mcp_status` three times while connectors were `pending`.
 - H2. In a restricted call offered `Bash`, the PreToolUse request's `tool_input` had exactly the keys `command` (string) and `description` (string); the hook refused the call and nothing ran. Input tokens (cache reads and writes included, summed over the call's turns): 9,986 for the call with `Bash` (two turns: the refused call and the answer) and 2,959 for a call with no tool (one turn), so offering `Bash` adds about 2,000 tokens to each turn (`(9,986 - 2 x 2,959) / 2`, rounded). Task 12 uses 2,000.
-- H3. The owner's prototype skill is `prototype-builder` in `~/.claude/skills/`. Not a symlink; no symlink and no hidden entry inside. 231 files, 16,685,387 bytes: a Flutter web starter, fonts, photos, notes and six scripts (`.mjs` and `.sh`). Front-matter keys: `name` and `description` only. Strict YAML: yes. `name` follows the rule and equals the folder name: yes. Description at most 1,024 characters: yes. Body at most 24,000 characters: no (27,433). So the skill is over the limits of Decision 3 (200 files, 10 MiB, 24,000 characters), and its scripts mean it runs commands while it reads the job's text, which Decision 7 refuses.
+- H3. The owner's prototype skill is `prototype-builder` in `~/.claude/skills/`. Not a symlink; no symlink and no hidden entry inside. 231 files, 16,685,387 bytes: a Flutter web starter, fonts, photos, notes and six scripts (`.mjs` and `.sh`). Front-matter keys: `name` and `description` only. Strict YAML: yes. `name` follows the rule and equals the folder name: yes. Description at most 1,024 characters: yes. Body at most 24,000 characters: no (27,433). So the skill was over the first limits of Decision 3 (200 files, 10 MiB, 24,000 characters), which the owner then raised, and its scripts mean it runs commands while it reads the job's text, which Decision 7 refuses. After Task 4, a yes-or-no check showed that `parseSkillFile` accepts its `SKILL.md`.
 - H4. The scan listed 31 Gmail tools. `readOnly`: `list_drafts`, `get_draft`, `get_thread`, `get_message`, `search_threads`, `list_labels`, `download_gmail_attachment`. `destructive`: `delete_draft`, `unlabel_thread`, `apply_sensitive_thread_label`, `trash_thread`, `mark_thread_spam`, `unlabel_message`, `apply_sensitive_message_label`, `trash_message`, `mark_message_spam`, `delete_label`. `openWorld`: `send_message`, `reply`, `forward`. No annotation: `create_draft`, `update_draft`, `label_thread`, `untrash_thread`, `unmark_thread_spam`, `label_message`, `update_message_labels`, `untrash_message`, `unmark_message_spam`, `create_label`, `update_label`. So under Decision 9 the `write` list is `create_draft`, `label_thread`, `label_message`, `update_message_labels`, all three label tools among them are held as a delete when their input names Trash or Spam, and `unlabel_thread` and `unlabel_message` stay unclassed because the scan marks them destructive.
 
 ## Decisions made in this plan
@@ -356,7 +356,7 @@ Needs H3 (Decision 3).
 - Consumes: `parseFlowYaml` and `FlowFileError` (`packages/sdk/src/load/parse-yaml.ts`).
 - Produces: `SKILL_LIMITS = { nameMax: 64, descriptionMax: 1024, bodyMax: 60000, fileBytes: 262144 }` (Decision 3); `SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/`; `type SkillFile = { name: string; description: string; body: string; keys: string[] }`; `parseSkillFile(text: string): { ok: true; skill: SkillFile } | { ok: false; reason: string }` (it catches `FlowFileError` and returns its reason); `skillCopyText(skill: Pick<SkillFile, "name" | "description" | "body">): string`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "a SKILL.md with name, description and other keys parses to the name, the description, the body and the list of keys"
   2. "R14: the copy text holds only name and description in its front matter: allowed-tools, hooks, model, license and metadata are gone"
@@ -370,31 +370,33 @@ Needs H3 (Decision 3).
 
 Each refusal has its own fixed sentence, for example "This skill's SKILL.md has no front matter." and "This skill's text is longer than 60,000 characters."
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/sdk/src/skill/skill-file.test.ts`
 Expected: FAIL with "Cannot find module"
 
-- [ ] **Step 3: Implement `parseSkillFile` and `skillCopyText` in `packages/sdk/src/skill/skill-file.ts`**
+- [x] **Step 3: Implement `parseSkillFile` and `skillCopyText` in `packages/sdk/src/skill/skill-file.ts`**
 
 Line endings: `\r\n` is read as `\n`. The front matter is the text between the first line `---` and the next line `---`. The copy text is `---\nname: <JSON string>\ndescription: <JSON string>\n---\n<body>`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run packages/sdk/src/skill/skill-file.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/sdk/src/skill packages/sdk/src/node.ts
 git commit -m "Read a SKILL.md and write its copy without front matter (R14)" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
 
 ### Task 5: SDK: command lines and their patterns
 
