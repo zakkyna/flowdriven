@@ -8,7 +8,7 @@ export type ConnectorFact = {
   url: string;
   id: string;
   status: "connected" | "needs_login" | "failed" | "pending";
-  tools: { name: string; readOnly: boolean }[];
+  tools: { name: string; readOnly: boolean; destructive?: true }[];
 };
 const object = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v);
@@ -40,7 +40,11 @@ export function parseConnectors(response: unknown): ConnectorFact[] {
     if (status === "connected" && Array.isArray(s.tools))
       for (const t of s.tools as unknown[]) {
         if (!object(t) || typeof t.name !== "string" || !t.name || visible(t.name, 120) !== t.name) continue;
-        tools.push({ name: t.name, readOnly: object(t.annotations) && t.annotations.readOnly === true });
+        tools.push({
+          name: t.name,
+          readOnly: object(t.annotations) && t.annotations.readOnly === true,
+          ...(object(t.annotations) && t.annotations.destructive === true ? { destructive: true } : {}),
+        });
         if (tools.length === 200) break;
       }
     facts.push({ name: visible(s.name, 120), url: s.config.url, id: s.config.id, status, tools });

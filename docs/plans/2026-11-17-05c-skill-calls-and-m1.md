@@ -1041,7 +1041,7 @@ Chair (review, 2026-11-17): the second call followed both decisions. Files the e
 
 Chair's decision (2026-11-17, before the executor's call): the Interfaces above are made exact. (1) A key or string value "holds" `trash` or `spam` when its folded text contains the word. It is folded as `protectedPath` in `claude/decide.ts` folds a path part: NFKC, upper case then lower case, NFKC again, and only the printable ASCII characters 0x21 to 0x7E are kept, so a space, a zero-width or a fullwidth character cannot hide the word. Numbers, booleans and null hold nothing. The input itself is at depth 1; an array or object met at depth 21 or deeper makes the answer true without looking further. (2) In `classifyTool`, `spam` joins the words of `delete`; nothing else there changes. (3) The scan pushes `{ name, readOnly }` as today and adds `destructive: true` only when the tool's `annotations` object has `destructive === true` (the key Claude Code's scan output uses, as the Task 0 probe shows); `ConnectorFact.tools` gains `destructive?: true`. The router's `FactConnector` type and the stored-scan check in `service/claude-harness.ts` stay as they are in this task; Task 18, which uses the mark, changes them.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "throwsMailAway is false for the label FlowDriven and for INBOX"
   2. "throwsMailAway is true for Trash, [Gmail]/Spam and a fullwidth TRASH, as a key or a value, at any depth"
@@ -1050,29 +1050,32 @@ Chair's decision (2026-11-17, before the executor's call): the Interfaces above 
   5. "R4: a flow with a schedule that marks spam before its first ask is refused"
   6. "the scan keeps destructive true from a tool's annotation and leaves it out otherwise"
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/connectors/label-rule.test.ts packages/sdk/src/validate/risky-spam.test.ts packages/runner/src/claude/connector-scan-destructive.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the rule, the word and the mark**
+- [x] **Step 3: Implement the rule, the word and the mark**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/connectors packages/runner/src/claude/connector-scan.ts packages/runner/src/claude/connector-scan-destructive.test.ts packages/sdk/src/validate
 git commit -m "Recognise a label change that moves mail to Trash or Spam, and keep the destructive mark of a tool" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format, pnpm lint, pnpm typecheck and pnpm check passed; Task 17 tests 6 passed.
+Chair (review, 2026-11-17): files the executor touched: `connectors/label-rule.ts` (new), `sdk/src/validate/risky.ts`, `claude/connector-scan.ts` and the three new test files; all on this task's list. The fold is the one of `protectedPath`, an array or object at depth 21 makes the answer true, and `destructive` is kept only for the value `true`. The chair's own full run of `pnpm format && pnpm check` was green end to end (272 test files, 1,786 tests passed and 1 skipped).
 
 ### Task 18: Plain Gmail writes: a class of their own; Trash and Spam labels are held as deletes
 

@@ -10,7 +10,7 @@ export function classifyTool(name: string): RiskyAction | undefined {
     ["send", ["send", "reply", "forward"]],
     ["post", ["post", "publish"]],
     ["pay", ["pay", "purchase", "buy"]],
-    ["delete", ["delete", "remove", "trash"]],
+    ["delete", ["delete", "remove", "trash", "spam"]],
     ["merge", ["merge"]],
   ];
   return groups.find(([, names]) => names.some((word) => words.includes(word)))?.[0];
