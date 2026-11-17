@@ -1241,7 +1241,7 @@ git commit -m "Add the prototype host connector to the catalog" -m "Assisted-by:
 
 Chair's decision (2026-11-17, before the executor's call), from the present code: (1) Wiring: `createHandlers` gains an optional `local?: (row: FlowRow) => LocalChecks` (the three functions of the Interfaces, built per flow because a bundled skill is read from the flow's files); `readiness.check` passes `local?.(row)` as the fifth argument; `service/service.ts` joins this task to provide it, from `skillSource`, `readSkillFolder` and `bundledSkill` (with `homedir()`), `commandReadiness` (with the `PATH` of `options.env`, the one the `claude` child gets) and `resolveExtraFolder` (with `homedir()` and `options.dataDir`). Without `local` every row stays as today. (2) Skill rows (`type: "skill"`): ok is "Found your skill <name>; its text has <n> characters." with n the length of the loaded skill's `copyText`, written with `toLocaleString("en-US")`; a `claude-code:` skill whose folder does not exist is missing with "Your Claude Code has no skill <name>."; any other failure is missing with the reason the reader gives. (3) Command rows (`type: "cli_tool"`): the state and detail of `commandReadiness`. (4) Folder rows (`type: "path"` with a ref for which `isExtraRef` is true): a refused ref is missing with the reason of `resolveExtraFolder`; a folder that does not exist yet is ok with "FlowDriven creates <path> at the first run."; an existing folder is ok with "Ready: <path>.", for `access: read_write` only after a write test that makes an empty folder with `mkdtempSync(join(path, ".flowdriven-check-"))` and removes it at once. It is a folder, not a file, because a `file_change` trigger lists only files and so never sees it (its default glob `**/*` matches hidden names). When the test fails the row is missing with "This folder cannot be written." Sentences show the resolved path through `visible`. Path rows inside the project and rows of other types keep their present state. (5) For these three kinds the row's route stays `{ via: "FlowDriven", risk: "official" }`, and its guide holds the detail when the state is not ok, as connector rows do.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "a skill row is ok with its size, missing when not installed, and missing with the reason when it cannot be read"
   2. "a command row is ok or missing from PATH"
@@ -1250,29 +1250,31 @@ Chair's decision (2026-11-17, before the executor's call), from the present code
   5. "rows of other types keep their present states"
   6. "readiness.check runs no command and sends no prompt"
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/service/readiness-local.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the three row kinds**
+- [x] **Step 3: Implement the three row kinds**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Check skills, commands and granted folders on the Readiness screen" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run packages/runner/src/service/readiness-local.test.ts (6 passed); pnpm format && pnpm lint && pnpm typecheck && pnpm check (passed).
+Chair (review, 2026-11-17): files the executor touched: `service/map-flow.ts`, `service/handlers.ts`, the `local` checks in `service/service.ts` (as the decision says) and the new `service/readiness-local.test.ts`, whose home folder is a temporary folder through a mock of `homedir()` in that file only; all on this task's list. The chair's fix: a granted path that exists but is a file is missing with "This path is not a folder." instead of "Ready" (or "This folder cannot be written."), with the test "a granted path that is a file is missing with This path is not a folder., for read and for read_write". The chair's own full run of `pnpm format && pnpm check` was green end to end (277 test files, 1,810 tests passed and 1 skipped).
 
 ### Task 22: The M1 flow package
 

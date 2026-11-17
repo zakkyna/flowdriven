@@ -10,11 +10,13 @@ import {
 import {
   type Check,
   type LeafStep,
+  type Requirement,
   FlowManifest as SdkManifest,
   type Step,
   type Trigger,
 } from "@flowdriven/sdk";
 import { catalogEntry } from "../connectors/catalog.ts";
+import { isExtraRef } from "../folders/extra.ts";
 import { UNOFFICIAL_SENTENCE } from "../router/route.ts";
 import type { FlowRow, RunRow, StepRow } from "../storage.ts";
 import { connectorReadiness } from "./readiness-connector.ts";
@@ -184,11 +186,19 @@ export function toFlowDetail(row: FlowRow, runs: RunRow[], lastRunSteps: StepRow
     ),
   });
 }
+export type LocalChecks = Record<
+  "skill" | "command" | "folder",
+  (req: Requirement) => {
+    state: "ok" | "missing" | "needs_login";
+    detail: string;
+  }
+>;
 export function toReadinessReport(
   row: FlowRow,
   checkedAt: string,
   web?: { chromeFlag: boolean; hostFile: boolean },
   connectors?: { name: string; url: string; status: string }[],
+  local?: LocalChecks,
 ): ReadinessReport {
   const m = manifestOf(row);
   const items = m.requirements.map((r) => {
@@ -197,6 +207,15 @@ export function toReadinessReport(
         ? catalogEntry(r.ref)
         : undefined;
     const connector = entry && connectors !== undefined ? connectorReadiness(entry, connectors) : undefined;
+    const checked =
+      local &&
+      (r.type === "skill"
+        ? local.skill(r)
+        : r.type === "cli_tool"
+          ? local.command(r)
+          : r.type === "path" && isExtraRef(r.ref)
+            ? local.folder(r)
+            : undefined);
     return {
       requirementId: r.id,
       name: r.ref ?? r.id,
@@ -210,6 +229,14 @@ export function toReadinessReport(
       autoInstall: "guided" as const,
       guide: { steps: ["Nothing to do yet."], commands: [], verified: false },
       checkedAt,
+      ...(checked
+        ? {
+            ...checked,
+            ...(checked.state !== "ok"
+              ? { guide: { steps: [checked.detail], commands: [], verified: false } }
+              : {}),
+          }
+        : {}),
       ...(connector && entry
         ? {
             ...connector,

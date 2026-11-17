@@ -24,7 +24,13 @@ import type { HarnessService } from "./claude-harness.ts";
 import { ALLOW_FIRST } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
-import { defaultSettings, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
+import {
+  defaultSettings,
+  type LocalChecks,
+  toFlowDetail,
+  toFlowSummary,
+  toReadinessReport,
+} from "./map-flow.ts";
 import { toQueueView } from "./map-queue.ts";
 import { runTrigger, toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
 import { toTriggerStatus } from "./map-trigger.ts";
@@ -45,6 +51,7 @@ export type HandlerContext = {
   capabilities?: ReturnType<typeof createCapabilities>;
   webCheck?: () => { chromeFlag: boolean; hostFile: boolean };
   connectors?: () => { name: string; url: string; status: string }[];
+  local?: (row: FlowRow) => LocalChecks;
 };
 export type Handlers = {
   [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> | Promise<OperationOutput<N>>;
@@ -117,6 +124,7 @@ export function createHandlers({
   capabilities,
   webCheck,
   connectors,
+  local,
 }: HandlerContext): Handlers {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
@@ -329,8 +337,10 @@ export function createHandlers({
         runTrigger(begun.run, flowNameOf),
       );
     },
-    "readiness.check": ({ flowId }) =>
-      toReadinessReport(flow(flowId), now().toISOString(), webCheck?.(), connectors?.()),
+    "readiness.check": ({ flowId }) => {
+      const row = flow(flowId);
+      return toReadinessReport(row, now().toISOString(), webCheck?.(), connectors?.(), local?.(row));
+    },
     "readiness.install": () => unavailable("Installing a requirement arrives with the readiness engine."),
     "approvals.list": ({ state }) =>
       [

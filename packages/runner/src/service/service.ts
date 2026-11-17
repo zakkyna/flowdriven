@@ -1,15 +1,18 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, rmdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type Notice, operations, type RunnerTopic } from "@flowdriven/contracts";
 import { STOP } from "../claude/browser-post.ts";
+import { visible } from "../claude/text.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { createEngine, type Engine } from "../engine.ts";
+import { resolveExtraFolder } from "../folders/extra.ts";
 import type { HarnessAdapter } from "../harness.ts";
 import type { Probes } from "../keeper/types.ts";
 import { routeAll } from "../router/route.ts";
+import { bundledSkill, readSkillFolder, skillSource } from "../skills/skill-folder.ts";
 import type { Store } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
 import type { TriggerDeps, TriggerService } from "../triggers/service.ts";
@@ -21,6 +24,7 @@ import { createDispatcher, createHandlers } from "./handlers.ts";
 import { createKeepAwake } from "./keep-awake.ts";
 import { type Every, wireKeeper } from "./keeper-wiring.ts";
 import { createNotifier, observeStore } from "./notify-wiring.ts";
+import { commandReadiness } from "./readiness-commands.ts";
 import { nativeHostPath } from "./readiness-web.ts";
 import { wireTriggers } from "./trigger-wiring.ts";
 import { createWeekly } from "./weekly-limit.ts";
@@ -150,6 +154,50 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     projectDir,
     now,
     harnesses: hs,
+    local: (row) => ({
+      skill: (req) => {
+        const source = skillSource(req.ref, { home: homedir() });
+        if (!source) return { state: "missing", detail: "This skill's name is invalid." };
+        if (source.kind === "installed") {
+          try {
+            lstatSync(source.dir);
+          } catch (error) {
+            if (error instanceof Error && "code" in error && error.code === "ENOENT")
+              return { state: "missing", detail: `Your Claude Code has no skill ${source.name}.` };
+          }
+        }
+        const result =
+          source.kind === "installed"
+            ? readSkillFolder(source.dir, source.name)
+            : bundledSkill(row.files, source.name);
+        return result.ok
+          ? {
+              state: "ok",
+              detail: `Found your skill ${source.name}; its text has ${result.skill.copyText.length.toLocaleString("en-US")} characters.`,
+            }
+          : { state: "missing", detail: result.reason };
+      },
+      command: (req) => commandReadiness(req, { path: options.env?.PATH ?? "" }),
+      folder: (req) => {
+        const result = resolveExtraFolder(req.ref ?? "", { home: homedir(), dataDir: options.dataDir });
+        if (!result.ok) return { state: "missing", detail: result.reason };
+        const path = visible(result.path, 300);
+        if (!result.exists) return { state: "ok", detail: `FlowDriven creates ${path} at the first run.` };
+        try {
+          if (!statSync(result.path).isDirectory()) throw new Error("not a folder");
+        } catch {
+          return { state: "missing", detail: "This path is not a folder." };
+        }
+        if (req.type === "path" && req.access === "read_write") {
+          try {
+            rmdirSync(mkdtempSync(join(result.path, ".flowdriven-check-")));
+          } catch {
+            return { state: "missing", detail: "This folder cannot be written." };
+          }
+        }
+        return { state: "ok", detail: `Ready: ${path}.` };
+      },
+    }),
     ...(hs ? { connectors: () => hs.facts().connectors ?? [] } : {}),
     webCheck:
       options.webCheck ??
