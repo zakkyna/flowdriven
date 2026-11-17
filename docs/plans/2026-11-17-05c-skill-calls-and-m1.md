@@ -897,7 +897,7 @@ git add packages/runner/src/claude packages/runner/src/harness.ts packages/runne
 git commit -m "Let a step run its declared command lines through Bash, checked by the hook" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-Blocked (Codex, 2026-11-17, third call): Task 13 requires adapter.ts to pass takesOutside to buildPolicy and command patterns to buildPrompt, but adapter.ts is not in the permitted files.
+Blocked (Codex, 2026-11-17, first call; first labelled "third call" by mistake): Task 13 requires adapter.ts to pass takesOutside to buildPolicy and command patterns to buildPrompt, but adapter.ts is not in the permitted files.
 Blocked (Codex, 2026-11-17, second call): Auditing every allowed and refused Bash call requires changes to claude/run.ts, which is outside the permitted files; the existing audit records only aggregate allowed calls and caps refused-call entries.
 Chair's decision (2026-11-17, second): `packages/runner/src/claude/run.ts` joins the files of this task for one thing only: in the decide wrapper, next to `connector_call`, each allowed `Bash` call writes one audit row `command_run` with the command line cut to 300 characters through `visible`; a refused `Bash` call is recorded by the present `tool_denied` path and counted under Blocked calls. Nothing else in `run.ts` changes.
 
@@ -1815,7 +1815,7 @@ The chair added, under the owner's yes to fix the network gaps and under Decisio
 - the package managers `pip`, `pip3`, `uv`, `poetry`, `gem`, `cargo`, `go`, `brew`, `composer` and `nodejs` run only as an exact line, as `npm` does;
 - a name with a version (`python3.13`, `pip3.13`, `ruby3.3` and the like, which Homebrew puts on PATH) counts as its interpreter.
 
-All three come with the test "uvx, pipx, bundle, docker and podman drop the route, and package managers and versioned interpreters run only as an exact line". The full gate is the closing gate in the Handover.
+All three come with the test "uvx, pipx, bundle, docker and podman drop the route, and package managers and versioned interpreters run only as an exact line". The full gate is the closing gate in the Handover. When the verifier pointed out that no owner answer named this addition, the chair asked the owner alone, in Indonesian, with the choices "Ya, setujui (Disarankan)" and "Tidak, buang tambahannya". The owner answered "Ya, setujui (Disarankan)" (2026-11-17).
 
 ---
 
