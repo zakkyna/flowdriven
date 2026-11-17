@@ -1843,7 +1843,7 @@ Written by the chair on 2026-11-17. Tasks 20 and 22 to 25 did not run (see "Wait
   - Gmail drafts and labels as a write class (Task 18, b813eeb);
   - pick keys for a keyless loop over a choice, with a pick releasing only inside a loop over its choice (Task 19, ffd714d).
 - Readiness rows for skills, commands and granted folders (Task 21, ed43ce1).
-- The security review: three rounds by a fresh opus reviewer, with the fixes R1 (440f5b0), R2 (e60f773) and R3 (bea4b11). Then R4 (1ca8541) fixed the gaps found after round 3. See the outcome above.
+- The security review: three rounds by a fresh opus reviewer, with the fixes R1 (440f5b0), R2 (e60f773) and R3 (bea4b11). Then R4 (1ca8541) and R5 (15778d4) fixed the gaps found after round 3. See the outcome above.
 
 Two present tests that item 6 does not name changed, each to an equally strict expectation, with the owner's own yes (under "Owner approval"):
 - `connectors/catalog.test.ts` (the risky map is nine tools, Task 18);
@@ -1859,7 +1859,13 @@ Two present tests that item 6 does not name changed, each to an equally strict e
   It needs a runner change: text the owner approved in the Inbox counts as the owner's own, so the build step takes no outside text. That change is a task of a later plan, with its own "Ask first".
 - Tasks 20 and 22 to 25 stay unticked here. The owner's O5 answer chose an option that says the runner change is made in the next plan ("Ini perlu perubahan runner di rencana berikutnya"). So Tasks 22 to 25 move to that plan with it, and Task 20 goes with them once H1 is done.
 
-**Closing gate (C1).** CLOSING_GATE_PLACEHOLDER
+**Closing gate (C1).** One full run of `pnpm format && pnpm check` on 15778d4, on 2026-11-17, at a load average of about 6 to 10. It was green end to end, with no re-run of any test:
+- `pnpm format` changed no file, and lint and typecheck passed;
+- 288 test files: 1,832 tests passed and 1 was skipped;
+- the check tools' 109 tests passed;
+- `check:hidden` found nothing in 616 files, and `check:deps` passed.
+
+The log, `.workflow/scratch/05c-c1-check.log` (git-ignored), names the commit and the start and end times in its own first and last lines. Earlier green runs on 75718bd and 1ca8541 came before Review fixes R4 and R5 changed code.
 
 **Open items for later plans.**
 - O2: the Bash tool's sandbox, and the shell it runs. Rounds 2 and 3 marked R2-F1 and R3-F1 uncertain because they depend on that shell being zsh.
