@@ -211,7 +211,7 @@ The owner said yes to this "Ask first" change on 2026-11-17 ("Lewati bila tak ad
 - Consumes: `child(name)` (`entry.test.ts:5-10`).
 - Produces: nothing new.
 
-- [ ] **Step 1: Write the change (the test is the change)**
+- [x] **Step 1: Write the change (the test is the change)**
 
 ```ts
 test("without the silencer the warning is printed (the check can see it)", (ctx) => {
@@ -224,22 +224,24 @@ test("without the silencer the warning is printed (the check can see it)", (ctx)
 
 The test "silences only the SQLite warning" (`entry.test.ts:11-16`) is not touched.
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `pnpm vitest run packages/runner/src/entry.test.ts`
 Expected on Node 24.22.3: 1 passed, 1 skipped. On a Node that prints the warning: 2 passed.
 
-- [ ] **Step 3: Run the gate**
+- [x] **Step 3: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 4: Chair step (commit)**
+- [x] **Step 4: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/entry.test.ts
 git commit -m "Skip the SQLite warning control test on a Node that prints no warning" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6-luna, 2026-11-17. Evidence: pnpm format && pnpm check.
 
 ### Task 2: Contracts: the pin of a capability row, the allow with pins, and a step's time limit
 
