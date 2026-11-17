@@ -49,6 +49,7 @@ export type StepRow = {
   attempts: Attempt[];
   outputs: Record<string, Value>;
   checks: CheckOutcome[];
+  limitMs?: number;
   note?: string;
   outside?: boolean;
 };

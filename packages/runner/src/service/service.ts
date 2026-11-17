@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -16,6 +17,7 @@ import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
 import { createDispatcher, createHandlers } from "./handlers.ts";
+import { createKeepAwake } from "./keep-awake.ts";
 import { type Every, wireKeeper } from "./keeper-wiring.ts";
 import { createNotifier, observeStore } from "./notify-wiring.ts";
 import { nativeHostPath } from "./readiness-web.ts";
@@ -24,6 +26,8 @@ import { createWeekly } from "./weekly-limit.ts";
 
 export type ServiceOptions = {
   store: Store;
+  /** Keeps the Mac awake during a long step; tests pass their own so no real caffeinate runs. */
+  keepAwake?: (pid: number) => void;
   dataDir: string;
   mode: "demo" | "live";
   now?: () => Date;
@@ -105,6 +109,17 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     newId,
     dayOf,
     harness: wired?.harness ?? harness,
+    keepAwake:
+      options.keepAwake ??
+      createKeepAwake({
+        platform: process.platform,
+        spawn: (cmd, args) => {
+          const child = spawn(cmd, args, { stdio: "ignore" });
+          child.unref();
+          return child;
+        },
+        onError: () => store.appendAudit({ at: now().toISOString(), kind: "keep_awake_failed", detail: {} }),
+      }),
     queue: wired?.keeper,
     ...(hs ? { routeOf: (reqs) => routeAll(reqs, hs.facts()) } : {}),
     readiness: hs

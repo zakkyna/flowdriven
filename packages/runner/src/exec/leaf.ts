@@ -19,6 +19,12 @@ import { limits } from "./limits.ts";
 import { stepTakesOutsideText } from "./outside.ts";
 import { raceAbort } from "./timeout.ts";
 
+export const LONG_STEP_MS = 30 * 60 * 1000;
+export const LONG_STEP = {
+  timedOut: (minutes: number) =>
+    `This step ran for its whole time limit of ${minutes} minutes, so FlowDriven does not try it again.`,
+};
+
 export async function runLeaf(
   step: LeafStep,
   ctx: { deps: ResolvedDeps; run: RunRow; manifest: FlowManifest; scope: Scope; itemKey: string },
@@ -80,6 +86,7 @@ export async function runLeaf(
     save();
   }
   const { duration, attempts, replanAt, mediumAt } = limits(step, manifest);
+  row.limitMs = duration;
   const failures: string[] = [];
   for (let n = 1; n <= attempts; n++) {
     const replan = n === replanAt;
@@ -186,6 +193,7 @@ export async function runLeaf(
             outputs: step.outputs.map(({ id, type }) => ({ id, type })),
             ...(failures.length ? { lastFailure: failures.at(-1) } : {}),
             pauseLimit,
+            ...(duration > LONG_STEP_MS && deps.keepAwake ? { onStart: deps.keepAwake } : {}),
             maxDurationMs: duration,
             signal: ctl.signal,
           }),
@@ -339,6 +347,10 @@ export async function runLeaf(
       clearTimeout(timer);
     }
     Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+    if (timedOut && duration > LONG_STEP_MS && n < attempts) {
+      block(LONG_STEP.timedOut(Math.round(duration / 60_000)));
+      return "failed";
+    }
     failures.push(failure);
     row.state = "retrying";
     row.note = failure;

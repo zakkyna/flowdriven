@@ -43,6 +43,7 @@ export type EngineDeps = {
     ctx?: { flowId: string; hash: string },
   ) => { ready: boolean; reason?: string };
   runCommand?: CommandRunner;
+  keepAwake?: (pid: number) => void;
   queue?: { waitingOf(runId: string): { stepId: string; itemKey: string; waiting: Waiting }[] };
 };
 export type ResolvedDeps = EngineDeps & {
