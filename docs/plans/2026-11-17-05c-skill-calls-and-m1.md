@@ -1753,7 +1753,7 @@ Written by the chair on 2026-11-17. Tasks 20 and 22 to 25 did not run (see "Wait
   - Gmail drafts and labels as a write class (Task 18, b813eeb);
   - pick keys for a keyless loop over a choice, with a pick releasing only inside a loop over its choice (Task 19, ffd714d).
 - Readiness rows for skills, commands and granted folders (Task 21, ed43ce1).
-- The security review: three rounds by a fresh opus reviewer, with the fixes R1, R2 and R3 (see the outcome above).
+- The security review: three rounds by a fresh opus reviewer, with the fixes R1 (440f5b0), R2 (e60f773) and R3 (bea4b11). Then R4 (1ca8541) fixed the gaps found after round 3. See the outcome above.
 
 Present tests the plan did not name changed under item 6 of the owner approval, each to an equally strict expectation, and each is recorded under its task:
 - `connectors/catalog.test.ts` (the risky map is nine tools, Task 18);
@@ -1770,7 +1770,13 @@ Present tests the plan did not name changed under item 6 of the owner approval, 
   It needs a runner change: text the owner approved in the Inbox counts as the owner's own, so the build step takes no outside text. That change is a task of a later plan, with its own "Ask first".
 - Tasks 20 and 22 to 25 stay unticked here. A later plan takes them over, together with H1 and that change.
 
-**Closing gate (C1).** CLOSING_GATE_PLACEHOLDER
+**Closing gate (C1).** One full run of `pnpm format && pnpm check` on 1ca8541, on 2026-11-17, at a load average of about 5 to 9. It was green end to end, with no re-run of any test:
+- `pnpm format` changed no file, and lint and typecheck passed;
+- 287 test files: 1,827 tests passed and 1 was skipped;
+- the check tools' 109 tests passed;
+- `check:hidden` found nothing in 615 files, and `check:deps` passed.
+
+The log is `.workflow/scratch/05c-c1-check.log` (git-ignored). An earlier run on 75718bd was also green, but Review fix R4 changed code after it.
 
 **Open items for later plans.**
 - O2: the Bash tool's sandbox, and the shell it runs. Rounds 2 and 3 marked R2-F1 and R3-F1 uncertain because they depend on that shell being zsh.
