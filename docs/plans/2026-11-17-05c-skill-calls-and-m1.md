@@ -183,6 +183,7 @@ Group A, groundwork: Tasks 0 to 3. Group B, skill calls: Tasks 4, 6, 7, 8, 9. Gr
 
 - O1 (owner, Task 0; answered 2026-11-17): the skill is `prototype-builder` and the host is a claude.ai connector. The limits of Decision 3 were raised with the owner. The host's tools are not known while it is `needs-auth` (H1).
 - O5 (owner and research; blocks Tasks 20 and 22 to 25): the owner's skill runs `flutter`, `node` and `sh` while it reads the job's text. Decision 7 keeps commands out of such a step, so M1 needs a safe way to run them first: an OS sandbox for commands (O2), a step order that keeps outside text away from the commands, or the owner's own decision on the risk. The chair brings the choices to the owner when Tasks 1 to 19 and 21 are done.
+  - The owner's answer (2026-11-17): "Anda setujui rencananya (Disarankan)". The owner approves a short build plan, written without commands, before the step that runs the skill's commands from it. It is built in a later plan; see the Handover.
 - O2 (research, 18.3; not in this session): Claude Code's Bash sandbox settings in a `--restricted` call, and whether they hold writes to the call's folders. Until then commands run without an OS sandbox and the preview says so.
 - O3 (research, 20.9 D3; not in this session): Upwork's own terms on reading job pages in a logged-in browser. The flow screen shows the risk as plan 05 wrote it.
 - O4 (later plan): the app enforcing the attended first run before a trigger can be switched on (spec 20.5), a stall check for long steps, input defaults for manual runs, and a call grant bound to the held step.
@@ -1673,8 +1674,56 @@ git commit -m "Refuse the shell words that run or change a command, and two more
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 2 tests; pnpm format && pnpm lint && pnpm typecheck && pnpm check passed (1824 tests passed, 1 skipped; 109 tool tests passed).
 Chair (review, 2026-11-17): files the executor touched: `router/commands-route.ts`, `sdk/src/validate/risky.ts` and the two new test files; all on this task's list, and the lists match the Interfaces word for word. No present test or fixture declares one of the new words as a command. The chair's own full run of `pnpm format && pnpm check` was green end to end (285 test files, 1,824 tests passed and 1 skipped; 109 check-tool tests passed) at a load average of about 4 to 8.
 
+**Outcome of the review (2026-11-17).** Three rounds, the most the plan allows. Seven findings were fixed with their own tests: F1, F2 and F3 (R1, 440f5b0), R2-F1 and R2-F2 (R2, e60f773), and R3-F1 and R3-F2 (R3, bea4b11). R2-F3 (refusals that are too strict) is under Known limits by the owner's choice. So is the class behind R2-F1 and R3-F1: the refused programs are a list, and the rule that a program must be a file on PATH waits for a later plan. No other finding is open.
+
 ---
 
 ## Handover
 
-Written by the chair after Task 25: what M1 showed, what is left, and the open items for plan 04b and plan 06.
+Written by the chair on 2026-11-17. Tasks 20 and 22 to 25 did not run (see "Waiting" below), so this Handover is written before Task 25, not after it.
+
+**Done.** Tasks 0 to 19 and 21 and the review fixes R1 to R3 are committed on `claude/plan-05c-detail-29be69`. The branch was cut from `work/decisions-2026-11-17` at 4090c45; it has no remote, and nothing was pushed. Each task's section names the files the executor touched, the chair's checks and fixes, and its gate evidence. In short:
+- Groundwork: the probes H1 to H4, run with the owner watching (Task 0); the control test (Task 1, 7a5463e); the contract (Task 2, 36704b6); and store version 6 with the `consent_pins` table (Task 3, fbee335).
+- Skill calls:
+  - SKILL.md and its copy without front matter, R14 (Task 4, 50970ab);
+  - reading, hashing and copying a skill folder (Task 6, 9d25c7b);
+  - the route, the preview and the pin (Task 7, f4365d7);
+  - the gate and readiness, R9 (Task 8, 5c75bb2);
+  - skill steps with a read-only copy (Task 9, 76509a4).
+- Long steps: no second try after a limit over 30 minutes, and the Mac kept awake while the step runs (Task 10, 5f622b4); the time limit and the running time on screen (Task 11, 9fc41b1).
+- Commands: the command-line parser and patterns (Task 5, fe47367); the route and the PATH lookup (Task 12, 32aacf0); and Bash through the hook, with one audit row per call (Task 13, a8f8559).
+- Granted folders: the grant at the allow, pinned, logged and taken back (Task 14, 0966be1); a step's folders checked again at each call (Task 15, 70717d1); and `file_change` triggers on them (Task 16, 25a2bac).
+- Connectors and approvals:
+  - the Trash and Spam rule, the spam word and the destructive mark (Task 17, cd66641);
+  - Gmail drafts and labels as a write class (Task 18, b813eeb);
+  - pick keys for a keyless loop over a choice, with a pick releasing only inside a loop over its choice (Task 19, ffd714d).
+- Readiness rows for skills, commands and granted folders (Task 21, ed43ce1).
+- The security review: three rounds by a fresh opus reviewer, with the fixes R1, R2 and R3 (see the outcome above).
+
+Present tests the plan did not name changed under item 6 of the owner approval, each to an equally strict expectation, and each is recorded under its task:
+- `connectors/catalog.test.ts` (the risky map is nine tools, Task 18);
+- `service/claude-harness-connector.test.ts` (adds `pickTools`, Task 19);
+- plan 05b's connector demo and its test (Task 19). Its line is now "pick released one item: j1 ran in the loop over the choice, the call after the loop held".
+
+**Waiting.**
+- Task 20, the prototype host connector, needs H1. The owner reconnects the host connector in claude.ai, where it showed `needs-auth`. Then the chair scans once more with no prompt, to learn its tools.
+- Tasks 22 to 25 (M1) need O5. The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Anda setujui rencananya (Disarankan)", "Riset kotak pasir dulu", "Terima risikonya" and "Putuskan nanti"): "Anda setujui rencananya (Disarankan)". That means:
+  - one step reads the job and writes a short build plan, without running commands;
+  - the owner reads and approves that plan;
+  - the next step builds the prototype with the skill's commands, from the approved plan only.
+
+  It needs a runner change: text the owner approved in the Inbox counts as the owner's own, so the build step takes no outside text. That change is a task of a later plan, with its own "Ask first".
+- Tasks 20 and 22 to 25 stay unticked here. A later plan takes them over, together with H1 and that change.
+
+**Closing gate (C1).** CLOSING_GATE_PLACEHOLDER
+
+**Open items for later plans.**
+- O2: the Bash tool's sandbox, and the shell it runs. Rounds 2 and 3 marked R2-F1 and R3-F1 uncertain because they depend on that shell being zsh.
+- O3 and O4, as written under Open items.
+- O5: decided above, still to build.
+- The rule that a command's program must be an executable file on PATH.
+- The risky-word rules scoped to subcommands (R2-F3).
+
+**What the chair learned.**
+- Codex stopped on eleven calls. Most stops came from gaps in the plan, not in its own work: a present test that pins a list or sentence the task changes on purpose, or a wiring file missing from the task's list. From Task 16 on, the chair checked those before each call and wrote a "Chair's decision" first. Three calls still stopped on such a gap (Tasks 16, 18 and 19), and the rest went through on the first call.
+- One finished Codex call waited about 80 minutes, because the chair started it without its background watcher. Every call now starts with its watcher.
