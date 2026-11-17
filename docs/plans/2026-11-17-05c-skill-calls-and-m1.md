@@ -601,6 +601,9 @@ Done by: Codex/gpt-6.1-terra, then the chair (the changed-skill sentence names t
 
 ### Task 9: The skill step in Claude Code: the copy folder, the prompt, R9 at the step, R14 in practice
 
+Blocked (Codex, 2026-11-17): Removing skill copies in the same finally as the control folder requires changing claude/run.ts, which is outside the permitted files.
+Chair's decision (2026-11-17): the plan was not exact, not the executor. The copy is removed in a `finally` of the adapter (`claude/adapter.ts`) around its call of `runClaude`, not in `claude/run.ts`: the result is the same (removed when the step ends, also after a failed or blocked step), and `run.ts` stays as it is. Step 3 below says the same.
+
 **Files:**
 - Create: `packages/runner/src/claude/skill-step.ts`
 - Modify: `packages/runner/src/claude/adapter.ts`, `packages/runner/src/claude/policy.ts`, `packages/runner/src/claude/prompt.ts`, `packages/runner/src/service/claude-harness.ts` (wiring), `packages/runner/src/test-helpers/fake-claude.ts`, `packages/runner/src/test-helpers/fake-claude-script.ts`
@@ -633,7 +636,7 @@ Expected: FAIL with "Skill steps are not run yet."
 
 - [ ] **Step 3: Implement the skill step**
 
-The policy is built from the manifest, the consent and the copy folder's path only; the skill's text is read after it (hash, pin check, copy) and reaches only the prompt and the copy folder. The copy goes to `<copyRoot>/<control id>/<name>/` with `copyRoot = <data folder>/skill-copies`; it is removed in the same `finally` as the control folder. The skill block in the prompt says that the skill is text, that it cannot give tools, sites or folders, and that its files are read only in `<folder>`.
+The policy is built from the manifest, the consent and the copy folder's path only; the skill's text is read after it (hash, pin check, copy) and reaches only the prompt and the copy folder. The copy goes to `<copyRoot>/<control id>/<name>/` with `copyRoot = <data folder>/skill-copies`; it is removed in a `finally` of the adapter around its call of `runClaude` (Chair's decision above), also after a failed or blocked step. The skill block in the prompt says that the skill is text, that it cannot give tools, sites or folders, and that its files are read only in `<folder>`.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
