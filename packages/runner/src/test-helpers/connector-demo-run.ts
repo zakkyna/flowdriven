@@ -200,13 +200,15 @@ export async function runConnectorDemo(
         approves: ["gmail.delete_draft"],
       },
     };
+    // A pick releases a call only inside a loop over the ask's choice (plan 05c, Decision 10): the loop
+    // over the choice has no key, so its items take the pick keys; the step after the loop is held.
     const loop = {
       id: "loop",
-      for_each: "${steps.find.outputs.jobs}",
+      for_each: "${steps.pick.outputs.choice}",
       as: "job",
-      key: "${job.id}",
       steps: [worker("delete", "Delete", "DELETE ${job.id}")],
     };
+    const later = worker("later", "Later", "LATER");
     const found = { report: "ok", outputs: { jobs: [{ id: "j1" }, { id: "j2" }], note: "ok" } };
     const plays: FakePlay[] = [
       {
@@ -217,8 +219,9 @@ export async function runConnectorDemo(
         ],
       },
       { when: "DELETE", actions: [invoke("delete", "delete_draft"), done] },
+      { when: "LATER", actions: [invoke("later", "delete_draft"), done] },
     ];
-    const picked = await start("pick", [find, pick, loop], plays);
+    const picked = await start("pick", [find, pick, loop, later], plays);
     const choice = store.listApprovals({ runId: picked.id, state: "pending" }).at(0);
     if (!choice)
       throw new Error(
@@ -227,7 +230,9 @@ export async function runConnectorDemo(
     await service.engine.answerAsk(choice.id, { picks: ["j1"] });
     const pickAudit = store.listAudit(picked.id);
     const used = pickAudit.find((row) => row.kind === "grant_used" && field(row, "grant") === "pick");
-    const itemHeld = pickAudit.find((row) => row.kind === "call_held");
+    const laterHeld = store
+      .listApprovals({ runId: picked.id, state: "pending" })
+      .find((approval) => approval.kind === "risky_action" && approval.stepId === "later");
     const image = await start(
       "image",
       [worker("image", "Image", "IMAGE")],
@@ -273,7 +278,7 @@ export async function runConnectorDemo(
       `risky call held: ${heldLine}`,
       `approved call ran: ${field(grant, "tool")} (${field(grant, "grant")})`,
       `changed input held again: ${count} approvals for the step`,
-      `pick released one item: ${field(used, "itemKey")} ran, ${field(itemHeld, "itemKey")} held`,
+      `pick released one item: ${field(used, "itemKey")} ran in the loop over the choice, ${laterHeld ? "the call after the loop held" : "nothing held"}`,
       `non-text result withheld: ${field(withheld, "why")}`,
       `tab closed after a withheld page: ${closed ? "tab 1001 closed" : "none"}, step stopped: ${moved.blockedReason ?? "none"}`,
     ];

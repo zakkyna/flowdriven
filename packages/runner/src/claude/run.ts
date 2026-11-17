@@ -1,5 +1,6 @@
 import type { Value } from "@flowdriven/sdk";
 import type { GrantBook } from "../connectors/grants.ts";
+import { isCallGrant } from "../connectors/grants.ts";
 import type { CallInfo, HeldCall, RateLimit } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
 import { BROWSER_DENY, CHROME_PREFIX, closeSentence } from "./browser.ts";
@@ -32,6 +33,7 @@ import { visible } from "./text.ts";
 export const MAX_DENIED_ENTRIES = 50;
 const MAX_PAGE_ROWS = 50;
 export type RunInput = {
+  pickTools?: string[];
   runId: string;
   stepId: string;
   itemKey: string;
@@ -194,7 +196,9 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         }
         const decision = decide(policy, call, attempt?.state(), {
           calls: connectorCalls,
-          granted: (grant) => deps.grants?.has(input.runId, grant, input.itemKey) ?? false,
+          granted: (grant) =>
+            (isCallGrant(grant) || (input.pickTools?.includes(grant) ?? false)) &&
+            (deps.grants?.has(input.runId, grant, input.itemKey) ?? false),
         });
         if (
           !decision.allow &&

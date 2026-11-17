@@ -17,6 +17,7 @@ import type { RunRow, StepRow } from "../storage.ts";
 import { approvedCallsOf, HOLD_TEXT, heldPayload, labelOf, MAX_HOLDS } from "./held.ts";
 import { limits } from "./limits.ts";
 import { stepTakesOutsideText } from "./outside.ts";
+import { loopsOverChoice } from "./pick-keys.ts";
 import { raceAbort } from "./timeout.ts";
 
 export const LONG_STEP_MS = 30 * 60 * 1000;
@@ -164,12 +165,22 @@ export async function runLeaf(
           outputs: await raceAbort(fn((step.with ?? {}) as Record<string, Value>, run), ctl.signal),
         };
       } else {
+        const home = manifest.steps.find(
+          (s) => "for_each" in s && s.steps.some((nested) => nested.id === step.id),
+        );
+        const ask =
+          home &&
+          manifest.steps.find(
+            (s) => "do" in s && s.do === "ask" && loopsOverChoice(manifest, s.id).includes(home.id),
+          );
+        const pickTools = ask && "do" in ask && ask.do === "ask" ? ask.ask.approves : [];
         const approvedCalls = approvedCallsOf(store, run.id, step.id, itemKey);
         result = await raceAbort(
           harness.runStep({
             runId: run.id,
             stepId: step.id,
             itemKey,
+            pickTools,
             attempt: n,
             replan,
             kind: step.do,

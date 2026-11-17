@@ -9,6 +9,7 @@ import {
 import type { ResolvedDeps } from "../engine.ts";
 import type { ItemRow, RunRow } from "../storage.ts";
 import { runLeaf } from "./leaf.ts";
+import { loopsOverChoice, pickKeysOf } from "./pick-keys.ts";
 import { itemScope } from "./scope.ts";
 
 export async function runLoop(
@@ -44,6 +45,18 @@ export async function runLoop(
       }
       const list = resolveValue(step.for_each, scope);
       if (!Array.isArray(list)) throw new Error("for_each is not a list.");
+      const ask =
+        step.key === undefined
+          ? manifest.steps.find(
+              (candidate) =>
+                "do" in candidate &&
+                candidate.do === "ask" &&
+                loopsOverChoice(manifest, candidate.id).includes(step.id),
+            )
+          : undefined;
+      const pickKeys = ask ? pickKeysOf(store, run.id, ask.id) : undefined;
+      if (ask && list.length > 0 && (!pickKeys || pickKeys.length !== list.length))
+        throw new Error(`The picks of ${ask.id} cannot be matched to this loop.`);
       const keys = new Set<string>();
       const cap = Math.min(
         step.max ?? Infinity,
@@ -54,7 +67,9 @@ export async function runLoop(
       const items: ItemRow[] = list.map((item, position) => {
         const value =
           step.key === undefined
-            ? `#${position}`
+            ? ask
+              ? pickKeys?.[position]
+              : `#${position}`
             : resolveValue(step.key, itemScope(scope, step, item, [], ""));
         if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean")
           throw new Error("Loop key must resolve to a scalar value.");

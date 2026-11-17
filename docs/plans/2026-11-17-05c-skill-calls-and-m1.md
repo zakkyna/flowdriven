@@ -1144,7 +1144,7 @@ Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's 
 
 Chair's decision (2026-11-17, before the executor's call), from the present code: (1) Files: `loopsOverChoice` and `pickKeysOf` live in a new module `packages/runner/src/exec/pick-keys.ts`, because `exec/loop.ts` imports `runLeaf` from `exec/leaf.ts` and a helper in `loop.ts` used by `leaf.ts` would make a cycle; it joins Files and the Step 6 `git add`. (2) `loopsOverChoice(manifest, askId)` returns the ids of the top-level loop steps whose `for_each` is exactly the string `${steps.<askId>.outputs.choice}`, and only when `<askId>` is a top-level `do: ask` step; otherwise `[]`. (3) `pickKeysOf(store, runId, askId)` takes the approved approval of kind `ask` with that `stepId` in the run (`store.listApprovals`) and returns its `picks` in the order of its `payload.options` (the `picks` field is in answer order, the `choice` output in option order); `undefined` when there is no such approval or its payload has no options. (4) The loop: only on its first pass, where keys are made today, a loop without `key` that `loopsOverChoice` names keys item i with the i-th pick key. An empty list makes no items and does not block (an ask with no options, or one that expired with `on_expiry: end`, passes with an empty choice and no approval). When the list is not empty and `pickKeysOf` is `undefined` or has another length, the loop blocks the run through its present `block` with "The picks of <askId> cannot be matched to this loop." Seen keys stay as today (only a declared `key` writes them), and a resumed run keeps the stored keys. (5) The leaf finds its loop as `exec/outside.ts:24` does; when `loopsOverChoice` names that loop for a top-level ask, `pickTools` is that ask's `ask.approves`; for every other step it is `[]`. `claude/adapter.ts` passes `pickTools` on to `runClaude`. In `claude/run.ts` the `granted` function counts a grant that is not a call grant (`isCallGrant`) only when `input.pickTools` holds it; call grants are checked as today. (6) Present tests: besides the ones named below, `service/claude-harness-connector.test.ts:180-195` ("after a rescan on the fake ... a pick grant added to the store releases the risky tool for that item") builds its request by hand, so like the tests of `claude/adapter-held.test.ts` it adds `pickTools: ["gmail.delete_draft"]`, with the same expectations (item 6 of the owner approval). `claude/review-05b-fix.test.ts` has no test of the changed shape (its R-2 loop is over `${steps.find.outputs.jobs}` and expects the call held), so it does not change.
 
-- [ ] **Step 1: Write the failing tests, and change the present ones**
+- [x] **Step 1: Write the failing tests, and change the present ones**
 
   1. "R10 on the spec's flow: the pick releases the publish for the picked job in the keyless build loop, and the other job's publish is held"
   2. "the keyless loop over the choice keys its items with the picked keys, in option order"
@@ -1157,29 +1157,34 @@ Chair's decision (2026-11-17, before the executor's call), from the present code
 
 Present tests (item 6 of the owner approval): `claude/review-05b-r.test.ts:207-221` ("without a key on the loop the item key is #<position> ... the call is held", a loop over `${steps.pick.outputs.choice}`) becomes the same proof for a keyless loop over another list, with the same expectations; any test of `claude/review-05b-fix.test.ts` of that shape changes the same way. Tests of `claude/adapter-held.test.ts` that release a tool by a pick add `pickTools` (the tools their pick approves) to their request; their expectations stay as they are. The executor lists each changed test under this task by title.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/engine-pick-keys.test.ts packages/runner/src/claude/adapter-pick-loop.test.ts`
 Expected: FAIL (positional keys `#0`, `#1`; the publish is held)
 
-- [ ] **Step 3: Implement the pick keys and `pickTools`**
+- [x] **Step 3: Implement the pick keys and `pickTools`**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2, then `pnpm vitest run packages/runner/src/engine-ask.test.ts packages/runner/src/engine-held.test.ts packages/runner/src/engine-loop.test.ts packages/runner/src/review-r2.test.ts packages/runner/src/claude packages/runner/src/service`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
-git add packages/runner/src/exec/loop.ts packages/runner/src/exec/leaf.ts packages/runner/src/engine.ts packages/runner/src/harness.ts packages/runner/src/claude/run.ts packages/runner/src/claude/adapter.ts packages/runner/src/engine-pick-keys.test.ts packages/runner/src/claude/adapter-pick-loop.test.ts packages/runner/src/claude/adapter-held.test.ts packages/runner/src/claude/review-05b-r.test.ts packages/runner/src/claude/review-05b-fix.test.ts packages/runner/src/service/claude-harness-connector.test.ts packages/runner/src/exec/pick-keys.ts
+git add packages/runner/src/exec/loop.ts packages/runner/src/exec/leaf.ts packages/runner/src/engine.ts packages/runner/src/harness.ts packages/runner/src/claude/run.ts packages/runner/src/claude/adapter.ts packages/runner/src/engine-pick-keys.test.ts packages/runner/src/claude/adapter-pick-loop.test.ts packages/runner/src/claude/adapter-held.test.ts packages/runner/src/claude/review-05b-r.test.ts packages/runner/src/claude/review-05b-fix.test.ts packages/runner/src/service/claude-harness-connector.test.ts packages/runner/src/exec/pick-keys.ts packages/runner/src/test-helpers/connector-demo-run.ts packages/runner/src/test-helpers/connector-demo.test.ts
 git commit -m "Key a keyless loop over a choice by its picks, and release a pick only inside that loop" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Blocked (Codex, 2026-11-17, first call): connector-demo.test.ts expects a pick to release a tool in a loop over another list; its demo helper and expectation are outside the permitted files.
+Chair's decision (2026-11-17, second): the plan was not exact, not the executor. Plan 05b's connector demo (`test-helpers/connector-demo-run.ts`, pinned by `test-helpers/connector-demo.test.ts`) let a pick release a call in a loop over `${steps.find.outputs.jobs}`, which Decision 10 now refuses on purpose. Under item 6 of the owner approval both join this task: the demo's loop iterates `${steps.pick.outputs.choice}` with no `key` (the case this task adds), a worker step `later` after the loop calls `delete_draft` as the R10 test does, and the line "pick released one item: j1 ran, j2 held" becomes "pick released one item: j1 ran in the loop over the choice, the call after the loop held", built from the `grant_used` row of the pick and the pending `risky_action` approval of step `later`. The other seven lines and the other two demo tests stay as they are. The chair made this change.
+Chair (review, 2026-11-17): Codex's call stopped at the full gate on the connector demo; the chair finished the task. Files the executor touched: the new `exec/pick-keys.ts`, `exec/loop.ts`, `exec/leaf.ts`, `harness.ts`, `claude/run.ts`, `claude/adapter.ts`, the two new test files, and the present tests named in Step 1 and the first decision (`claude/review-05b-r.test.ts:208-221` as a keyless loop over `${steps.find.outputs.jobs}` with the same expectations, `claude/adapter-held.test.ts` and `service/claude-harness-connector.test.ts` with `pickTools: ["gmail.delete_draft"]` only); `engine.ts` and `claude/review-05b-fix.test.ts` are untouched; all are on this task's list after the decisions, and the chair checked each. The chair's change: the connector demo and its test, as the second decision says.
+Done by: Codex/gpt-6.1-terra, then the chair, 2026-11-17. Evidence: the chair's full run of `pnpm format && pnpm check` was green end to end (276 test files, 1,803 tests passed and 1 skipped).
 
 ### Task 20: The prototype host connector
 

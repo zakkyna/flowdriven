@@ -206,11 +206,15 @@ test("the item key of a picked item in a loop over the choice equals the pick ke
   expect(c.store.hasGrant(run.id, pickGrant("gmail", "delete_draft"), "j1")).toBe(true);
 });
 test(
-  "without a key on the loop the item key is #<position>, not the pick key, so no grant matches and the call is held (fail closed, Fact 11)",
+  "without a key on a loop over another list the item key is #<position>, so no grant matches and the call is held",
   timeout,
   async () => {
     const c = await real(
-      [find, pick("gmail.delete_draft"), loop(false, ["gmail"])],
+      [
+        find,
+        pick("gmail.delete_draft"),
+        { ...loop(false, ["gmail"]), for_each: "${steps.find.outputs.jobs}" },
+      ],
       [findPlay, { when: "Publish picked", actions: [invoke(gmail, "delete", "delete_draft"), result] }],
     );
     const run = await c.start();

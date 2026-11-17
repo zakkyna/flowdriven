@@ -188,11 +188,17 @@ test(
   async () => {
     const t = await setup([tool("a"), done]);
     t.store.addGrant("r1", pickGrant("gmail", "delete_draft"), "j1");
-    expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "ok" });
-    expect(await t.adapter.runStep({ ...t.request, itemKey: "j2" })).toMatchObject({ hold: expectedHold() });
-    expect(await t.adapter.runStep({ ...t.request, runId: "r2" })).toMatchObject({ hold: expectedHold() });
+    expect(await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
+      exit: "ok",
+    });
+    expect(
+      await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"], itemKey: "j2" }),
+    ).toMatchObject({ hold: expectedHold() });
+    expect(
+      await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"], runId: "r2" }),
+    ).toMatchObject({ hold: expectedHold() });
     t.script([tool("b", "send_message"), done]);
-    expect(await t.adapter.runStep(t.request)).toMatchObject({
+    expect(await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
       hold: expectedHold("send_message", { id: "d1" }, "send"),
     });
   },
@@ -200,7 +206,9 @@ test(
 test("a pick grant allows any input and the audit has grant_used with grant pick", timeout, async () => {
   const t = await setup([tool("a", "delete_draft", { id: "different" }), done]);
   t.store.addGrant("r1", pickGrant("gmail", "delete_draft"), "j1");
-  expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "ok" });
+  expect(await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
+    exit: "ok",
+  });
   expect(t.audits).toContainEqual({
     kind: "grant_used",
     detail: {

@@ -183,7 +183,10 @@ test("after a rescan on the fake the harness service gives the adapter the scan'
   const t = await setup();
   t.store.putCapabilityConsent({ flowId: t.m.id, hash: t.hash, at: t.now().toISOString() });
   t.store.addGrant("r1", pickGrant("gmail", "delete_draft"), "j1");
-  expect(await t.hs.adapter.runStep(t.request)).toMatchObject({ exit: "ok", outside: true });
+  expect(await t.hs.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
+    exit: "ok",
+    outside: true,
+  });
   expect(readFakeCalls(t.home)).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ kind: "tool", id: "read", ran: true }),

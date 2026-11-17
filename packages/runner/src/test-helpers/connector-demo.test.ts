@@ -19,7 +19,7 @@ const lines = [
   "risky call held: Hold test: delete_draft on Gmail",
   "approved call ran: delete_draft (call)",
   "changed input held again: 2 approvals for the step",
-  "pick released one item: j1 ran, j2 held",
+  "pick released one item: j1 ran in the loop over the choice, the call after the loop held",
   "non-text result withheld: unchecked",
   "tab closed after a withheld page: tab 1001 closed, step stopped: The page moved to an address this step does not declare.",
 ];

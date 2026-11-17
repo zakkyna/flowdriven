@@ -34,6 +34,7 @@ export class HarnessCallError extends Error {
   }
 }
 export type StepRequest = {
+  pickTools?: string[];
   runId: string;
   stepId: string;
   itemKey: string;

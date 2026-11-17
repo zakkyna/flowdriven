@@ -130,6 +130,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
               runId: req.runId,
               stepId: req.stepId,
               itemKey: req.itemKey,
+              pickTools: req.pickTools,
               attempt: req.attempt,
               model: options.effortModels?.()?.[req.effort ?? "medium"] ?? modelFor(req.effort),
               ...(schema === undefined ? {} : { schema }),
