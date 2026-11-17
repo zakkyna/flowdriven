@@ -460,7 +460,7 @@ Needs H3 (Decision 3).
 - Consumes: `parseSkillFile`, `skillCopyText`, `SKILL_NAME` (Task 4) and `contentHash`, all from `@flowdriven/sdk/node`.
 - Produces: `SKILL_FOLDER_LIMITS = { files: 1000, fileBytes: 2097152, totalBytes: 67108864 }` (Decision 3); `type LoadedSkill = { name: string; description: string; body: string; copyText: string; files: Map<string, Uint8Array>; hash: string; modifiedAt: string }` (`modifiedAt` is the newest file's time, for the preview only); `skillSource(ref: string | undefined, o: { home: string }): { kind: "installed"; name: string; dir: string } | { kind: "bundled"; name: string; prefix: string } | undefined`; `readSkillFolder(dir: string, name: string): { ok: true; skill: LoadedSkill } | { ok: false; reason: string }`; `bundledSkill(files: Record<string, string>, name: string): { ok: true; skill: LoadedSkill } | { ok: false; reason: string }`; `writeSkillCopy(dest: string, skill: LoadedSkill): void`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "skillSource reads claude-code:<name> as the folder ~/.claude/skills/<name> and flow:<name> as skills/<name>/ of the flow; any other ref or a bad name is undefined"
   2. "an installed skill folder reads into its files, its parsed text and a hash equal to contentHash of its files"
@@ -473,31 +473,32 @@ Needs H3 (Decision 3).
   9. "a bundled skill reads from the flow's stored files under skills/<name>/"
   10. "writeSkillCopy creates folders 0700 and files 0600 and refuses a destination that exists"
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/skills/skill-folder.test.ts`
 Expected: FAIL with "Cannot find module"
 
-- [ ] **Step 3: Implement the module in `packages/runner/src/skills/skill-folder.ts`**
+- [x] **Step 3: Implement the module in `packages/runner/src/skills/skill-folder.ts`**
 
 Walk with `lstatSync`; keep paths relative with `/`; read every file once and hash those same bytes, so the copy writes what was hashed.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run packages/runner/src/skills/skill-folder.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/skills
 git commit -m "Read, hash and copy a skill folder" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
 
 ### Task 7: Router and preview: skills, with the pin at the allow
 
