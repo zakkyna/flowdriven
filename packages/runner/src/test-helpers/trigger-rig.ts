@@ -37,6 +37,8 @@ export async function triggerRig(
   script: Script = { steps: { a: { text: "x", outputs: { draft: "x" } } } },
   options: {
     project?: string;
+    home?: string;
+    dataDir?: string;
     readiness?: EngineDeps["readiness"];
     afterList?: () => void;
     hold?: { wait: () => Promise<void> };
@@ -99,6 +101,8 @@ export async function triggerRig(
     now: clock.now,
     dayOf: (date) => dayOf(date),
     projectDir: project,
+    home: options.home,
+    dataDir: options.dataDir,
     begin: (id, o) => {
       const result = engine.beginStart(id, o);
       begun.push(result);

@@ -150,7 +150,9 @@ test("a root swapped for a symlink to a folder outside the project, after enabli
   r.clock.advance(10_000);
   await r.svc.tick();
   expect(r.runsOf(id)).toHaveLength(0);
-  expect(r.svc.list(id).at(0)?.reason).toBe("Only folders inside the project folder can be watched for now.");
+  expect(r.svc.list(id).at(0)?.reason).toBe(
+    "Only folders inside the project folder or a folder you granted to this flow can be watched.",
+  );
   expect(r.store.getTrigger(id, 0)?.lastFire?.outcome).toBe("refused");
 });
 test("500 changed files with max_items 1 and the default cap give 24 runs, 476 dropped and one flood event, and the next local day does not replay them", async () => {

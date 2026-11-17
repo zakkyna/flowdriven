@@ -17,6 +17,8 @@ export function wireTriggers(o: {
   engine: Engine;
   now: () => Date;
   projectDir: string;
+  home?: string;
+  dataDir?: string;
   every?: Every;
   watch?: TriggerDeps["watch"];
   dayOf?: (date: Date) => string;
@@ -48,6 +50,8 @@ export function wireTriggers(o: {
     store: o.store,
     now: o.now,
     projectDir: o.projectDir,
+    home: o.home,
+    dataDir: o.dataDir,
     dayOf: o.dayOf ?? localDay,
     begin: (id, options) => o.engine.beginStart(id, options),
     every,

@@ -362,7 +362,7 @@ test("file_change cannot reach outside the project: .., an absolute path elsewhe
   await r.tick();
   expect(r.store.listRuns({ flowId: id })).toHaveLength(0);
   expect(await r.service.call("triggers.list", { flowId: id })).toMatchObject([
-    { reason: "Only folders inside the project folder can be watched for now." },
+    { reason: "Only folders inside the project folder or a folder you granted to this flow can be watched." },
   ]);
 });
 

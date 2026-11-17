@@ -17,7 +17,7 @@ export function isExtraRef(ref: string | undefined): boolean {
   const parts = ref.slice(2).split("/");
   return parts.length <= 16 && parts.every((part) => !part.startsWith("."));
 }
-const fold = (path: string) => path.normalize("NFC").toLowerCase();
+export const fold = (path: string) => path.normalize("NFC").toLowerCase();
 export function resolveExtraFolder(
   ref: string,
   o: { home: string; dataDir: string },

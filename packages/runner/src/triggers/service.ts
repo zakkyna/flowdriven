@@ -63,6 +63,8 @@ export type TriggerDeps = {
   now: () => Date;
   dayOf: (date: Date) => string;
   projectDir: string;
+  home?: string;
+  dataDir?: string;
   begin: (flowId: string, options: StartOptions) => Begun;
   every: (ms: number, fn: () => void) => () => void;
   watch: (path: string, onSignal: () => void, onError: () => void) => (() => void) | undefined;
@@ -121,12 +123,20 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
   };
   const audit = (kind: string, detail: Value) =>
     store.appendAudit({ at: deps.now().toISOString(), kind, detail });
+  const granted = (flow: FlowRow) => {
+    if (!deps.home || !deps.dataDir) return undefined;
+    const consent = store.getCapabilityConsent(flow.id);
+    const folders =
+      consent?.hash === flow.hash ? Object.values(consent.pins?.folders ?? {}).map((pin) => pin.path) : [];
+    return { home: deps.home, dataDir: deps.dataDir, folders };
+  };
   const checked = (flow: FlowRow, manifest: FlowManifest, index: number) =>
     checkEnable({
       manifest,
       files: flow.files,
       index,
       projectDir: deps.projectDir,
+      granted: granted(flow),
       flowExists: (id) => !!store.getFlow(id),
       selfId: flow.id,
     });
@@ -227,14 +237,14 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     const result = checked(flow, manifest, index);
     if (!result.ok) throw new EngineError("not_allowed", result.reason);
     if (trigger.kind === "file_change") {
-      const resolved = resolveRoot(deps.projectDir, trigger.path);
+      const resolved = resolveRoot(deps.projectDir, trigger.path, granted(flow));
       if (!resolved.ok) throw new EngineError("not_allowed", resolved.reason);
       let scanned: ReturnType<typeof scanFolder>;
       try {
         scanned = scanFolder(resolved.root, {
           glob: trigger.glob,
           maxEntries: MAX_SCAN_ENTRIES,
-          within: realpathSync(deps.projectDir),
+          within: resolved.within ?? realpathSync(deps.projectDir),
         });
       } catch {
         throw new EngineError("not_allowed", "That folder does not exist.");
@@ -242,7 +252,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       if (scanned.outside)
         throw new EngineError(
           "not_allowed",
-          "Only folders inside the project folder can be watched for now.",
+          "Only folders inside the project folder or a folder you granted to this flow can be watched.",
         );
       store.putSetting(`snap:${id}:${index}`, scanned.files);
       close(id, index);
@@ -435,7 +445,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
       }
       if (trigger.kind === "file_change") {
         const key = `${row.flowId}:${row.index}`;
-        const resolved = resolveRoot(deps.projectDir, trigger.path);
+        const resolved = resolveRoot(deps.projectDir, trigger.path, granted(flow));
         if (!resolved.ok) {
           close(row.flowId, row.index);
           const updated = record(row, "refused", resolved.reason);
@@ -499,14 +509,14 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
         const scanned = scanFolder(state.root, {
           glob: trigger.glob,
           maxEntries: MAX_SCAN_ENTRIES,
-          within: realpathSync(deps.projectDir),
+          within: resolved.within ?? realpathSync(deps.projectDir),
         });
         state.capped = scanned.capped;
         if (scanned.outside) {
           const updated = record(
             row,
             "refused",
-            "Only folders inside the project folder can be watched for now.",
+            "Only folders inside the project folder or a folder you granted to this flow can be watched.",
           );
           if (updated !== row) store.putTrigger(updated);
           return;

@@ -89,7 +89,10 @@ test("checkEnable refuses a required input without a default, a 30 second schedu
   for (const [trigger, message] of [
     [{ kind: "schedule", every: "30s" }, "The shortest schedule is every 1 minute."],
     [{ kind: "schedule", every: "1h", days: [] }, "No days are selected."],
-    [{ kind: "file_change", path: ".." }, "Only folders inside the project folder can be watched for now."],
+    [
+      { kind: "file_change", path: ".." },
+      "Only folders inside the project folder or a folder you granted to this flow can be watched.",
+    ],
     [{ kind: "file_change", path: "" }, "That file pattern is too long or too complex."],
     [
       { kind: "file_change", path: `a${String.fromCodePoint(0)}` },

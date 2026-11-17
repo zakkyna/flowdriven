@@ -134,6 +134,8 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     engine,
     now,
     projectDir,
+    home: homedir(),
+    dataDir: options.dataDir,
     dayOf,
     every: options.triggers?.every,
     watch: options.triggers?.watch,

@@ -993,7 +993,7 @@ Chair's decision (2026-11-17, second): the plan was wrong, not the executor. Poi
 
 Chair's decision (2026-11-17, before the executor's call): the Interfaces above are not exact. (1) `resolveRoot` keeps its result form and gains an optional `within`: `resolveRoot(project, path, granted?)` returns `{ ok: true; root: string; within?: string } | { ok: false; reason: string }`, where `within` is set only for a `~/...` path and is the pinned path of the granted folder that holds it; a project path returns `{ ok: true, root }` exactly as today; both calls in `triggers/service.ts` pass `resolved.within ?? realpathSync(deps.projectDir)` to `scanFolder` as `within`, so a symlink inside a granted folder that leads out of it is `outside`, and both `scanned.outside` sentences become the new sentence. (2) `granted` is `{ home: string; dataDir: string; folders: string[] }`, because `resolveExtraFolder` needs FlowDriven's data folder (Task 14). (3) A path for which `isExtraRef` is true is resolved with `resolveExtraFolder`; it is accepted only when its resolved path is inside (folded as in `folders/extra.ts`) one of `folders`, then it must exist and be a folder, with today's two sentences; any other `~/...` path, and every `~/...` path when `granted` is missing, gets the new sentence. Every other path keeps today's project rule exactly: a relative or an absolute path inside the project folder is accepted as today, and a path outside it gets the new sentence. (4) The folders of a flow are the paths in `store.getCapabilityConsent(flowId)?.pins?.folders`, used only when that row's `hash` equals the flow's hash; otherwise the flow has none. (5) Files: `packages/runner/src/service/trigger-wiring.ts` and the `wireTriggers` call in `packages/runner/src/service/service.ts` join this task, to pass `home: homedir()` and `dataDir: options.dataDir` (`TriggerDeps` gains optional `home` and `dataDir`); `packages/runner/src/test-helpers/trigger-rig.ts` may gain the same two optional options; `fold` in `folders/extra.ts` may be exported, with no other change there.
 
-- [ ] **Step 1: Write the failing tests, and change the present ones**
+- [x] **Step 1: Write the failing tests, and change the present ones**
 
   1. "a file_change path inside a granted folder can be watched"
   2. "a path in a folder granted to another flow, or a folder that is no longer granted, is refused"
@@ -1003,29 +1003,31 @@ Chair's decision (2026-11-17, before the executor's call): the Interfaces above 
 
 Present tests (item 6 of the owner approval): every test that expects "Only folders inside the project folder can be watched for now." (`triggers/scan.test.ts`, `triggers/rules.test.ts`, `triggers/service-files.test.ts`, `review-04-r.test.ts:365`; the executor lists them under this task by title) expects the new sentence; nothing else in them changes.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/triggers packages/runner/src/review-04-r.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the granted roots**
+- [x] **Step 3: Implement the granted roots**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/triggers packages/runner/src/review-04-r.test.ts
 git commit -m "Let a file_change trigger watch a folder granted to its flow" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: `pnpm vitest run packages/runner/src/triggers packages/runner/src/review-04-r.test.ts` passed (110 tests); `pnpm format && pnpm check` passed.
+Chair (review, 2026-11-17): the second call followed both decisions. Files the executor touched: `triggers/scan.ts`, `triggers/rules.ts`, `triggers/service.ts`, the new `triggers/scan-granted.test.ts`, the four sentence lines (`triggers/scan.test.ts:67`, `triggers/rules.test.ts:92`, `triggers/service-files.test.ts:153`, `review-04-r.test.ts:365`), `service/trigger-wiring.ts`, the `wireTriggers` call in `service/service.ts`, two options in `test-helpers/trigger-rig.ts` and the `fold` export in `folders/extra.ts`; all are on this task's list after the decisions, and the chair checked each. The tests use a fresh temporary folder as home. The chair's own full run of `pnpm format && pnpm check` was green end to end (269 test files, 1,780 tests passed and 1 skipped).
 
 ### Task 17: The spam word, the Trash and Spam label rule, and the destructive mark of a scanned tool
 

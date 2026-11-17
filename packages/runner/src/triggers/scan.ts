@@ -1,6 +1,12 @@
 import { lstatSync, readdirSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { fold, isExtraRef, resolveExtraFolder } from "../folders/extra.ts";
+
+export type GrantedFolders = { home: string; dataDir: string; folders: string[] };
+const WATCH_REASON =
+  "Only folders inside the project folder or a folder you granted to this flow can be watched.";
+
 export type Snapshot = Record<string, [number, number]>;
 export type ScanResult = { files: Snapshot; capped: boolean; outside: boolean };
 
@@ -12,7 +18,8 @@ function inside(root: string, target: string): boolean {
 export function resolveRoot(
   project: string,
   path: string,
-): { ok: true; root: string } | { ok: false; reason: string } {
+  granted?: GrantedFolders,
+): { ok: true; root: string; within?: string } | { ok: false; reason: string } {
   let base: string;
   try {
     base = realpathSync(project);
@@ -21,14 +28,27 @@ export function resolveRoot(
     return { ok: false, reason: "The project folder is missing." };
   }
   if (!path || path.includes("\0")) return { ok: false, reason: "That folder path is not valid." };
+  if (path.startsWith("~/")) {
+    if (!granted || !isExtraRef(path)) return { ok: false, reason: WATCH_REASON };
+    const extra = resolveExtraFolder(path, granted);
+    if (!extra.ok) return { ok: false, reason: WATCH_REASON };
+    const within = granted.folders.find((folder) => inside(fold(folder), fold(extra.path)));
+    if (!within) return { ok: false, reason: WATCH_REASON };
+    if (!extra.exists) return { ok: false, reason: "That folder does not exist." };
+    try {
+      if (!lstatSync(extra.path).isDirectory()) return { ok: false, reason: "That path is not a folder." };
+    } catch {
+      return { ok: false, reason: "That folder does not exist." };
+    }
+    return { ok: true, root: extra.path, within };
+  }
   let root: string;
   try {
     root = realpathSync(resolve(base, path));
   } catch {
     return { ok: false, reason: "That folder does not exist." };
   }
-  if (!inside(base, root))
-    return { ok: false, reason: "Only folders inside the project folder can be watched for now." };
+  if (!inside(base, root)) return { ok: false, reason: WATCH_REASON };
   try {
     if (!lstatSync(root).isDirectory()) return { ok: false, reason: "That path is not a folder." };
   } catch {

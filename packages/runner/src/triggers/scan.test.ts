@@ -64,7 +64,7 @@ test("resolveRoot accepts a relative and an absolute folder inside the project, 
   for (const path of ["..", "link"])
     expect(resolveRoot(project, path)).toEqual({
       ok: false,
-      reason: "Only folders inside the project folder can be watched for now.",
+      reason: "Only folders inside the project folder or a folder you granted to this flow can be watched.",
     });
   expect(resolveRoot(project, "missing")).toEqual({ ok: false, reason: "That folder does not exist." });
   expect(resolveRoot(project, "file")).toEqual({ ok: false, reason: "That path is not a folder." });

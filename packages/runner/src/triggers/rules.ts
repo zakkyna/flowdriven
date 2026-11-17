@@ -1,7 +1,7 @@
 import { type FlowManifest, type Value, validateManifest } from "@flowdriven/sdk";
 import type { TriggerOutcome } from "../storage.ts";
 import { MAX_QUEUED_TRIGGERED, MIN_EVERY_MS } from "./constants.ts";
-import { resolveRoot } from "./scan.ts";
+import { type GrantedFolders, resolveRoot } from "./scan.ts";
 import { scheduleOf } from "./schedule.ts";
 
 type Result = { ok: true } | { ok: false; reason: string };
@@ -44,6 +44,7 @@ export function checkEnable(i: {
   files: Record<string, string>;
   index: number;
   projectDir: string;
+  granted?: GrantedFolders;
   flowExists: (id: string) => boolean;
   selfId: string;
 }): Result {
@@ -76,7 +77,7 @@ export function checkEnable(i: {
       (trigger.glob.match(/\*\*/g)?.length ?? 0) > 8
     )
       return { ok: false, reason: "That file pattern is too long or too complex." };
-    const root = resolveRoot(i.projectDir, trigger.path);
+    const root = resolveRoot(i.projectDir, trigger.path, i.granted);
     if (!root.ok) return root;
   } else if (trigger.kind === "flow_done") {
     if (trigger.flow === i.selfId) return { ok: false, reason: "A flow cannot start itself." };
