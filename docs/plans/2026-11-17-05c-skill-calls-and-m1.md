@@ -103,7 +103,7 @@ All are the chair's call (owner may override), within what the spec leaves to th
 4. **The pin (R9).** The pin of an installed skill is `contentHash` of its folder's original bytes (front matter included). The preview shows the hash, the number of files, the size of the text and the date of the newest file. `allow` reads the folder again and stores the pins only when they equal the pins the screen sent. A bundled skill is pinned by the flow hash already. The check runs at three places: `consentOf` (the flow screen and trigger enable), the gate at run start, and the skill step right before the copy, which copies the same bytes it hashed.
 5. **Pins live next to the consent**, in the table `consent_pins` (`flow_id` primary key, `pins` JSON), written and removed with the consent in one transaction, as `{ skills: {<requirement id>: <hash>}, folders: {<requirement id>: {path, access}} }` (a column on `capability_consents` would break a present test that inserts three values without column names; Task 3, 2026-11-17). Every declared extra folder is pinned, used by a step or not (a trigger may watch it). A consent without pins is `stale` for a flow that has a pinned row (fail closed). `flows.allowCapabilities` takes the pins the screen showed; a difference is refused with "Something this flow uses changed since you looked at it. Reload and check it again."
 6. **Long steps.** A step whose time limit is over 30 minutes is not tried again after it ran out its limit, because each try of such a step can cost hours of quota (spec 20.1 times the prototype skill at 27 to 48 minutes, sometimes over 130). A shorter step keeps the retries of today. While a step over 30 minutes runs on macOS, `caffeinate -i -w <pid>` keeps the Mac awake; a failure to start it is written to the audit log and the step goes on. The Run screen shows each step's time limit and, for a running long step, the minutes so far. No heartbeat: a call that hangs waits until its limit (Known limits).
-7. **Commands.** A `cli_tool` with no `commands` keeps `DROP.notYet`, and the gate keeps it in "cannot enforce yet". The route drops a `cli_tool` when a pattern is risky by `classifyCommand`, or when its program runs other programs or reaches the network: `sh`, `bash`, `zsh`, `dash`, `ksh`, `csh`, `tcsh`, `fish`, `env`, `xargs`, `nohup`, `nice`, `time`, `timeout`, `exec`, `eval`, `command`, `sudo`, `su`, `doas`, `osascript`, `open`, `script`, `expect`, `watch`, `npx`, `pnpx`, `bunx`, `curl`, `wget`, `ssh`, `scp`, `sftp`, `rsync`, `nc`, `telnet`, `ftp`, or when it holds `find` with `-delete` or `-exec`, `git clean`, `git reset --hard` or `dd`; interpreters and package runners (`node`, `python`, `python3`, `ruby`, `perl`, `php`, `deno`, `bun`, `lua`, `npm`, `pnpm`, `yarn`) are routed only with patterns that end without ` *`. The hook parses a command line into words of `A-Z a-z 0-9 . _ / = : @ % + , -` separated by single spaces, the first word a bare program name, no word starting with `=`, at most 1,000 characters and 64 words; anything else is refused. A word that a wildcard matches must not start with `-` or `/`, must not hold `..`, and must not hold `/` right after `=`, `:`, `,`, `@`, `%` or `+`; so flags come only from the declared pattern, and `git -c core.fsmonitor=...`, `--exec-path` or `--output=/x` cannot come in through a wildcard. A step that takes outside text, reads web pages or a connector, or uses a `sensitive` requirement gets no commands; a step that runs commands needs a folder, and its commands run in its first folder. Readiness looks the program up on the runner's `PATH` without a shell and runs nothing (the health command of spec 12.1 waits for catalog entries). Why: without an OS sandbox the command line is the only thing FlowDriven checks, so it stays narrow.
+7. **Commands.** A `cli_tool` with no `commands` keeps `DROP.notYet`, and the gate keeps it in "cannot enforce yet". The route drops a `cli_tool` when a pattern is risky by `classifyCommand`, or when its program runs other programs or reaches the network: `.`, `source`, `sh`, `bash`, `zsh`, `dash`, `ksh`, `csh`, `tcsh`, `fish`, `env`, `xargs`, `nohup`, `nice`, `time`, `timeout`, `exec`, `eval`, `command`, `sudo`, `su`, `doas`, `osascript`, `open`, `script`, `expect`, `watch`, `npx`, `pnpx`, `bunx`, `curl`, `wget`, `ssh`, `scp`, `sftp`, `rsync`, `nc`, `telnet`, `ftp`, or when it holds `find` with `-delete` or `-exec`, `git clean`, `git reset --hard` or `dd`; interpreters and package runners (`node`, `python`, `python3`, `ruby`, `perl`, `php`, `deno`, `bun`, `lua`, `npm`, `pnpm`, `yarn`) are routed only with patterns that end without ` *`. The hook parses a command line into words of `A-Z a-z 0-9 . _ / = : @ % + , -` separated by single spaces, the first word a bare program name, no word starting with `=`, at most 1,000 characters and 64 words; anything else is refused. A word that a wildcard matches must not start with `-` or `/`, must not hold `..`, and must not hold `/` right after `=`, `:`, `,`, `@`, `%` or `+`; so flags come only from the declared pattern, and `git -c core.fsmonitor=...`, `--exec-path` or `--output=/x` cannot come in through a wildcard. A step that takes outside text, reads web pages or a connector, or uses a `sensitive` requirement gets no commands; a step that runs commands needs a folder, and its commands run in its first folder. Readiness looks the program up on the runner's `PATH` without a shell and runs nothing (the health command of spec 12.1 waits for catalog entries). Why: without an OS sandbox the command line is the only thing FlowDriven checks, so it stays narrow.
 8. **Granted folders.** An extra folder is written `~/<part>/<part>...` (no `.`, `..` or hidden part, at most 16 parts). It resolves with `realpathSync.native` through the nearest existing parent, against the resolved home folder; the resolved path must stay inside the home folder, must not be the home folder, and must not hold a hidden part, be inside `~/Library`, or be inside or around FlowDriven's data folder. These comparisons fold case and Unicode normal form (NFC, then lower case), because APFS ignores both by default. At each call it must also stay out of the run's project folder, it is resolved again and must equal the pin; a missing folder is created (mode 0700) at the first call, as spec 12.1 allows once the owner agreed. Allow writes one `folder_granted` audit row per folder; Withdraw writes one `folder_revoked` row per pinned folder and takes effect at the next attempt, as plan 05's allow does. A routed extra folder needs the allow, and its `sensitive` passes once allowed, as for web and connectors.
 9. **Plain Gmail writes** (the owner's answer of 2026-11-13). Class `write`: `create_draft`, `label_thread`, `unlabel_thread`, `label_message`, `unlabel_message`, `update_message_labels`, each only if H4 lists it; they run without approval when declared. Every write tool whose name holds `label`, `spam` or `trash` is a label tool and is held as `delete` when any key or string value of its input contains `trash` or `spam` after NFKC folding and lower case (so a label move to Trash or Spam waits; a user label with such a word waits too, which is safe). `mark_thread_spam` and `mark_message_spam` join the held deletes, and the SDK's `classifyTool` learns the word `spam` (R4). A write tool whose scan annotation says destructive drops the route. Every other Gmail tool (`update_draft`, which can overwrite a draft the owner wrote; `create_label`, `update_label`, `apply_sensitive_*`, `untrash_*`, `unmark_*_spam`, `download_gmail_attachment`, and any name H4 shows that this list does not) stays unclassed and drops the route.
 10. **Pick keys and where a pick releases (plan 05b Handover).** A loop whose `for_each` is exactly `${steps.<ask>.outputs.choice}`, where `<ask>` is a top-level `do: ask` step, and that declares no `key`, keys its items with the picked option keys in option order, read from that ask's approved approval in this run; if they cannot be matched the loop blocks the run. Such a loop writes no seen keys (only a declared `key` does). A pick grant keeps its form (`<requirement>.<tool>`, item key = pick key), and the hook honours it only for a step inside a loop over that ask's choice: the leaf gives such a step `pickTools` (that ask's `approves`), every other step gets none, and a request without `pickTools` releases nothing by a pick.
@@ -409,7 +409,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
 - Consumes: `commandAllowed(entry, cmd, args)` (`packages/sdk/src/validate/risky.ts:33`).
 - Produces: `COMMAND_LIMITS = { chars: 1000, words: 64 }`; `parseCommandLine(text: string): { ok: true; words: string[] } | { ok: false; reason: string }`; `commandLineAllowed(patterns: string[], words: string[]): boolean`, which calls `commandAllowed` per pattern and applies the wildcard-word rule of Decision 7.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "an exact pattern allows exactly its words and nothing more"
   2. "a pattern ending in ' *' allows more words that are relative values or paths"
@@ -420,31 +420,33 @@ Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
   7. "a path as the program (/usr/bin/git, ./x) is refused"
   8. "a line over 1,000 characters or 64 words is refused"
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/sdk/src/validate/command-line.test.ts`
 Expected: FAIL with "Cannot find module"
 
-- [ ] **Step 3: Implement `parseCommandLine` and `commandLineAllowed` in `packages/sdk/src/validate/command-line.ts`**
+- [x] **Step 3: Implement `parseCommandLine` and `commandLineAllowed` in `packages/sdk/src/validate/command-line.ts`**
 
 A word is `[A-Za-z0-9._/=:@%+,-]+`; the first word is `[A-Za-z0-9._-]+`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm vitest run packages/sdk/src/validate/command-line.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/sdk/src/validate/command-line.ts packages/sdk/src/validate/command-line.test.ts packages/sdk/src/index.ts
 git commit -m "Parse a command line into plain words and match it against declared patterns" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
 
 ### Task 6: Runner: read, hash and copy a skill folder
 
@@ -750,7 +752,7 @@ Needs H2 (the cost). The gate is not changed here (Task 13), so a step with a co
   1. "a cli_tool with commands is the Claude Code commands route, enforced by the FlowDriven hook, with the label sentence"
   2. "a cli_tool without commands keeps DROP.notYet" (the present row of `route.test.ts:93-115` stays as it is)
   3. "a risky pattern drops the route: rm, git merge, git push --force, gh pr merge, npm publish, git clean, git reset --hard, find with -delete"
-  4. "a program that runs other programs or reaches the network drops the route: bash, env, xargs, sudo, osascript, npx, curl, ssh"
+  4. "a program that runs other programs or reaches the network drops the route: ., source, bash, env, xargs, sudo, osascript, npx, curl, ssh"
   5. "an interpreter or a package runner with a wildcard pattern drops; with an exact pattern it routes"
   6. "the sentence lists the commands, cleaned by visible, and more than 8 refuse the preview"
   7. "findProgram finds an executable file on PATH, skips a folder and a file that is not executable, and runs nothing"
