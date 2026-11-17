@@ -1039,6 +1039,8 @@ Chair (review, 2026-11-17): the second call followed both decisions. Files the e
 **Interfaces:**
 - Produces: `throwsMailAway(input: unknown): boolean` (true when any key or string value, at any depth up to 20, holds `trash` or `spam` after NFKC folding and lower case, and true for anything deeper); `classifyTool` returns `delete` for a name with the word `spam`; the scan's tool fact gains `destructive?: true` when its annotation says so (absent otherwise, so present facts built by hand stay valid).
 
+Chair's decision (2026-11-17, before the executor's call): the Interfaces above are made exact. (1) A key or string value "holds" `trash` or `spam` when its folded text contains the word. It is folded as `protectedPath` in `claude/decide.ts` folds a path part: NFKC, upper case then lower case, NFKC again, and only the printable ASCII characters 0x21 to 0x7E are kept, so a space, a zero-width or a fullwidth character cannot hide the word. Numbers, booleans and null hold nothing. The input itself is at depth 1; an array or object met at depth 21 or deeper makes the answer true without looking further. (2) In `classifyTool`, `spam` joins the words of `delete`; nothing else there changes. (3) The scan pushes `{ name, readOnly }` as today and adds `destructive: true` only when the tool's `annotations` object has `destructive === true` (the key Claude Code's scan output uses, as the Task 0 probe shows); `ConnectorFact.tools` gains `destructive?: true`. The router's `FactConnector` type and the stored-scan check in `service/claude-harness.ts` stay as they are in this task; Task 18, which uses the mark, changes them.
+
 - [ ] **Step 1: Write the failing tests**
 
   1. "throwsMailAway is false for the label FlowDriven and for INBOX"
