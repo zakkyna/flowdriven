@@ -184,6 +184,7 @@ Group A, groundwork: Tasks 0 to 3. Group B, skill calls: Tasks 4, 6, 7, 8, 9. Gr
 - When the approval of a held call expires, the step and run fail, but a loop item is not marked failed (plan 05b, unchanged).
 - The risky-word rules of a command line (`merge`, `delete`, `publish`, and for `git` also `clean`, `foreach`, `bisect` with `run`) match any word of the line, also at the hook since Review fix R1, so a harmless call whose argument is only named like that word (`git checkout clean`, `cat delete`) is refused with the risky-command sentence. It fails closed. Applying the word rules to the subcommand words only is left to a later plan with its own review (security review round 2, R2-F3; the owner's answer of 2026-11-17).
 - The refused programs are a list (security review rounds 1 to 3). A rule that the program word must be an executable file on the child's `PATH` would close the class of shell words that run or change a command; it waits for a later plan, together with O2 on the Bash tool's shell (the owner's answer of 2026-11-17).
+- Every review round found more names, because a list of refused programs cannot be complete. A later plan could let a command step run only programs from an allowlist, the catalog that spec 12.1 points at, with an OS sandbox without network (O2) as the hard stop. Until then, the list and the exact-line rule are what hold.
 
 ## Open items
 
@@ -1774,7 +1775,7 @@ The owner's answer (2026-11-17, asked alone, in Indonesian, with the choices "Ya
 
 The hook's re-check applies all four to a concrete call as well.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "gh, dig, host, nslookup, ping, whois, traceroute and the other network programs drop the route and are refused at the hook"
   2. "git fetch, pull, clone, ls-remote, remote, submodule, send-email and the other network subcommands drop the route and are refused at the hook"
@@ -1783,29 +1784,38 @@ The hook's re-check applies all four to a concrete call as well.
 
 No present test changes. The tests of R1 to R4 keep their reasons, because `classifyCommand` and the earlier refusals run first.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/router/route-commands-review5.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: Implement the four rules**
+- [x] **Step 3: Implement the four rules**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/router docs/plans/2026-11-17-05c-skill-calls-and-m1.md
 git commit -m "Refuse commands that reach the network, and let git push go only to a named remote" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run packages/runner/src/router/route-commands-review5.test.ts passed 4 tests; pnpm format && pnpm lint && pnpm typecheck && pnpm check passed (1831 tests passed, 1 skipped; 109 tool tests passed).
+Chair (review, 2026-11-17): the executor touched `router/commands-route.ts`, `router/route.ts` and the new test file, all on this task's list. The push check finds the remote after `-C dir` and after flags, and the tests of R1 to R4 keep their reasons.
+
+The chair added, under the owner's yes to fix the network gaps and under Decision 7's exact-line rule (item 3(b)), three list gaps that the parent session found after the call:
+- `uvx`, `pipx`, `bundle`, `docker` and `podman` fetch code and run it, as the refused `npx` does, so they join the programs that run other programs;
+- the package managers `pip`, `pip3`, `uv`, `poetry`, `gem`, `cargo`, `go`, `brew`, `composer` and `nodejs` run only as an exact line, as `npm` does;
+- a name with a version (`python3.13`, `pip3.13`, `ruby3.3` and the like, which Homebrew puts on PATH) counts as its interpreter.
+
+All three come with the test "uvx, pipx, bundle, docker and podman drop the route, and package managers and versioned interpreters run only as an exact line". The full gate is the closing gate in the Handover.
 
 ---
 
