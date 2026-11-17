@@ -177,6 +177,7 @@ Group A, groundwork: Tasks 0 to 3. Group B, skill calls: Tasks 4, 6, 7, 8, 9. Gr
 - "The first run is a dry run on the newest 3 items" (spec 20.5) is a procedure in M1 (the `newest` param), not a rule the app enforces. A manual run with inputs that have defaults still needs every input named (Fact 16); M1 uses a param instead.
 - When the approval of a held call expires, the step and run fail, but a loop item is not marked failed (plan 05b, unchanged).
 - The risky-word rules of a command line (`merge`, `delete`, `publish`, and for `git` also `clean`, `foreach`, `bisect` with `run`) match any word of the line, also at the hook since Review fix R1, so a harmless call whose argument is only named like that word (`git checkout clean`, `cat delete`) is refused with the risky-command sentence. It fails closed. Applying the word rules to the subcommand words only is left to a later plan with its own review (security review round 2, R2-F3; the owner's answer of 2026-11-17).
+- The refused programs are a list (security review rounds 1 to 3). A rule that the program word must be an executable file on the child's `PATH` would close the class of shell words that run or change a command; it waits for a later plan, together with O2 on the Bash tool's shell (the owner's answer of 2026-11-17).
 
 ## Open items
 
@@ -1621,6 +1622,54 @@ git commit -m "Refuse zsh precommand words and count git and npm deletes as dele
 ```
 Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm vitest run (Step 2 paths) passed 3 tests; pnpm format && pnpm lint && pnpm typecheck && pnpm check passed.
 Chair (review, 2026-11-17): files the executor touched: `router/commands-route.ts`, `sdk/src/validate/risky.ts` and the two new test files; all on this task's list. The chair's fix, under R2-F2 and the owner's yes, after the parent session pointed at it: the subcommand scan skipped only the word after `-C` and `-c`, so the exact line `git --git-dir . rm notes.md` routed without being called a delete (under a declared `git *` the hook already refused it, since a wildcard word cannot start with `-`); now the scan also skips the value after `--git-dir`, `--work-tree`, `--namespace`, `--super-prefix` and `--config-env`, with the test "the value after --git-dir, --work-tree, --namespace, --super-prefix or --config-env is not read as the subcommand". The chair's full run of `pnpm format && pnpm check` at a load average of about 13 to 18 had one failure, `service/claude-harness-connectors.test.ts` "a rescan stores the connectors with the scan, a later scan without MCP keeps them, and a hung call keeps the cached list" (child processes and a timeout; not touched here), with 1,821 tests passed and 1 skipped; that file alone then passed (3 tests), and lint, typecheck, `check:hidden` and `check:deps` passed. So `pnpm check` did not pass end to end on this run; the closing gate needs that.
+
+**Round 3 (2026-11-17, the same reviewer, at e60f773; the last round the plan allows).** Findings file `.workflow/scratch/plan-05c/security-review-3.md` (git-ignored). R2-F1 and R2-F2 are fixed (re-probed). Open: 1 medium, 1 low, both uncertain:
+- R3-F1 (medium, uncertain): the zsh word `repeat` still routes, and the hook allows `repeat 1 rm x`, which zsh runs as `rm x`; the same class as R2-F1. The chair's own probe found more words of that class that the parser lets through: `alias git=sh` and `export` can change what a later declared call runs. Uncertain because the real Bash tool's shell was not run.
+- R3-F2 (low, uncertain): the git options `--attr-source` and `--shallow-file` also take the next word, so `git --attr-source HEAD rm notes.md` reads `HEAD` as the subcommand.
+- The reviewer's sturdier fix for R3-F1 is a rule that the program word must be an executable file on the child's `PATH`. It closes the whole class, but macOS also ships some shell commands as files (`/usr/bin/alias`, `/usr/bin/cd`), so they would still need the list. That rule waits for a later plan, together with O2.
+
+The owner's answer (2026-11-17, asked alone, in Indonesian). The first wording was answered with a request for plainer words, so the chair asked again in plain words, with the choices "Blokir kata-kata itu (Disarankan)", "Pengaman kuat sekarang" and "Biarkan, catat saja". The owner answered "Blokir kata-kata itu (Disarankan)". That is the yes of "Ask first" for the fix task below. R3-F2 is in it because it completes R2-F2's rule, which the owner approved in round 2.
+
+### Review fix R3: shell words that run or change a command, and two more git options
+
+**Files:**
+- Modify: `packages/runner/src/router/commands-route.ts` (`runsAnything`), `packages/sdk/src/validate/risky.ts` (the git option skip list in `classifyCommand`)
+- Test: `packages/runner/src/router/route-commands-review3.test.ts`, `packages/sdk/src/validate/risky-git-options.test.ts`
+
+**Interfaces:**
+- Produces (R3-F1): `runsAnything` gains the shell words that run a command or change how a later command runs: `repeat foreach select case if while until for function alias unalias hash rehash enable disable functions unfunction autoload zmodload emulate setopt unsetopt set shopt export typeset declare local readonly unset fc r cd pushd popd ulimit umask`. Through the hook's re-check the same holds for a concrete call.
+- Produces (R3-F2): the git option skip list gains `--attr-source` and `--shallow-file`.
+
+- [ ] **Step 1: Write the failing tests**
+
+  1. "repeat, alias, export and every other shell word on the list drop the route and are refused at the hook"
+  2. "git --attr-source x rm and git --shallow-file x rm are a delete, and git --attr-source x status is not"
+
+No present test changes.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm vitest run packages/runner/src/router/route-commands-review3.test.ts packages/sdk/src/validate/risky-git-options.test.ts`
+Expected: FAIL
+
+- [ ] **Step 3: Implement the two fixes**
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: the command of Step 2
+Expected: PASS
+
+- [ ] **Step 5: Run the gate**
+
+Run: `pnpm format && pnpm check`
+Expected: PASS
+
+- [ ] **Step 6: Chair step (commit)**
+
+```bash
+git add packages/runner/src/router packages/sdk/src/validate docs/plans/2026-11-17-05c-skill-calls-and-m1.md
+git commit -m "Refuse the shell words that run or change a command, and two more git options" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
