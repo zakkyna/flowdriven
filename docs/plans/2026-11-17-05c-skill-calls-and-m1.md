@@ -289,8 +289,7 @@ git add packages/contracts/src
 git commit -m "Add the capability pin, the allow with pins, and a step's time limit to the contract" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
-Chair: on a loaded Mac (load average about 40) one load-sensitive test failed in each of two full runs (named under Global Constraints), and each passed alone three times out of three; lint, typecheck, check:hidden and check:deps passed.
+Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: Codex's full run of `pnpm format && pnpm check` was green (245 test files, 1,665 tests passed and 1 skipped; `.workflow/scratch/codex-task-2.log`). The chair's two later full runs of `pnpm check` were not green: the first failed only "500 changed files with max_items 1 ..." (`triggers/service-files.test.ts`, a 5 s timeout) and the second only "a close of the withheld tab is allowed ..." (`claude/adapter-closing.test.ts`), on a Mac whose load average was about 40; each of those tests passed alone three times out of three, and lint, typecheck, `check:hidden` and `check:deps` were green. Corrected on 2026-11-17 after the owner's decision "Hijau sebelum ditutup": the plan closes only after one full `pnpm check` that is green end to end.
 
 ### Task 3: Store version 6: pins on the capability consent
 
