@@ -562,7 +562,7 @@ Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
 - Consumes: Task 7.
 - Produces: `GATE.skillChanged(names: string[]) = "Your skill <names> changed since you allowed this flow. Look at it on the flow's screen and allow it again."`; `gate` checks `do: skill` steps like `do: worker` steps (their `uses` and their `skill`); a `skill` requirement whose ref is `claude-code:<name>` or `flow:<name>` goes through the router (routed: needs the allow; dropped: its reason), and any other `skill` requirement stays in `cannot` (Decision 2); `readiness(manifest, ctx)` gives `allowed: true` only when the consent hash is the run's flow hash and every used skill's pin matches; a stale skill pin gives `GATE.skillChanged`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
   1. "a skill step whose skill and uses are routed and allowed passes the gate"
   2. "R9: editing SKILL.md after the allow blocks the run until the owner allows it again: the run is blocked with GATE.skillChanged and no child starts"
@@ -573,29 +573,31 @@ Done by: Codex/gpt-6.1-terra, 2026-11-17. Evidence: pnpm format && pnpm check.
   7. "a skill step that also uses a web requirement needs the allow first, as a worker step does"
   8. "a skill requirement with no ref stays in cannot enforce yet" (the present tests `claude-harness.test.ts:146` and `claude-harness-web.test.ts:93` pass unchanged)
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run packages/runner/src/service/claude-harness-skill.test.ts`
 Expected: FAIL with the sentence "This flow needs something FlowDriven cannot enforce yet"
 
-- [ ] **Step 3: Implement the skill rows of `gate` and the pin check of `readiness`**
+- [x] **Step 3: Implement the skill rows of `gate` and the pin check of `readiness`**
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: the command of Step 2, then `pnpm vitest run packages/runner/src/service/claude-harness.test.ts packages/runner/src/service/claude-harness-web.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm format && pnpm check`
 Expected: PASS
 
-- [ ] **Step 6: Chair step (commit)**
+- [x] **Step 6: Chair step (commit)**
 
 ```bash
 git add packages/runner/src/service
 git commit -m "Let skill steps pass the gate and block a run whose skill changed since the allow" -m "Assisted-by: Codex" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+Done by: Codex/gpt-6.1-terra, then the chair (the changed-skill sentence names the skill, not the requirement id), 2026-11-17. Evidence: the chair's full run of `pnpm format && pnpm check` was green (251 test files, 1,715 tests passed and 1 skipped; check:hidden and check:deps OK).
 
 ### Task 9: The skill step in Claude Code: the copy folder, the prompt, R9 at the step, R14 in practice
 

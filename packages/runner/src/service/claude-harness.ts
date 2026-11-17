@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { type HarnessCard, RunnerError } from "@flowdriven/contracts";
 import type { FlowManifest, Requirement, Value } from "@flowdriven/sdk";
 import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapter.ts";
@@ -19,6 +20,7 @@ import {
   unattendedProviderErrors,
 } from "../router/route.ts";
 import type { HarnessFacts, Routed } from "../router/types.ts";
+import { bundledSkill, readSkillFolder, skillSource } from "../skills/skill-folder.ts";
 import type { HarnessStateRow, Store } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
@@ -61,6 +63,8 @@ export const GATE = {
   noConsent: "Give FlowDriven consent to run Claude Code on the Harnesses screen first.",
   cannotEnforce: (ids: string[]) =>
     `This flow needs something FlowDriven cannot enforce yet: ${ids.join(", ")}.`,
+  skillChanged: (names: string[]) =>
+    `Your skill ${names.join(", ")} changed since you allowed this flow. Look at it on the flow's screen and allow it again.`,
   sensitive: (ids: string[]) =>
     `This flow marks ${ids.join(", ")} as sensitive, and Claude Code runs without an OS sandbox. Allowing that arrives with a later version.`,
 };
@@ -113,14 +117,14 @@ export function gate(
     sensitive = new Set<string>();
   for (const step of manifest.steps.flatMap((s) => ("steps" in s ? s.steps : [s]))) {
     for (const check of step.checks) if (check.type === "command") cannot.add(`command:${check.cmd}`);
-    if (step.do === "skill") {
-      cannot.add(step.skill);
-      for (const id of step.uses) cannot.add(id);
-    }
-    if (step.do !== "worker") continue;
-    for (const id of step.uses) {
+    if (step.do !== "worker" && step.do !== "skill") continue;
+    for (const id of new Set(step.do === "skill" ? [...step.uses, step.skill] : step.uses)) {
       const req = manifest.requirements.find((r) => r.id === id);
-      if (req?.type === "web" || (req?.type === "mcp_server" && catalogEntry(req.ref))) {
+      if (
+        req?.type === "web" ||
+        (req?.type === "mcp_server" && catalogEntry(req.ref)) ||
+        (req?.type === "skill" && skillSource(req.ref, { home: "" }))
+      ) {
         const route = routeRequirement(req, facts);
         if (!route || !route.routed) drops.set(id, route?.reason ?? "FlowDriven cannot provide this yet.");
         else {
@@ -405,7 +409,32 @@ export function createHarnessService(options: {
         cache?.inventory.skills.filter((skill) => skill.scope === "user").map((skill) => skill.name),
       ),
     readiness(manifest, ctx) {
-      return gate({
+      const consent = ctx && options.store.getCapabilityConsent(ctx.flowId);
+      const sameHash = ctx !== undefined && consent?.hash === ctx.hash;
+      const used = new Set(
+        manifest.steps.flatMap((step) =>
+          ("steps" in step ? step.steps : [step]).flatMap((leaf) =>
+            leaf.do === "skill" ? [...leaf.uses, leaf.skill] : leaf.do === "worker" ? leaf.uses : [],
+          ),
+        ),
+      );
+      const changed: string[] = [];
+      if (sameHash && ctx) {
+        for (const req of manifest.requirements) {
+          if (req.type !== "skill" || !used.has(req.id)) continue;
+          const source = skillSource(req.ref, { home: options.env.HOME ?? homedir() });
+          if (!source) continue;
+          const flow = source.kind === "bundled" ? options.store.getFlow(ctx.flowId) : undefined;
+          const result =
+            source.kind === "installed"
+              ? readSkillFolder(source.dir, source.name)
+              : flow && bundledSkill(flow.files, source.name);
+          // The sentence names the skill, which the owner knows, not the flow's requirement id.
+          if (!result || !result.ok || result.skill.hash !== consent?.pins?.skills[req.id])
+            changed.push(source.name);
+        }
+      }
+      const result = gate({
         platform: options.platform ?? process.platform,
         dataDir: options.dataDir,
         scan: cache?.scan,
@@ -418,8 +447,11 @@ export function createHarnessService(options: {
           cache?.inventory.connectors,
           cache?.inventory.skills.filter((skill) => skill.scope === "user").map((skill) => skill.name),
         ),
-        allowed: ctx !== undefined && options.store.getCapabilityConsent(ctx.flowId)?.hash === ctx.hash,
+        allowed: sameHash && changed.length === 0,
       });
+      return result.reason === ALLOW_FIRST && changed.length
+        ? { ready: false, reason: GATE.skillChanged([...new Set(changed)].sort()) }
+        : result;
     },
     stop() {
       stopped = true;
