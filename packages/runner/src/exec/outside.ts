@@ -6,6 +6,7 @@ import {
   templateExpressions,
 } from "@flowdriven/sdk";
 import type { RunRow, StepRow } from "../storage.ts";
+import { ownedNow } from "./own-text.ts";
 
 const STATUS_KEYS = new Set(["status", "passed", "failed", "skipped"]);
 const SCOPE_NAMES = new Set(["steps", "params", "inputs", "trigger"]);
@@ -20,8 +21,27 @@ export function takesOutsideText(
   itemKey: string,
   rows: StepRow[],
 ): boolean {
+  return takesOutside(template, stepId, manifest, run, itemKey, rows, true);
+}
+
+function takesOutside(
+  template: string,
+  stepId: string,
+  manifest: FlowManifest,
+  run: RunRow,
+  itemKey: string,
+  rows: StepRow[],
+  allowOwned: boolean,
+): boolean {
   const marked = (id: string, key: string) =>
-    rows.some((r) => r.runId === run.id && r.stepId === id && r.itemKey === key && r.outside === true);
+    rows.some(
+      (r) =>
+        r.runId === run.id &&
+        r.stepId === id &&
+        r.itemKey === key &&
+        r.outside === true &&
+        (!allowOwned || !ownedNow(r)),
+    );
   const home = manifest.steps.find((s) => "for_each" in s && s.steps.some((nested) => nested.id === stepId));
   const sameLoop = home !== undefined && "for_each" in home ? home.steps.map((s) => s.id) : [];
   let paths: string[][];
@@ -33,7 +53,7 @@ export function takesOutsideText(
   for (const path of paths) {
     const first = path.at(0);
     if (home && "for_each" in home && first === home.as) {
-      if (takesOutsideText(home.for_each, home.id, manifest, run, "", rows)) return true;
+      if (takesOutside(home.for_each, home.id, manifest, run, "", rows, false)) return true;
       continue;
     }
     if (first === "trigger") {
@@ -50,9 +70,16 @@ export function takesOutsideText(
       continue;
     }
     const top = manifest.steps.find((s) => s.id === id);
-    if (!top) continue;
+    if (!top) {
+      if (
+        viaSteps &&
+        manifest.steps.some((s) => "for_each" in s && s.steps.some((nested) => nested.id === id))
+      )
+        return true;
+      continue;
+    }
     if ("for_each" in top) {
-      if (takesOutsideText(top.for_each, top.id, manifest, run, "", rows)) return true;
+      if (takesOutside(top.for_each, top.id, manifest, run, "", rows, false)) return true;
       if (
         top.steps.some((nested) =>
           rows.some(
