@@ -1,9 +1,9 @@
-import { mkdirSync, realpathSync } from "node:fs";
+import { lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseTemplate, type Requirement, type UrlTemplate, webRates } from "@flowdriven/sdk";
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
-import { isExtraRef, resolveExtraFolder } from "../folders/extra.ts";
+import { fold, isExtraRef, resolveExtraFolder } from "../folders/extra.ts";
 import type { Routed } from "../router/types.ts";
 import type { BrowserPolicy } from "./browser.ts";
 import { COMMAND_STOP, type CommandPolicy } from "./commands.ts";
@@ -17,6 +17,7 @@ export type Policy = {
   tools: string[];
   folders: Folder[];
   cwd: string;
+  workFolder?: string;
   addDirs: string[];
   schema: boolean;
   sessionId: string;
@@ -36,7 +37,9 @@ export function isProjectRef(ref: string | undefined): boolean {
   return true;
 }
 
+export const ITEM_FOLDER = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 export const FOLDER_STOP = {
+  itemKey: (id: string) => `This step's item has no name that can be a folder (${id}).`,
   notGranted: (id: string) => `This step uses a folder you have not granted (${id}).`,
   moved: (id: string) => `The folder ${id} now leads somewhere else. Allow the flow again on its screen.`,
   project: (id: string) => `The folder ${id} holds this run's project folder.`,
@@ -57,6 +60,7 @@ export function buildPolicy(input: {
   takesOutside?: boolean;
   grantedFolders?: Record<string, { path: string; access: "read" | "read_write" }>;
   home?: string;
+  itemKey?: string;
 }): Policy {
   const policy: Policy = {
     tools: [],
@@ -165,6 +169,15 @@ export function buildPolicy(input: {
   });
 
   const control = resolveDeep(input.controlRoot);
+  for (const requirement of paths) {
+    if (
+      requirement.type === "path" &&
+      requirement.per_item &&
+      (!input.itemKey || !ITEM_FOLDER.test(input.itemKey))
+    )
+      throw new Error(FOLDER_STOP.itemKey(requirement.id));
+  }
+  const grantedPaths = new Map<string, string>();
   const pending: { path: string; ref: string | undefined; write: boolean }[] = [];
   for (const requirement of paths) {
     if (requirement.type !== "path") continue;
@@ -185,7 +198,6 @@ export function buildPolicy(input: {
         if (!result.ok || result.path !== pin.path) throw new Error(FOLDER_STOP.moved(requirement.id));
         const project = resolveDeep(input.project);
         if (!project) throw new Error(FOLDER_STOP.moved(requirement.id));
-        const fold = (path: string) => path.normalize("NFC").toLowerCase();
         if (isInside(fold(result.path), fold(project))) throw new Error(FOLDER_STOP.project(requirement.id));
         if (!control || isInside(result.path, control) || isInside(control, result.path))
           throw new Error("A folder of this step overlaps FlowDriven's control folder.");
@@ -199,9 +211,25 @@ export function buildPolicy(input: {
       }
       const after = check();
       if (!after.exists) throw new Error(FOLDER_STOP.moved(requirement.id));
-      const existing = policy.folders.find((item) => item.path === after.path);
+      let path = after.path;
+      if (requirement.per_item) {
+        path = join(path, input.itemKey ?? "");
+        try {
+          try {
+            mkdirSync(path, { mode: 0o700 });
+          } catch (error) {
+            if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+          }
+          if (!lstatSync(path).isDirectory() || fold(realpathSync.native(path)) !== fold(path))
+            throw new Error(FOLDER_STOP.moved(requirement.id));
+        } catch {
+          throw new Error(FOLDER_STOP.moved(requirement.id));
+        }
+      }
+      grantedPaths.set(requirement.id, path);
+      const existing = policy.folders.find((item) => item.path === path);
       if (existing) existing.write ||= requirement.access === "read_write";
-      else policy.folders.push({ path: after.path, write: requirement.access === "read_write" });
+      else policy.folders.push({ path, write: requirement.access === "read_write" });
       continue;
     }
     if (!isProjectRef(ref)) throw failure();
@@ -248,7 +276,7 @@ export function buildPolicy(input: {
     const index = (path: string) =>
       paths.findIndex((req) => {
         if (req.type !== "path") return false;
-        if (isExtraRef(req.ref)) return input.grantedFolders?.[req.id]?.path === path;
+        if (isExtraRef(req.ref)) return grantedPaths.get(req.id) === path;
         return (
           resolveDeep(
             req.ref === undefined || req.ref === "." ? input.project : join(input.project, req.ref),
@@ -271,6 +299,7 @@ export function buildPolicy(input: {
   const first = policy.folders.find((folder) => folder.path !== skillPath);
   if (first) {
     policy.cwd = first.path;
+    if ([...grantedPaths.values()].includes(first.path)) policy.workFolder = first.path;
     policy.addDirs = policy.folders
       .filter((folder) => folder.path !== first.path)
       .map((folder) => folder.path);

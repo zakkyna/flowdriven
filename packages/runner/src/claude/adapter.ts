@@ -123,6 +123,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       const schema = outputSchema(req.outputs);
       let call: CallInfo | undefined;
       let outside = false;
+      let workFolder: string | undefined;
       const result = await (async () => {
         try {
           return await run(
@@ -153,6 +154,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   connectors: options.connectors?.() ?? [],
                   catalog,
                   project: req.project,
+                  itemKey: req.itemKey,
                   home,
                   grantedFolders: options.grantedFolders?.(req.runId),
                   controlRoot: control.root,
@@ -161,6 +163,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   schema: schema !== undefined,
                   ...(folder ? { skillFolder: folder } : {}),
                 });
+                workFolder = policy.workFolder;
                 if (skillRequirement) {
                   const result = prepareSkillStep({
                     requirement: skillRequirement,
@@ -240,7 +243,10 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           }
         }
       })();
-      const mark = outside ? { outside: true as const } : {};
+      const mark = {
+        ...(outside ? { outside: true as const } : {}),
+        ...(workFolder === undefined ? {} : { workFolder }),
+      };
       if (result.kind === "hold")
         return withCall(
           { exit: "failed", text: CONNECTOR_DENY.held, outputs: {}, hold: result.held, ...mark },

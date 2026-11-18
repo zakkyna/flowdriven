@@ -63,6 +63,7 @@ export type StepResult = {
   exit: ExitClass;
   text: string;
   outputs: Record<string, Value>;
+  workFolder?: string;
   block?: string;
   noRetry?: string;
   hold?: HeldCall;

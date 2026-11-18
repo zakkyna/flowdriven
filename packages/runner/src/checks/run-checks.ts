@@ -12,6 +12,7 @@ export type CheckContext = {
   stepId: string;
   itemKey: string;
   folder: string;
+  filesFolder?: string;
   files: ReadonlyMap<string, string>;
   declaredOutputs: string[];
   output: { text: string; values: Record<string, Value> };
@@ -68,7 +69,7 @@ export async function runChecks(checks: Check[], ctx: CheckContext): Promise<Che
             }
           }
         } else if (c.type === "files") {
-          const files = matchFiles(ctx.folder, c.paths, ctx.bind);
+          const files = matchFiles(ctx.filesFolder ?? ctx.folder, c.paths, ctx.bind);
           if (
             (c.min_count !== undefined && files.length < c.min_count) ||
             (c.max_count !== undefined && files.length > c.max_count) ||

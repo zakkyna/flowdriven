@@ -152,6 +152,7 @@ export async function runLeaf(
         exit: "ok" | "failed" | "quota" | "auth" | "interrupted";
         text: string;
         outputs: Record<string, Value>;
+        workFolder?: string;
         block?: string;
         noRetry?: string;
         outside?: boolean;
@@ -304,6 +305,7 @@ export async function runLeaf(
             stepId: step.id,
             itemKey,
             folder: run.project,
+            filesFolder: result.workFolder,
             files: new Map(Object.entries(flow.files)),
             declaredOutputs: step.outputs.map((o) => o.id),
             output: { text: result.text, values: outputs },

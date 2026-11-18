@@ -210,7 +210,7 @@ export function capabilitySentence(req: Requirement, catalog: ConnectorEntry[] =
       .join(", ")} in your own browser, at most ${perRun} per run and ${perDay} a day.`;
   }
   if (req.type === "path" && isExtraRef(req.ref))
-    return `Reads${req.access === "read_write" ? " and changes" : ""} files in ${visible(req.ref ?? "", 120)}, a folder outside the project that you grant.`;
+    return `Reads${req.access === "read_write" ? " and changes" : ""} files in ${visible(req.ref ?? "", 120)}, a folder outside the project that you grant.${req.per_item ? " Each item works in a folder of its own inside it." : ""}`;
   if (req.type === "path")
     return `Reads${req.access === "read_write" ? " and writes" : ""} files in ${visible(req.ref ?? "the project folder", 120)}.`;
   const noun = req.type === "harness" ? "A harness" : NOUNS[req.type];
