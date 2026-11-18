@@ -13,6 +13,7 @@ import { runAsk } from "./exec/ask.ts";
 import { createChain } from "./exec/chain.ts";
 import { runLeaf } from "./exec/leaf.ts";
 import { runLoop } from "./exec/loop.ts";
+import { ownTextHash } from "./exec/own-text.ts";
 import { createRecovery } from "./exec/recovery.ts";
 import { makeScope } from "./exec/scope.ts";
 import type { HarnessAdapter } from "./harness.ts";
@@ -471,6 +472,27 @@ export function createEngine(input: EngineDeps): Engine {
         row.checks = row.checks.map((c) =>
           c.type === "user" && c.verdict === "pending" ? { ...c, verdict: "passed" } : c,
         );
+        if (a.ownText) {
+          const value = row.outputs[a.ownText.output];
+          if (typeof value === "string" && ownTextHash(value) === a.ownText.hash) {
+            const { output, hash } = a.ownText;
+            row.ownerApproved = { output, hash, approvalId: a.id, at };
+            store.appendAudit({
+              at,
+              kind: "own_text_approved",
+              runId: run.id,
+              detail: { stepId: a.stepId, itemKey: a.itemKey, hash },
+            });
+          } else {
+            delete row.ownerApproved;
+            store.appendAudit({
+              at,
+              kind: "own_text_changed",
+              runId: run.id,
+              detail: { stepId: a.stepId, itemKey: a.itemKey },
+            });
+          }
+        }
         store.upsertStep(row);
         store.updateRun(run.id, { state: "running" });
       } else {

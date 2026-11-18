@@ -17,6 +17,7 @@ import type { RunRow, StepRow } from "../storage.ts";
 import { approvedCallsOf, HOLD_TEXT, heldPayload, labelOf, MAX_HOLDS } from "./held.ts";
 import { limits } from "./limits.ts";
 import { stepTakesOutsideText } from "./outside.ts";
+import { OWN_TEXT, ownTextHash, ownTextRefusal } from "./own-text.ts";
 import { loopsOverChoice } from "./pick-keys.ts";
 import { raceAbort } from "./timeout.ts";
 
@@ -287,7 +288,10 @@ export async function runLeaf(
       } else if (result.exit !== "ok") failure = "worker failed";
       else {
         const missing = step.outputs.find((o) => !Object.hasOwn(result.outputs, o.id));
-        if (missing) failure = `missing output ${missing.id}`;
+        if (missing)
+          failure = step.checks.some((c) => c.type === "user" && c.own_text === true)
+            ? OWN_TEXT.missing
+            : `missing output ${missing.id}`;
         else {
           const outputs = Object.fromEntries(step.outputs.map((o) => [o.id, result.outputs[o.id]])) as Record<
             string,
@@ -320,8 +324,17 @@ export async function runLeaf(
           else if (failed) failure = failed.evidence ?? failed.summary;
           else {
             row.outputs = outputs;
-            Object.assign(attempt, { endedAt: now().toISOString() });
-            if (row.checks.some((c) => c.required && c.verdict === "pending")) {
+            const pending = row.checks.some((c) => c.required && c.verdict === "pending");
+            const ownCheck =
+              pending &&
+              step.checks.some((c) => c.type === "user" && c.required !== false && c.own_text === true);
+            const output = step.outputs.at(0)?.id;
+            const value = output === undefined ? undefined : outputs[output];
+            const refusal = ownCheck ? ownTextRefusal(value) : undefined;
+            if (refusal) {
+              failure = refusal;
+            } else if (pending) {
+              Object.assign(attempt, { endedAt: now().toISOString() });
               const createdAt = now().toISOString();
               row.state = "waiting_approval";
               store.transaction(() => {
@@ -333,8 +346,13 @@ export async function runLeaf(
                   runId: run.id,
                   stepId: step.id,
                   itemKey,
-                  summary: `Approve the result of "${step.title ?? step.id}"`,
-                  payload: result.text.slice(0, 4000),
+                  summary: ownCheck
+                    ? OWN_TEXT.summary(step.title ?? step.id)
+                    : `Approve the result of "${step.title ?? step.id}"`,
+                  payload: ownCheck && typeof value === "string" ? value : result.text.slice(0, 4000),
+                  ...(ownCheck && output !== undefined && typeof value === "string"
+                    ? { ownText: { output, hash: ownTextHash(value) } }
+                    : {}),
                   approves: [],
                   onExpiry: "fail",
                   createdAt,
@@ -344,11 +362,12 @@ export async function runLeaf(
                 store.updateRun(run.id, { state: "waiting_approval" });
               });
               return "halt";
+            } else {
+              Object.assign(attempt, { endedAt: now().toISOString(), exit: "ok" });
+              row.state = "passed";
+              save();
+              return "passed";
             }
-            Object.assign(attempt, { exit: "ok" });
-            row.state = "passed";
-            save();
-            return "passed";
           }
         }
       }

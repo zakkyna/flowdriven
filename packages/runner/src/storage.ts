@@ -52,6 +52,7 @@ export type StepRow = {
   limitMs?: number;
   note?: string;
   outside?: boolean;
+  ownerApproved?: { output: string; hash: string; approvalId: string; at: string };
 };
 export type ItemRow = {
   runId: string;
@@ -81,6 +82,7 @@ export type ApprovalRow = {
   riskyAction?: RiskyAction;
   outside?: boolean;
   call?: { tool: string; input: Value };
+  ownText?: { output: string; hash: string };
 };
 export type AuditEntry = { at: string; kind: string; runId?: string; detail: Value };
 export type HarnessStateRow = {
