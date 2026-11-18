@@ -1,18 +1,16 @@
 import { FlowFileError } from "../hash/canonical.ts";
 import { parseFlowYaml } from "../load/parse-yaml.ts";
+import { hasHiddenText } from "../validate/hidden.ts";
 
 export const SKILL_LIMITS = { nameMax: 64, descriptionMax: 1024, bodyMax: 60000, fileBytes: 262144 };
 export const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export type SkillFile = { name: string; description: string; body: string; keys: string[] };
 
-const hidden = /[\p{Default_Ignorable_Code_Point}\p{Cc}\p{Zl}\p{Zp}]/u;
-const hasHidden = (text: string) => hidden.test(text.replaceAll("\n", "").replaceAll("\t", ""));
-
 export function parseSkillFile(text: string): { ok: true; skill: SkillFile } | { ok: false; reason: string } {
   if (new TextEncoder().encode(text).length > SKILL_LIMITS.fileBytes)
     return { ok: false, reason: "This skill's SKILL.md is larger than 256 KiB." };
   const normalized = text.replaceAll("\r\n", "\n");
-  if (hasHidden(normalized))
+  if (hasHiddenText(normalized))
     return { ok: false, reason: "This skill's SKILL.md contains hidden characters." };
   const lines = normalized.split("\n");
   const end = lines.indexOf("---", 1);
@@ -37,7 +35,7 @@ export function parseSkillFile(text: string): { ok: true; skill: SkillFile } | {
     description.length > SKILL_LIMITS.descriptionMax
   )
     return { ok: false, reason: "This skill's description is invalid." };
-  if (hasHidden(description))
+  if (hasHiddenText(description))
     return { ok: false, reason: "This skill's SKILL.md contains hidden characters." };
   const body = lines.slice(end + 1).join("\n");
   if (body.length > SKILL_LIMITS.bodyMax)

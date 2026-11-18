@@ -70,7 +70,7 @@ export const Check = z.discriminatedUnion("type", [
     .strictObject({ ...checkCommon, type: z.literal("not_contains"), ...pattern })
     .refine((v) => (v.pattern !== undefined) !== (v.patterns !== undefined)),
   z.strictObject({ ...checkCommon, type: z.literal("judge"), rubric: z.string() }),
-  z.strictObject({ ...checkCommon, type: z.literal("user") }),
+  z.strictObject({ ...checkCommon, type: z.literal("user"), own_text: z.boolean().optional() }),
   z.strictObject({
     ...checkCommon,
     type: z.literal("probe"),

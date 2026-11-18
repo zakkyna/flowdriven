@@ -1763,6 +1763,8 @@ All are additions; `format` becomes `flowdriven-flow/1.1`. Still one ordered lis
 | `params` | flow | Typed values set once in the flow's settings, not asked per run (`min_score`). `inputs` (9.5) stay per run. |
 | `limits: {max_duration, max_items, max_runs_per_day, max_attempts}` | flow and step | Step limit overrides the 30 min of 11.3. Runner-enforced. |
 | `rate` on `web` | requirement | Counted by the runner from hook-observed calls. |
+| `own_text` on a `user` check (added 2026-11-18, plan 05d) | check | The step declares one text output, and the Inbox shows that text itself. When the owner approves it, a later step that reads the step takes the text as the owner's own words, not outside text (R1), while its SHA-256 still matches; so a step that runs commands may use it (the owner's answer O5 of 2026-11-17). |
+| `per_item` on a granted folder (added 2026-11-18, plan 05d) | requirement | A step inside a loop works in `<folder>/<item key>/`, created at its first call; the key must be a plain lower-case name. |
 
 The Upwork flow:
 

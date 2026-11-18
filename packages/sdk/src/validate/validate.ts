@@ -67,6 +67,10 @@ export function validateManifest(
   manifest.requirements.forEach((req, i) => {
     if (reqIds.has(req.id)) add("duplicate_id", `requirements.${i}`);
     reqIds.add(req.id);
+    if (req.type === "path" && req.per_item) {
+      if (!req.ref?.startsWith("~/")) add("per_item_ref", `requirements.${i}.ref`);
+      if (req.access !== "read_write") add("per_item_access", `requirements.${i}.access`);
+    }
     if (req.type !== "web") return;
     const path = `requirements.${i}`;
     if ((req.url_patterns?.length ?? 0) > 8) add("web_template_count", `${path}.url_patterns`);
@@ -112,8 +116,15 @@ export function validateManifest(
       if (needsUser && step === lastLeaf) add("light_needs_user_check", path);
       if (leaf) {
         leaf.uses.forEach((id, k) => {
-          if (!requirement(id)) add("unknown_requirement", `${path}.uses.${k}`);
+          const req = requirement(id);
+          if (!req) add("unknown_requirement", `${path}.uses.${k}`);
+          if (req?.type === "path" && req.per_item && variable === undefined)
+            add("per_item_loop", `${path}.uses.${k}`);
         });
+        const ownText = leaf.checks.filter((check) => check.type === "user" && check.own_text === true);
+        if (ownText.length > 0 && (leaf.outputs.length !== 1 || leaf.outputs.at(0)?.type !== "text"))
+          add("own_text_output", `${path}.outputs`);
+        if (ownText.length > 1) add("own_text_once", `${path}.checks`);
         if (
           leaf.do === "skill" &&
           (!leaf.uses.includes(leaf.skill) || requirement(leaf.skill)?.type !== "skill")
@@ -127,6 +138,7 @@ export function validateManifest(
           });
         leaf.checks.forEach((check, k) => {
           const cp = `${path}.checks.${k}`;
+          if (check.type === "user" && check.own_text && !check.required) add("own_text_required", cp);
           if (
             check.type === "command" &&
             !leaf.uses.some((id) => {

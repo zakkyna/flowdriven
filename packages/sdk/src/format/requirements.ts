@@ -44,6 +44,7 @@ export const Requirement = z.discriminatedUnion("type", [
     ...common,
     type: z.literal("path"),
     access: z.enum(["read", "read_write"]).default("read"),
+    per_item: z.boolean().optional(),
   }),
   z.strictObject({
     ...common,
