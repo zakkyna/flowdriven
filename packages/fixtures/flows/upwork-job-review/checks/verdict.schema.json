@@ -1,0 +1,5 @@
+{
+  "type": "object",
+  "required": ["fit", "reasons"],
+  "properties": { "fit": { "type": "boolean" }, "reasons": { "type": "string" } }
+}

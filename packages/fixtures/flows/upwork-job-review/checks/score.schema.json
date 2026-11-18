@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "required": ["value", "reasons"],
+  "properties": {
+    "value": { "type": "number", "minimum": 0, "maximum": 10 },
+    "reasons": { "type": "string" }
+  }
+}

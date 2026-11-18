@@ -1,0 +1,15 @@
+{
+  "type": "array",
+  "maxItems": 20,
+  "items": {
+    "type": "object",
+    "required": ["id", "title", "title_start"],
+    "properties": {
+      "id": { "type": "string", "minLength": 18, "maxLength": 24 },
+      "title": { "type": "string" },
+      "title_start": { "type": "string" },
+      "budget": { "type": "string" },
+      "snippet": { "type": "string" }
+    }
+  }
+}
