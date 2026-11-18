@@ -2,6 +2,7 @@
 
 ## Claude Code only
 
-- Claude plans and reviews. Plan tasks are executed by Codex, one task per call, under the handoff rules in AGENTS.md.
-- A reviewing session reads a change as a diff from a checkout of the default branch and does not load the rules of the branch it reviews.
-- Hooks and permission deny rules for the "Never do" list come with a later, owner-approved plan. Until then those rules are advice: a session without hard controls runs unattended only inside a sandbox with no network path to GitHub, and otherwise the owner watches it (spec 17.4).
+- Claude plans, reviews, decides and commits. Codex writes the code through the `cross-cli` skill, one task per call.
+- In this project, AGENTS.md and this file decide the process. From the global rules, keep the model routing (cheaper models and Codex for bulk work) and every safety rule. Skip ledgers and extra verifier rounds; keep a short progress note in `.workflow/` only when a task is long. Do not add other frameworks on top.
+- A reviewing session reads the change as a diff from a checkout of the default branch, so it never loads the instruction files, settings or hooks of the branch it reviews.
+- The safety rules in AGENTS.md are not yet enforced by hooks. Until they are, a session runs unattended only in a sandbox with no network path to GitHub; otherwise the owner watches it.
