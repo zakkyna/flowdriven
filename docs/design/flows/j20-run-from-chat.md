@@ -1,0 +1,188 @@
+# FS-j20: Run flows from the chat
+
+| Item | Value |
+|---|---|
+| Journey | j20, "Menjalankan flow lewat chat", Running a flow from chat |
+| PRD features | F-03, F-04, F-06 (also F-02 for the new-chat row and chat list, F-21 for the agent pill and run card) |
+| Safety rules | SR-1, SR-3, SR-4, SR-5, SR-7, SR-8, SR-9; START for the next flow of a chain |
+| Prototype source | Brief sections 16.3.5-7, 16.5, 17.2.3, 17.3, 18.4, 19, 20, 23.4.5, 23.9, 23.10, 25.2; `js/screens/chat.js` (`respond`), `js/actions.js` (`startRun`, `startChain`, `startTogether`, `proactive`, `decide`, `alwaysAllow`, `stopRun`, `finish`), `js/guide.js` (j20) |
+| Status | In the prototype (version 8); the agent pill and the agent on the run card are Pending prototype version 9; reading sentences with the agent, "Change" on a plan, and failure lines are Not in the prototype yet |
+
+## Goal
+
+The person types, in plain words, which flow to run. FlowDriven runs one flow, several together, or a chain in order, shows progress in the chat, asks only for what is missing, and puts every risky action in front of the person before it happens.
+
+## Entry points and trigger
+
+- "New chat" in the left menu, or any open chat. Starter chips on an empty chat. A suggestion chip under an assistant message.
+- Trigger: the person sends a message (Enter sends, Shift+Enter adds a line) or clicks a card button. A start typed in the chat is source `chat`. The next flow of a chain goes through the start rule `START` with source `after`.
+- Related: FS-j27 (inputs in plain words or a form), FS-j28 (schedules that ask first), FS-j24 (decisions), FS-j22 and FS-j23 (make and improve a flow, reached from the same chat).
+
+## Preconditions
+
+- Permission is `on` and the chat's agent is `ready` (FS-j01, FS-j12). Otherwise see FS-j20.E1 and E2.
+- The flows named exist. A flow that is `new` or `changed` shows a confirm card first (SR-3).
+
+## Main path
+
+> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
+
+The agent pill in S1 and the agent line on the run card in S4 depend on version 9.
+
+1. **FS-j20.S1 New chat.**
+   - Person: clicks "New chat".
+   - FlowDriven: `chats.create` reuses an empty chat if one exists (moved to the top of Today) or makes a chat titled "New chat". The chat starts with the main agent and its default model (pending version 9).
+   - Sees: "What should I do?", "I can run your flows, make a new flow, or improve one.", the composer, the agent pill ("Claude Code - Sonnet 5.5" with a status dot in version 9; "Claude Code ready" in version 8), and starter chips: one for a flow of the person's own (for example "Run Build APK and upload it, then fill my timesheet"), "Run Weekly supplier report", "Make a new flow", "What needs me?". Starter chips are built from the person's own flows and are fewer on a new install (Not in the prototype yet).
+2. **FS-j20.S2 Ask for a chain.**
+   - Person: clicks the chip "Run Build APK and upload it, then fill my timesheet" (or types it).
+   - FlowDriven: `chats.send` stores the message at once and returns. The first user message becomes the chat title (cut to 40 characters) and the chat moves to the top of Today. One chat turn runs: one agent call with no tools and a JSON schema (AD-10), on the chat's agent and model, with a compact context (flows with names and inputs, remembered answers, what runs and what needs the person, the last 12 turns or 24,000 characters). It returns the intent `run_chain` with the two flow ids in order, the values it found, the reply text and the language. FlowDriven checks the answer against its own state (both flows exist, order, values) and fills inputs by AD-11. A chip is sent as the person's own message in the app language and never changes the chat language.
+   - Sees: the user bubble, then one short question for what is missing: "Fill timesheet: How long did you work, and what did you work on? For example: 2 hours, built the login page. Like last time, I'll use Project Example (Example Corp), Feature work." with chips "2 hours, built the login page" and "Use a form". Input handling is FS-j27.
+3. **FS-j20.S3 Answer.**
+   - Person: types "2 hours, release build".
+   - FlowDriven: the turn returns `fill_inputs`; FlowDriven parses the duration (2h) and "What you did" with its own parsers. Nothing is missing, so it shows the plan card and starts nothing.
+   - Sees: the question card marked answered, and a plan card: "I'll run these one after the other:" 1. "Build APK and upload it", 2. "Fill timesheet - starts when Build APK and upload it finishes". Buttons "Start" and "Change".
+4. **FS-j20.S4 Start.**
+   - Person: clicks "Start".
+   - FlowDriven: for each flow it checks the confirmed hash. A `new` or `changed` flow opens the confirm card first (FS-j20.P6). Then `chats.act` starts the first flow with `flows.start {flowId, source: "chat"}` and writes the run on the chat's agent and model, with the start proof (SR-4). The second flow waits; when the first ends `done`, `starts.request(flowId, "after", ...)` applies `START`.
+   - Sees: "Started. I'll tell you here if I need you." and a run card per flow: flow name, state badge ("Waiting to start", "Starting", "Running", "Needs you", "Finished"), a step track, "Step 2 of 4: Build the APK", and a "Stop" button while it is active. The card also says the agent: "Claude Code - Sonnet 5.5" (pending version 9). A queued run says "Waiting for the earlier run of this flow." and, if that run needs the person, "The earlier run needs you first." with the link "See what it needs".
+5. **FS-j20.S5 The first flow ends.**
+   - Person: waits, or does something else.
+   - FlowDriven: Build APK and upload it is a `report` flow, so its card shows "Finished: <first report lines>" and no extra chat line is posted. `START` starts Fill timesheet in the same chat; its card says "Started by itself after Build APK and upload it finished."
+   - Sees: the second card.
+6. **FS-j20.S6 A risky step asks.**
+   - Person: sees the decision.
+   - FlowDriven: step 3 of Fill timesheet creates a decision (state `pending`, "Needs you"): the effect class of "Create the timesheet entry in the timesheet service" is `change`, and the flow lists it under "Asks you first". The run is `waiting_approval`. FlowDriven shows the decision in this chat, in Activity under "Needs you", and as a system notification when no FlowDriven window is focused. The runner never answers it.
+   - Sees: a card "Submit this timesheet entry?" with the summary "Thu 19 Nov, 13:00-15:00 (2h): Project Example (Example Corp), Feature work. "Release build for Project Example."" and the buttons "Approve", "Always allow for this flow", "Reject" and "Details" (opens the run in Activity). "Always allow for this flow" is shown because the place (the person's timesheet account) is fixed in the flow (SR-1).
+7. **FS-j20.S7 Approve.**
+   - Person: clicks "Approve".
+   - FlowDriven: `approvals.resolve {approvalId, decision: "approve"}`. FlowDriven writes a one-time grant bound to the run, the step, the tool and the exact input digest. The step runs; the run ends `done`. The audit log records the decision. The report gets "You approved: Submit this timesheet entry."
+   - Sees: because "Fill timesheet" has the result `chat`, FlowDriven posts the answer lines filled from the inputs and outputs: "Logged Thu 19 Nov, 13:00-15:00 (2h): Project Example (Example Corp), Feature work." and ""Release build for Project Example." Entry 4812." (the entry number comes from the timesheet service in the real app).
+8. **FS-j20.S8 Offer to repeat.**
+   - Person: sees an offer.
+   - FlowDriven: when both runs ended `done`, the person rejected nothing, and Fill timesheet is not already set to run after Build APK and upload it, FlowDriven posts "Both flows finished." with the first report line of each report flow, and a card "Do this every time? Fill timesheet can start by itself after Build APK and upload it finishes." with the buttons "Yes, every time" and "Only this time". These are card buttons, not words matched in the next message. "Yes, every time" calls `flows.setSchedule` for Fill timesheet with type `after`; it replaces any schedule the flow had, and the card says what it replaces. "Only this time" closes the card.
+   - Sees: after "Yes, every time": "Done. Next time Fill timesheet starts after Build APK and upload it. You can change it on the Fill timesheet page."
+
+## Other paths
+
+> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
+
+P11 depends on version 9; the others do not.
+
+- **FS-j20.P1 One flow, nothing missing.** Typed "run weekly supplier report": intent `run`, `flows.start` at once. The chat says "Starting Weekly supplier report." and shows its run card. A `report` flow ends with "Done. The report is in Activity."
+- **FS-j20.P2 Several flows with no order word.** Intent `run_together`. Plan card "I'll run both at the same time." (or "I'll run all <n> at the same time.") with "Start" and "Change". One run per flow, in parallel. A flow that already has an active run queues its new run.
+- **FS-j20.P3 A flow name alone.** Intent `answer` with a card "Run <flow> now?" and the buttons "Run" and "Not now". Nothing starts until "Run" is clicked. Questions ("is build apk done?"), negations ("don't run it") and plain mentions get an answer or a status card, never a run.
+- **FS-j20.P4 Cancel or ask while a question is open.** Cancel words give "Okay, I won't start it." A question mark gives a short answer: "I need these details to start the flow." A different request leaves the question open and is handled, unless it carries values for it.
+- **FS-j20.P5 Typed yes with a card open.** While a plan, schedule, confirm, run or stop card is open, "yes", "ok", "start" or "no" in any language gets "Use the buttons on the card above." Only a click on a button starts or changes anything.
+- **FS-j20.P6 A new or changed flow.** Instead of starting, the chat shows "Confirm <flow> first?" with a "Confirm" button. It opens a dialog "Confirm <flow>?" with the steps and three lists, "Does on its own", "Asks you first" and "Never does", the line "You can change it later with Improve with chat." and the buttons "Cancel" and "Confirm". "Confirm" confirms this exact version (`flows.confirm {flowId, hash, onItsOwn}`) and the start continues. FS-j22 describes the dialog in full.
+- **FS-j20.P7 Stop.** The "Stop" button on a run card stops at once with no question (`runs.stop`); the card shows "Stopped by you". A typed stop ("stop build apk") makes a card "Stop <flow>?" with "Stop" and "Keep it running", because the sentence may be a question or a negation; with nothing running FlowDriven says "Nothing is running right now." Stopping a run in a chain posts "Stopped. <names> did not start."
+- **FS-j20.P8 Turn off a schedule.** "Turn off timesheet automatically" gives a card "Stop running Fill timesheet by itself?" with "Yes, turn it off" and "No".
+- **FS-j20.P9 Set a schedule from the chat.** "Run timesheet every weekday at 17:00" gives a card "Set this schedule?" with "Yes, set it" and "No". Two schedules in one sentence: "One schedule at a time, please. Which flow first?" See FS-j28.
+- **FS-j20.P10 Status.** "What needs me?" or "what is running?" gives a status card: "<n> things need you:" with "Open" links, "Running now: <names>" or "Nothing is running.", the latest result of a named flow, and "Problems: <names>".
+- **FS-j20.P11 Always allow.** The button "Always allow for this flow" calls `approvals.resolve {decision: "always_allow"}`. The decision becomes `allowed_always`, the run goes on, and FlowDriven stores a standing rule for that flow, that action and that exact place. The chat says "Okay. From now on Fill timesheet does this by itself. You can undo it on its page with Ask me again." Later runs show "Done by your rule: <step>." Replies and other actions whose place comes from what the run read never get this button (SR-1). Standing rules are made only in the desktop window (SR-2).
+- **FS-j20.P12 Make or improve.** "make a flow ..." and "change flow ..." intents (`make_flow`, `improve_flow`) go on in FS-j22 and FS-j23.
+- **FS-j20.P13 Outside text in the context.** If the context of a turn holds outside text (for example a report line that quotes an email), the turn never starts a run by itself: it shows a "Run <flow> now?" card the person clicks (SR-5).
+- **FS-j20.P14 Two messages in a row.** One turn runs at a time per chat; a second message is stored at once and answered after the first. The composer stays usable.
+
+## States
+
+| Entity | From -> to | Cause |
+|---|---|---|
+| Chat | none -> new -> titled | `chats.create`; first message |
+| Card (plan, run, ask, confirm) | open -> answered | Person clicks a button, or answers the question |
+| Run | `queued` -> `checking` -> `running` | `flows.start`; the same flow has no active run |
+| Run | `running` -> `waiting_approval` | A held action needs the person |
+| Run | `waiting_approval` -> `running` | `approve`, `edit` or `reject` (reject skips the action) |
+| Run | `running` -> `done` | All steps ended |
+| Run | active -> `stopped` | "Stop" |
+| Run | `running` -> `needs_login` | The agent is signed out (FS-j25) |
+| Run | `running` -> `interrupted` | App or runner ended (FS-j20.E6) |
+| Run | `running` -> `failed` or `blocked` | A step failed, or a check cannot pass |
+| Decision | `pending` -> `approved`, `approved_edited`, `rejected`, `expired`, `allowed_always` | Person, or 24 hours with no answer (counts as Reject) |
+| Standing rule | none -> active | "Always allow for this flow" |
+| Schedule (Fill timesheet) | weekdays 17:00 -> `after` Build APK | "Yes, every time" |
+
+## Decisions and confirmations
+
+- Asks: a plan card needs a click on "Start"; a flow named alone needs "Run"; a `new` or `changed` flow needs "Confirm"; every risky action (`change`, `send`, `post`, `pay`, `delete`, `merge`) needs "Approve" unless a standing rule or the confirmation covers that exact action and place (SR-1); "Yes, every time" needs a click; a typed stop needs "Stop".
+- Does not ask: the "Stop" button, "Reject", "Always allow for this flow" (a click, no dialog), reads and writes inside the flow's declared folders (the confirmation covered them), and the chat turn itself.
+- Typed words never confirm a card (FS-j20.P5). The agent never starts anything and never answers a decision (AD-10, SR-2).
+- A rejected action is skipped, the run goes on, and the report says "You said no: <action>. It was not done." A rejection never stops a chain.
+
+## Errors and edge cases
+
+> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
+
+E11 depends on version 9; the others do not.
+
+- **FS-j20.E1 Agent not set up or signed out.** Cause: the chat's agent is `not_installed` or `needs_login`. Person sees: the message is stored, and FlowDriven answers with its own line "Claude Code needs you to sign in." and one button ("Sign in to Claude Code" or "Set up Claude Code", the same action as in Settings). No agent call is made. A run that finds the agent signed out shows "Waiting for sign-in" with "Sign in and continue" (FS-j25).
+- **FS-j20.E2 Permission off.** Cause: Settings switch is off. Person sees: the message is not sent; it stays in the composer with "FlowDriven may not run your AI agents. Turn this on in Settings." and a button "Open Settings". No run is created.
+- **FS-j20.E3 Missing or invalid inputs.** Cause: a required input is empty or invalid. Person sees: one short question for what is missing, with an example and "Use a form"; "Which date?"; "That's more than a working day. How long did you work?"; "How long? Zero hours can't be logged." Details in FS-j27. A flow with a file input opens its form at once.
+- **FS-j20.E4 Limits reached.** Cause: the spending limit or an agent's usage limit is reached, or a flow's daily run limit (default 24). Person sees: the run card says "Needs you" with the decision "Monthly limit reached. Raise it in Settings to continue." (SR-9); for the daily limit the chat says "<flow> reached its limit of <n> runs today." Next: nothing continues silently; after the limit is raised the run continues.
+- **FS-j20.E5 A stopped or failed run.** Cause: "Stop", a failed step, or a blocked check. Person sees: the card's state ("Stopped by you", "Failed", "Stuck") and the plain reason with "Details". In a chain, the rest does not start. After a stop FlowDriven says "Stopped. <names> did not start." After a failure it says "<flow> failed. <names> did not start." (the prototype stayed silent). A decision still waiting on a stopped run becomes `expired`.
+- **FS-j20.E6 Crash or restart.** Cause: the app, the runner or the computer ends during a chain. Next launch: runs that were active become `interrupted` ("Stopped unexpectedly"). A run resumes by itself only when every interrupted step is marked idempotent; a step that may have half happened (the timesheet submit) is never repeated by itself (SR-8). The chain does not start the next flow while a run is `interrupted`. Chats, cards and waiting decisions are kept; a waiting decision still says "Needs you".
+- **FS-j20.E7 A flow changed since it was confirmed.** Cause: the flow was improved, or its files changed, between the plan and the start, or while an earlier flow of the chain was running. Person sees: when the turn of that flow comes, `START` refuses and the chat shows "Confirm <flow> first?" and a "Needs you" item; the chain waits (SR-3).
+- **FS-j20.E8 Computer asleep, or FlowDriven closed, at a scheduled time.** A chat start has no clock time. After "Yes, every time" the new schedule follows FS-j28 (catch up once within the grace window, else "Missed"). A run that was going while the computer slept continues after wake, or is `interrupted` as in E6.
+- **FS-j20.E9 The assistant answer is not usable.** Cause: invalid JSON, an unknown flow id, an unknown intent, a timeout, or no quota. Person sees: "I did not understand that. Try again, or pick one of these." with starter chips; for no quota the agent's own limit is named. Nothing starts and the audit log records the failed turn (Not in the prototype yet).
+- **FS-j20.E10 Old cards after a flow is deleted.** The card says "a deleted flow" and loses its buttons.
+- **FS-j20.E11 The agent cannot be limited for this flow.** Cause: the chat's agent is Codex and the flow needs a tool Codex cannot be limited for (AD-09). Person sees: a plain reason and a button "Use Claude Code for this run" (pending version 9; FS-j31).
+- **FS-j20.E12 Prototype gap: "Change" on a plan.** The prototype only replied "Tell me what to change." The real app lets the person say the change in the next message; the assistant returns a new plan card (reorder, drop a flow, change an input).
+- **FS-j20.E13 Prototype gap: Indonesian "Hanya kali ini".** The prototype matched the chip text "Hanya kali ini" as "yes" because "Hanya" contains "ya". The real app uses card buttons with action ids, never text matching (FS-j30).
+- **FS-j20.E14 Prototype gap: stubs.** Build APK always succeeded, and the timesheet service check "if the time is taken, take the free time the timesheet service suggests" was never shown. In the real app a failing step makes the run `failed` or `blocked`; the check is part of the flow's steps.
+
+## Data read and written
+
+- Reads: `Flow` (name, inputs, result, touches, confirmed hash, schedule), `remembered`, `Settings` (`mainAgent`, `agentPermission`), `Run` list, `Decision` list, `StandingRule`.
+- Writes: `Chat`, `Message`, `Card`, `Run`, `Step`, `Decision`, `Grant` (one-time), `StandingRule`, `remembered` (when a run starts), `Flow.schedule` ("Yes, every time"), `AuditRecord` for every turn that failed, every start, every decision and every permission change.
+
+## Runner API used
+
+> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
+
+`chats.setAgent` depends on version 9; the others do not.
+
+`chats.create`, `chats.get`, `chats.list`, `chats.send`, `chats.act`, `chats.setAgent` (version 9), `flows.list`, `flows.get`, `flows.start`, `flows.confirm`, `flows.setSchedule`, `runs.status`, `runs.stop`, `approvals.list`, `approvals.resolve`, `rules.list`, `activity.summary`. Topics: `chats`, `runs`, `approvals`, `rules`, `flows`, `activity`.
+
+## Acceptance criteria
+
+> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
+
+A21 and A22 depend on version 9; the others do not.
+
+- **FS-j20.A1** "New chat" reuses an empty chat (moved to the top of Today) or creates one titled "New chat"; the first user message sets the title to its first 40 characters and moves the chat to the top of Today.
+- **FS-j20.A2** Enter sends; Shift+Enter adds a line; an empty or blank message is not sent.
+- **FS-j20.A3** A chat turn is exactly one agent call with no tools and a JSON schema, on the chat's agent and model, with a context of at most 12 turns or 24,000 characters.
+- **FS-j20.A4** FlowDriven checks every intent against its own state; an unknown flow id or intent starts nothing and shows FS-j20.E9.
+- **FS-j20.A5** A question, a negation, a plain mention or a flow name alone never starts a run; it gives an answer, a status card, or a "Run <flow> now?" card.
+- **FS-j20.A6** A turn whose context holds outside text never starts a run by itself; it shows a card the person clicks (SR-5).
+- **FS-j20.A7** A chain shows a plan card with the order and starts only after "Start"; the first flow starts with source `chat`, the next with source `after` through `START`.
+- **FS-j20.A8** A flow that is `new` or `changed` never starts from the chat; the confirm card comes first, and a flow that changes while a chain runs stops the chain at that flow (SR-3).
+- **FS-j20.A9** Several flows without an order word run in parallel, one run per flow; a second run of a flow that is active is `queued`.
+- **FS-j20.A10** The run card shows the flow name, state badge with words, track, current step, "Stop", and (pending version 9) the agent and model; a queued run behind a run that needs the person shows "The earlier run needs you first."
+- **FS-j20.A11** "Stop" ends the agent's process group at once with no dialog and sets run and step `stopped` and waiting decisions `expired` (SR-8).
+- **FS-j20.A12** If the first run of a chain ends `failed`, `blocked`, `stopped`, `needs_login` or `interrupted`, the rest does not start, and FlowDriven says which flows did not start; a rejected action does not stop the chain.
+- **FS-j20.A13** A risky action shows a decision in the chat with "Approve", "Reject", "Details" and, only when its place is fixed in the flow, "Always allow for this flow"; the decision also shows in Activity and as a notification when no window is focused.
+- **FS-j20.A14** "Approve" writes a one-time grant bound to run, step, tool and exact input digest; the same action with other input is held again (SR-1).
+- **FS-j20.A15** "Always allow for this flow" stores a standing rule for that flow, action and exact place, and the next run shows "Done by your rule: <step>." (SR-1, SR-2).
+- **FS-j20.A16** A flow with the result `chat` posts its answer lines in the run's chat, with `{inputId}` filled and lines with an unfilled placeholder dropped; a flow with the result `report` posts "Done. The report is in Activity." or, inside a chain, nothing extra.
+- **FS-j20.A17** After a rejection, the chat shows "You said no: <action>. It was not done." in place of the answer line, and no "Both flows finished." offer appears.
+- **FS-j20.A18** The repeat offer appears only when both runs ended `done`, nothing was rejected, and the schedule is not already `after`; "Yes, every time" and "Only this time" are card buttons, and no sentence, in any language, accepts the offer.
+- **FS-j20.A19** While a card is open, typed "yes", "ok", "start" or "no" starts or changes nothing and answers "Use the buttons on the card above."
+- **FS-j20.A20** With permission off or the agent signed out, no agent call is made, the message stays in the composer or the chat shows the next-step button, and no run is created.
+- **FS-j20.A21** (pending version 9) A run started from a chat records the chat's agent and model and passes the choice only through the agent's model flag (SR-4).
+- **FS-j20.A22** (pending version 9) A chat with a not-ready agent never calls it; a flow that the chat's agent cannot be limited for shows a reason and the offer to use Claude Code.
+- **FS-j20.A23** After a restart, runs that were active are `interrupted`, a step not marked idempotent is not repeated by itself, and the chain does not continue (SR-8).
+- **FS-j20.A24** Every turn that failed, every start, every decision and every permission change is in the audit log and shown in plain words on the run page (SR-7).
+- **FS-j20.A25** When the spending or usage limit is reached, the run pauses with a "Needs you" item and does not continue until the person acts (SR-9).
+
+## Not in the prototype yet
+
+- The agent reading the person's sentences (the prototype used keyword rules), "Change" that revises a plan, starter chips from the person's own flows, "<flow> failed. <names> did not start.", the unusable-answer line, the limit pause, the Codex limits offer, and the system notification.
+
+## Drafter's calls
+
+- A typed stop still shows a card "Stop <flow>?" (as in the prototype). The "Stop" button on a run card never asks. Reason: a typed sentence can be a question or a negation.
+- Inside a chain a report flow posts no extra "Done." line, so the run card is the one place that shows its result (as in the prototype).
+- The "Both flows finished." line is written by FlowDriven from the runs' first report lines; the prototype's sentence about the APK path was canned sample text.
+- A failed first flow now posts a line; the prototype stayed silent.
+- The repeat offer's schedule change replaces the flow's old schedule and says so, because a flow has one schedule.
+- The agent pill and agent line use " - " here; the real strings come from the language files.
