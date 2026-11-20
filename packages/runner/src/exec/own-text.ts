@@ -16,7 +16,7 @@ export function ownTextHash(text: string): `sha256:${string}` {
 export function ownTextRefusal(value: Value | undefined): string | undefined {
   if (typeof value !== "string") return OWN_TEXT.missing;
   if (value.length > OWN_TEXT_MAX) return OWN_TEXT.tooLong;
-  if (hasHiddenText(value)) return OWN_TEXT.hidden;
+  if (hasHiddenText(value) || /\p{Cf}/u.test(value)) return OWN_TEXT.hidden;
 }
 export function ownedNow(row: StepRow): boolean {
   const mark = row.ownerApproved;

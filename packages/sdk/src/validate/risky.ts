@@ -42,7 +42,7 @@ export function gitSubcommand(words: string[]): string | undefined {
 }
 export function classifyCommand(pattern: string): RiskyAction | undefined {
   const words = pattern.trim().split(/\s+/);
-  const program = words[0]?.split(/[\\/]/).at(-1) ?? "";
+  const program = (words[0]?.split(/[\\/]/).at(-1) ?? "").toLowerCase();
   if (!program || program.includes("*") || ["rm", "rmdir", "unlink", "shred", "trash"].includes(program))
     return "delete";
   if (words.includes("merge")) return "merge";
