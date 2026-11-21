@@ -195,3 +195,30 @@ test("the denied target is cut to 300 characters and the tool name passes visibl
     tool: `${CHROME_PREFIX}bad<U+202E>`,
   });
 });
+
+test("TC-SR5-14 only typed, bounded template addresses count as pages", () => {
+  const template = parseTemplate("https://jobs.example.test/job/{id:[0-9]{1,8}}");
+  if (!template.ok) throw new Error("Bad template");
+  const p = {
+    ...policy,
+    browser: {
+      ...policy.browser,
+      requirementId: "web",
+      templates: [template.template],
+      perRun: 3,
+      perDay: 10,
+    },
+  };
+  const addresses = [
+    "https://jobs.example.test/job/123",
+    "https://jobs.example.test/job/12a",
+    "https://jobs.example.test/job/123456789",
+    "https://evil.example.test/steal?d=file-text",
+    "https://jobs.example.test/job/123?x=secret",
+  ];
+  const results = addresses.map((url) => decide(p, call("navigate", { url, tabId: 7 }), state));
+  expect(results[0]).toMatchObject({ allow: true, effect: "page" });
+  for (const result of results.slice(1))
+    expect(result).toMatchObject({ allow: false, reason: BROWSER_DENY.address });
+  expect(results.filter((result) => result.allow && result.effect === "page")).toHaveLength(1);
+});
