@@ -1,6 +1,6 @@
 # FlowDriven data model
 
-Status: complete for the V1 build, 2026-11-21.
+Status: complete for the V1 build, 2026-11-21 (revised after the early review, 2026-11-21).
 
 This file lists every entity the real app stores, the tables of store version 7, the migration from store version 6, and how long data is kept. It extends the store that exists today; it replaces nothing. It follows the architecture decisions in `architecture.md`: AD-05 (the store), AD-06 and AD-07 (decisions and standing rules), AD-10 (the assistant), AD-13 (starts and schedules) and AD-14 (words). The read models the screens get, and the operations that write these entities, are in `runner-api.md`. The safety rules `SR-1` to `SR-9` and the start rule `START` are defined in `architecture.md`; this file cites them.
 
@@ -11,7 +11,7 @@ This file lists every entity the real app stores, the tables of store version 7,
 - **Ids.** New ids are `<prefix>-<12 hex>` from the injected `newId(prefix)` (`service/service.ts`). Prefixes: `run` (runs), `ap` (decisions), `chat`, `msg`, `draft`, `rule`, `wq` (waiting questions), `start`. Existing ids keep their form. Flow ids keep the reverse-DNS form of format 1.1; flows made in the app get `local.<slug>` (section 3.1).
 - **Time.** Moments are ISO 8601 in UTC with milliseconds (`IsoDateTime`). Schedule times are wall-clock `HH:MM` and days are `mon` to `sun`, in the person's time zone, which comes from the operating system through the injected clock. Calendar dates are `YYYY-MM-DD`. Tests inject the clock and the zone.
 - **Hashes.** `sha256:<64 hex>` (`ContentHash`), from `contentHash` in the SDK, as today.
-- **Words.** Data keeps codes, never FlowDriven's sentences (AD-14). FlowDriven's own lines are stored as a `Line`: a key of `LINE_KEYS` (`packages/contracts/src/line-keys.ts`, new) and the raw values to fill in; `apps/desktop` draws it, because no words live in `packages/*` (AD-14, chair decision for V1, revisable). Text that a person, an agent or a flow author wrote is stored as text, with its language when known. A FlowDriven line keeps the language it was posted in, so a later language change rewrites nothing (FS-j30.S4).
+- **Words.** Data keeps codes, never FlowDriven's sentences (AD-14). FlowDriven's own lines are stored as a `Line`: a key of `LINE_KEYS` (`packages/contracts/src/line-keys.ts`, new) and the raw values to fill in; `apps/desktop` draws it with its language files in `apps/desktop/src/i18n/`, because no words live in `packages/*` (AD-14, owner decision for V1, revisable). The runner never builds a sentence: it emits a code with values, and the renderer, or Electron main for a system notification, turns it into words. A quoted sentence in this set is only the English drawing of such a `Line`. Text that a person, an agent or a flow author wrote is stored as text, with its language when known. A FlowDriven line keeps the language it was posted in, so a later language change rewrites nothing (FS-j30.S4).
 - **Outside text.** Anything that holds outside text carries `outside: true` (SR-5). Text the person approved as their own carries the existing own-text mark (`exec/own-text.ts`).
 - **Money.** US dollars, rounded to cents.
 - **Releases.** V1 is build steps B-01 to B-24 and B-31; V2 adds Memory, Phone & bots and skill updates; V3 adds the Marketplace and the gateway (`prd.md`, section 9). Each entity names the release that needs it.
@@ -29,7 +29,7 @@ type LanguageCode = string;          // a code main passes to the runner at spaw
 type InputType = "text" | "longtext" | "number" | "bool" | "date" | "time" | "duration" | "choice"
   | "url" | "file" | "folder" | "secret_ref" | "list<text>";
 type TypedValue = { type: InputType; value: string | number | boolean | string[] };
-type AgentChoice = "chat" | "main" | "busy_fallback" | "other_agent";
+type AgentChoice = "chat" | "main" | "busy_fallback";
 type ScheduleSpec =                          // the person-facing schedule, as runner-api.md section 3 gives it
   | { type: "manual" }
   | { type: "daily" | "weekdays"; time: string; whenItsTime?: "ask" | "last" }
@@ -37,7 +37,9 @@ type ScheduleSpec =                          // the person-facing schedule, as r
   | { type: "after"; afterFlowId: FlowId; whenItsTime?: "ask" | "last" };
 ```
 
-`Place.value` is canonical: an account is the id of the requirement that reaches it; a folder is the resolved absolute path pinned at confirmation; an address is the lowercased address; a site is a host; a command is the declared command pattern; a repo is `owner/name`. Two places are the same only when `kind` and `value` are both equal. `label` is for display and is never compared. Typed values are canonical too: a date is `YYYY-MM-DD`, a time is `HH:MM`, a duration is whole minutes, a choice is its key.
+`Place.value` is canonical: an account is the id of the requirement that reaches it; a folder is the resolved absolute path pinned at confirmation; an address is the lowercased address; a site is a host; a command is the declared command pattern; a repo is `owner/name`. Two places are the same only when `kind` and `value` are both equal. `label` is for display and is never compared.
+
+Place kinds per effect for V1 standing rules (SR-1; decided for V1, revisable): a `change` rule uses an `account` or a `folder` place (the timesheet entry, one cloud folder upload); a `local_write` rule uses a `folder`; a `run_command` rule uses a `command`. No other kind may be the place of a rule. There is no standing rule for `send`, `post`, `pay`, `delete` or `merge` in V1, so the kinds `address`, `site` and `repo` never appear in a rule. If send or post rules are ever allowed, they need destination-level places (every recipient, a channel, with cc, bcc and attachments) and a step-level rule that ignores standing rules after the step read outside-marked results; that is a later approvals change with its own security review. Typed values are canonical too: a date is `YYYY-MM-DD`, a time is `HH:MM`, a duration is whole minutes, a choice is its key.
 
 ## 2. Entity map
 
@@ -50,7 +52,7 @@ type ScheduleSpec =                          // the person-facing schedule, as r
 | One-time grant | The person's approval of one exact call | `call_grants` | V1 | new (replaces `grants`) |
 | Schedule | When a flow starts by itself, as the person set it | `schedules` | V1 | new |
 | Manifest trigger | A format 1.1 trigger and its state | `triggers`, `fire_keys` | V1 | kept |
-| Start request | Every request that went through `START`, with its outcome; also the "Missed" and "Skipped" rows | `starts` | V1 | new |
+| Start request | Every request that went through `START`, with its outcome; missed and skipped slots are recorded here too (not shown as rows in Activity in V1) | `starts` | V1 | new |
 | Chat | One conversation, its agent and model, its language, the unsent composer text | `chats` | V1 | new |
 | Message | One entry in a chat: the person's text, the agent's reply, a FlowDriven line, a note, a run's answer, or a card | `messages` | V1 | new |
 | Chat turn | The state of the one agent call that answers a person's message | inside its message | V1 | new |
@@ -63,7 +65,7 @@ type ScheduleSpec =                          // the person-facing schedule, as r
 | Audit record | The append-only record of every call, decision, permission change and start | `audit_log` | V1 | changed (new kinds) |
 | Usage | One agent call's tokens, time and cost | `usage_events` | V1 | changed |
 | Settings | The person's choices | `settings` | V1 | changed (new keys) |
-| Window preferences | Color mode and the cached menu bar switch | main's own file | V1 | new |
+| Window preferences | The color mode | main's own file | V1 | new |
 | Agent | One AI agent on this Mac: state, version, billing, models | `harness_state` | V1 | changed |
 | Model | A model an agent offers | inside the agent row | V1 | new |
 | Agent catalog entry | What FlowDriven knows about an agent: install, sign-in and status commands, model catalog | code, never stored | V1 | new |
@@ -93,7 +95,6 @@ type FlowHead = {                      // flow_heads.data (new)
 type FlowOrigin =
   | { kind: "chat"; chatId: ChatId; draftId: DraftId }
   | { kind: "skill"; chatId: ChatId; draftId: DraftId; skillId: SkillId }
-  | { kind: "duplicate"; fromFlowId: FlowId }
   | { kind: "import" }                 // flows.import, for developers
   | { kind: "market"; listingId: string }   // V3
   | { kind: "demo" };                  // the runner's --demo mode
@@ -104,7 +105,7 @@ type FlowVersion = {                   // flows.data: today's FlowRow plus the v
   files: Record<string, string>;       // path -> UTF-8 text, as today
   registeredAt: IsoDateTime;
   format: "flowdriven-flow/1.1" | "flowdriven-flow/1.2";   // a version 6 row reads as 1.1
-  savedBy?: { kind: "save_flow" | "save_change" | "import" | "duplicate" | "market" | "demo"; draftId?: DraftId };
+  savedBy?: { kind: "save_flow" | "save_change" | "import" | "market" | "demo"; draftId?: DraftId };
   parentHash?: ContentHash;            // the version this one was changed from
 };
 ```
@@ -113,7 +114,7 @@ Rules:
 - The head is `flow_heads.headHash`. `Store.getFlow(id)` without a hash returns the head version; today it returns the row with the highest rowid, and the two agree after the migration.
 - A new version comes from Save change, an import of a folder whose id exists, or a marketplace update (V3). It moves the head in the same transaction. Old versions stay (F-11.R2).
 - A flow made in the app gets the id `local.` plus a slug of its name (lowercase ASCII letters, digits and hyphens, at most 60 characters, `flow` when nothing is left). A taken id (live, deleted, or present in `flows`) gets `-2`, `-3` and so on.
-- A draft whose name is taken shows the next free name, "Invoice collector 2", before saving (FS-j22.P4). A duplicate is "<name> (copy)", then "<name> (copy 2)". A unique index enforces unique names.
+- A draft whose name is taken shows the next free name, "Invoice collector 2", before saving (FS-j22.P4). A unique index enforces unique names.
 - The flow state shown to the person is derived and never stored:
   - `confirmed`: a confirmation exists, its `hash` equals `headHash`, and every skill hash it pinned still equals the skill's current hash;
   - `changed`: a confirmation exists but one of those checks fails;
@@ -149,7 +150,7 @@ type Confirmation = {                  // confirmations.data (new); one row per 
 Rules:
 - One row per flow: the latest confirmation. Earlier confirmations are in the audit log.
 - Confirming writes this row, creates, keeps or ends standing rules (3.3), and writes the audit record `flow_saved`, `flow_changed` or `flow_confirmed`, all in one transaction.
-- `onItsOwn` never holds a touch whose rule is `not_allowed`. It holds a risky kind (`send`, `post`, `pay`, `delete`, `merge`) only when the person moved it there; a draft, a change and an install never pre-select one (SR-1). A non-read touch in `onItsOwn` must have a fixed place (SR-1); `local_write` and `run_command` touches are fixed by their declared folder or command.
+- `onItsOwn` never holds a touch whose rule is `not_allowed`, and in V1 it never holds a risky kind (`send`, `post`, `pay`, `delete`, `merge`): drafts place such a touch under "Asks you first", it cannot be moved, and `flows.confirm` refuses it in `onItsOwn` with `not_allowed`, reason `always_asks` (SR-1; decided for V1, revisable). A non-read touch in `onItsOwn` must have a fixed place (SR-1); `local_write` and `run_command` touches are fixed by their declared folder or command, and a `change` touch by its account or folder.
 - A `legacy` confirmation covers a format 1.1 flow's declared requirements exactly as the version 6 capability consent did; it has no touches and makes no standing rules.
 
 ### 3.3 Standing rule (V1)
@@ -159,8 +160,8 @@ type StandingRule = {                  // standing_rules.data (new)
   id: RuleId;
   flowId: FlowId;
   touchId: TouchId;
-  effect: Exclude<Effect, "read">;
-  place: Place;                        // always a fixed place declared in the flow (SR-1)
+  effect: "local_write" | "run_command" | "change";   // V1: never send, post, pay, delete or merge
+  place: Place;                        // always a fixed place declared in the flow (SR-1); its kind fits the effect (section 1)
   sentence: string;                    // the touch sentence when the rule was made, for display
   state: "active" | "revoked";
   createdAt: IsoDateTime;
@@ -175,11 +176,14 @@ type StandingRule = {                  // standing_rules.data (new)
 ```
 
 Rules:
-- Only the person's click in the desktop window makes a rule: "Always allow for this flow" (`approvals.resolve`) or a confirmation (Save flow, Save change, the confirm dialog) (SR-2). A phone, a bot, a flow file, a skill, memory, an agent or another AI tool never makes, widens or revives one.
+- Only the person's click in the desktop window makes a rule: "Always allow for this flow" (`approvals.resolve`) or a confirmation (Save flow, Save change, the confirm dialog) (SR-2). "Always allow for this flow" exists exactly as in the prototype: only for a repeatable `change` action at a fixed place, from a pending `risky_action` decision whose effect is `change` (the timesheet entry, one cloud folder upload). It is never offered for `send`, `post`, `pay`, `delete` or `merge`. A phone, a bot, a flow file, a skill, memory, an agent or another AI tool never makes, widens or revives one.
 - A rule matches a call only when flow, touch id, effect and place are all equal, and the run's own version has a touch with that id, effect and place (AD-06).
 - At a new confirmation an active rule stays only if a touch with the same id, effect and place still exists and is still in `onItsOwn`. Otherwise it is revoked with `flow_changed` (touch gone or changed) or `moved_to_asks_first` (AD-07).
 - "Ask me again" revokes at once (`rules.revoke`). A call that already started under the rule is not undone.
 - At most one active rule per flow, touch, effect and place; making the same rule again returns the active one.
+- The store refuses to make a rule with any other effect (error `rule_effect_not_allowed`) or with a place kind that does not fit its effect (error `rule_place_not_allowed`), so no code path can store a rule for a risky kind; a rule row of another effect, from a damaged or later store, is never matched (SR-1).
+- After a Reject or an expiry in a run, no standing rule applies for the rest of that run; the held call shows the normal decision card.
+- The audit records of a rule (`rule_created`, `rule_revoked`, `rule_used`) keep the rule id and the place kind, never the place value (3.16).
 
 ### 3.4 One-time grant (V1)
 
@@ -218,7 +222,6 @@ type Schedule = {                      // schedules.data (new); no row means "On
   confirmedHash: ContentHash;          // the confirmed version when the schedule was set
   cursorAt?: IsoDateTime;              // the last slot the trigger service handled
   lastFire?: { at: IsoDateTime; outcome: StartRequest["outcome"]; startId: StartId };
-  firstRun?: { startId: StartId; runId?: RunId; at: IsoDateTime };   // the run once now (FS-j28.P11)
   pausedAt?: IsoDateTime;
   pausedWhy?: "blocked_runs" | "challenge";
 };
@@ -231,7 +234,7 @@ Rules:
 - Each slot is claimed once through the `starts` key (3.7), so two ticks or a restart never handle a slot twice.
 - A flow change keeps the schedule's settings; `START` refuses the changed flow until it is confirmed again (SR-3).
 - Deleting a flow deletes its schedule and every schedule whose `afterFlowId` is that flow; those become "Only when I start it".
-- Turning on a time schedule for a flow with no `done` run records `firstRun`; when that run ends `blocked`, the row is deleted, the audit says `first_run_blocked`, and the flow page says why (FS-j28.P11).
+- Turning a schedule on never starts a run (decided for V1, revisable). The offer "Run it now?" that follows Save flow is a card, not part of the schedule.
 
 ### 3.6 Manifest trigger (V1, kept)
 
@@ -255,10 +258,9 @@ type StartRequest = {                  // starts row (new)
   questionId?: QuestionId;             // asked or needs_confirmation
   slotAt?: IsoDateTime;                // schedule, after and try_next: the slot the start is for
   request: { chatId?: ChatId; messageId?: MessageId; chainId?: string; chainIndex?: number;
-             afterRunId?: RunId; fromRunId?: RunId; missedStartId?: StartId };
+             afterRunId?: RunId; fromRunId?: RunId };
   agent?: { agent: AgentId; model: ModelId; choice: AgentChoice };
   flowHash?: ContentHash;
-  ranLate?: { startId: StartId; at: IsoDateTime };   // a "Missed" row the person ran with "Run it now"
 };
 ```
 
@@ -267,8 +269,8 @@ Keys: `slot:<slot time>` for a schedule slot; `after:<upstream run id>` for "aft
 Rules:
 - `starts.request(flowId, source, context)` (`packages/runner/src/starts/start-rule.ts`, new) writes exactly one row, in the same transaction as what it creates (run, question, card, chat). A second request with the same key returns the first row and creates nothing (FS-j28.A2, FS-j28.A20).
 - A chat-typed start writes a row too, with source `chat`, so the audit and M-07 can count every start.
-- Activity's "Missed" rows are rows with outcome `missed`; "Skipped" rows have outcome `skipped`; a missed row with `ranLate` reads "Run late" (FS-j28.P7, P9).
-- `refused` is for a start the person asked for that cannot run (permission off, daily limit, an agent that cannot be limited); a slot that cannot run is `missed`.
+- A slot that cannot run is a row with outcome `missed` and its reason; a slot that finds the flow busy or its question open is a row with outcome `skipped`. In V1 Activity shows run rows only: missed and skipped slots stay in `starts` and in the audit log (`start_requested`), and no row, "Run late" mark or "Run it now" offer is built for them (decided for V1, revisable; they go into the prototype first).
+- `refused` is for a start the person asked for that cannot run (permission off, daily limit, an agent that cannot be limited); no run is created. A slot that cannot run is `missed`, and with the permission off its reason is `permission_off`.
 
 ### 3.8 Chat (V1)
 
@@ -377,7 +379,6 @@ type Draft = {                         // drafts.data (new)
   flowId?: FlowId;                     // change: the flow it changes
   baseHash?: ContentHash;              // change: the head when the change was proposed
   changes?: { sign: "+" | "-" | "~"; text: string }[];
-  rules?: { kept: RuleId[]; ended: RuleId[] };   // change: what Save change would do to standing rules
   replacedBy?: DraftId;
   saved?: { flowId: FlowId; hash: ContentHash; at: IsoDateTime };
 };
@@ -424,6 +425,7 @@ type RememberedAnswer = {              // remembered row (new); key (flow_id, ki
   flowId: FlowId; inputId: string;
   kind: "remember" | "last";
   value: TypedValue;
+  outside: boolean;                    // the value came from outside text (SR-5) and the person has not typed or confirmed it
   savedAt: IsoDateTime;
   runId: RunId;
 };
@@ -433,6 +435,8 @@ Rules:
 - Written when a run starts, not when it ends (FS-j27.A10).
 - `remember` rows exist only for inputs that declare `remember`, and never for `date` or `time` inputs (AD-11).
 - `last` rows hold the run's value of every input except `date` and `time`, which return to their defaults; they serve "Use my last answers" (FS-j27.P2, FS-j28.P2).
+- `outside` is set when the value of an input came from outside text (an email, a web page, a file read by an agent). A person who types or confirms the value clears the mark.
+- "Use my last answers" and `whenItsTime: "last"` are not offered when a needed value is a row with `outside: true`; the person is asked for that value instead (SR-5; decided for V1, revisable).
 - "Run again" does not read these rows; it reads the earlier run's own inputs (FS-j25.P2).
 
 ### 3.14 Run, step, item and seen (V1, changed)
@@ -448,10 +452,9 @@ The `runs`, `steps`, `items` and `seen` tables stay. New fields go into `data`. 
 | `language` | `LanguageCode` | the language of its answer lines and dates | `"en"` |
 | `cause` | `{code: CauseCode, params?}` | why it is `blocked`, `needs_login`, `failed`, `interrupted` or `stopped` (`runner-api.md`, `Cause`) | `crash` for `interrupted`, else `step_failed` when `blockedReason` is set |
 | `needsLoginSince` | IsoDateTime | start of a sign-in wait; after 12 hours the run becomes `blocked` (FS-j25.A5) | none |
-| `decisionLines` | `Line[]` | the honest lines: "You approved: X.", "Done by your rule: X.", "You said no: X. It was not done.", "No answer in 24 hours: X. It was not done." (AD-12) | `[]` |
+| `decisionLines` | `Line[]` | the honest lines, as codes with the title as a value; the English drawings are "You approved: X.", "Done by your rule: X.", "You said no: X. It was not done.", "No answer in 24 hours: X. It was not done." (AD-12) | `[]` |
 | `result` | `{kind: "chat" or "report", chatId?, messageId?}` | where the answer went | none |
 | `stoppedBy` | `"person"`, `"permission_off"`, `"flow_deleted"` or `"phone"` | who stopped it | none |
-| `firstScheduledRun` | boolean | the run once now when a schedule was turned on | false |
 
 Today's fields stay: `flowHash` is the version the run runs (SR-3), `inputs` the resolved typed values, `trigger` the format 1.1 trigger, `requirements` and `routes` the frozen snapshot, `blockedReason` the English sentence the old screens read until they retire.
 
@@ -473,7 +476,7 @@ Decisions keep the `approvals` table and today's `ApprovalRow`. New fields go in
 | `effect` | `Effect` | the kind of the held action, from FlowDriven's catalog | from `riskyAction`, else none |
 | `touchId` | TouchId | the touch of the flow it belongs to | none |
 | `place` | `Place` | where the call goes, as FlowDriven read it from the call | none |
-| `fixedPlace` | boolean | the place equals the touch's fixed place, so "Always allow for this flow" may be offered (SR-1) | false |
+| `fixedPlace` | boolean | the place equals the touch's fixed place (SR-1); "Always allow for this flow" may be offered only when this is true, the effect is `change` and the place did not come from outside text | false |
 | `similarGroup` | string | held calls of the same run and kind that "Approve all similar" may batch | none |
 | `chatId` | ChatId | the run's chat, for the decision card | none |
 | `resolvedVia` | `"window"`, `"chat"`, `"phone"`, `"rule"`, `"expiry"`, `"stop"` or `"permission_off"` | what ended it | `"window"` when resolved |
@@ -487,7 +490,7 @@ Rules:
 
 ### 3.16 Audit record (V1, changed)
 
-The `audit_log` table stays append-only: its triggers abort every UPDATE and DELETE, and nothing trims it (SR-7, NF-15). `detail` is JSON text. It holds ids, codes, hashes, short titles and counts, never message text, email bodies, file contents, prompts or secrets, so deleting a chat leaves nothing of its text in the log.
+The `audit_log` table stays append-only: its triggers abort every UPDATE and DELETE, and nothing trims it (SR-7, NF-15). `detail` is JSON text. It holds ids, codes, hashes, short titles and counts, never message text, email bodies, file contents, prompts, secrets or the value of a place (an address, a folder path), so deleting a chat leaves nothing of its text in the log. Records of a standing rule keep the place kind and the rule id only (decided for V1, revisable).
 
 Existing kinds stay readable and are still written where their code still runs (`run_error`, `run_dropped`, `run_interrupted`, `items_capped`, `ask_answered`, `call_approved`, `call_rejected`, `own_text_approved`, `own_text_changed`, `call_held`, `grant_used`, `connector_call`, `connector_withheld`, `command_run`, `page_read`, `page_withheld`, `tool_denied`, `tool_unchecked`, `tool_calls`, `limits_not_applied`, `internal_error`, `keep_awake_failed`, `keeper_settings_invalid`, `folder_granted`, `trigger_*`). `capabilities_allowed`, `capabilities_withdrawn` and `harness_consent` are no longer written.
 
@@ -507,14 +510,14 @@ New kinds:
 | `flow_saved` | Save flow | `flowId`, `hash`, the three lists (touch ids), `draftId`, `skillId` and skill hash |
 | `flow_changed` | Save change | `flowId`, `oldHash`, `newHash`, rules kept and ended |
 | `flow_confirmed` | the confirm dialog or a confirm card | `flowId`, `hash`, `onItsOwn`, `by` |
-| `flow_imported`, `flow_duplicated`, `flow_deleted` | import, duplicate, delete | `flowId`, `hash`, the source flow, the schedules turned off |
-| `schedule_changed` | a schedule is set, changed or removed | `flowId`, `from`, `to`, `by` (`window`, `chat_card`, `save_flow`, `first_run_blocked`, `target_deleted`) |
+| `flow_imported`, `flow_deleted` | import, delete | `flowId`, `hash`, the schedules turned off |
+| `schedule_changed` | a schedule is set, changed or removed | `flowId`, `from`, `to`, `by` (`window`, `chat_card`, `save_flow`, `target_deleted`) |
 | `start_requested` | every `START` request | `flowId`, `source`, `outcome`, `reason`, `startId`, `runId` |
 | `run_stopped`, `run_resumed` | Stop; Try again or Sign in and continue | `runId`, `by`, `outcome` |
 | `decision_made` | approve, edit, reject, always allow, answer | `approvalId`, `runId`, `decision`, `via` |
 | `decision_expired` | expiry, Stop, permission off | `approvalId`, `runId`, `why` |
 | `decisions_batch` | Approve all similar | `runId`, `group`, `approvalIds` |
-| `rule_created`, `rule_revoked`, `rule_used` | a standing rule is made, revoked or used | `ruleId`, `flowId`, `touchId`, `effect`, place kind and value, `by`, `runId`, `stepId` |
+| `rule_created`, `rule_revoked`, `rule_used` | a standing rule is made, revoked or used | `ruleId`, `flowId`, `touchId`, `effect`, place kind (not the value), `by`, `runId`, `stepId` |
 | `question_asked`, `question_closed` | a waiting question opens; it is answered, cancelled or closed | `questionId`, `flowId`, `chatId`, `kind`, `missing`, `state` |
 | `run_blocked` | a run becomes `blocked`, `needs_login` or `failed` | `runId`, `state`, `cause` |
 | `caller_refused` | the dispatcher refuses an operation for its caller (`tool` or `phone`, V2) | `operation`, `caller` |
@@ -539,7 +542,6 @@ New kinds:
 | `mainAgent` | `{agent: AgentId, model: ModelId}` | absent until "Start chatting" (FS-j01.S4) | `settings.update` |
 | `busyFallback` | boolean | false | `settings.update` |
 | `spendingLimit` | number, US dollars a month | 10 | `settings.update` (raise only) |
-| `background` | `{keepRunning: boolean, openAtLogin: boolean}` | `{keepRunning: true, openAtLogin: true}` (Q-02) | `settings.update` |
 | `spending-pause` | `{id, month, reachedAt, limitUsd, expiresAt, state}` | no pause | the runner (3.17) |
 | `retention` | `{lastSweepAt}` | never swept | the runner (section 6) |
 | `keeper` | `KeeperSettings` | `DEFAULT_KEEPER` | as today |
@@ -547,19 +549,17 @@ New kinds:
 | `toolAccess` (V2) | boolean | false | `phone.setToolAccess` |
 | `revocations` (V3) | `{list, signature, fetchedAt}` | none | the runner |
 
-The person's choices (`language` to `background`) change only through the person's action in the window (SR-2); no flow, skill, memory item, agent output or other AI tool can call `settings.update`. `keeper.effortModels` stays as the internal default model table (AD-08). The color mode is not a store setting (3.19).
+The person's choices (`language` to `spendingLimit`) change only through the person's action in the window (SR-2); no flow, skill, memory item, agent output or other AI tool can call `settings.update`. `keeper.effortModels` stays as the internal default model table (AD-08). The color mode is not a store setting (3.19). V1 has no `background` setting: it adds no menu-bar icon and no Open at login, and keeps today's macOS behaviour, in which the app stays alive when its window closes (`apps/desktop/electron/main.ts`), so schedules keep running until the person quits (decided for V1, revisable).
 
 ### 3.19 Window preferences (V1, new)
 
 Electron main keeps a small file in Electron's user data folder: `window.json`, written by main only, atomically (a temporary file, then a rename).
 
 ```ts
-type WindowFile = { version: 1; colorMode: "light" | "system" | "dark"; keepRunning: boolean };
+type WindowFile = { version: 1; colorMode: "light" | "system" | "dark" };
 ```
 
 - `colorMode` sets `nativeTheme.themeSource` before the first paint (AD-15). A missing or unreadable file gives `system` ("Auto") (FS-j12.A13). It never goes into the store.
-- `keepRunning` is a cache of `background.keepRunning`, so closing the last window behaves as the person last chose even before the renderer has loaded. "Open at login" lives in the operating system's login item; main reads it back from Electron.
-- The store's `background` is the person's record. `runner-api.md`, section 12.7, says how the two are kept in step.
 
 ### 3.20 Agent and model (V1, changed)
 
@@ -740,7 +740,7 @@ Main does not restart a runner that exited with code 3, 5 or 6 (`runner-api.md`,
 
 ### 5.4 How it is tested (tests first, B-03)
 
-Fixture: `packages/runner/src/test-helpers/store-v6.ts` (new) exports `makeStoreV6(folder, options?)`. It writes a version 6 database from a frozen copy of the version 6 statements, kept inside the helper as text so that later edits of `schema.ts` cannot change the fixture, and fills it with:
+Fixture: `packages/runner/src/test-helpers/store-v6.ts` (new) exports `makeStoreV6(folder, options?)`. It writes a version 6 database from a frozen copy of the version 6 statements, kept inside the helper as text so that later edits of `schema.ts` cannot change the fixture, and fills it with synthetic rows written by hand, never a copy or a recording of a real store:
 - two flows, one with two versions and one registered with the demo hash, and a third flow with the same name as the first;
 - a capability consent with skill and folder pins for one flow, and a stale consent (older hash) for another;
 - runs in every version 6 state, with steps, items and seen keys;
@@ -775,7 +775,7 @@ Tests in `packages/runner/src/migrate.test.ts` (new), layer L3, real SQLite in a
 | Data | Kept | How |
 |---|---|---|
 | Runs and their steps, items, decisions, grants and usage rows | A run is kept when it ended within the last 90 days, or it is among the newest 50 runs of its flow, whichever keeps more (F-14.R12, NF-15). An open run, a run with a pending decision and a run named by an open waiting question are never removed. | The retention sweep deletes the run and its rows in `steps`, `items`, `approvals`, `call_grants` and `usage_events` |
-| Start requests (including "Missed" and "Skipped" rows) | The same rule as runs, per flow | Sweep |
+| Start requests (including missed and skipped slots) | The same rule as runs, per flow | Sweep |
 | Audit log | Forever. Nothing trims it (SR-7) | - |
 | Chats, messages, drafts | Until the person deletes the chat | `chats.delete` |
 | Waiting questions | Open: until answered, cancelled or closed. Answered, cancelled or closed: 30 days | Sweep |
@@ -785,7 +785,7 @@ Tests in `packages/runner/src/migrate.test.ts` (new), layer L3, real SQLite in a
 | Remembered answers | Until the flow is deleted | `flows.delete` |
 | Confirmations | One per flow; deleted with the flow | `flows.delete` |
 | `seen` keys, `fire_keys` | 30 days, as today | as today |
-| Backups | Kept; the app never deletes them in V1 | - |
+| Backups | Kept until the person removes them; the app never deletes them in V1 (named in 7.3) | - |
 | `control/`, `skill-copies/` | Per attempt, swept at start, as today | as today |
 | Memory proposals (V2) | 30 days unanswered | Sweep |
 
@@ -812,16 +812,17 @@ One transaction deletes the chat row; the foreign keys delete its messages, draf
 - An unsaved draft is gone with its chat (FS-j22.E8); a flow saved from it stays.
 - A waiting question of the chat is gone; its pending start never runs (audit `question_closed`, `chat_deleted`).
 - Runs started from the chat keep running. Their decisions stay in Activity; a later answer of a `chat` result goes to a new FlowDriven chat, as for a start outside a chat.
-- Usage rows of the chat's turns stay (spending history); they hold no text. Audit records stay; they hold ids, not text.
+- Usage rows of the chat's turns stay (spending history); they hold no text. Audit records stay; they hold ids, codes and short titles, never message text, and a rule's records hold the place kind and the rule id, not the place value (3.16).
+- A migration backup made before the deletion still holds the chat (7.3).
 - `secure_delete` overwrites the deleted text on disk.
 
 ### 7.3 Leaving FlowDriven
 
-Quitting and removing `<data folder>` removes everything the runner stored, including the backups. Main's `window.json` lives in Electron's user data folder. V2 keychain items are removed with Unpair.
+Quitting and removing `<data folder>` removes everything the runner stored, including the backups. The limit to know: the migration backups hold a copy of everything at migration time, chats deleted later included, and the app never deletes them in V1; they stay until the person removes them. Main's `window.json` lives in Electron's user data folder. V2 keychain items are removed with Unpair.
 
 ## 8. Export
 
-- **Copy report** (`runs.export`): parts built on request from the run and never stored; the renderer turns them into Markdown in the app language, with the answer lines in the run's language; no token numbers and no run id; hidden characters shown as visible marks; outside text keeps its tag; anything that looks like a secret is masked as "[hidden]" (FS-j25.A12, FS-j25.E11). It leaves the app only by the person's click (NF-21).
+- **Copy report** (`runs.export`): parts built on request from the run and never stored; the renderer turns them into Markdown in the app language, with the answer lines in the run's language; no token numbers and no run id; hidden characters shown as visible marks; outside text keeps its tag; a secret is masked as "[hidden]" by a named pattern list: keys that start with `sk-`, tokens that start with `ghp_`, `Bearer` values and the value of every `secret_ref` input; the run page's text is masked by the same list (FS-j25.A12, FS-j25.E11). V1 does not prove more than that: a secret that matches no pattern, and a secret inside the person's own files that an agent reads, can still appear on the run page and reach the model maker as part of the agent's work. It leaves the app only by the person's click (NF-21).
 - **Memory** (V2, `memory.export`): Markdown on request; memory never goes into a log, a bug report or a published package (spec R18).
 - **No other export in V1.** There is no automatic export, no telemetry and no upload (NF-18). The store is a plain SQLite file in the person's data folder, and the backups are full copies of it.
 
@@ -831,30 +832,35 @@ Quitting and removing `<data folder>` removes everything the runner stored, incl
 - **Agent sign-in data.** FlowDriven never reads an agent's own sign-in or credential files. From the agent's own status command it keeps only whether it is signed in and its billing method; never an account name, an address or a token. Passwords never pass through FlowDriven (FS-j01.A5).
 - **Prompts and raw agent output.** Chat-turn prompts, step prompts and the agent's raw event stream are not stored; only parsed results, validated intents, checks, step outputs and usage numbers.
 - **Process environment values.** The runner starts agents with a minimal environment and stores no value from it.
-- **The color mode.** It is in main's `window.json`, not in the store.
+- **The color mode.** It is in main's `window.json`, not in the store. It is the only thing in that file.
 - **FlowDriven's sentences as data.** Statuses, causes, rules and FlowDriven's lines are codes (AD-14); the only FlowDriven words a person reads from the store are chat lines, stored as codes with the language they were posted in.
 
 ## 10. Drafter's calls
 
-- Four tables beyond AD-05: `flow_heads` (one row per flow: the current version, a unique name and a tombstone, because `flows` holds versions and a delete must keep the versions that past runs use), `call_grants` (AD-07 binds a grant to the step and the exact digest; today's `grants` key has no step), `schedules` (a schedule is the person's state and must not change the flow's hash), and `starts` (the "Missed" and "Skipped" rows of Activity, and the one key per slot and per request).
+- Four tables beyond AD-05: `flow_heads` (one row per flow: the current version, a unique name and a tombstone, because `flows` holds versions and a delete must keep the versions that past runs use), `call_grants` (AD-07 binds a grant to the step and the exact digest; today's `grants` key has no step), `schedules` (a schedule is the person's state and must not change the flow's hash), and `starts` (the record of missed and skipped slots, which V1 keeps for the audit and does not show in Activity, and the one key per slot and per request).
 - The existing tables `flows`, `harness_state` and `approvals` keep their names although their entities are now called flow versions, agents and decisions, so the migration only adds.
 - `grants`, `capability_consents` and `consent_pins` are frozen rather than dropped, so version 7 only adds; a later store version drops them.
 - A version 6 consent is not carried into `agentPermission`: the one permission covers every agent, and widening one agent's consent without a click would break SR-2.
 - Version 6 rows are not rewritten; the decoders fill the version 7 fields. Reason: a smaller migration with fewer ways to fail, and a version 6 run, decision or trigger reads the same before and after.
 - `secure_delete` is turned on for the whole store, so deleting a chat (V1) and memory (V2) overwrites the text.
-- Cards live inside their message and are addressed by the message id, as the chair's `chats.act {chatId, messageId, ...}` implies.
+- Cards live inside their message and are addressed by the message id, as the owner's `chats.act {chatId, messageId, ...}` implies.
 - Chat turns are recorded on the person's message, not in a table of their own; queued and running turns become `interrupted` at start, and nothing runs by itself.
 - Chat-turn usage rows use the chat id as `run_id`, so the spending limit counts chat turns that cost money.
 - Spending counts rows with `billing` `per_use` and unknown; only `plan` rows are left out (Q-03). Reason: when FlowDriven cannot tell how an agent bills, the person's limit should still hold (SR-9).
 - The spending pause is one settings row (like today's weekly limit) rather than one decision per run, because it belongs to no run.
-- `busyFallback` is off until the person turns it on; the brief gives no default.
+- `busyFallback` is off until the person turns it on; the prototype brief gives no default.
 - A FlowDriven line keeps the language it was posted in (per message), so neither an app language change nor a chat language change rewrites old lines (FS-j30.S4).
 - Pasted text is marked on the message and treated as outside text, because FS-j22.E7 lists "the person pasted an email" as outside text and only the composer can tell a paste.
 - Deleting a flow stops its queued and paused runs (kept as `stopped`) instead of deleting them, so the history stays honest.
 - A grant ends with its run.
 - Unreadable version 6 rows are skipped and counted in `store_migrated`; an SQL error fails the migration.
 - Later tables arrive in store version 8 (V2) and 9 (V3), each with a backup and a fixture test.
-- A `failed` first scheduled run keeps the schedule on; only `blocked` turns it off (FS-j28.P11).
+- Standing rules exist only for `local_write`, `run_command` and `change`, and "Always allow for this flow" only for a `change` at a fixed place (the prototype's behaviour); a risky kind always asks. Reason: a rule for send, post, pay, delete or merge has no amount or volume ceiling and would run after a step read a stranger's text.
+- No automatic first run: turning a schedule on never starts a run, so a schedule row holds no first-run state.
+- V1 has no `background` setting and no tray or login item; main keeps only the color mode.
+- `RememberedAnswer.outside` stops a value that came from outside text from reaching later unattended runs through "Use my last answers".
+- Backups are named as a limit in 7.3 instead of being swept, because the V1 migration backup predates chats; a sweep policy is a later product decision.
+- Audit records of rules keep the place kind and the rule id, so the append-only log never holds an address or a home path.
 - Name mappings (old name -> chosen name, file):
   - composer draft `drafts` -> `Chat.composerText` (`j27-flow-inputs.md`, E6); `drafts` keeps the meaning "flow drafts" of `j22-make-a-flow.md` and `j29-flow-from-skill.md`.
   - change card state `proposed` -> draft state `drafted` with `kind: "change"`; `cancelled` and `saved` kept; `stale` is derived (`j23-improve-a-flow.md`).
@@ -863,7 +869,7 @@ Quitting and removing `<data folder>` removes everything the runner stored, incl
   - Decision (product word) -> `approvals` rows and the contract's `Approval` (all flow specs).
   - `Card` (`j20-run-from-chat.md`, data) -> a card inside its message.
   - `Flow.schedule` (`j20-run-from-chat.md`, `j21-run-from-flows.md`, `j28-proactive-schedule.md`) -> the `schedules` row; the flow file's `schedule` is only a suggestion.
-  - Activity rows "Missed", "Skipped", "Run late" (`j21-run-from-flows.md`, `j28-proactive-schedule.md`) -> `starts` rows with outcome `missed` or `skipped`, and `ranLate`.
+  - Activity rows "Missed", "Skipped", "Run late" (`j21-run-from-flows.md`, `j28-proactive-schedule.md`) -> `starts` rows with outcome `missed` or `skipped` and their reason; Activity does not show them in V1.
   - slot outcome `skipped` with "a run of the flow is still active" (`j28-proactive-schedule.md`) -> outcome `skipped`, reason `still_running`.
   - signed-out wait "then fails with a clear reason" (`prd.md`, F-14.R4) -> `needs_login` becomes `blocked` after 12 hours (`j25-history-and-problems.md`, A5), because the flow spec is the source for its journey.
   - bot link states `off`, pairing, `paired` (`j26-memory-phone-marketplace.md`) -> `phone_links.state` `off`, `pairing`, `paired`.

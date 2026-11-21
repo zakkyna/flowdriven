@@ -5,8 +5,8 @@
 | Journey | j27, "Flow yang butuh info dari Anda", Flows that need info from you |
 | PRD features | F-05, F-03, F-06 |
 | Safety rules | SR-1, SR-5, SR-7; START (rule 2, missing inputs) |
-| Prototype source | Brief sections 16.5, 23 (intro), 23.1, 23.2, 23.4, 23.7-23.10; `js/screens/chat.js` (`parseInputs`, `collectInputs`, form card), `js/actions.js` (`inputsFor`, `startRun`, `resolvedInputs`), `js/guide.js` (j27) |
-| Status | In the prototype (version 8); the chat language rules are in the prototype (version 9); the agent reading the sentences, the typed parsers in the runner, the form draft and the hidden-character check are Not in the prototype yet |
+| Prototype source | The prototype brief, 'Redesign 1: chat first, plain words' and 'Inputs, results, proactive schedules, flows from skills, and every feature shown'; `js/screens/chat.js` (`parseInputs`, `collectInputs`, form card), `js/actions.js` (`inputsFor`, `startRun`, `resolvedInputs`), `js/guide.js` (j27) |
+| Status | In the prototype (version 8); the chat language rules are in the prototype (version 9); the agent reading the sentences, the typed parsers in the runner, the form draft and the input messages of PU-28 (hidden characters, the 4,000-character limit, numbers and choices) are Not in the prototype yet |
 
 ## Goal
 
@@ -20,7 +20,7 @@ When a flow needs details (the timesheet: date, start time, duration, customer, 
 
 ## Preconditions
 
-- The flow is confirmed (SR-3) and declares its inputs (format 1.2): types `text`, `longtext`, `number`, `bool`, `date`, `time`, `duration`, `choice` (alias `enum`), `url`, `file`, `folder`; each may have `required`, `default` (a value, or the codes `today` and `now`), `example` and `remember`.
+- The flow is confirmed (SR-3) and declares its inputs (format 1.2). The one list of input types, the same as F-05.R1: `text`, `longtext`, `number`, `bool`, `date`, `time`, `duration`, `choice` (alias `enum`), `url`, `file`, `folder`; each may have `required`, `default` (a value, or the codes `today` and `now`), `example` and `remember`. The timesheet's "Start" input is an optional `time` whose default is "next free time" (F-05.R11; Decided for V1, revisable).
 - Permission is `on` and the chat's agent is `ready`, because reading a sentence is a chat turn (FS-j20).
 
 ## Main path
@@ -55,13 +55,13 @@ Language details in S2 (the chat answers in the language the person writes) depe
 P7 depends on version 9; the others do not.
 
 - **FS-j27.P1 Answer a question in words.** The person answers "2 hours, release build" in a normal message. The turn returns `fill_inputs`; FlowDriven fills only what is still missing and asks again only for what is still missing or invalid. The card of the question is marked answered.
-- **FS-j27.P2 Use my last answers.** In an open question the person types "use my last answers" (or clicks the option). FlowDriven applies the last run's values (`lastInputs`) except date and time inputs, which return to their defaults. If the last answers do not cover the required inputs, it asks for the rest. From a schedule the same rule is the field "When it's time" (FS-j28).
+- **FS-j27.P2 Use my last answers.** In an open question the person types "use my last answers" (or clicks the option). FlowDriven applies the last run's values (`lastInputs`) except date and time inputs, which return to their defaults. If the last answers do not cover the required inputs, it asks for the rest. "Use my last answers" is not offered, and `whenItsTime: "last"` is not offered for a schedule, when a needed value came from outside text, unless the person typed or confirmed that value (which clears the mark; see FS-j27.P8). From a schedule the same rule is the field "When it's time" (FS-j28).
 - **FS-j27.P3 Several flows with gaps.** For a chain or flows together, one message lists the missing inputs of each flow under its name ("Fill timesheet: ..."). Then the plan card shows (FS-j20.P2).
 - **FS-j27.P4 A file or folder input.** The form opens at once ("Choose the file and fill in the details.") because a file cannot be typed.
 - **FS-j27.P5 Cancel.** In an open question or form, cancel words or the form's "Cancel" give "Okay, I won't start it." and the waiting question closes. No run starts.
 - **FS-j27.P6 Another request while a question is open.** A status request, "make a flow ..." or another flow plus a run word is handled; the question stays open unless the message carries values for it. A message that is not an answer and not a request ("why?", "?") gets "I need these details to start the flow."
 - **FS-j27.P7 The question follows the chat's language.** The question, the line "Starting ..." and the chips "Use a form" come from FlowDriven's language file in the chat's language (version 9). The example text is the flow's own `example`, kept as the flow author wrote it.
-- **FS-j27.P8 Text read from outside.** A value that the agent found in text from outside (a pasted email the person sent, a page) may fill a typed input, is shown to the person in the line "Starting ...", and still passes the same parsers. A turn whose context holds outside text never starts the run by itself: it shows a card "Run <flow> now?" that the person clicks (SR-5). Outside text is never taken as the person's own words, and it can never add a tool, a place or a permission.
+- **FS-j27.P8 Text read from outside.** A value that the agent found in text from outside (a pasted email the person sent, a page) may fill a typed input, is shown to the person in the line "Starting ...", and still passes the same parsers. A turn whose context holds outside text never starts the run by itself: it shows a card "Run <flow> now?" that the person clicks (SR-5). Outside text is never taken as the person's own words, and it can never add a tool, a place or a permission. A value that came from outside text is saved as a remembered answer with `outside: true` (`RememberedAnswer.outside`). It is not reused by "Use my last answers" or by `whenItsTime: "last"` until the person types or confirms that value; confirming it (for example by choosing "Start" on the form that shows it, or retyping it) saves it again with `outside: false`. A remembered answer that is marked outside is also marked in the chat context (SR-5).
 - **FS-j27.P9 Typing while the form is open.** The reply is "Please fill in the form above, then choose Start." and nothing else happens.
 
 ## States
@@ -86,8 +86,8 @@ P7 depends on version 9; the others do not.
 ## Errors and edge cases
 
 - **FS-j27.E1 Agent not set up or signed out.** Cause: the chat's agent cannot take a chat turn. Person sees: "Claude Code needs you to sign in." and its button (FS-j20.E1). The form still opens from the flow page and the Run button; its run then shows "Waiting for sign-in".
-- **FS-j27.E2 Permission off.** Cause: switch off. Person sees: the message stays in the composer with "FlowDriven may not run your AI agents. Turn this on in Settings."; a form "Start" shows the same line and starts nothing.
-- **FS-j27.E3 Missing or invalid inputs.** Cause: a value cannot be used. Person sees, in the chat or under the form field (the first invalid field is focused and marked invalid):
+- **FS-j27.E2 Permission off** (PU-07). Cause: switch off. Person sees: `chats.send` answers `not_allowed: permission_off` and stores nothing; the message stays in the composer with "FlowDriven may not run your AI agents." and the button "Turn on permission" (it opens the "Before you start" dialog of Settings); a form "Start" shows the same line and button and starts nothing. No run is created. TC-j12-13 is the one runner-level owner of the `chats.send` rule.
+- **FS-j27.E3 Missing or invalid inputs** (the messages for numbers, choices, hidden characters and the 4,000-character limit are PU-28). Cause: a value cannot be used. Person sees, in the chat or under the form field (the first invalid field is focused and marked invalid):
   - date not understood: "Which date?"
   - duration not understood: "Tell me how long you worked, for example 2 hours."
   - duration zero: "How long? Zero hours can't be logged."
@@ -99,13 +99,15 @@ P7 depends on version 9; the others do not.
   - text with hidden or format characters: "That text has characters FlowDriven cannot show. Please type it again."
   - longtext over 4,000 characters: "Keep it under 4,000 characters."
   A value for an input the flow does not declare is ignored. Next: only the invalid part is asked again.
-- **FS-j27.E4 Limits reached.** Input limits are in E3. Run limits (spending, usage, daily) pause the run after the inputs are given, with a "Needs you" item (FS-j20.E4, SR-9).
+- **FS-j27.E4 Limits reached.** Input limits are in E3. Run limits (spending, usage, daily) pause the run after the inputs are given, with one "Needs you" item (FS-j20.E4, SR-9, PU-08, PU-09).
 - **FS-j27.E5 A stopped or failed run.** The remembered answers and the last answers were saved at start, so "Run again" and "Use my last answers" work (FS-j25).
 - **FS-j27.E6 Crash or restart.** The waiting question and its card are in the store and still wait. The unsent composer text is kept with the chat (`chats.setComposer`; the `drafts` table holds flow drafts only). Values typed in a form but not yet submitted are view state and are lost. A restart never starts a run that was waiting for details.
 - **FS-j27.E7 The flow changed since it was confirmed, with a question open.** Cause: the flow was improved before the person answered. Person sees: after the answer, `START` rule 1 shows "Confirm <flow> first?"; the values given are kept and used after "Confirm". If the flow's input list changed, values for removed inputs are dropped and new required inputs are asked again.
 - **FS-j27.E8 Computer asleep, or FlowDriven closed, at a scheduled time.** A question that FlowDriven posts for a schedule (FS-j28) belongs to the slot's day. When the person answers later, "today" and "now" resolve to the slot's date and time, not to the time of the answer, so the entry lands on the right day. If the slot is missed (FS-j28.E8) no question is posted.
 - **FS-j27.E9 Prototype gap: keyword parsing.** The prototype read sentences with word lists in English and Indonesian. In the real app the agent extracts values and FlowDriven validates them with its own parsers, so other phrasings and other languages work.
-- **FS-j27.E10 Prototype gap: stubs.** "Next free time" was always 13:00 and the timesheet service conflict check was never shown. In the real app the start time may be left empty, and the flow's own step asks the timesheet service for the next free time; a conflict makes the step fail or ask, as the flow says.
+- **FS-j27.E10 Prototype gap: stubs.** "Next free time" was always 13:00 and the timesheet service conflict check was never shown. In the real app the "Start" input is an optional `time` with the default "next free time" (the `What it needs` line reads "Default: Next free time"), and the flow's own step asks the timesheet service for the first free slot; a conflict makes the step fail or ask, as the flow says. This differs from the prototype brief, which made Start required; the change is recorded in F-05.R11.
+- **FS-j27.E11 Outside text trying to steer the agent.** Covered by P8 and A15 (an outside value may fill an input but never starts the run by itself and is never reused by "Use my last answers" until the person types or confirms it) and by SR-5.
+- **FS-j27.E12 Not applicable here: a decision that expires.** A waiting question is not a decision; it has no 24-hour expiry of its own and waits until it is answered, cancelled or the flow is deleted (a question posted for a schedule follows FS-j28). The 24-hour expiry applies to decisions inside a run (FS-j24.P7).
 
 ## Data read and written
 
@@ -124,17 +126,17 @@ A13 depends on version 9; the others do not.
 - **FS-j27.A2** FlowDriven asks, in one short message with an example and a "Use a form" chip, only for required inputs that are missing or invalid; optional inputs are never asked.
 - **FS-j27.A3** When nothing is missing, the flow starts at once and the chat shows a line listing the resolved values.
 - **FS-j27.A4** Every value is parsed and checked by FlowDriven's own parsers, whatever the agent returned; an invalid or undeclared value is never passed to the run.
-- **FS-j27.A5** Dates (today, yesterday, a weekday name, a day and month) resolve in the person's time zone, including `Asia/Jakarta` near midnight, and a date that cannot be read gives "Which date?".
+- **FS-j27.A5** Dates (today, yesterday, a weekday name, a day and month) resolve in the person's time zone, including `Asia/Bangkok` near midnight, and a date that cannot be read gives "Which date?".
 - **FS-j27.A6** Durations accept hours, minutes and words in both languages, refuse zero, and ask again above 16 hours with the stated messages.
 - **FS-j27.A7** A choice input accepts only a declared choice; anything else asks with the choices as chips.
 - **FS-j27.A8** The form has one field per input of the right kind, is filled with known values, marks optional fields, validates on "Start" with the stated messages, focuses the first invalid field, and turns read-only after a valid "Start".
 - **FS-j27.A9** While the form is open, typed text gets "Please fill in the form above, then choose Start." and starts nothing; "Cancel" gives "Okay, I won't start it." and closes the question.
 - **FS-j27.A10** Remembered answers are saved when the run starts, only for inputs that declare `remember`, and "What you did", dates and times are not saved as remembered answers.
-- **FS-j27.A11** "Use my last answers" applies the last values except date and time; it is refused with a question for the rest when they do not cover the required inputs.
+- **FS-j27.A11** "Use my last answers" applies the last values except date and time; it is refused with a question for the rest when they do not cover the required inputs, and it is not offered for a value marked `outside` unless the person typed or confirmed it.
 - **FS-j27.A12** For several flows, one message groups the missing inputs by flow name; a file input opens the form at once.
 - **FS-j27.A13** (version 9) The question and the "Starting ..." line follow the chat's language; the agent answers in the language the person writes; chips and buttons never change the chat's language.
 - **FS-j27.A14** The answer lines of a `chat` result are filled from the run's inputs and outputs, lines with an unfilled placeholder are dropped, and dates follow the run's language.
-- **FS-j27.A15** A value that came from outside text may fill an input but the turn never starts the run by itself (SR-5).
+- **FS-j27.A15** A value that came from outside text may fill an input but the turn never starts the run by itself (SR-5); it is saved with `outside: true`, and "Use my last answers" and `whenItsTime: "last"` are not offered for it until the person types or confirms that value (one test).
 - **FS-j27.A16** Text with hidden or format characters is refused in typed inputs and forms.
 - **FS-j27.A17** A waiting question survives a restart and still waits; a restart starts nothing.
 - **FS-j27.A18** If the flow changed since it was confirmed, the start after the answer shows the confirm card first and keeps the given values; changed input declarations are re-checked.
@@ -142,12 +144,13 @@ A13 depends on version 9; the others do not.
 
 ## Not in the prototype yet
 
-- The agent reading sentences, the typed parsers in the runner, FS-j27.E3 messages for number, choice and hidden characters, the 4,000 character limit, the slot rule in E8, and the restart rules in E6 and E7.
+- The agent reading sentences, the typed parsers in the runner, PU-28 (the E3 messages for number, choice, hidden characters and the 4,000 character limit), PU-07 (the permission-off refusal), PU-08 and PU-09 (limit lines), the slot rule in E8, and the restart rules in E6 and E7.
+- Removed from V1: nothing of this journey; the `outside` mark on remembered answers is a safety addition with no new screen.
 
 ## Drafter's calls
 
 - A weekday name means the most recent such day up to today; "last <weekday>" means the one before. The prototype used the current week.
 - The remembered-answer rule keeps the prototype's list: customer, project and activity are remembered; date, start and what you did are not.
 - Cancel is a field on `fill_inputs` (`cancel: true`), not a new intent, so the intent list stays as in AD-10.
-- The start input of the timesheet is optional and empty means "next free time"; the flow's step asks the timesheet service. The format has no code for it (AD-04 has only `today` and `now`).
+- The start input of the timesheet is an optional `time` with the default "next free time" (F-05.R11); the flow's step asks the timesheet service. The format has no code for it (AD-04 has only `today` and `now`), so the default is the flow's own wording.
 - 4,000 characters for longtext matches the limit the engine already uses for own text.

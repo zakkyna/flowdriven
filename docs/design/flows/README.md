@@ -5,11 +5,12 @@ One flow spec describes one journey of the clickable prototype's Guide as the re
 ## What a flow spec is
 
 - It follows one journey from its trigger to its end: the main path first, then other paths, then errors.
-- It names exact English UI words in quotes, taken from the prototype, and names states with the words from the design vocabulary (`waiting_approval`, `needs_login`, `confirmed`, `changed`, `approved_edited`).
+- It names exact English UI words in quotes, taken from the prototype (except the sample names, see "Generic names" below), and names states with the words from the design vocabulary (`waiting_approval`, `needs_login`, `confirmed`, `changed`, `approved_edited`).
 - It says what asks, what confirms and what deliberately does not.
 - It lists the runner operations it uses (names from `../runner-api.md`) and the data it reads and writes (names from `../data-model.md`).
 - It ends with testable acceptance criteria. Every criterion has at least one test case.
-- Where the prototype has a gap, the spec says what the real app does instead. Where the real app adds behavior the owner has not tried, the spec marks it "Not in the prototype yet", so it goes into the prototype before it is built.
+- Where the prototype has a gap, the spec says what the real app does instead. Where the real app adds behavior the owner has not tried, the spec marks it "Not in the prototype yet" and lists it by its `PU-nn` id from the register of V1 behaviours the owner has not seen (in `../prd.md`), so it goes into the prototype before it is built. What the owner has not seen and V1 drops is listed as "Removed from V1" and goes into the prototype first, later.
+- Where a path or criterion leaves V1, it keeps its id and reads "(Removed from V1: ...)", or it is rewritten to the V1 behaviour.
 - V1 means V1 (build steps B-01 to B-24). Memory, Phone & bots and skill updates are V2. Marketplace and the gateway are V3.
 
 ## Template
@@ -17,7 +18,7 @@ One flow spec describes one journey of the clickable prototype's Guide as the re
 Every file has these parts in this order:
 
 1. Title `# FS-jNN: <English title>`. Version 9 of the clickable prototype is final, so no pending line is written.
-2. A table: Journey (id, Indonesian title from the Guide, English title), PRD features, Safety rules (SR ids, `START`), Prototype source (brief sections and prototype files), Status.
+2. A table: Journey (id, Indonesian title from the Guide, English title), PRD features, Safety rules (SR ids, `START`), Prototype source (the prototype brief cited by section title only, never by number, and the prototype files), Status.
 3. `## Goal`: one or two sentences.
 4. `## Entry points and trigger`.
 5. `## Preconditions`.
@@ -25,12 +26,12 @@ Every file has these parts in this order:
 7. `## Other paths`.
 8. `## States`: a table of entity, from -> to, cause.
 9. `## Decisions and confirmations`: what asks, what confirms, what deliberately does not.
-10. `## Errors and edge cases`: cause, what the person sees, what happens next. Always covered: agent not set up or signed out, permission off, limits reached, a stopped or failed run, a crash or restart, a flow changed since it was confirmed, outside text trying to steer the agent, a decision that expires, and the prototype gaps for the journey.
+10. `## Errors and edge cases`: cause, what the person sees, what happens next. Always covered: agent not set up or signed out, permission off, limits reached, a stopped or failed run, a crash or restart, a flow changed since it was confirmed, outside text trying to steer the agent, a decision that expires, and the prototype gaps for the journey. An item that cannot happen in the journey gets a short entry "Not applicable because ..." instead of being left out.
 11. `## Data read and written`.
 12. `## Runner API used`: operation names and topics.
 13. `## Acceptance criteria`.
 14. `## Not in the prototype yet` (if any).
-15. `## Drafter's calls`: judgments the spec made where the brief was silent, one line each with the reason.
+15. `## Drafter's calls`: judgments the spec made where the brief was silent, one line each with the reason. A choice is marked "Decided for V1 (revisable)"; decisions belong to the owner, so write "owner", never "chair", for a decision (the AGENTS.md term "Chair step" stays).
 
 ## Id rules
 
@@ -48,6 +49,10 @@ Every file has these parts in this order:
 | `TC-jNN-nn` | A test case for the journey in `../test-cases/journeys.md` | `TC-j24-07` |
 
 Numbers never change once used. A removed item leaves its number unused. The journey id comes from the prototype's Guide (j01 to j31).
+
+## Generic names and the time zone
+
+Specs, fixtures and test cases use generic, product-neutral names, and these are the names the build uses: "cloud storage" for any file storage service, `timesheet-skill` for the timesheet skill, "the timesheet service" for the timesheet account, "Job review", and "Project Example" and "Example Corp" for projects and customers. Where the clickable prototype shows another name, the name in the specs is the one to build. Examples use the time zone `Asia/Bangkok` (UTC+07:00, no daylight saving), "Bangkok" for the city; addresses use `example.test` or `example.com` only. The only non-ASCII character allowed in these files is the middle dot in "Claude Code · Sonnet 5.5".
 
 ## How specs map to the other documents
 

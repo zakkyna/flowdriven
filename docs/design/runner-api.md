@@ -1,6 +1,6 @@
 # FlowDriven runner API (contract version 2)
 
-Status: complete for the V1 build, 2026-11-21.
+Status: complete for the V1 build, 2026-11-21 (revised after the early review, 2026-11-21).
 
 This file is the runner API contract version 2: every operation the renderer (and later a paired phone and other AI tools on this Mac) can call, the read models they return, the cards of the chat and their actions, the events and notices, the error codes, and the IPC layer between the window, Electron main and the runner. It lives in `packages/contracts` and extends contract version 1; most operations stay. The architecture decisions it follows are in `architecture.md` (AD-02 processes, AD-03 contract, AD-06 and AD-07 decisions and rules, AD-10 assistant, AD-13 starts, AD-14 words, AD-15 appearance, AD-16 renderer). The stored entities behind these read models are in `data-model.md`. Safety rules `SR-1` to `SR-9` and the start rule `START` are defined in `architecture.md`.
 
@@ -14,15 +14,14 @@ Contract version 2 holds the V1 operations only. The later operations of V2 and 
 | Agents | - | `agents.list`, `agents.setUp`, `agents.signIn`, `agents.rescan`, `agents.models` | `harnesses.list`, `harnesses.rescan`, `harnesses.setConsent` |
 | Settings | `settings.get`, `settings.update` | - | - |
 | Chats | - | `chats.list`, `chats.get`, `chats.create`, `chats.send`, `chats.act`, `chats.setAgent`, `chats.setComposer`, `chats.delete` | - |
-| Flows | `flows.list`, `flows.get`, `flows.import` | `flows.start`, `flows.confirm`, `flows.setSchedule`, `flows.tryNextRun`, `flows.duplicate`, `flows.delete` | `flows.build`, `flows.update`, `flows.run`, `flows.capabilities`, `flows.allowCapabilities`, `flows.withdrawCapabilities` |
-| Starts | - | `starts.next` | - |
+| Flows | `flows.list`, `flows.get`, `flows.import` | `flows.start`, `flows.confirm`, `flows.setSchedule`, `flows.tryNextRun`, `flows.delete` | `flows.build`, `flows.update`, `flows.run`, `flows.capabilities`, `flows.allowCapabilities`, `flows.withdrawCapabilities` |
 | Runs | `runs.list`, `runs.status`, `runs.report`, `runs.export`, `runs.resume` | `runs.stop` | `queue.list`, `queue.move`, `usage.summary` |
 | Decisions | `approvals.list`, `approvals.resolve`, `approvals.answer` | `approvals.resolveSimilar` | - |
 | Rules | - | `rules.list`, `rules.revoke` | - |
 | Activity, Search, Skills | - | `activity.summary`, `search.query`, `skills.list`, `skills.makeFlow` | - |
 | Other | `audit.list`, `readiness.check`, `readiness.install`, `triggers.list`, `triggers.setEnabled` | - | - |
 
-19 operations stay (most change a shape or a table field), 28 are new and 12 retire: contract version 2 has 47 live operations. The 12 retired names stay in the table as retired entries while the builder-first screens stay in the code, unrouted (chair decision for V1, revisable): the real runner answers each `unavailable` with reason `retired` (section 7).
+19 operations stay (most change a shape or a table field), 26 are new and 12 retire: contract version 2 has 45 live operations. The 12 retired names stay in the table as retired entries while the builder-first screens stay in the code, unrouted (owner decision for V1, revisable): the real runner answers each `unavailable` with reason `retired` (section 7). `flows.duplicate` and `starts.next` are not in version 2 (section 7).
 
 ## 2. Conventions
 
@@ -65,7 +64,7 @@ type OperationDef = {
 ```
 
 Rules that `operations.test.ts` checks over the whole table:
-1. The live names are exactly the 47 of section 5 and the retired names exactly the 12 of section 7 (snapshots), so nothing is added or retired by accident.
+1. The live names are exactly the 45 of section 5 and the retired names exactly the 12 of section 7 (snapshots), so nothing is added or retired by accident.
 2. Every name matches `^[a-z]+\.[A-Za-z]+$` (the pattern main checks).
 3. `personOnly: true` implies `mcp: "no"` and `phone` is `"no"` or `"restricted"`.
 4. Decisions and permissions are never `mcp: "yes"`: no `approvals.*`, `rules.*`, `settings.*`, `flows.confirm`, `flows.setSchedule` or `chats.act` has `mcp: "yes"`.
@@ -78,7 +77,7 @@ Rules that `operations.test.ts` checks over the whole table:
 
 | Caller | How a call arrives | Release |
 |---|---|---|
-| `window` | JSON-RPC over the runner's stdio from Electron main, which relays only the app window's calls and its own `starts.next` call for the tray (section 12) | V1 |
+| `window` | JSON-RPC over the runner's stdio from Electron main, which relays only the app window's calls (section 12) | V1 |
 | `tool` | the local MCP server inside the runner, when the person turned on "Let other AI tools on this Mac start your flows" | V2 |
 | `phone` | the bot module inside the runner, for the paired account only | V2 |
 
@@ -91,7 +90,7 @@ The dispatcher (`service/handlers.ts`, `createDispatcher`) tags each call with i
 
 ### 2.5 Words and text
 
-- No words in `packages/*` (AD-14, chair decision for V1, revisable): the runner and the contracts carry codes, `Line` values and typed values, and everything a person reads is drawn in `apps/desktop`, by the renderer or, for system notifications and the menu bar menu, by Electron main. `packages/contracts/src/line-keys.ts` (new) lists every `Line` key the runner may emit (`LINE_KEYS`); `en.ts` must have each, which TypeScript and the language check verify.
+- No words in `packages/*` (AD-14, owner decision for V1, revisable): the runner never builds a sentence. It emits a code with values: a `Line` (a key and its values), a typed value, or a code such as a `Cause`. Everything a person reads is drawn in `apps/desktop` with the language files in `apps/desktop/src/i18n/`, by the renderer or, for system notifications, by Electron main. A sentence in quotes in this file (for example a line a handler "posts") is only the English drawing of the `Line` that handler emits; runner tests assert the key and the values, never the sentence. `packages/contracts/src/line-keys.ts` (new) lists every `Line` key the runner may emit (`LINE_KEYS`); `en.ts` must have each, which TypeScript and the language check verify. Keys that this version adds: `notice.decisionTitle`, `notice.decisionBody`, `notice.questionTitle`, `notice.questionBody`, `notice.problemTitle`, `notice.problemBody`, `notice.limitTitle`, `notice.limitBody` (section 10); `chat.permissionOff` ("FlowDriven may not run your AI agents."); `chat.agentCannotRunFlow` (param `agent`); `flows.empty` ("No flows yet"); `chat.nothingWaiting` ("Nothing is waiting for you.").
 - Outputs carry codes and `Line` values (`{key, params}`); the renderer draws them in the app language, or for chat lines in the language stored with the message (AD-14). `params` hold raw values: names and text as they are, numbers as numbers, and moments as `IsoDateTime` (a param named `at` or `until`, or ending in `At`), which the renderer formats in the line's language and the person's zone.
 - Text written by a person, an agent or a flow author passes through as text with its `outside` mark (SR-5); the renderer draws it with the safe text renderer (AD-16).
 
@@ -117,7 +116,8 @@ type FlowState = "new" | "changed" | "confirmed";
 type AgentState = "not_installed" | "installing" | "waiting_login" | "needs_login" | "ready" | "unknown";
 type TouchRule = "runs_alone" | "asks_first" | "not_allowed";
 type Effect = "read" | "local_write" | "run_command" | "change" | "send" | "post" | "pay" | "delete" | "merge";
-type Place = { kind: "account" | "folder" | "address" | "site" | "command" | "repo"; value: string; label: string };
+type RuleEffect = "local_write" | "run_command" | "change";   // the only effects a standing rule may have in V1
+type Place = { kind: "account" | "folder" | "address" | "site" | "command" | "repo"; value: string; label: string };   // a rule's place kind: change -> account or folder, local_write -> folder, run_command -> command
 type Line = { key: string; params?: Record<string, string | number> };  // key ^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9_]*)+$, at most 100; values at most 400
 type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -133,7 +133,6 @@ type ScheduleView = {                                // output
   whenItsTime: "ask" | "last";
   needsAnswers: boolean;      // the flow has required inputs without a value: show "When it's time"
   canUseLast: boolean;        // the last answers cover the required inputs ("Use my last answers" enabled)
-  firstRunNote: boolean;      // no done run yet: turning on a time schedule runs it once now (FS-j28.P11)
   nextAt?: IsoDateTime;       // next slot of a time schedule
 };
 
@@ -154,7 +153,7 @@ type InputProblem = "empty" | "unreadable" | "zero" | "too_long" | "too_long_tex
 type FieldProblem = { inputId: string; problem: InputProblem; params?: { min?: number; max?: number } };
 ```
 
-`Cause` and the run state give the plain-words row of FS-j25.P4: for example `blocked` with `usage_limit` reads "Claude Code has no usage left right now. It will be available again at 14:05." with "Try again", and `stopped` with `permission_off` reads "Stopped because you turned off permission." `InputProblem` and the input type give the parser messages of FS-j27.E3: (`date`, `unreadable`) "Which date?"; (`duration`, `zero`) "How long? Zero hours can't be logged."; (`duration`, `too_long`) "That's more than a working day. How long did you work?"; (`number`, `out_of_range`) "Enter a number from <min> to <max>."; (`file`, `empty`) "Choose <label>."; (`longtext`, `too_long_text`) "Keep it under 4,000 characters."
+`Cause` and the run state give the plain-words row of FS-j25.P4 (the renderer draws the words from the codes): for example `blocked` with `usage_limit` reads "Claude Code has no usage left right now. It will be available again at 14:05." with "Try again", and `stopped` with `permission_off` reads "Stopped because you turned off permission." `InputProblem` and the input type give the parser messages of FS-j27.E3: (`date`, `unreadable`) "Which date?"; (`duration`, `zero`) "How long? Zero hours can't be logged."; (`duration`, `too_long`) "That's more than a working day. How long did you work?"; (`number`, `out_of_range`) "Enter a number from <min> to <max>."; (`file`, `empty`) "Choose <label>."; (`longtext`, `too_long_text`) "Keep it under 4,000 characters."
 
 ## 4. Read models
 
@@ -202,17 +201,18 @@ type InputView = {
 };
 type TouchView = {
   id: TouchId; sentence: string; effect: Effect; place?: Place; fixedPlace: boolean;
+  alwaysAsks: boolean;                           // a risky kind: it stays under "Asks you first" and the dialog offers no way to move it
   declared: TouchRule;                           // the rule in the flow file
   list: "on_its_own" | "asks_first" | "never";   // what applies now
   byRule?: RuleId;                               // on its own because of a standing rule: "(you allowed this)"
 };
 type StandingRuleView = {
-  id: RuleId; flowId: FlowId; touchId: TouchId; sentence: string; effect: Effect; place: Place;
+  id: RuleId; flowId: FlowId; touchId: TouchId; sentence: string; effect: RuleEffect; place: Place;
   createdAt: IsoDateTime; createdBy: "always_allow" | "confirm"; lastUsedAt?: IsoDateTime;
 };
 ```
 
-`confirmLists` follows SR-1: reads are under "Does on its own"; declared `local_write` and `run_command` too; a `change` with a fixed place is under "Does on its own" for a draft or a change made in the chat; risky kinds and anything without a fixed place are under "Asks you first"; an installed flow (V3) pre-places only reads. Version 1's `kind`, `saved`, `signOff`, `stepCount`, `playback`, `conversation`, `stepStatus` and `canUndo` are gone (mapping: `signOff.state` `approved` -> `confirmed`, `stale` -> `changed`, `none` -> `new`).
+`confirmLists` follows SR-1: reads are under "Does on its own"; declared `local_write` and `run_command` too; a `change` with a fixed place is under "Does on its own" for a draft or a change made in the chat; risky kinds (`send`, `post`, `pay`, `delete`, `merge`) and anything without a fixed place are under "Asks you first", and a risky kind cannot be moved (`TouchView.alwaysAsks`; `flows.confirm` refuses it in `onItsOwn` with `always_asks`); an installed flow (V3) pre-places only reads. Version 1's `kind`, `saved`, `signOff`, `stepCount`, `playback`, `conversation`, `stepStatus` and `canUndo` are gone (mapping: `signOff.state` `approved` -> `confirmed`, `stale` -> `changed`, `none` -> `new`).
 
 ### 4.2 Runs
 
@@ -266,7 +266,7 @@ type Approval = {
   riskyAction?: RiskyAction;                     // send, post, pay, delete, merge
   effect?: Effect;                               // required for risky_action in v2
   place?: Place; fixedPlace?: boolean;
-  canAlwaysAllow: boolean;                       // risky_action, fixed place not taken from outside text, pending, and the caller is the window
+  canAlwaysAllow: boolean;                       // true only for a pending risky_action whose effect is `change` with a fixed place not taken from outside text, and the caller is the window; always false for send, post, pay, delete and merge
   similarGroup?: string; similarWaiting?: number;   // "Approve all similar (N)"
   stepWaiting: number;                           // other pending decisions of the same step
   createdAt: IsoDateTime; expiresAt: IsoDateTime;
@@ -323,7 +323,6 @@ type DraftView = {
   outside: boolean;                              // "Includes text from an email or web page"
   assumptions: string[];
   changes?: { sign: "+" | "-" | "~"; text: string }[];
-  rulesKept?: StandingRuleView[]; rulesEnded?: StandingRuleView[];   // "Still allowed by your rule", "Your rule ends"
 };
 ```
 
@@ -340,7 +339,7 @@ type Agent = {
   installCommand?: string;                       // shown only in "Install it yourself" (FS-j01.P1)
   billing: "per_use" | "plan" | "unknown";
   models?: Model[]; defaultModel?: ModelId;      // when ready
-  usage?: { status: "ok" | "warning" | "limited" | "unknown"; fiveHour?: number; sevenDay?: number; resetsAt?: IsoDateTime };
+  usage?: { status: "ok" | "warning" | "limited" | "unknown"; fiveHour?: number; sevenDay?: number; resetsAt?: IsoDateTime };   // V1 Settings shows no usage rows and no "plan limits apply" note; the field serves the usage-limit wait reason
   capability: { tier: "enforced" | "folder_limited" | "label_only"; accountTools: boolean };   // AD-09
   setUp?: { phase: "installing" | "waiting_login"; since: IsoDateTime };
   problem?: { code: "install_failed" | "sign_in_timeout" | "too_old" | "unreadable"; detail?: string };
@@ -354,7 +353,6 @@ type Settings = {
   busyFallback: boolean;
   spendingLimit: number;                         // US dollars a month
   spending: { month: string; spentUsd: number; limitUsd: number; state: "ok" | "warning" | "reached"; allOnPlans: boolean };
-  background: { keepRunning: boolean; openAtLogin: boolean };
   keeper: KeeperSettings;                        // unchanged
 };
 
@@ -369,11 +367,9 @@ type NeedsYouItem =
   | { kind: "question"; questionId: QuestionId; questionKind: "inputs" | "confirm"; flowId: FlowId; flowName: string; chatId: ChatId; askedAt: IsoDateTime }
   | { kind: "decision"; decision: Approval };
 type EarlierRow =
-  | { kind: "run"; run: RunSummary }             // needs_login, blocked, interrupted, stopped, done, failed
-  | { kind: "missed"; startId: StartId; flowId: FlowId; flowName: string; slotAt: IsoDateTime;
-      reason: "permission_off" | "daily_limit" | "too_old" | "clock_changed"; ranLate?: { runId?: RunId; at: IsoDateTime }; canRunNow: boolean }
-  | { kind: "skipped"; startId: StartId; flowId: FlowId; flowName: string; slotAt: IsoDateTime;
-      reason: "question_open" | "still_running"; questionAskedAt?: IsoDateTime };
+  | { kind: "run"; run: RunSummary };           // needs_login, blocked, interrupted, stopped, done, failed
+// V1 has only run rows. Missed and skipped slots stay in `starts` with their outcome and reason and in the audit log;
+// "Missed", "Skipped", "Run late" and "Run it now" in Activity go into the prototype first, later (decided for V1, revisable).
 
 type SearchResult = {
   recent: boolean;                               // the text was empty: recent chats and every flow
@@ -424,9 +420,7 @@ type AuditRecord = {                             // changed: detail is an object
 | `flows.confirm` | new | - | flows, rules, chats, activity | no | no | yes |
 | `flows.setSchedule` | new | - | flows, runs, chats, activity | no | no | yes |
 | `flows.tryNextRun` | new | - | runs, chats, activity | no | no | no |
-| `flows.duplicate` | new | - | flows, skills | no | no | no |
 | `flows.delete` | new | - | flows, rules, runs, approvals, chats, activity, skills | no | no | yes |
-| `starts.next` | new | flows | - | no | no | no |
 | `runs.list` | changed | runs | - | no | no | no |
 | `runs.status` | changed | runs, approvals | - | restricted | restricted | no |
 | `runs.report` | changed | runs | - | no | no | no |
@@ -453,9 +447,9 @@ MCP and phone rules (V2; the fields are set in version 2 so the table is checked
 - `flows.get` over MCP: inputs show labels and types only; remembered answers, places and rules are left out.
 - `flows.start` over MCP and phone: the source is always `tool` or `phone`, inputs cannot be passed, and missing inputs and confirmations are asked in FlowDriven (`START`).
 - `runs.status` over MCP and phone: states, step titles and cause words only; no step outputs and no decision payloads.
-- `approvals.list` over MCP: titles, flow names and states only; over the phone: one pending decision at a time, with only the flow, the step and a short summary for runs marked sensitive.
-- `approvals.resolve` over the phone: `approve` and `reject` only, one decision at a time, a risky kind needs the second tap ("Tap again to confirm"), never `edit` or `always_allow`. `approvals.answer` over the phone: one tap.
-- `activity.summary` over the phone: the Needs-you titles and the running flow names.
+- `approvals.list` over MCP and over the phone (V2): the flow id, the step id and the state only, never a decision title, a flow name, a payload or an input value (decision text is fixed text only; section 10). Over the phone: one pending decision at a time.
+- `approvals.resolve` and `approvals.answer` over the phone (V2): not built until phone approval is decided as a product question in the prototype, when V2 is planned, and has its own security review. By default only fixed text reaches a bot, and risky kinds are decided in the app. If it is built, it never allows `edit` or `always_allow`.
+- `activity.summary` over the phone (V2): counts and states only, no titles and no names.
 
 ## 6. Operations
 
@@ -484,7 +478,7 @@ Each operation lists its input and output, its errors as `code: reason`, its top
 - Input: `{agentId: AgentId}`. Output: `Agent` (state `installing`, `waiting_login` or `ready`); it returns at once and the rest happens in the background.
 - Errors: `not_found: agent_unknown`; `conflict: setup_running`; `unavailable: install_unavailable`.
 - Topics: writes `agents`, `settings`. Person only.
-- Does, in order (FS-j01.S2): sets `agentPermission` to `on` when it is not (audit `permission_changed`, source `window`); for `not_installed`, sets `installing` and runs the catalog install command as a program with arguments, without a shell; on success sets `waiting_login`, starts the agent's own sign-in and polls its status command every 2 seconds until signed in (`ready`) or 10 minutes pass (`needs_login`, problem `sign_in_timeout`); on install failure sets `not_installed` with problem `install_failed`. A `ready` agent only gets the permission ("Use Claude Code"). Audit `agent_setup` for each phase.
+- Does, in order (FS-j01.S2): sets `agentPermission` to `on` when it is not (audit `permission_changed`, source `window`); for `not_installed`, sets `installing` and runs the catalog install command as a program with arguments, without a shell; on success sets `waiting_login`, starts the agent's own sign-in and polls its status command every 2 seconds until signed in (`ready`) or 10 minutes pass (`needs_login`, problem `sign_in_timeout`); on install failure sets `not_installed` with problem `install_failed`. A `ready` agent only gets the permission: its card keeps the label "Set up <agent>", with no special label for a ready agent. Audit `agent_setup` for each phase.
 - Tests first: the fake agent goes `not_installed -> installing -> waiting_login -> ready` with no further call; the permission is `on` before the install starts; the spawned command equals the catalog entry and has no shell and no bypass or full-access flag (SR-4); a failing install leaves `not_installed` and the permission `on`; with the injected clock at 10 minutes the state is `needs_login` and polling stops; a second call while installing gets `conflict: setup_running`.
 
 #### `agents.signIn` (new)
@@ -513,7 +507,7 @@ Each operation lists its input and output, its errors as `code: reason`, its top
 
 - Input: `{}`. Output: `Settings`.
 - Does: absent keys read as their defaults (`data-model.md`, 3.18); `spending` is computed for the person's current local month.
-- Tests first: an empty store gives `language: "en"`, `agentPermission: "unset"`, `mainAgent: null`, `busyFallback: false`, `spendingLimit: 10`, `background: {keepRunning: true, openAtLogin: true}`; usage rows with `billing` `plan` do not count in `spentUsd`.
+- Tests first: an empty store gives `language: "en"`, `agentPermission: "unset"`, `mainAgent: null`, `busyFallback: false`, `spendingLimit: 10`; usage rows with `billing` `plan` do not count in `spentUsd`.
 
 #### `settings.update` (changed)
 
@@ -526,7 +520,6 @@ type SettingsPatch = {
   mainAgent?: { agent: AgentId; model: ModelId };
   busyFallback?: boolean;
   spendingLimit?: number;                        // above the current limit, at most 10000; rounded to cents
-  background?: { keepRunning?: boolean; openAtLogin?: boolean };
   keeper?: KeeperPatch;                          // as version 1
 };
 ```
@@ -535,10 +528,9 @@ type SettingsPatch = {
 - Errors: `invalid_input: language_unknown`, `limit_not_above` (params `limit`), `limit_too_high`, `model_unknown`; `not_allowed: agent_not_ready`.
 - Topics: writes `settings`, plus `runs`, `approvals` and `activity` for the permission and the limit, `agents` for the main agent. Person only.
 - Does:
-  - `agentPermission: "off"` stops every active run (as `runs.stop`, cause `permission_off`), expires their pending decisions (`resolvedVia: "permission_off"`), stops automatic starts (later slots are `missed` with reason `permission_off`) and refuses chat turns. `"on"` lets them start again; a missed slot never runs later (FS-j12.P2). Audit `permission_changed`.
+  - `agentPermission: "off"` stops every active run (as `runs.stop`, cause `permission_off`), expires their pending decisions (`resolvedVia: "permission_off"`), stops automatic starts (later slots are recorded `missed` with reason `permission_off`) and refuses chat turns (`chats.send` answers `not_allowed: permission_off`) and starts (`flows.start` answers `refused`, `permission_off`). The cause of a stopped run is `permission_off`, drawn as "Stopped because you turned off permission." `"on"` lets them start again; a missed slot never runs later (FS-j12.P2). Audit `permission_changed`. Settings and the "Turn on permission" button (section 8.2, `agent_needed`) open the same "Before you start" dialog; its "Give permission" calls this operation with `agentPermission: "on"`.
   - `mainAgent` needs a `ready` agent and one of its models; open chats and running runs keep theirs (FS-j12.S4).
   - `spendingLimit` must be above the current limit (FS-j12.A8); raising it above the month's spending clears `spending-pause`, approves its `budget_raise` decision (`resolvedVia: "window"`) and lets the paused runs go on. Audit `limit_raised`.
-  - `background` is the person's record; main applies it (section 12.7).
   - Every changed key writes `setting_changed` with the old and new value.
 - Tests first: `{spendingLimit: 10}` with limit 10 gives `invalid_input: limit_not_above` and saves nothing; `{spendingLimit: 25.004}` saves 25; turning the permission off with two running fake runs leaves both `stopped`, their decisions `expired`, and audit `permission_changed` with source `window`; `{mainAgent: {agent: "codex", ...}}` with codex `needs_login` gives `not_allowed: agent_not_ready`; a call from a `tool` caller gets `not_allowed: caller_not_allowed` (V2).
 
@@ -560,27 +552,27 @@ type SettingsPatch = {
 
 - Input: `{subject?: {kind: "make"} | {kind: "improve"; flowId: FlowId}}`. Output: `{chatId: ChatId; reused: boolean}`.
 - Errors: `not_found: flow_deleted` (improve).
-- Does: reuses the newest chat with no messages and moves it to the top, else makes "New chat"; the chat starts on the main agent and its default model, in the app language. `make` posts "Tell me what it should do, in your own words." with the example chip (FS-j22.S2). `improve` posts "What should change in <flow>?" with two chips; the weekday chip is left out when the flow already runs every weekday at 17:00 (FS-j23.A1).
+- Does: reuses the newest chat with no messages and moves it to the top, else makes "New chat"; the chat starts on the main agent and its default model, in the app language. `make` posts a line (English: "Tell me what it should do, in your own words.") with the example chip (FS-j22.S2). `improve` posts a line (English: "What should change in <flow>?", param `flow`) with two chips; the weekday chip is left out when the flow already runs every weekday at 17:00 (FS-j23.A1).
 - Tests first: two calls without a message give the same `chatId` with `reused: true`; `improve` on a deleted flow gives `not_found`.
 
 #### `chats.send` (new)
 
 - Input: `{chatId; text: string (1..16000, not blank); pasted?: boolean} | {chatId; starter: number}`. `starter` is the index of one of the empty chat's starter chips; chips under a message use `chats.act` `suggestion`.
 - Output: `{messageId: MessageId; turn: "queued" | "not_ready" | "form_open"}`. It returns at once; the answer arrives through the `chats` topic (AD-10).
-- Errors: `not_found`; `not_allowed: permission_off` (nothing is stored; the text stays in the composer, FS-j20.E2).
+- Errors: `not_found`; `not_allowed: permission_off` (nothing is stored and no turn runs; the text stays in the composer, FS-j20.E2; the renderer shows `chat.permissionOff`, "FlowDriven may not run your AI agents.", with the button "Turn on permission", which opens the permission dialog). This is the one rule for a chat message with the permission off: every case in every journey agrees with it.
 - Does:
   1. Stores the person's message and clears `composerText`. The first person message sets the title (first 40 characters); the chat moves to the top.
-  2. With an open form card in the chat: posts "Please fill in the form above, then choose Start." and runs no turn (`form_open`).
+  2. With an open form card in the chat: posts a line (English: "Please fill in the form above, then choose Start.") and runs no turn (`form_open`).
   3. With the chat's agent not `ready`: posts an `agent_needed` card and runs no turn (`not_ready`, FS-j20.E1).
   4. Otherwise queues one turn (one at a time per chat). The turn is one agent call with no tools and a JSON schema, on the chat's agent and model, with the compact context (at most 12 turns or 24,000 characters) and the standing instruction to answer in the person's language (AD-10, FS-j30.P5). FlowDriven validates the intent against its own state, then posts the reply, lines and cards. A turn whose context holds outside text (outside messages or `pasted`) only posts cards (SR-5). The chat language changes when the turn reports a registered code for typed text (not for `fromChip`).
-  5. An invalid answer is asked for once more; two failures post a `turn_failed` card ("I did not understand that. ...") and audit `chat_turn_failed`.
+  5. An invalid answer is asked for once more; two failures post a `turn_failed` card (English: "I did not understand that. ...") and audit `chat_turn_failed`.
 - Tests first: with the fake brain answering `run` for a confirmed flow with nothing missing, exactly one brain call happens with `tools` empty and a schema, and one run starts with source `chat`; with the brain answering `run` for a flow named alone, a question or a negation, an `ask_run` card is posted and no run starts (FS-j20.A5); with outside text in the context, `run` gives an `ask_run` card (FS-j20.A6); with the permission off nothing is stored; two quick sends give two queued turns answered in order; a context over 24,000 characters is cut to the newest turns.
 
 #### `chats.act` (new)
 
 - Input: `{chatId; messageId} & ChatAct`, where `ChatAct` is the union of section 8.2.
 - Output: `{card: CardView; posted: MessageId[]; starts?: StartOutcome[]; fields?: FieldProblem[]}`.
-- Errors: `not_found` (message, card, `flow_deleted`); `invalid_input: unknown_action` and value errors; `conflict: card_answered`, `card_replaced`, `card_stale`, `question_answered`, `hash_mismatch`; `not_allowed: permission_off`, `flow_not_confirmed`, `place_not_fixed`, `never_does`.
+- Errors: `not_found` (message, card, `flow_deleted`); `invalid_input: unknown_action` and value errors; `conflict: card_answered`, `card_replaced`, `card_stale`, `question_answered`, `hash_mismatch`; `not_allowed: permission_off`, `flow_not_confirmed`, `place_not_fixed`, `never_does`, `always_asks`.
 - Topics: writes `chats`, `flows`, `rules`, `runs`, `approvals`, `activity`. Person only.
 - Does: section 8.
 - Tests first: one per action in section 8.2, plus the common rules of 8.1 (a second click returns `conflict: card_answered` and changes nothing; an action of another card type gives `unknown_action`).
@@ -589,7 +581,7 @@ type SettingsPatch = {
 
 - Input: `{chatId; agent: AgentId; model: ModelId}`. Output: `ChatSummary`.
 - Errors: `not_found` (chat; `agent_unknown`); `invalid_input: model_unknown`; `not_allowed: agent_not_ready`.
-- Does: stores the choice for this chat only, posts the note "Now using <agent> · <model>" and audits `chat_agent_changed` (FS-j31.S3). Running runs keep theirs. Later calls use the chosen agent with the chosen model through that agent's own model flag; nothing else in them changes: not the sandbox, the tools, the places or the approvals (SR-4).
+- Does: stores the choice for this chat only, posts a note line (English: "Now using <agent> · <model>") and audits `chat_agent_changed` (FS-j31.S3). Running runs keep theirs. Later calls use the chosen agent with the chosen model through that agent's own model flag; nothing else in them changes: not the sandbox, the tools, the places or the approvals (SR-4).
 - Tests first: other chats and `settings.mainAgent` are unchanged; a model id with a space or a leading dash is refused by the schema; a model the agent did not list gives `model_unknown`.
 
 #### `chats.setComposer` (new)
@@ -610,7 +602,7 @@ type SettingsPatch = {
 #### `flows.list` (changed)
 
 - Input: `{}`. Output: `FlowSummary[]`, live flows, newest `createdAt` first.
-- Tests first: a deleted flow is not listed; `asksFor` lists "Duration" and "What you did" for the sample timesheet flow; `live` is `needs_you` while its decision waits.
+- Tests first: a deleted flow is not listed; `asksFor` lists "Duration" and "What you did" for the sample timesheet flow; `live` is `needs_you` while its decision waits; with no flow the list is empty and the renderer draws `flows.empty` ("No flows yet") with "Make a new flow".
 
 #### `flows.get` (changed)
 
@@ -630,39 +622,33 @@ type SettingsPatch = {
 - Output: `StartOutcome`.
 - Errors: `not_found` (flow; run).
 - Topics: writes `runs`, `chats`, `activity`.
-- Does: `starts.request(flowId, source, context)` (`START`): a `new` or `changed` flow posts a confirm card in a FlowDriven chat and a Needs-you item (`needs_confirmation`); missing required inputs post one question in a FlowDriven chat ("<flow> needs a few details.") (`asked`); otherwise the run starts on the main agent and its default model (the busy fallback may apply, FS-j12.P3). `again` takes the inputs of `fromRunId` and runs the flow's current confirmed version (FS-j25.P2). With the permission off: `refused`, `permission_off`, and no run.
-- Tests first: on a confirmed flow with nothing missing, one run with `source: "flows"`, `agent.choice: "main"`; on a `changed` flow, no run and a `needs_confirmation` outcome with a confirm card; with missing inputs, no run and one waiting question (FS-j21.A3); `again` uses the earlier run's inputs and the current hash; a `source: "chat"` input is refused by the schema.
+- Does: `starts.request(flowId, source, context)` (`START`): a `new` or `changed` flow posts a confirm card in a FlowDriven chat and a Needs-you item (`needs_confirmation`); missing required inputs post one question in a FlowDriven chat (a line, English: "<flow> needs a few details.") (`asked`); otherwise the run starts on the main agent and its default model (the busy fallback may apply, FS-j12.P3). `again` takes the inputs of `fromRunId` and runs the flow's current confirmed version (FS-j25.P2). With the permission off: `{outcome: "refused", reason: "permission_off"}` and no run; the renderer shows `chat.permissionOff` ("FlowDriven may not run your AI agents.") with "Turn on permission", which opens the permission dialog.
+- Tests first: on a confirmed flow with nothing missing, one run with `source: "flows"`, `agent.choice: "main"`; on a `changed` flow, no run and a `needs_confirmation` outcome with a confirm card; with missing inputs, no run and one waiting question (FS-j21.A3); `again` uses the earlier run's inputs and the current hash; a `source: "chat"` input is refused by the schema; with the permission off the outcome is `refused` with `permission_off` and no run, no `starts` row of outcome `started`.
 
 #### `flows.confirm` (new)
 
 - Input: `{flowId; hash: ContentHash; onItsOwn: TouchId[] (0..100, unique); pins?: Record<string, string (1..600)> (at most 50)}`.
 - Output: `{flow: FlowDetail; rules: {created: RuleId[]; kept: RuleId[]; ended: RuleId[]}}`.
-- Errors: `not_found` (`flow_deleted`); `conflict: hash_mismatch` (the hash is not the head); `invalid_input: touch_unknown`, `pins_missing`, `pin_invalid`; `not_allowed: place_not_fixed`, `never_does`.
+- Errors: `not_found` (`flow_deleted`); `conflict: hash_mismatch` (the hash is not the head); `invalid_input: touch_unknown`, `pins_missing`, `pin_invalid`; `not_allowed: place_not_fixed`, `never_does`, `always_asks` (a touch of a risky kind, `send`, `post`, `pay`, `delete` or `merge`, is in `onItsOwn`).
 - Topics: writes `flows`, `rules`, `chats`, `activity`. Person only.
-- Does: writes the confirmation for exactly `hash` with `onItsOwn` and the pins; creates a standing rule for each non-read touch in `onItsOwn`, keeps a rule whose touch still exists with the same id, effect and place and is still in `onItsOwn`, and revokes the rest (AD-07); closes the flow's open confirm-kind waiting question; open confirm cards of the flow show as answered and do not start anything. Audit `flow_confirmed`, `rule_created`, `rule_revoked`. The same function serves Save flow, Save change and the `confirm_flow` card action.
-- Tests first: confirming hash H2 when the head is H3 gives `conflict: hash_mismatch` and writes nothing; a `send` touch with a fixed place in `onItsOwn` makes one rule; a touch without a fixed place gives `not_allowed: place_not_fixed`; a `not_allowed` touch gives `never_does`; a re-confirm after a change keeps the matching rule and revokes the one whose place changed (FS-j24.A14).
+- Does: writes the confirmation for exactly `hash` with `onItsOwn` and the pins; creates a standing rule for each non-read touch in `onItsOwn` (in V1 only `local_write`, `run_command` and `change` can be there, each with a place kind that fits its effect: `change` an `account` or a `folder`, `local_write` a `folder`, `run_command` a `command`; any other place kind is `place_not_fixed`), keeps a rule whose touch still exists with the same id, effect and place and is still in `onItsOwn`, and revokes the rest (AD-07); closes the flow's open confirm-kind waiting question; open confirm cards of the flow show as answered and do not start anything. Audit `flow_confirmed`, `rule_created`, `rule_revoked`. The same function serves Save flow, Save change and the `confirm_flow` card action.
+- Tests first: confirming hash H2 when the head is H3 gives `conflict: hash_mismatch` and writes nothing; a `change` touch with a fixed place in `onItsOwn` makes one rule; a `send`, `post`, `pay`, `delete` or `merge` touch in `onItsOwn` gives `not_allowed: always_asks` and writes nothing (no confirmation, no rule); a touch without a fixed place gives `not_allowed: place_not_fixed`; a `not_allowed` touch gives `never_does`; a re-confirm after a change keeps the matching rule and revokes the one whose place changed (FS-j24.A14).
 
 #### `flows.setSchedule` (new)
 
 - Input: `{flowId; hash: ContentHash; schedule: ScheduleSpec}`.
-- Output: `{schedule: ScheduleView; firstRun?: StartOutcome}`.
+- Output: `{schedule: ScheduleView}`.
 - Errors: `not_found`; `not_allowed: flow_not_confirmed`; `conflict: hash_mismatch`; `invalid_input: schedule_self`, `schedule_loop`, `schedule_target_missing`, `bad_time`, `bad_day`, `last_answers_incomplete`.
 - Topics: writes `flows`, `runs`, `chats`, `activity`. Person only.
-- Does: needs the flow `confirmed` at `hash` (FS-j21.A6). Refuses an `after` that names the flow itself, a missing flow, or a loop (FS-j21.E3), and `whenItsTime: "last"` when the last answers do not cover the required inputs. `manual` removes the schedule. Turning on a time schedule for a flow with no `done` run saves it and then calls `starts.request(flowId, "try_next", {slotAt: now})`; the outcome is `firstRun` (FS-j28.P11). Audit `schedule_changed`.
-- Tests first: `{type: "after", afterFlowId: <itself>}` gives `schedule_self`; an `after` that closes a loop gives `schedule_loop`; `time: "25:00"` is refused by the schema; a first time schedule on a never-run flow returns `firstRun.outcome` `started` or `asked`; an `after` schedule never returns `firstRun`; the flow's hash is unchanged.
+- Does: needs the flow `confirmed` at `hash` (FS-j21.A6). Refuses an `after` that names the flow itself, a missing flow, or a loop (FS-j21.E3), and `whenItsTime: "last"` when the last answers do not cover the required inputs. `manual` removes the schedule. Turning a schedule on never starts a run (decided for V1, revisable); the offer "Run it now?" that follows Save flow is a card, not part of this operation. Audit `schedule_changed`.
+- Tests first: `{type: "after", afterFlowId: <itself>}` gives `schedule_self`; an `after` that closes a loop gives `schedule_loop`; `time: "25:00"` is refused by the schema; turning on a time schedule for a flow that never ran creates no run, no question and no `starts` row, and the output has only `schedule`; the flow's hash is unchanged.
 
 #### `flows.tryNextRun` (new)
 
-- Input: `{flowId; missedStartId?: StartId}`. Output: `StartOutcome`.
-- Errors: `not_found`; `not_allowed: no_schedule` (a manual flow without `missedStartId`); `conflict: already_ran_late`.
-- Does: `starts.request(flowId, "try_next", {slotAt})` with `slotAt` now, or the missed slot for "Run it now" on a "Missed" row (FS-j28.P9; the row then reads "Run late"). An open waiting question is reused (`reused: true`).
-- Tests first: twice in a row gives one question and `reused: true` the second time; with `missedStartId`, "today" in the started run resolves to the missed slot's date in `Asia/Jakarta`.
-
-#### `flows.duplicate` (new)
-
-- Input: `{flowId}`. Output: `{flowId: FlowId; name: string}`.
-- Does: copies the head version's files into a new flow, "<name> (copy)", state `new`, no schedule, no standing rules, no remembered answers (FS-j21.A17). Audit `flow_duplicated`.
-- Tests first: the original's hash, rules and schedule are unchanged; the copy is `new`.
+- Input: `{flowId}`. Output: `StartOutcome`.
+- Errors: `not_found`; `not_allowed: no_schedule` (a manual flow).
+- Does: `starts.request(flowId, "try_next", {slotAt})` with `slotAt` now. An open waiting question is reused (`reused: true`). There is no "Run it now" for a missed slot in V1 (Activity shows run rows only).
+- Tests first: twice in a row gives one question and `reused: true` the second time; "today" in the started run resolves to the date of now in the person's zone (the test uses the zone `Asia/Bangkok`); the input schema refuses any key besides `flowId`.
 
 #### `flows.delete` (new)
 
@@ -674,13 +660,7 @@ type SettingsPatch = {
 
 ### 6.6 Starts
 
-`starts.request(flowId, source, context)` (`packages/runner/src/starts/start-rule.ts`, new) is internal, not an operation: every start outside a typed chat request reaches it (`START`), and it returns a `StartOutcome` and writes one `starts` row.
-
-#### `starts.next` (new)
-
-- Input: `{withinHours: 1..48}`. Output: `{next?: {flowId: FlowId; flowName: string; at: IsoDateTime}; language: LanguageCode}`; main draws the line in that language.
-- Does: the next due time schedule of a confirmed flow. Electron main calls it when the menu bar menu opens, for the line "Quitting stops your schedules. Next: <flow>, <time>." (FS-j28.P10).
-- Tests first: with schedules at 17:00 today and 08:00 Monday, `withinHours: 24` at 14:00 gives the 17:00 one; nothing due gives `{}`.
+`starts.request(flowId, source, context)` (`packages/runner/src/starts/start-rule.ts`, new) is internal, not an operation: every start outside a typed chat request reaches it (`START`), and it returns a `StartOutcome` and writes one `starts` row. V1 has no operation that lists the next scheduled start: the menu-bar line and its `starts.next` call left V1 with the menu-bar icon (section 12.7).
 
 ### 6.7 Runs
 
@@ -702,8 +682,8 @@ type SettingsPatch = {
 #### `runs.export` (changed)
 
 - Input: `{runId}`. Output: `{parts: ExportParts; language: LanguageCode}`, where `ExportParts` is `{flowName; startedAt; endedAt?; state: RunState; cause?: Cause; startWords?: Line; summary: string[]; steps: {title: string; state: StepRunState}[]; decisionLines: Line[]; answer?: {lines: string[]; values: Record<string, TypedValue>}; outside: boolean}`.
-- Does: the parts of "Copy report" (`data-model.md`, section 8), built on request and never stored. The runner masks anything that looks like a secret as "[hidden]" and replaces hidden characters with their visible marks in every text part before it returns them; the renderer builds the Markdown in the app language, with the answer lines in the run's language (`apps/desktop/src/screens/activity/copy-report.ts`, new).
-- Tests first: runner (L3): a test secret built at run time appears as "[hidden]" in the parts; a zero-width character built with `String.fromCodePoint(0x200b)` appears as its visible mark; no part holds the run id. Renderer (L2): the Markdown starts with `# <flow>, <when>`, has `Result: <words>`, `Ended: <time>` and `## Summary`, in English and in Bahasa Indonesia (FS-j25.A12).
+- Does: the parts of "Copy report" (`data-model.md`, section 8), built on request and never stored. The runner masks a secret as "[hidden]" by a named pattern list (keys that start with `sk-`, tokens that start with `ghp_`, `Bearer` values and the value of every `secret_ref` input) and replaces hidden characters with their visible marks in every text part before it returns them; the run page's text is masked by the same list. V1 does not prove more: a secret that matches no pattern, and a secret inside the person's own files that an agent reads, can still appear on the run page and reach the model maker; the renderer builds the Markdown in the app language, with the answer lines in the run's language (`apps/desktop/src/screens/activity/copy-report.ts`, new).
+- Tests first: runner (L3): a test secret of each pattern kind, built at run time, appears as "[hidden]" in the parts and a value that matches no pattern is left as it is; a zero-width character built with `String.fromCodePoint(0x200b)` appears as its visible mark; no part holds the run id. Renderer (L2): the Markdown starts with `# <flow>, <when>`, has `Result: <words>`, `Ended: <time>` and `## Summary`, in English and in Bahasa Indonesia (FS-j25.A12).
 
 #### `runs.resume` (changed)
 
@@ -717,7 +697,7 @@ type SettingsPatch = {
 - Input: `{runId}`. Output: `{run: RunSummary; changed: boolean}`.
 - Errors: `not_found`.
 - Topics: writes `runs`, `approvals`, `chats`, `activity`.
-- Does: for `queued`, `checking`, `running`, `retrying`, `waiting_approval` and `needs_login`: ends the agent's process group at once (SR-8), sets the run and its running step `stopped` with cause `stopped`, expires its pending decisions (`resolvedVia: "stop"`) and clears their notices, starts the next queued run of the same flow, and in a chain posts "Stopped. <names> did not start." A run that already ended returns unchanged with `changed: false`. No dialog. Audit `run_stopped`.
+- Does: for `queued`, `checking`, `running`, `retrying`, `waiting_approval` and `needs_login`: ends the agent's process group at once (SR-8), sets the run and its running step `stopped` with cause `stopped`, expires its pending decisions (`resolvedVia: "stop"`) and clears their notices, starts the next queued run of the same flow, and in a chain posts a line (English: "Stopped. <names> did not start.") A run that already ended returns unchanged with `changed: false`. No dialog. Audit `run_stopped`.
 - Tests first: the fake claude's process group is gone within 2 seconds (injected kill seam); the decision is `expired`; a second call returns `changed: false`; the queued run of the flow moves to `checking`.
 
 ### 6.8 Decisions
@@ -725,21 +705,21 @@ type SettingsPatch = {
 #### `approvals.list` (changed)
 
 - Input: `{state?: ApprovalState; runId?: RunId; flowId?: FlowId}`. Output: `Approval[]`, newest first. It includes the synthetic `weekly_limit` and `budget_raise` decisions.
-- Tests first: the expiry sweep runs before the list (a decision 24 hours old reads `expired`); `canAlwaysAllow` is false for a place taken from outside text.
+- Tests first: the expiry sweep runs before the list (a decision 24 hours old reads `expired`); `canAlwaysAllow` is false for a place taken from outside text and for every decision of effect `send`, `post`, `pay`, `delete` or `merge`, and true for a `change` with a fixed place.
 
 #### `approvals.resolve` (changed)
 
 - Input: `{approvalId; decision: ApprovalDecision; editedText?: string (1..4000); editedSubject?: string (1..300)}`; `editedText` exactly when `decision` is `edit`.
 - Output: `{decision: Approval; stepWaiting: number; ruleId?: RuleId}`.
-- Errors: `not_found`; `conflict: already_answered` (params `via`), `decision_expired`; `invalid_input: edit_not_allowed`, `empty_text`, `hidden_characters`; `not_allowed: place_not_fixed`, `raise_in_settings` (a `budget_raise` decision), `phone_no_rules` (V2).
+- Errors: `not_found`; `conflict: already_answered` (params `via`), `decision_expired`; `invalid_input: edit_not_allowed`, `empty_text`, `hidden_characters`; `not_allowed: place_not_fixed`, `always_asks` (`always_allow` on a decision of effect `send`, `post`, `pay`, `delete` or `merge`), `raise_in_settings` (a `budget_raise` decision), `phone_no_rules` (V2).
 - Topics: writes `approvals`, `runs`, `rules`, `chats`, `activity`. Person only (the phone: restricted).
 - Does (AD-07):
-  - `approve`: a one-time grant for the run, step, item, tool and exact digest; state `approved`; the step re-runs and the call is made once, exactly as written; line "You approved: <title>."
-  - `edit` (email and text payloads only; recipients never change): state `approved_edited`; the grant is bound to the digest of the edited call; line "You approved your edited version: <title>."
-  - `reject`: state `rejected`; the action is skipped, the step is `skipped`, later steps that needed its result are skipped and listed, and the run goes on; line "You said no: <title>. It was not done." No dialog.
-  - `always_allow` (window only, a fixed place not taken from outside text): approves as `approve` and writes a standing rule `{flow, touch, effect, place}`; state `allowed_always`; line "You approved: <title>."
+  - `approve`: a one-time grant for the run, step, item, tool and exact digest; state `approved`; the step re-runs and the call is made once, exactly as written; decision line `report.youApproved` (English: "You approved: <title>.")
+  - `edit` (email and text payloads only; recipients never change): state `approved_edited`; the grant is bound to the digest of the edited call; decision line `report.youApprovedEdited` (English: "You approved your edited version: <title>.")
+  - `reject`: state `rejected`; the action is skipped, the step is `skipped`, later steps that needed its result are skipped and listed, and the run goes on; decision line `report.youSaidNo` (English: "You said no: <title>. It was not done."). No dialog. For the rest of that run no standing rule applies, and a held call of the run shows the normal decision card.
+  - `always_allow` (window only; only for a pending `risky_action` decision whose effect is `change`, at a fixed place not taken from outside text): approves as `approve` and writes a standing rule `{flow, touch, effect, place}`; state `allowed_always`; decision line `report.youApproved`. A decision of effect `send`, `post`, `pay`, `delete` or `merge` gives `not_allowed: always_asks`; a place that is not fixed gives `place_not_fixed`.
   - Every decision clears its notice (`notice_clear`), audits `decision_made`, and, when the step has no more pending decisions, lets the run continue.
-- Tests first: an approved grant allows one exact call and holds the same call with another input (FS-j20.A14); a second resolve gives `conflict: already_answered` with `via: "window"`; at the expiry moment (injected clock) `approve` gives `decision_expired`; `edit` with text built from `String.fromCodePoint(0x202e)` gives `hidden_characters`; `edit` of a `diff` payload gives `edit_not_allowed`; `reject` leaves the run `running` and the step `skipped` (FS-j24.A6); `always_allow` on a reply whose address came from the run gives `place_not_fixed`.
+- Tests first: an approved grant allows one exact call and holds the same call with another input (FS-j20.A14); a second resolve gives `conflict: already_answered` with `via: "window"`; at the expiry moment (injected clock) `approve` gives `decision_expired`; `edit` with text built from `String.fromCodePoint(0x202e)` gives `hidden_characters`; `edit` of a `diff` payload gives `edit_not_allowed`; `reject` leaves the run `running` and the step `skipped` (FS-j24.A6); `always_allow` on a `change` whose place came from the run gives `place_not_fixed`; `always_allow` on a `send` reply, even with an address that is fixed, gives `always_asks` and writes no rule.
 
 #### `approvals.answer` (changed)
 
@@ -753,7 +733,7 @@ type SettingsPatch = {
 - Input: `{runId; group: string (1..100); approvalIds: DecisionId[] (2..50)}`: the items the dialog listed.
 - Output: `{decisions: Approval[]}`.
 - Errors: `not_found`; `conflict: list_changed` (params: the current ids); `not_allowed: kind_not_batchable`.
-- Does: approves exactly those pending decisions of that run and group, each with its own grant bound to its own exact input (FS-j24.P3), when the pending set of the group equals `approvalIds`; otherwise approves nothing. Only `risky_action` decisions with `riskyAction` `send` or `post`. Audit `decisions_batch` and one `decision_made` each.
+- Does: approves exactly those pending decisions of that run and group, each with its own grant bound to its own exact input (FS-j24.P3), when the pending set of the group equals `approvalIds`; otherwise approves nothing. Only `risky_action` decisions with `riskyAction` `send` or `post`, one run only. The renderer's dialog lists every item in full before it calls this: every recipient, the subject and the whole text (renderer test L2: the dialog shows each held payload in full, and the button calls nothing until the dialog is open). Audit `decisions_batch` and one `decision_made` each.
 - Tests first: three pending replies approved by their three ids give three grants with three digests; a fourth reply that arrived after the dialog opened gives `list_changed` and approves nothing; a batch of `delete` decisions gives `kind_not_batchable`.
 
 ### 6.9 Rules
@@ -775,8 +755,8 @@ type SettingsPatch = {
 #### `activity.summary` (new)
 
 - Input: `{filter?: "all" | "finished" | "problems" (default "all"); limit?; before?}`. Output: `ActivitySummary`.
-- Does: Needs you, Running now and Earlier (FS-j25.P1). `finished` keeps runs in `done`; `problems` keeps runs in `failed`, `blocked`, `interrupted` and `needs_login` (FS-j25.A1); `all` also shows "Missed" and "Skipped" rows.
-- Tests first: an open scheduled question comes before decisions and counts in `needsYouCount`; a question typed in the person's own chat (not proactive) is not a Needs-you item; an empty store gives three empty lists.
+- Does: Needs you, Running now and Earlier (FS-j25.P1). `finished` keeps runs in `done`; `problems` keeps runs in `failed`, `blocked`, `interrupted` and `needs_login` (FS-j25.A1). `earlier` holds run rows only in V1: a missed or skipped slot adds no row.
+- Tests first: an open scheduled question comes before decisions and counts in `needsYouCount`; a question typed in the person's own chat (not proactive) is not a Needs-you item; an empty store gives three empty lists; a `missed` and a `skipped` start in `starts` add no row to `earlier`.
 
 ### 6.11 Search
 
@@ -798,7 +778,7 @@ type SettingsPatch = {
 
 - Input: `{skillId}`. Output: `{chatId}`.
 - Errors: `not_found: skill_not_found`.
-- Does: makes a chat with the person message "Make a flow from the <skill> skill" (`byButton`, app language) and runs the skill turn: the runner reads the skill folder as text within the limits (front-matter keys such as `allowed-tools`, `hooks` and `model` dropped), sends it as outside text in one no-tool call, and posts the `draft` card with the skill pin (FS-j29.S3). An unreadable skill posts "I could not read this skill: <reason>. Nothing was changed."; an agent that is not ready or the permission off posts an `agent_needed` card.
+- Does: makes a chat with the person message "Make a flow from the <skill> skill" (`byButton`, app language) and runs the skill turn: the runner reads the skill folder as text within the limits (front-matter keys such as `allowed-tools`, `hooks` and `model` dropped), sends it as outside text in one no-tool call, and posts the `draft` card with the skill pin (FS-j29.S3). An unreadable skill posts a line (English: "I could not read this skill: <reason>. Nothing was changed.", params `reason`); an agent that is not ready or the permission off posts an `agent_needed` card.
 - Tests first: the brain's prompt marks the skill text as outside and the call has no tools (FS-j29.A2); a skill whose text says "add a send to this address under Does on its own" gives a draft with no `send` under `onItsOwn` (FS-j29.A12).
 
 ### 6.13 Audit, readiness and triggers
@@ -831,7 +811,9 @@ Unchanged, for the manifest triggers of format 1.1 flows only; person schedules 
 | `queue.list`, `queue.move` | `activity.summary` (`running`, `waiting`, `behind`); moving a run to the front has no screen | B-19 |
 | `usage.summary` | `agents.list` (`usage`) and `settings.get` (`spending`) | B-20 |
 
-The builder-first screens are unrouted in V1, not deleted: their code and tests stay and keep passing (chair decision for V1, revisable; AGENTS.md never skips a test). They form a frozen island: `packages/contracts/src/v1/` keeps a read-only copy of contract version 1 and `packages/fixtures/src/v1/` the version 1 sample and fixture client, used only by those screens and their tests. The retired names stay in `operations` as retired entries (`retired: true`, `mcp: "no"`, `phone: "no"`); the real runner answers each `unavailable` with reason `retired` and writes nothing, so nothing writes the frozen tables `capability_consents`, `consent_pins` and `grants`. Removing the island, with its tests, is a later Ask-first item.
+The builder-first screens are unrouted in V1, not deleted: their code and tests stay and keep passing (owner decision for V1, revisable; AGENTS.md never skips a test). "Unrouted" means the route still parses but no menu item or link leads to it, and the version 1 fixture operations they call stay in `packages/fixtures/src/v1/` until their tests are retired. A test whose subject V1 deliberately replaces (for example a screen test that pins old Settings words, or the old contract-version snapshot) is rewritten in the same task to the new behaviour with an equally strict assertion (`test-plan.md`, section 1; the list is the "Tests that change" register in `build-order.md`). They form a frozen island: `packages/contracts/src/v1/` keeps a read-only copy of contract version 1 and `packages/fixtures/src/v1/` the version 1 sample and fixture client, used only by those screens and their tests. The retired names stay in `operations` as retired entries (`retired: true`, `mcp: "no"`, `phone: "no"`); the real runner answers each `unavailable` with reason `retired` and writes nothing, so nothing writes the frozen tables `capability_consents`, `consent_pins` and `grants`. Removing the island, with its tests, is a later Ask-first item.
+
+Two operations were designed for version 2 and then left V1 (decided 2026-11-21): `flows.duplicate` ("Duplicate" on the flow page) and `starts.next` (the menu-bar line). They are not retired entries, because contract version 1 never had them; the snapshot of live names (2.2) does not hold them. Both go into the prototype first, later.
 
 ## 8. Cards and card actions
 
@@ -843,7 +825,7 @@ The builder-first screens are unrouted in V1, not deleted: their code and tests 
 4. Only the `window` caller may call it (person only).
 5. An action that starts a run needs `agentPermission: "on"`; otherwise `not_allowed: permission_off`, and the card stays open.
 6. The card's answer and the action's effect commit in one transaction; FlowDriven's follow-up messages are posted after it.
-7. Typed words never answer a card: while a card that needs a click is open, a turn that would act on it posts "Use the buttons on the card above." (FS-j20.P5). A chat turn never calls `chats.act`.
+7. Typed words never answer a card: while a card that needs a click is open, a turn that would act on it posts a line (English: "Use the buttons on the card above.") (FS-j20.P5). A chat turn never calls `chats.act`.
 8. Decision cards and run cards are views of a decision or a run: their buttons call `approvals.resolve`, `approvals.answer`, `approvals.resolveSimilar` and `runs.stop`, the same calls Activity makes, so a decision is answered in one place only (FS-j24.P9).
 
 ### 8.2 Card types and actions
@@ -869,8 +851,7 @@ type CardView = CardBase & (
   | { type: "repeat_offer"; flowId: FlowId; name: string; afterFlowId: FlowId; afterName: string; replaces?: ScheduleView }
   | { type: "run_offer"; flowId: FlowId; name: string; schedule: ScheduleView; suggested?: ScheduleSpec }
   | { type: "choose"; purpose: "flow" | "skill"; options: { value: string; label: string }[] }
-  | { type: "agent_needed"; need: "permission" | "set_up" | "sign_in"; agentId?: AgentId; agentName?: string }
-  | { type: "other_agent"; agentId: AgentId; agentName: string; reason: Line; for: "run" | "draft" | "change" }
+  | { type: "agent_needed"; need: "permission" | "set_up" | "sign_in"; agentId?: AgentId; agentName?: string }   // need "permission": the line `chat.permissionOff`, with the button "Turn on permission"
   | { type: "turn_failed"; forMessageId: MessageId; failure: "not_understood" | "no_usage" | "spending_limit" | "agent_failed" | "timeout" | "interrupted"; agentName?: string; until?: IsoDateTime }
 );
 type CardBase = { state: "open" | "answered" | "replaced" | "cancelled" | "stale" | "flow_deleted"; answer?: { action: CardAction; at: IsoDateTime } };
@@ -889,7 +870,6 @@ type ChatAct =
   | { action: "every_time" } | { action: "only_this_time" }
   | { action: "run_now" } | { action: "propose_schedule" }
   | { action: "choose"; values: { option: string } }
-  | { action: "use_other_agent" }
   | { action: "retry_turn" }
   | { action: "suggestion"; values: { chip: number } };
 type CardAction = ChatAct["action"];
@@ -897,31 +877,30 @@ type CardAction = ChatAct["action"];
 
 | Card | Posted when | Button | Action | What FlowDriven does | Guarded by |
 |---|---|---|---|---|---|
-| `plan` | intent `run_together` or `run_chain` | "Start" | `start` | Records the chat's agent and model now for every run (FS-j31.P6). A `new` or `changed` flow posts a `confirm` card (`then: "start"`) and the plan waits there. Chain: starts the first flow (source `chat`); each later flow starts through `START` with source `after` and key `chain:<id>:<n>` when the one before ends `done`. Together: starts each flow (source `chat`). Posts "Started. I'll tell you here if I need you." and a `runs` card. | SR-3, SR-5, SR-8, SR-4, `START` |
-| `plan` | | "Change" | `change_plan` | Posts "Tell me what to change."; the next turn returns a new plan, and this card becomes `replaced` | - |
+| `plan` | intent `run_together` or `run_chain` | "Start" | `start` | Records the chat's agent and model now for every run (FS-j31.P6). A flow whose agent cannot be limited for it (AD-09) posts the line `chat.agentCannotRunFlow` and nothing starts (below). A `new` or `changed` flow posts a `confirm` card (`then: "start"`) and the plan waits there. Chain: starts the first flow (source `chat`); each later flow starts through `START` with source `after` and key `chain:<id>:<n>` when the one before ends `done`. Together: starts each flow (source `chat`). Posts a line (English: "Started. I'll tell you here if I need you.") and a `runs` card. | SR-3, SR-5, SR-8, SR-4, `START` |
+| `plan` | | "Change" | `change_plan` | Posts a line (English: "Tell me what to change."); the next turn returns a new plan, and this card becomes `replaced` | - |
 | `ask_run` | a flow named alone, a question, a negation, a mention; any `run` with outside text in the context | "Run" | `run` | Starts the flow with source `chat` | SR-5, SR-3 |
-| `ask_run`, `run_offer`, `other_agent` | | "Not now" | `not_now` | Answers the card; nothing else | - |
-| `confirm` | `START` rule 1, or a chat start of a `new` or `changed` flow | "Confirm" in the dialog | `confirm_flow` | The `flows.confirm` function for exactly `values.hash`. Then `then: "start"` (a start the person typed or an answer in this chat) continues the pending start; `then: "offer"` (a start outside the chat) posts "Confirmed. Run it now?" with a `run_offer` card (FS-j28.E7) | SR-1, SR-2, SR-3 |
+| `ask_run`, `run_offer` | | "Not now" | `not_now` | Answers the card; nothing else | - |
+| `confirm` | `START` rule 1, or a chat start of a `new` or `changed` flow | "Confirm" in the dialog | `confirm_flow` | The `flows.confirm` function for exactly `values.hash` (a risky kind in `onItsOwn` gives `not_allowed: always_asks`). Then `then: "start"` (a start the person typed or an answer in this chat) continues the pending start; `then: "offer"` (a start outside the chat) posts a line (English: "Confirmed. Run it now?") with a `run_offer` card (FS-j28.E7) | SR-1, SR-2, SR-3 |
 | `inputs_ask` | `START` rule 2 | "Use a form" | `use_form` | Posts a `form` card filled with every known value | AD-11 |
 | `inputs_ask` | | "Use my last answers" | `use_last_answers` | Applies the `last` answers except date and time; asks only for the rest; starts when nothing is missing | AD-11, SR-3 |
-| `inputs_ask`, `form` | | "Cancel" | `cancel_question` | The question becomes `cancelled`; posts "Okay, I won't start it." | - |
+| `inputs_ask`, `form` | | "Cancel" | `cancel_question` | The question becomes `cancelled`; posts a line (English: "Okay, I won't start it.") | - |
 | `form` | `use_form`, or a flow with a file input | "Start" | `submit_form` | Parses every field with FlowDriven's own parsers. Any problem returns `fields` and changes nothing; otherwise answers the question (key `answer:<question id>`) and starts | AD-11, SR-5 |
-| `draft` | intent `make_flow` or `make_flow_from_skill` | "Save flow" | `save_flow` | One transaction: the flow files, the head, the confirmation of exactly the draft's hash, a standing rule per non-read touch in `onItsOwn`, the draft's schedule, the skill pin, the audit; posts "Saved. It runs every Friday at 17:00. Run it now?" or "<name> is ready. Run it now, or put it on a schedule." with a `run_offer` card. Refused for a `replaced` or stale draft ("This draft was replaced. Use the newest one.", "The skill changed since I read it. I'll read it again.") | SR-1, SR-2, SR-3, SR-5 |
-| `draft` | | "Change something" | `change_draft` | With `values.text`: one turn with the draft and the change, a new draft card, this card `replaced`. Without: posts "Tell me what to change." and the chat's subject becomes this draft | - |
-| `change` | intent `improve_flow` | "Save change" | `save_change` | One transaction: the new version, the head, the confirmation of the new hash, rules kept or revoked, the audit; posts "Saved. The change applies from the next run." Refused when the flow's head is not the draft's base ("This flow changed since I made this suggestion. Ask again.") | SR-1, SR-3 |
+| `draft` | intent `make_flow` or `make_flow_from_skill` | "Save flow" | `save_flow` | One transaction: the flow files, the head, the confirmation of exactly the draft's hash, a standing rule per non-read touch in `onItsOwn`, the draft's schedule, the skill pin, the audit; posts a line (English: "Saved. It runs every Friday at 17:00. Run it now?" or "<name> is ready. Run it now, or put it on a schedule.") with a `run_offer` card; saving never starts a run by itself. Refused for a `replaced` or stale draft (English: "This draft was replaced. Use the newest one.", "The skill changed since I read it. I'll read it again.") | SR-1, SR-2, SR-3, SR-5 |
+| `draft` | | "Change something" | `change_draft` | With `values.text`: one turn with the draft and the change, a new draft card, this card `replaced`. Without: posts a line (English: "Tell me what to change.") and the chat's subject becomes this draft | - |
+| `change` | intent `improve_flow` | "Save change" | `save_change` | One transaction: the new version, the head, the confirmation of the new hash, rules kept or revoked, the audit; posts a line (English: "Saved. The change applies from the next run."). Refused when the flow's head is not the draft's base (English: "This flow changed since I made this suggestion. Ask again.") | SR-1, SR-3 |
 | `change` | | "Cancel" | `cancel_change` | The draft becomes `cancelled` | - |
-| `schedule` | intent `schedule`, or `propose_schedule` | "Yes, set it" | `set_schedule` | `flows.setSchedule` with the flow's confirmed hash, including the first-run rule; the card says what it replaces | SR-2, SR-3 |
+| `schedule` | intent `schedule`, or `propose_schedule` | "Yes, set it" | `set_schedule` | `flows.setSchedule` with the flow's confirmed hash; it sets the schedule and starts nothing; the card says what it replaces | SR-2, SR-3 |
 | `schedule` | | "No" | `skip_schedule` | Nothing | - |
 | `unschedule` | intent `unschedule` | "Yes, turn it off" | `turn_off_schedule` | The schedule becomes manual | SR-2 |
 | `unschedule` | | "No" | `keep_schedule` | Nothing | - |
 | `stop` | intent `stop` (typed) | "Stop" | `stop_runs` | `runs.stop` for each listed run that is still active | SR-8 |
 | `stop` | | "Keep it running" | `keep_running` | Nothing | - |
-| `repeat_offer` | a chain ended `done` with nothing rejected and no `after` schedule yet | "Yes, every time" | `every_time` | Sets the later flow's schedule to `after` the first, replacing its old schedule; posts "Done. Next time ..." | SR-2 |
+| `repeat_offer` | a chain ended `done` with nothing rejected and no `after` schedule yet | "Yes, every time" | `every_time` | Sets the later flow's schedule to `after` the first, replacing its old schedule; posts a line (English: "Done. Next time ...") | SR-2 |
 | `repeat_offer` | | "Only this time" | `only_this_time` | Nothing | - |
 | `run_offer` | after Save flow, a skill flow, or a confirm with `then: "offer"` | "Run now", "Run it now" | `run_now` | Starts the flow with source `chat` | SR-3 |
 | `run_offer` | | the schedule chip ("Every Friday at 16:00") | `propose_schedule` | Posts a `schedule` card with the suggested schedule; sets nothing | SR-2 |
 | `choose` | an unknown or ambiguous flow or skill name | one option per match | `choose` | Continues the pending intent with that flow or skill | - |
-| `other_agent` | the chat's agent cannot be limited for the flow (AD-09) | "Run with Claude Code this time", "Use Claude Code for this draft" | `use_other_agent` | Runs the pending start or turn once on the named agent and its default model (`agent.choice: "other_agent"`); the chat's choice stays | SR-4 |
 | `turn_failed` | a turn failed or was interrupted | "Try again" | `retry_turn` | Queues the turn of `forMessageId` again | - |
 | any card with suggestion chips | | a suggestion chip | `suggestion` | Posts the chip's text in the app language as the person's message with `fromChip`, then runs a turn; the chat's language does not change (FS-j30.P4) | AD-14 |
 
@@ -932,7 +911,9 @@ Cards with no `chats.act` action:
 | `runs` | "Stop" -> `runs.stop`; "Details" and "See what it needs" -> the run page |
 | `decision` | "Approve", "Always allow for this flow", "Reject", "Edit" -> `approvals.resolve`; "Send choice", "Pick none" -> `approvals.answer`; "Approve all similar (N)" -> its dialog, then `approvals.resolveSimilar`; "Details" -> the run page |
 | `status` | "Open" links to decisions, chats and runs |
-| `agent_needed` | "Sign in to <agent>" -> `agents.signIn`; "Set up <agent>" -> `agents.setUp`; "Open Settings" -> `#/settings` |
+| `agent_needed` | "Sign in to <agent>" -> `agents.signIn`; "Set up <agent>" -> `agents.setUp`; "Turn on permission" (`need: "permission"`) -> opens the "Before you start" permission dialog in the window, whose "Give permission" calls `settings.update {agentPermission: "on"}`; "Open Settings" -> `#/settings` |
+
+When the chat's agent cannot be limited for a flow (AD-09, PU-26), a start from that chat does not run and offers no other agent: the runner posts one line message `chat.agentCannotRunFlow` with the param `agent` (English: "Codex cannot run this flow safely yet. Choose Claude Code in the picker to run it.") and nothing starts; the `starts` row is `refused` with reason `agent_cannot_be_limited`. There is no `other_agent` card and no `use_other_agent` action: the person changes the chat's agent in the picker (`chats.setAgent`) and asks again.
 
 Tests first for the card actions (`packages/runner/src/assistant/cards.test.ts`, new, L3 with the fake brain):
 - `save_flow`: exactly one flow, `confirmed`, bound to the draft's hash; one standing rule per non-read touch in `onItsOwn`, each with its exact place, and none for reads; the schedule row equals the draft's; audit `flow_saved` with the three lists; a second click gives `conflict: card_answered` and still one flow; a failure injected before the commit leaves no row in `flow_heads`, `confirmations` or `standing_rules` (FS-j22.A6, A8, A14).
@@ -941,15 +922,16 @@ Tests first for the card actions (`packages/runner/src/assistant/cards.test.ts`,
 - `submit_form` with the duration "0" returns `fields: [{inputId: "duration", problem: "zero"}]`, starts nothing and keeps the card open; a valid form answers the question, starts the run and writes the `remember` and `last` rows (FS-j27.A8, A10).
 - `use_last_answers` with last answers that cover the required inputs starts the run with today's date from the default, not the last date (FS-j27.A11).
 - `save_change` after the flow's head moved gives `conflict: card_stale` and saves nothing (FS-j23.A12).
-- `change_draft` without text posts "Tell me what to change." and sets the chat's subject; with text it posts a new draft card and the old one reads `replaced` (FS-j22.A10).
+- `change_draft` without text posts a line (English: "Tell me what to change.") and sets the chat's subject; with text it posts a new draft card and the old one reads `replaced` (FS-j22.A10).
 - `every_time` sets the `after` schedule; no typed sentence in any language does (FS-j20.A18).
-- `use_other_agent` records `agent.choice: "other_agent"` on the run and leaves the chat's agent unchanged (FS-j31.A13).
+- A `run` or `start` for a flow that the chat's agent cannot be limited for posts one message with `line.key` `chat.agentCannotRunFlow` and `line.params.agent`, starts nothing, posts no card of type `other_agent`, and the card's action `use_other_agent` is refused by the schema (FS-j31.A13).
+- `save_flow` with a risky touch placed under `onItsOwn` is refused with `always_asks` and saves nothing (the runner places a risky touch under "Asks you first" itself, so only a forged call reaches this).
 - `suggestion` posts a person message with `fromChip: true`, and the chat's language stays as it was (FS-j30.A9).
 - `retry_turn` makes one more brain call with the same text.
 
 ### 8.3 Chips
 
-Chips act by code, so they work in any language (brief 24.11). The starter chips of an empty chat are `ChatView.starters`, built by the runner from the person's own flows: "Run <flow>", "Run <flow>, then <flow>", "Make a new flow" and "What needs me?". `chats.send {chatId, starter}` posts the chip's label as the person's message (a `Line` with `fromChip`) and acts on its code without a brain call: `run` and `run_chain` take the path of a typed run, `make_flow` the path of `chats.create {subject: {kind: "make"}}`, `status` posts the `status` card.
+Chips act by code, so they work in any language (the prototype brief, 'English and Bahasa Indonesia'). The starter chips of an empty chat are `ChatView.starters`, built by the runner from the person's own flows: "Run <flow>", "Run <flow>, then <flow>", "Make a new flow" and "What needs me?"; with no flows yet they are "Make a new flow" and "What needs me?" only, and "What needs me?" with nothing waiting posts the line `chat.nothingWaiting` ("Nothing is waiting for you."). `chats.send {chatId, starter}` posts the chip's label as the person's message (a `Line` with `fromChip`) and acts on its code without a brain call: `run` and `run_chain` take the path of a typed run, `make_flow` the path of `chats.create {subject: {kind: "make"}}`, `status` posts the `status` card.
 
 A chip under a message is one of: a suggestion (`chats.act` `suggestion` with its index; the runner knows the text, so the renderer cannot change it), an action of the message's card (`chats.act` with that action, for example "Use a form" -> `use_form`), or a link to another chat ("Answer in chat"). The starter chips of an empty chat belong to no message: they are sent with `chats.send {fromChip: true}`.
 
@@ -986,17 +968,16 @@ Tests first (`service/events.test.ts`): each row of the table marks exactly its 
 
 ## 10. Notices
 
-A notice is a runner -> main frame that becomes a system notification; it never reaches the renderer. Notices are only for decisions, problems and scheduled questions, never for progress or success (F-16). Main shows one only when no FlowDriven window is focused (`electronNoticeHandler`), and validates it strictly (`parseNotice`).
+A notice is a runner -> main frame that becomes a system notification; it never reaches the renderer. Notices are only for decisions, problems and scheduled questions, never for progress or success (F-16). A start by an `after` schedule sends no notice. Main shows one only when no FlowDriven window is focused (`electronNoticeHandler`), and validates it strictly (`parseNotice`).
 
 | Kind | Status | When | Title and body (words keys) | Target |
 |---|---|---|---|---|
-| `approval_waiting` | kept | a decision is created (also `budget_raise`) | "Waiting for you" and the decision's title | `run` (with `approvalId`), or `activity` for a decision with no run |
-| `run_blocked` | kept | a run becomes `blocked`, `needs_login` or `failed` | the flow name and the cause words | `run` |
-| `weekly_limit` | kept | the weekly-limit question | as today | `activity` |
-| `flood_cap`, `trigger_paused` | kept | as today | as today | `flow` |
-| `question_waiting` | new | a waiting question for missing inputs is created by a start outside the typed chat (FS-j28.S2) | "<flow> needs your answer" and "Open the chat to answer." with no input value | `chat` |
-| `confirm_waiting` | new | a start outside the typed chat finds the flow `new` or `changed` and posts the confirm card (`START` rule 1, FS-j28.E7) | the same words as `question_waiting` (FS-j28.E7) | `chat` |
-| `flow_withdrawn` | V3 | a marketplace flow was revoked | | `flow` |
+| `approval_waiting` | kept | a decision is created (also `budget_raise`) | `notice.decisionTitle` ("FlowDriven needs a decision") and `notice.decisionBody` ("Open FlowDriven to see what is waiting.") | `run` (with `approvalId`), or `activity` for a decision with no run |
+| `run_blocked` | kept | a run becomes `blocked`, `needs_login` or `failed` | `notice.problemTitle` ("A flow needs your attention") and `notice.problemBody` ("Open Activity to see what happened.") | `run` |
+| `weekly_limit`, `flood_cap`, `trigger_paused` | kept | the weekly-limit question; as today | `notice.limitTitle` ("FlowDriven paused a flow") and `notice.limitBody` ("Open Activity to see why.") | `activity` for `weekly_limit`, `flow` for the others |
+| `question_waiting` | new | a waiting question for missing inputs is created by a start outside the typed chat (FS-j28.S2) | `notice.questionTitle` ("FlowDriven has a question for you") and `notice.questionBody` ("Open the chat to answer.") | `chat` |
+| `confirm_waiting` | new | a start outside the typed chat finds the flow `new` or `changed` and posts the confirm card (`START` rule 1, FS-j28.E7) | the same keys as `question_waiting` (FS-j28.E7) | `chat` |
+| `flow_withdrawn` | V3 | a marketplace flow was revoked | fixed text too; its keys come with V3 | `flow` |
 
 ```ts
 type NoticeTarget =                                        // v2: inbox and builder retire
@@ -1005,14 +986,14 @@ type NoticeTarget =                                        // v2: inbox and buil
   | { screen: "flow"; flowId: NoticeId }                        // #/flows/<flowId>
   | { screen: "activity" }                                      // #/activity
   | { screen: "settings" };                                     // #/settings
-type Notice = { id: string; kind: NoticeKind; title: Line; body: Line; language: LanguageCode; target: NoticeTarget };   // drawn by main; at most 80 and 240 characters once drawn
+type Notice = { id: string; kind: NoticeKind; title: Line; body: Line; language: LanguageCode; target: NoticeTarget };   // title and body are fixed Lines with no params; drawn by main; at most 80 and 240 characters once drawn
 ```
 
-- The runner sends `title` and `body` as `Line` values with the app language at the moment it sends; main draws them with the words of `apps/desktop/src/i18n` (FS-j30.A16). `parseNotice` accepts only keys of `LINE_KEYS`. They hold fixed words and the flow name only: never an email's text, a payload marked sensitive, an input value or a secret (F-16.R6).
+- The runner sends `title` and `body` as `Line` values with the app language at the moment it sends; main draws them with the words of `apps/desktop/src/i18n` (FS-j30.A16). `parseNotice` accepts only the keys of the table above and refuses any `params` on `title` and `body`. The text is fixed: never a decision title, a flow name, a payload, an input value, an email's text or a secret (F-16.R6). Over the tool server (V2) the same holds: `approvals.list` gives the flow id, the step id and the state only (section 5).
 - A notice id is stable per item (for example `approval:<id>`, `question:<id>`), so the same item never notifies twice. Throttling stays in `notify/policy.ts`: at most one per run every 10 minutes unless a decision waits.
 - New frame `notice_clear` (`{jsonrpc: "2.0", method: "notice_clear", params: {id: NoticeId}}`): the runner sends it when the item is decided, answered, cancelled, expired, or its run stops; main closes that notification (F-16.R3).
 
-Tests first: `notice.test.ts` refuses a key outside `LINE_KEYS` and an unknown field; main's drawing test refuses a drawn body over 240 characters; the runner sends one `question_waiting` for a new question and none for a reused one (FS-j28.A12); a slot of a `changed` flow sends one `confirm_waiting`; resolving a decision sends `notice_clear` with `approval:<id>`.
+Tests first: `notice.test.ts` refuses a key outside the table above, a `params` on `title` or `body`, and an unknown field; a held call whose recipient and subject are known never appears in the notice's keys or values (a runner test that sends the notice for such a decision and checks the frame, and a main test that checks the drawn text); main's drawing test refuses a drawn body over 240 characters; the runner sends one `question_waiting` for a new question and none for a reused one (FS-j28.A12); a slot of a `changed` flow sends one `confirm_waiting`; resolving a decision sends `notice_clear` with `approval:<id>`.
 
 ## 11. Errors
 
@@ -1041,7 +1022,7 @@ The frame: `RpcErrorBody = {code: number; message: string; data: {code: RunnerEr
 | `too_large` | unavailable | the answer is over `MAX_FRAME_BYTES` |
 | `internal_error` | unavailable | any other error; audited as `internal_error` |
 | `caller_not_allowed` | not_allowed | the caller (tool, phone) may not call this operation |
-| `permission_off` | not_allowed | `agentPermission` is not `on` |
+| `permission_off` | not_allowed | `agentPermission` is not `on` (`chats.send`, `chats.act` that starts a run, `runs.resume`); `flows.start` returns the outcome `refused` instead |
 | `agent_unknown` | not_found | not an agent of the catalog |
 | `agent_not_installed`, `agent_not_ready` | not_allowed | the agent is not installed, or not `ready` |
 | `setup_running` | conflict | Set up or Sign in is already running for that agent |
@@ -1055,12 +1036,12 @@ The frame: `RpcErrorBody = {code: number; message: string; data: {code: RunnerEr
 | `flow_not_confirmed` | not_allowed | the flow is `new` or `changed` |
 | `hash_mismatch` | conflict | the hash sent is not the flow's head or confirmed hash |
 | `touch_unknown` | invalid_input | `onItsOwn` names a touch the flow does not have |
-| `place_not_fixed` | not_allowed | a rule or "Does on its own" needs a fixed place the touch does not have |
+| `place_not_fixed` | not_allowed | a rule or "Does on its own" needs a fixed place the touch does not have, or the place kind does not fit the effect (change: account or folder; local_write: folder; run_command: command) |
 | `never_does` | not_allowed | the touch's rule is `not_allowed` |
+| `always_asks` | not_allowed | a risky kind (`send`, `post`, `pay`, `delete`, `merge`) was put in `onItsOwn`, or "Always allow for this flow" was asked for a decision of that kind: it always asks in V1 |
 | `pins_missing`, `pin_invalid` | invalid_input | a folder that needs a pin has none, or the path is not allowed |
 | `schedule_self`, `schedule_loop`, `schedule_target_missing`, `bad_time`, `bad_day`, `last_answers_incomplete` | invalid_input | the schedule checks of FS-j21.E3 |
 | `no_schedule` | not_allowed | "Try the next run now" on a manual flow |
-| `already_ran_late` | conflict | the missed row already ran |
 | `card_answered`, `card_replaced`, `card_stale` | conflict | the card is no longer open |
 | `question_answered` | conflict | "This question was already answered." |
 | `unknown_action` | invalid_input | the action does not belong to the card |
@@ -1095,7 +1076,6 @@ declare global {
       window: Readonly<{                                    // new (AD-15); also in capture windows
         getPrefs(): Promise<WindowReply<WindowPrefs>>;                                  // invoke "window:getPrefs"
         setColorMode(mode: "light" | "system" | "dark"): Promise<WindowReply<WindowPrefs>>;   // "window:setColorMode"
-        setBackground(patch: { keepRunning?: boolean; openAtLogin?: boolean }): Promise<WindowReply<WindowPrefs>>;   // "window:setBackground"
         openLink(url: string): Promise<WindowReply<{ opened: boolean }>>;              // "window:openLink"
         quit(): Promise<WindowReply<{}>>;                                               // "window:quit"
       }>;
@@ -1106,7 +1086,7 @@ type RunnerReply =
   | { ok: true; result: unknown }
   | { ok: false; error: { code: string; message: string; reason?: string; params?: Record<string, unknown> } };
 type WindowReply<T> = { ok: true; result: T } | { ok: false; error: { code: "not_allowed" | "invalid_input" | "unavailable"; message: string } };
-type WindowPrefs = { colorMode: "light" | "system" | "dark"; keepRunning: boolean; openAtLogin: boolean; platform: "darwin" | "win32" | "linux" };
+type WindowPrefs = { colorMode: "light" | "system" | "dark"; platform: "darwin" | "win32" | "linux" };
 ```
 
 The renderer reaches the runner only through `RunnerClient` (`IpcRunnerClient` over `runner`, or `FixtureRunnerClient` in a plain browser), and the window through one small module, `apps/desktop/src/shell.ts` (existing). The `WindowPrefs` and `WindowReply` schemas live in `packages/contracts/src/window.ts` (new) so main and the renderer share them; they are versioned with the app, not with `CONTRACT_VERSION`.
@@ -1119,7 +1099,6 @@ The renderer reaches the runner only through `RunnerClient` (`IpcRunnerClient` o
 | `runner:event` | main -> renderer (send) | `(event: RunnerEvent)` | - | `broadcastRunnerEvent` |
 | `window:getPrefs` | renderer -> main (invoke) | `()` | `WindowReply<WindowPrefs>` | `electron/window-api.ts` (new) |
 | `window:setColorMode` | renderer -> main (invoke) | `(mode)` | `WindowReply<WindowPrefs>` | `window-api.ts` with `appearance.ts` (new) |
-| `window:setBackground` | renderer -> main (invoke) | `(patch)` | `WindowReply<WindowPrefs>` | `window-api.ts` with `tray.ts` and `login-item.ts` (new) |
 | `window:openLink` | renderer -> main (invoke) | `(url)` | `WindowReply<{opened}>` | `window-api.ts` |
 | `window:quit` | renderer -> main (invoke) | `()` | `WindowReply<{}>` | `window-api.ts` |
 
@@ -1138,7 +1117,7 @@ Between main and the runner (stdio, newline-delimited JSON-RPC 2.0, `wire.ts`): 
 | Renderer, after the answer | `RunnerReply` shape, then `operations[name].output.parse`; an error becomes a `RunnerError` with its reason |
 | Events | main checks each `event` frame with `RunnerEvent` (new) before broadcasting; the renderer checks it again |
 | Notices | main parses `notice` with `parseNotice` and `notice_clear` with a strict `{id: NoticeId}`; neither reaches the renderer |
-| Window API | main: sender check, exact argument count, the mode in its three values, the patch with only `keepRunning` and `openAtLogin` as booleans (at least one), the URL a string of at most 2,048 characters that parses with `https:` and has no user name or password; the renderer parses the answer with `WindowPrefs` |
+| Window API | main: sender check, exact argument count, the mode in its three values, the URL a string of at most 2,048 characters that parses with `https:` and has no user name or password; the renderer parses the answer with `WindowPrefs` |
 
 ### 12.4 Sender checks
 
@@ -1160,19 +1139,16 @@ Tests first: `runner-link.test.ts` with a stub runner that reports version 1 get
 
 - The app and its runner ship together, so the contract version must be equal; there are no version ranges.
 - A version 7 runner opens stores of versions 0 to 7 and refuses a newer one (`data-model.md`, section 5).
-- Fixtures and sample data validate against contract 2 (`packages/fixtures/src/story-v2/`, new). The unrouted screens use the frozen copies `packages/contracts/src/v1/` and `packages/fixtures/src/v1/` (section 7).
+- Fixtures and sample data validate against contract 2 (`packages/fixtures/src/story-v2/`, new). They are synthetic: the sample story and the fake agents' scripts are written by hand, never recorded from a real account or a real agent run, and a test scans fixtures and test helpers for local paths, `@` addresses and long tokens. The unrouted screens use the frozen copies `packages/contracts/src/v1/` and `packages/fixtures/src/v1/` (section 7).
 - A retired operation answers `unavailable` with reason `retired`.
 - The window API is versioned with the app. V2 and V3 operations raise `CONTRACT_VERSION` (section 13).
 
-### 12.7 Color mode and background
+### 12.7 Color mode
 
-- **Color mode** (AD-15): the renderer calls `window.setColorMode`; main sets `nativeTheme.themeSource` (`light`, `system`, `dark`) and writes `window.json`; at launch main applies the file before the first paint. The CSS follows the media query only. The runner is not called (FS-j12.A2).
-- **Background**: the store's `background` is the person's record (`data-model.md`, 3.18); main applies it.
-  - In Settings, a switch calls `settings.update {patch: {background}}`, then `window.setBackground` with the same values. Main applies the menu bar mode (`tray.ts`) and the login item (`login-item.ts`), and caches `keepRunning` in `window.json`.
-  - At launch the renderer, after `settings.get`, calls `window.getPrefs`. When `openAtLogin` differs, the operating system's value wins (the person changed it in macOS) and the renderer saves it with `settings.update`; when `keepRunning` differs, the store wins and the renderer calls `window.setBackground`.
-  - With `keepRunning` off, closing the last window quits; with it on, FlowDriven stays in the menu bar with "Open FlowDriven" and "Quit", and main calls `starts.next {withinHours: 24}` for the quit line (FS-j28.P10).
+- **Color mode** (AD-15): the renderer calls `window.setColorMode`; main sets `nativeTheme.themeSource` (`light`, `system`, `dark`) and writes `window.json`, which is `{version: 1, colorMode}` and nothing else; at launch main applies the file before the first paint. The CSS follows the media query only. The runner is not called (FS-j12.A2).
+- **No background setting in V1** (decided for V1, revisable): V1 adds no menu-bar icon, no Open at login, no quit warning and no Background section in Settings. It keeps today's macOS behaviour: the app stays alive when its window closes (`apps/desktop/electron/main.ts`), so schedules keep running until the person quits. The menu bar, Open at login and the quit warning go into the prototype first, later. Because of that there is no `window.setBackground` channel, no `tray.ts` and no `login-item.ts`, and `settings.update` has no `background` key.
 
-Tests first: `window-api.test.ts` refuses a call from a frame that is not the app's main frame, an unknown mode, a patch with an extra key and an `http:` link; `setColorMode("dark")` sets `themeSource` and writes the file atomically; an unreadable file gives `system`.
+Tests first: `window-api.test.ts` refuses a call from a frame that is not the app's main frame, an unknown mode, any other method (`setBackground` does not exist), an extra argument and an `http:` link; `setColorMode("dark")` sets `themeSource` and writes the file atomically; an unreadable file gives `system`.
 
 ## 13. Later operations (not in contract version 2)
 
@@ -1200,6 +1176,8 @@ Sketched so the store and the safety rules are ready for them. Each group ships 
 | `market.report`, `market.publish` | `{listingId, text}` / `{flowId, audience}` -> result | publishing needs its dialog for any audience but "Only me" |
 | `market.revocations` | `{}` -> `{checkedAt, stale}` | status only; fetching is the runner's own work |
 
+V2 notes: by default only fixed text reaches a bot (section 10), and risky kinds are decided in the app. Phone approval is a V2 product decision that is made in the prototype when V2 is planned, and it has its own security review before any bot can approve anything.
+
 V2 also adds, between the runner and main, a request frame `secret_request {name, purpose}` that main answers from the keychain at the moment of use, and the `tool` and `phone` callers of section 2.3.
 
 ## 14. Tests first
@@ -1222,8 +1200,13 @@ Shared dispatcher tests (`service/handlers.test.ts`): an unknown name answers -3
 - `approvals.resolve` adds `editedSubject` next to `editedText`, because Edit changes an email's subject and body (FS-j24.P1).
 - Every held call is kind `risky_action` with an `effect`, so the timesheet entry (`change`) needs no new kind.
 - The spending pause is one synthetic `budget_raise` decision with no run, resolved only by raising the limit in Settings.
-- New operations beyond the chair's list: `chats.setComposer` (the per-chat composer text of F-03.R1 survives a restart), `starts.next` (the menu bar's quit line, FS-j28.P10), and the V2 `skills.keepCurrent` ("Keep current version", FS-j26.S14).
-- The window API adds `getPrefs`, `openLink` (AD-16: links open only through main's check) and `quit` (the mismatch screen) to color mode and background.
+- New operations beyond the owner's list: `chats.setComposer` (the per-chat composer text of F-03.R1 survives a restart) and the V2 `skills.keepCurrent` ("Keep current version", FS-j26.S14).
+- The window API is `getPrefs`, `setColorMode`, `openLink` (AD-16: links open only through main's check) and `quit` (the mismatch screen); `WindowPrefs` is `{colorMode, platform}`.
+- Standing rules and "Always allow for this flow" are limited to `change` at a fixed place; a risky kind always asks and is refused in `onItsOwn` with `always_asks`, a new reason. Reason: no ceiling on amount or volume exists for send, post, pay, delete or merge, and a send must not run after a step read a stranger's text.
+- No automatic first run: `flows.setSchedule` returns only `{schedule}`.
+- Activity read model: run rows only; missed and skipped slots stay in `starts`; `flows.tryNextRun` takes `{flowId}` only.
+- One card type fewer: `other_agent` and `use_other_agent` left the contract; PU-26 is the line `chat.agentCannotRunFlow`.
+- Notices are fixed `Line` values with no params, so no decision title, flow name or input value reaches a notification.
 - A `notice_clear` frame removes a notification when its item is decided (F-16.R3).
 - MCP exposure: `flows.list` yes; `flows.get`, `flows.start`, `runs.status` and `approvals.list` restricted; everything else no. Listing decisions is restricted, never `yes`.
 - `phone` and `personOnly` are table fields from version 2, so the rules are tested before the phone exists.
@@ -1243,7 +1226,7 @@ Shared dispatcher tests (`service/handlers.test.ts`): an unknown name answers -3
   - "Yes, every time" and "Only this time" (`j20-run-from-chat.md`, S8) -> `every_time` and `only_this_time`.
   - "Run now" and "Run it now" (`j22-make-a-flow.md`, `j29-flow-from-skill.md`) -> `run_now` on a `run_offer` card; the schedule chip "Every Friday at 16:00" (`j29-flow-from-skill.md`) -> `propose_schedule`.
   - a chip "sent as the person's own message" (`j20-run-from-chat.md`, S2) -> `chats.act` `suggestion` (`j30-app-language.md`); starter chips of an empty chat -> `chats.send {chatId, starter}`, acting by code.
-  - "Try again" after a failed turn (`j22-make-a-flow.md`, E4) -> `retry_turn`; "Run with Claude Code this time" (`j31-agent-and-model.md`) and "Use Claude Code for this run, draft or change" (`j20-run-from-chat.md`, `j22-make-a-flow.md`, `j23-improve-a-flow.md`) -> `use_other_agent`.
+  - "Try again" after a failed turn (`j22-make-a-flow.md`, E4) -> `retry_turn`; "Run with Claude Code this time" (`j31-agent-and-model.md`) and "Use Claude Code for this run, draft or change" (`j20-run-from-chat.md`, `j22-make-a-flow.md`, `j23-improve-a-flow.md`) -> removed from V1; the line `chat.agentCannotRunFlow` replaces them (PU-26).
   - `flows.start {source: "again", inputs: <the run's inputs>}` (`j25-history-and-problems.md`, P2) -> `flows.start {source: "again", fromRunId}`.
   - `approvals.resolveSimilar {runId, group}` (`j24-decisions.md`) -> adds `approvalIds`.
   - the spent amount from `activity.summary` (`j12-settings.md`, S1) -> `settings.get` (`spending`).
@@ -1252,7 +1235,7 @@ Shared dispatcher tests (`service/handlers.test.ts`): an unknown name answers -3
   - flow `signOff` `approved`, `stale`, `none` -> `state` `confirmed`, `changed`, `new`.
   - run cause "Flow not confirmed" (`j25-history-and-problems.md`, P4) -> `flow_not_confirmed`; "You stopped this run." -> `stopped`; "Stopped because you turned off permission." (`j12-settings.md`, E5) -> state `stopped` with cause `permission_off`.
   - parser messages (`j27-flow-inputs.md`, E3) -> `InputProblem` codes `empty`, `unreadable`, `zero`, `too_long`, `too_long_text`, `out_of_range`, `not_a_choice`, `hidden_characters`, read together with the input type.
-  - slot outcome `skipped` (`j28-proactive-schedule.md`) -> Earlier row kind `skipped`.
+  - slot outcome `skipped` (`j28-proactive-schedule.md`) -> a `starts` row with outcome `skipped`; no Earlier row in V1.
   - the notification of a confirm-kind waiting item (`j28-proactive-schedule.md`, E7, which reuses the question's words) -> its own kind `confirm_waiting` with the same words, so the notice policy and its tests can tell the two apart.
-  - a start with the permission off: "a new run is `blocked`" (`j25-history-and-problems.md`, E2 and A15) against "no run is created" (`j12-settings.md`, E2; `j21-run-from-flows.md`, E2 and A15) -> no run: `flows.start` returns `refused` with `permission_off`, and a slot is `missed`. The cause `permission_off` stays for a run whose start check finds the permission off.
-  - names in `test-cases/journeys.md` that differ: `use_other_agent`, `retry_turn`, `suggestion`, `confirm_flow` are kept; `unschedule_yes` and `unschedule_no` -> `turn_off_schedule` and `keep_schedule`; `repeat_yes` and `repeat_no` -> `every_time` and `only_this_time`; `schedule_chip` -> `propose_schedule`; `stop` -> `stop_runs`; `change` -> `change_plan`; `chats.act {action: "approve"}` -> `approvals.resolve {decision: "approve"}`; `{started: false, reason: "needs_confirmation"}` -> `{outcome: "needs_confirmation"}`; Earlier rows with `text` -> rows with codes, words drawn by the renderer.
+  - a start with the permission off: "a new run is `blocked`" (`j25-history-and-problems.md`, E2 and A15) against "no run is created" (`j12-settings.md`, E2; `j21-run-from-flows.md`, E2 and A15) -> no run: `flows.start` returns `refused` with `permission_off`, `chats.send` answers `not_allowed: permission_off` and stores nothing, and a slot is recorded `missed` with reason `permission_off`; a run already going becomes `stopped` with cause `permission_off`.
+  - names in `test-cases/journeys.md` that differ: `retry_turn`, `suggestion`, `confirm_flow` are kept (`use_other_agent` left the contract); `unschedule_yes` and `unschedule_no` -> `turn_off_schedule` and `keep_schedule`; `repeat_yes` and `repeat_no` -> `every_time` and `only_this_time`; `schedule_chip` -> `propose_schedule`; `stop` -> `stop_runs`; `change` -> `change_plan`; `chats.act {action: "approve"}` -> `approvals.resolve {decision: "approve"}`; `{started: false, reason: "needs_confirmation"}` -> `{outcome: "needs_confirmation"}`; Earlier rows with `text` -> run rows with codes, words drawn by the renderer; `alwaysAllowOffered` -> `canAlwaysAllow`.
