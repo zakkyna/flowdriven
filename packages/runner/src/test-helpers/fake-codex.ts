@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// synthetic: written by hand, never recorded
 // Synthetic fake command, written by hand; no real agent output is recorded.
 import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";

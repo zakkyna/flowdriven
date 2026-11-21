@@ -1,3 +1,4 @@
+// synthetic: written by hand, never recorded
 // Synthetic fake script, written by hand; no real agent output is recorded.
 import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
