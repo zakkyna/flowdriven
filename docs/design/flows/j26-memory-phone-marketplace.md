@@ -199,7 +199,7 @@ V2: `memory.list`, `memory.keep`, `memory.drop`, `memory.edit`, `memory.pin`, `m
 ## Drafter's calls
 
 - Installed flows get only `read` touches under "Does on its own"; reason: the places come from outside text (SR-5), and the person's own move is the decision. The prototype pre-placed reads and changes.
-- Release split: Skills list in V1 (needed by `j29-flow-from-skill.md`); update diffs and roll back in V2; Memory and Phone & bots in V2; Marketplace in V3 (chair brief section 8).
+- Release split: Skills list in V1 (needed by `j29-flow-from-skill.md`); update diffs and roll back in V2; Memory and Phone & bots in V2; Marketplace in V3 (`prd.md`, section 9).
 - Pairing code valid 10 minutes, single use; reason: it matches the 10-minute command rule.
 - Memory and history commands over the bots are off and not offered in V2; reason: the spec makes them a per-channel opt-in, which the prototype never showed.
 - A revocation list older than 24 hours shows a "Needs you" row but does not block runs; reason: offline use should not break installed flows, and a block would be a new product decision.

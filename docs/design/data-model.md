@@ -11,7 +11,7 @@ This file lists every entity the real app stores, the tables of store version 7,
 - **Ids.** New ids are `<prefix>-<12 hex>` from the injected `newId(prefix)` (`service/service.ts`). Prefixes: `run` (runs), `ap` (decisions), `chat`, `msg`, `draft`, `rule`, `wq` (waiting questions), `start`. Existing ids keep their form. Flow ids keep the reverse-DNS form of format 1.1; flows made in the app get `local.<slug>` (section 3.1).
 - **Time.** Moments are ISO 8601 in UTC with milliseconds (`IsoDateTime`). Schedule times are wall-clock `HH:MM` and days are `mon` to `sun`, in the person's time zone, which comes from the operating system through the injected clock. Calendar dates are `YYYY-MM-DD`. Tests inject the clock and the zone.
 - **Hashes.** `sha256:<64 hex>` (`ContentHash`), from `contentHash` in the SDK, as today.
-- **Words.** Data keeps codes, never FlowDriven's sentences (AD-14). FlowDriven's own lines are stored as a `Line`: a key of `packages/i18n/src/en.ts` (new) and the values to fill in. Text that a person, an agent or a flow author wrote is stored as text, with its language when known. A FlowDriven line keeps the language it was posted in, so a later language change rewrites nothing (FS-j30.S4).
+- **Words.** Data keeps codes, never FlowDriven's sentences (AD-14). FlowDriven's own lines are stored as a `Line`: a key of `LINE_KEYS` (`packages/contracts/src/line-keys.ts`, new) and the raw values to fill in; `apps/desktop` draws it, because no words live in `packages/*` (AD-14, chair decision for V1, revisable). Text that a person, an agent or a flow author wrote is stored as text, with its language when known. A FlowDriven line keeps the language it was posted in, so a later language change rewrites nothing (FS-j30.S4).
 - **Outside text.** Anything that holds outside text carries `outside: true` (SR-5). Text the person approved as their own carries the existing own-text mark (`exec/own-text.ts`).
 - **Money.** US dollars, rounded to cents.
 - **Releases.** V1 is build steps B-01 to B-24 and B-31; V2 adds Memory, Phone & bots and skill updates; V3 adds the Marketplace and the gateway (`prd.md`, section 9). Each entity names the release that needs it.
@@ -25,7 +25,7 @@ type Effect = "read" | "local_write" | "run_command" | "change" | "send" | "post
 type TouchRule = "runs_alone" | "asks_first" | "not_allowed";
 type Place = { kind: "account" | "folder" | "address" | "site" | "command" | "repo"; value: string; label: string };
 type Line = { key: string; params?: Record<string, string | number> };
-type LanguageCode = string;          // a registered code of packages/i18n/src/languages.ts (new): "en", "id"
+type LanguageCode = string;          // a code main passes to the runner at spawn (--languages), from apps/desktop/src/i18n/languages.ts (new): "en", "id"
 type InputType = "text" | "longtext" | "number" | "bool" | "date" | "time" | "duration" | "choice"
   | "url" | "file" | "folder" | "secret_ref" | "list<text>";
 type TypedValue = { type: InputType; value: string | number | boolean | string[] };
@@ -124,7 +124,7 @@ Rules:
 The format 1.2 parts the store and the API read (AD-04; defined in `packages/sdk/src/format/inputs.ts`, `result.ts`, `touches.ts` and `schedule.ts`, all new):
 - `inputs[]`: `id`, `label`, `type` (`InputType`; `choice` is the alias of `enum`), `required`, `default` (a literal value or the codes `today` and `now`), `example`, `remember`, `choices` for `choice`.
 - `result`: `{kind: "chat" | "report", answer?: string[] | Record<LanguageCode, string[]>}`; answer lines hold `{inputId}` placeholders.
-- `touches[]`: `{id, sentence, effect, place?, rule}`; FlowDriven checks them against the requirements and classifies `effect` with its own catalog.
+- `touches[]`: `{id, sentence, effect, place?, rule, covers}`, where `covers` lists the declared tools or command patterns the touch stands for; FlowDriven checks them against the requirements (each declared tool or command covered by exactly one touch, `architecture.md` AD-04) and classifies `effect` with its own catalog.
 - `schedule`: a suggestion only. Save flow copies a draft's schedule into `schedules` once (3.5); a file's schedule never turns on by itself, and a flow file never holds standing rules (AD-04).
 
 ### 3.2 Confirmation (V1)
@@ -275,7 +275,7 @@ Rules:
 ```ts
 type Chat = {                          // chats.data (new)
   id: ChatId;
-  title: string;                       // "New chat" until the first person message (cut to 40 characters); a FlowDriven chat uses the flow name
+  title: string;                       // "" until the first person message (drawn as "New chat"), then that message cut to 40 characters; a starter chip that runs flows sets their names; a FlowDriven chat uses the flow name
   titleSource: "default" | "first_message" | "flowdriven";
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;              // order of the chat list; a person message moves the chat to the top of Today
@@ -292,7 +292,7 @@ type Chat = {                          // chats.data (new)
 ```
 
 Rules:
-- "New chat" reuses an empty chat (one with no messages) and moves it to the top; otherwise it makes a chat titled "New chat" on the main agent and its default model.
+- "New chat" reuses an empty chat (one with no messages) and moves it to the top; otherwise it makes an untitled chat (drawn "New chat") on the main agent and its default model.
 - The language changes only from text the person typed, when the turn reports a registered code; a chip, a button, outside text, an agent's report and a run's answer never change it (FS-j30.P2).
 - The agent and model change only through `chats.setAgent` (the person's click), or fall back to the agent's default when the stored model is no longer offered (FS-j31.P8). A run already going keeps its own.
 - A FlowDriven chat (`from: "flowdriven"`) is made for a scheduled question, the answer of a `chat` result started outside a chat, or a confirm card of a start outside a chat. It starts on the main agent and its default model, in the app language.
@@ -306,7 +306,7 @@ type Message = {                       // messages.data (new)
   kind: "text" | "reply" | "line" | "note" | "result" | "card";
   text?: string;                       // kind text (the person) or reply (the agent); at most 16,000 characters
   line?: Line;                         // kind line, note, or a person message FlowDriven wrote for a button click
-  result?: { runId: RunId; lines: string[] };   // a chat result: the answer lines, filled in the run's language
+  result?: { runId: RunId; lines: string[]; values: Record<string, TypedValue>; language: LanguageCode };   // a chat result: the flow's answer lines with {inputId} placeholders and the run's values; the renderer fills them in the run's language
   card?: Card;                         // kind card (3.10)
   chips?: Chip[];
   language?: LanguageCode | string;    // the language it was written in; a line renders in it forever
@@ -337,7 +337,7 @@ Rules:
 - At start after a crash, every turn in `queued` or `running` becomes `interrupted` and gets a `turn_failed` card with "Try again"; nothing runs by itself (FS-j22.E5).
 - The prompt of a turn and the agent's raw output are never stored; only the validated intent and what FlowDriven posted.
 - Each turn writes one `usage_events` row (3.17).
-- `messages.search_text` repeats the person's text, the agent's reply and result lines for Search (AD-17); lines and cards are not searched.
+- `messages.search_text` repeats the person's text, the agent's reply and result lines (with the raw values put in) for Search (AD-17); lines and cards are not searched.
 
 ### 3.10 Card (V1)
 
@@ -482,8 +482,8 @@ Decisions keep the `approvals` table and today's `ApprovalRow`. New fields go in
 
 Rules:
 - In version 7 every held call is kind `risky_action` with an `effect` (for example `change` for a timesheet entry); `riskyAction` stays set for the five risky kinds.
-- `expiresAt` is `createdAt` plus 24 hours. A restart never restarts the clock (FS-j24.A16). An expired decision counts as Reject.
-- Two decisions belong to no run and are not rows here: `weekly_limit` (existing, settings key `weekly:<agentId>`) and the spending pause `budget_raise` (new, settings key `spending-pause`). `approvals.list` and Activity show both. Only `settings.update` resolves the spending pause, by raising the limit (SR-9).
+- `expiresAt` is `createdAt` plus 24 hours. A restart never restarts the clock (FS-j24.A16). An expired decision of a run counts as Reject.
+- Two decisions belong to no run and are not rows here: `weekly_limit` (existing, settings key `weekly:<agentId>`) and the spending pause `budget_raise` (new, settings key `spending-pause`). `approvals.list` and Activity show both. Only `settings.update` resolves the spending pause, by raising the limit (SR-9); otherwise it ends when the next local month begins (`spending-pause.expiresAt`). Either way the paused runs continue under the limit, the decision closes with `resolvedVia` `window` or `expiry`, and it never counts as Reject.
 
 ### 3.16 Audit record (V1, changed)
 
@@ -516,6 +516,7 @@ New kinds:
 | `decisions_batch` | Approve all similar | `runId`, `group`, `approvalIds` |
 | `rule_created`, `rule_revoked`, `rule_used` | a standing rule is made, revoked or used | `ruleId`, `flowId`, `touchId`, `effect`, place kind and value, `by`, `runId`, `stepId` |
 | `question_asked`, `question_closed` | a waiting question opens; it is answered, cancelled or closed | `questionId`, `flowId`, `chatId`, `kind`, `missing`, `state` |
+| `run_blocked` | a run becomes `blocked`, `needs_login` or `failed` | `runId`, `state`, `cause` |
 
 ### 3.17 Usage and spending (V1, changed)
 
@@ -524,7 +525,8 @@ New kinds:
 - Every agent call writes one row: steps and checks as today, and each chat turn with `run_id` = the chat id, `step_id` = the person's message id, `item_key` = "" and `kind` = `brain`.
 - `billing` comes from the agent row at the time of the call: the agent's own sign-in method, never its account (3.20).
 - The spending of a month is the sum of `cost_usd` over rows with `billing` `per_use` or unknown whose `at` falls in the person's current local month. Rows with `plan` are bound by the agent's own usage limits instead (Q-03).
-- When the spending reaches the limit, FlowDriven writes the `spending-pause` setting and pauses, with the `budget_raise` decision, every run whose next agent call bills per use or unknown; a chat turn on such an agent ends with the failure `spending_limit` (SR-9). Agents on a plan keep running within their own usage limits.
+- When the spending reaches the limit, FlowDriven writes the `spending-pause` setting and pauses, with the `budget_raise` decision, every run whose next agent call bills per use or unknown; a chat turn on such an agent ends with the failure `spending_limit` (SR-9). The pause ends when the limit is raised or the next local month begins (3.15). Agents on a plan keep running within their own usage limits.
+- A call billed per use whose agent reports no cost cannot be counted, so it is refused while the limit applies: the run is stuck with the cause `cost_not_reported`, and a chat turn ends with the failure `spending_limit` (SR-9; decided for V1, revisable).
 
 ### 3.18 Settings keys (V1, changed)
 
@@ -684,6 +686,7 @@ Notes:
 - Foreign keys are used only from chat parts to `chats`, so deleting a chat removes its messages, drafts and questions in one statement. Other tables keep today's style without foreign keys, because runs, decisions and audit records outlive their flows and chats.
 - New table and index names follow today's style: lowercase, the table name first (`runs_flow`, `runs_state`, `approvals_run`, `approvals_state`, `audit_log_run`, `usage_events_at`, `flow_heads_name`, `standing_rules_flow`, `schedules_after`, `starts_key`, `starts_flow_at`, `starts_outcome_at`, `chats_updated`, `messages_chat_seq`, `messages_card`, `drafts_chat`, `waiting_questions_open`, `waiting_questions_chat`).
 - The new statements live in `packages/runner/src/schema.ts` next to today's, as a new `SCHEMA_V7` text; the steps live in `packages/runner/src/migrate.ts` (new).
+- The retired version 1 operations stay in the contract for the unrouted builder-first screens, but the real runner answers each `unavailable` with reason `retired` (`runner-api.md`, section 7), so nothing writes a frozen table.
 - Search (AD-17) uses `LIKE` with `ESCAPE '\'` over `chats.title`, `messages.search_text`, `flow_heads.name` and `flow_heads.summary`, with a result limit. No full-text index in version 7.
 
 ## 5. Migration from version 6
@@ -816,7 +819,7 @@ Quitting and removing `<data folder>` removes everything the runner stored, incl
 
 ## 8. Export
 
-- **Copy report** (`runs.export`): Markdown built on request from the run, never stored, in the run's language; no token numbers and no run id; hidden characters shown as visible marks; outside text keeps its tag; anything that looks like a secret is masked as "[hidden]" (FS-j25.A12, FS-j25.E11). It leaves the app only by the person's click (NF-21).
+- **Copy report** (`runs.export`): parts built on request from the run and never stored; the renderer turns them into Markdown in the run's language; no token numbers and no run id; hidden characters shown as visible marks; outside text keeps its tag; anything that looks like a secret is masked as "[hidden]" (FS-j25.A12, FS-j25.E11). It leaves the app only by the person's click (NF-21).
 - **Memory** (V2, `memory.export`): Markdown on request; memory never goes into a log, a bug report or a published package (spec R18).
 - **No other export in V1.** There is no automatic export, no telemetry and no upload (NF-18). The store is a plain SQLite file in the person's data folder, and the backups are full copies of it.
 

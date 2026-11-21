@@ -146,7 +146,7 @@ type StartOutcome =
 type CauseCode =
   | "agent_signed_out" | "site_sign_in" | "permission_off" | "agent_not_set_up" | "usage_limit" | "spending_limit"
   | "checks_failing" | "requirement_missing" | "flow_not_confirmed" | "limits_not_applied" | "crash"
-  | "step_failed" | "stopped" | "flow_deleted" | "agent_cannot_be_limited" | "daily_limit" | "internal_error";
+  | "step_failed" | "stopped" | "flow_deleted" | "agent_cannot_be_limited" | "daily_limit" | "cost_not_reported" | "internal_error";
 type Cause = { code: CauseCode; params?: Record<string, string> };   // params: agent, site, step, tries, until, missing, flow
 
 type InputProblem = "empty" | "unreadable" | "zero" | "too_long" | "too_long_text" | "out_of_range"
@@ -1184,6 +1184,7 @@ Sketched so the store and the safety rules are ready for them. Each group ships 
 | `memory.keep`, `memory.drop` | `{id}` -> item, `{}` | only the runner writes memory (spec R17) |
 | `memory.edit` | `{id, text (1..500)}` -> item | |
 | `memory.pin` | `{id, pinned}` -> item | |
+| `memory.grant` | `{id, flowId, on}` -> item | the person's per-item grant for one flow (FS-j26.P3); it never widens what a run may do (SR-2) |
 | `memory.delete` | `{id}` -> `{}` | secure deletion; the dialog is the renderer's |
 | `memory.export` | `{}` -> `{markdown}` | on request only (spec R18) |
 | `phone.list` | `{}` -> `{links: PhoneLinkView[], toolAccess}` | |
