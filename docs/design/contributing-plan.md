@@ -9,7 +9,7 @@ Decided for V1 (revisable), 2026-11-21: contributing must be easy both for peopl
 | Someone who wants to try FlowDriven | `README.md` quickstart | `docs/design/prd.md` sections 1 to 5 |
 | A person who codes by hand | `CONTRIBUTING.md` | `docs/design/README.md`, the flow spec and test cases of the build step they pick |
 | An AI agent (Claude Code, Codex, others) | `AGENTS.md` (Claude Code reads it through `CLAUDE.md`) | the plan task it was given and the spec sections that task names |
-| A translator | `docs/translating.md` | the English words file `packages/i18n/src/en.ts` |
+| A translator | `docs/translating.md` | the English words file `apps/desktop/src/i18n/en.ts` |
 
 Both paths meet in the same places: the design set in `docs/design/`, the plans in `docs/plans/`, the TDD loop of `docs/design/test-plan.md`, and the gate `pnpm format`, then `pnpm check`.
 
@@ -40,16 +40,16 @@ A short page with:
 
 ### `AGENTS.md` (exists; stays the rule set for AI agents)
 
-AGENTS.md keeps its role and its pinned layout (`tools/checks/test/agent-rules.test.mjs`). B-31 does not rewrite it. Two small changes are already named elsewhere and stay Ask-first: the wording that allows translations in language files (AD-14), and pointing its "Design:" line to `docs/design/` after the owner approves this set.
+AGENTS.md keeps its role and its pinned layout (`tools/checks/test/agent-rules.test.mjs`). B-31 does not edit it (`prd.md`, Q-04). Two small changes wait for a later Ask-first question: pointing its "Design:" line to `docs/design/`, and a sentence saying that the language files are the one place for other languages.
 
 ### `docs/translating.md` (new), for translators
 
 At most ten steps, matching brief 24.9.7 of the clickable prototype:
-1. Copy `packages/i18n/src/en.ts` to `packages/i18n/src/<code>.ts`.
+1. Copy `apps/desktop/src/i18n/en.ts` to `apps/desktop/src/i18n/<code>.ts`.
 2. Set `code` and `name` (the name written in the language itself).
 3. Translate the values. Keep the keys and every `{placeholder}`. Give each count the plural forms your language needs.
-4. Add one line for your file to `packages/i18n/src/languages.ts`.
-5. Run `pnpm check`. It lists missing keys, wrong placeholders and missing plural forms. Missing words show in English until they are translated.
+4. Add one line for your file to `apps/desktop/src/i18n/languages.ts`.
+5. Run `pnpm check`. It fails, naming the file, the key and the fix in one line, on a key English lacks, a changed placeholder, a missing `other` plural form, or a code that is taken or is not a language tag. It lists the words not translated yet; they show in English until they are.
 6. Keep product names as they are (FlowDriven, Claude Code, Codex). Do not add hidden or format characters; the hidden-character check refuses them.
 7. Bahasa Indonesia's word rules (brief 24.6) are the example of a style note; a new language may add its own short style note at the top of its file.
 
@@ -65,4 +65,4 @@ Docs get checks, not unit tests. The cases are in `test-cases/platform.md` under
 - `docs/translating.md` steps work: a test language file added by a test, with two words, passes the language check and falls back to English for the rest (this is the same case as the I18N tests);
 - the hidden-character check covers the new files (it scans every tracked file already).
 
-The first two checks live in `tools/checks/` (a check script and its `node:test` test). Editing `tools/checks/` is Ask-first; the V1 build plan names this change.
+The first two checks are one Vitest test, `apps/desktop/src/docs.test.ts`, so `tools/checks/` stays unchanged in V1 (`prd.md`, Q-04). Moving them into `tools/checks/` is a later Ask-first item.

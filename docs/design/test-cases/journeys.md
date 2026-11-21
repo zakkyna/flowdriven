@@ -551,7 +551,7 @@ Words and lines (chair decision, 2026-11-21): the words live in `apps/desktop/sr
 - File: packages/runner/src/service/spending.test.ts (new)
 - Given: limit 10, spent 10.00 (per-use charges); two runs are paused (`waiting_approval`) behind the one synthetic `budget_raise` decision (no run, setting `spending-pause`) with summary "Monthly limit reached. Raise it in Settings to continue."; the person has not answered it.
 - When: `settings.update {patch: {spendingLimit: 25}}` from the window.
-- Then: the decision becomes `approved` with `resolvedVia: "window"` and the setting `spending-pause` is cleared; both runs return to `running` and finish (they were never `blocked` and needed no "Try again"); an audit record `limit_raised` with detail `from=10 to=25` and the resolved decision exists; `settings.update {patch: {spendingLimit: 20}}` afterwards is refused with `invalid_input` reason `limit_not_above` (no lowering) and saves nothing.
+- Then: the decision becomes `approved` with `resolvedVia: "window"` (raising the limit; the month change closes it with `resolvedVia: "expiry"`, TC-j12-25) and the setting `spending-pause` is cleared; both runs return to `running` and finish (they were never `blocked` and needed no "Try again"); an audit record `limit_raised` with detail `from=10 to=25` and the resolved decision exists; `settings.update {patch: {spendingLimit: 20}}` afterwards is refused with `invalid_input` reason `limit_not_above` (no lowering) and saves nothing.
 - Traces: FS-j12.S5, FS-j12.A8, FS-j12.A11, SR-9, SR-7, F-23
 - Build step: B-24
 - Fails first because: no spending enforcement or decision kind exists.
@@ -559,9 +559,9 @@ Words and lines (chair decision, 2026-11-21): the words live in `apps/desktop/sr
 ### TC-j12-25 Reaching the limit pauses runs with a "Needs you" item and nothing continues
 - Layer: L3
 - File: packages/runner/src/service/spending.test.ts (new)
-- Given: limit 10; per-use usage rows add up to 9.90; a run of `example.weekly-supplier-report` is mid-step with 3 steps left; the fake claude reports the next call as costing 0.15.
-- When: that call ends, then `clock.advance(23 * 3600 * 1000)`, then `clock.advance(2 * 3600 * 1000)`; a second run is started at the same moment the limit is reached.
-- Then: after the call the run is `waiting_approval` and `approvals.list` has one `budget_raise` decision with no run and summary "Monthly limit reached. Raise it in Settings to continue." (pending, `activity.summary` lists it under needs you); the next step makes no agent call; the second run is created but also waits behind the same decision; after 25 hours neither run has continued (never `running` or `done`) and no run became `blocked`; one notice of kind `approval_waiting` was sent for the one decision.
+- Given: zone `Asia/Jakarta`; clock Fri 2026-11-27 10:00 local; limit 10; per-use usage rows add up to 9.90; a run of `example.weekly-supplier-report` is mid-step with 3 steps left; the fake claude reports the next call as costing 0.15.
+- When: that call ends, then `clock.advance(23 * 3600 * 1000)`, then `clock.advance(2 * 3600 * 1000)`; a second run is started at the same moment the limit is reached; then the clock is set to Tue 2026-12-01 00:00:01 local (the next local month).
+- Then: after the call the run is `waiting_approval` and `approvals.list` has one `budget_raise` decision with no run and summary "Monthly limit reached. Raise it in Settings to continue." (pending, `activity.summary` lists it under needs you); the next step makes no agent call; the second run is created but also waits behind the same decision; after 25 hours (same month) the decision is still `pending`, neither run has continued, no run became `blocked` and the decision never counted as a Reject (it has no 24-hour expiry); one notice of kind `approval_waiting` was sent for the one decision; at the start of the next local month the decision closes with `resolvedVia` `expiry` (`spending-pause.expiresAt`), the setting `spending-pause` is cleared and both runs go on under the limit (spent counts only December).
 - Traces: FS-j12.E4, FS-j12.A11, FS-j12.E11, SR-9, F-23
 - Build step: B-24
 - Fails first because: spent is never summed and no run pauses.
@@ -2912,7 +2912,7 @@ Words and lines (chair decision, 2026-11-21): the words live in `apps/desktop/sr
   | `{code:"agent_signed_out", agent:"Claude Code"}` | "Claude Code needs you to sign in." | "Sign in to Claude Code" |
   | same with agent "Codex" | "Codex needs you to sign in." | "Sign in to Codex" |
   | `{code:"site_sign_in", site:"Example Job Site"}` | "The Example Job Site asks you to sign in again in your browser. FlowDriven never passes a sign-in or robot check for you. The run waits up to 12 hours." | "Sign in and continue" |
-  | `{code:"permission_off"}` | "Allow FlowDriven to run AI agents in Settings." | "Open Settings" |
+  | `{code:"permission_off"}` (run state `stopped`) | "Stopped because you turned off permission." | "Open Settings" |
   | `{code:"agent_not_set_up", agent:"Claude Code"}` | "Set up Claude Code first." | "Set up Claude Code" |
   | `{code:"usage_limit", agent:"Claude Code", until:"14:05"}` | "Claude Code has no usage left right now. It will be available again at 14:05." | "Try again" |
   | `{code:"spending_limit"}` | "Monthly limit reached. Raise it in Settings to continue." | "Raise limit" |
@@ -3149,15 +3149,15 @@ Words and lines (chair decision, 2026-11-21): the words live in `apps/desktop/sr
 - Build step: B-19
 - Fails first because: the route does not exist.
 
-### TC-j25-30 Permission off blocks a new run
+### TC-j25-30 Permission off creates no run and stops a running one
 - Layer: L3
 - File: packages/runner/src/agents/registry.test.ts (new)
-- Given: `settings.update {patch: {agentPermission: "off"}}`; Claude Code `ready`.
-- When: `flows.start {flowId: "example.weekly-supplier-report", source: "flows"}`.
-- Then: the run is `blocked` with cause `permission_off`; `describeCause` words are "Allow FlowDriven to run AI agents in Settings."; the fake claude got no call. After `agentPermission` is `on` and `runs.resume` is chosen, the run starts.
+- Given: Claude Code `ready`; a run of `example.fill-timesheet` is `running`; then `settings.update {patch: {agentPermission: "off"}}`.
+- When: `flows.start {flowId: "example.weekly-supplier-report", source: "flows"}`; a chat start through `chats.act {action: "run"}`; a scheduled slot comes due.
+- Then: the running run is `stopped` with cause `permission_off` and `describeCause` words "Stopped because you turned off permission."; `flows.start` returns `{outcome: "refused", reason: "permission_off"}` and creates no run; the chat start fails with `not_allowed` (reason `permission_off`) and the chat holds the permission card; the slot is recorded `missed` with reason `permission_off`; the fake claude got no call after the stop. After `agentPermission` is `on`, `flows.start` starts a run.
 - Traces: FS-j25.A15, FS-j25.E2, F-14, F-15
 - Build step: B-07
-- Fails first because: the gate checks per-agent consent, not the one permission.
+- Fails first because: the gate checks per-agent consent, not the one permission, and a start with the permission off still makes a run.
 
 ### TC-j25-31 Turning the permission off stops every open run
 - Layer: L3
@@ -5682,7 +5682,7 @@ The test writers fixed these details while writing the cases. `data-model.md`, `
 - Typed "yes", "ok", "start", "no" with a card open are answered by FlowDriven with no agent call. Reason: saves a call and removes any chance of the agent acting on them.
 - A run that ended `failed` does not count as "finished" for the first-run rule; only `done` does. Reason: the point is to see the flow work.
 - The daily limit of 24 counts every start source, including the chat and Run clicks. Reason: j20.E4 and j21.E4 name it for those paths; the engine counted only non-manual starts.
-- The spending pause is one synthetic `budget_raise` decision with no run, resolved only by raising the limit in Settings (chair decision, 2026-11-21); the paused runs are not `blocked` and need no "Try again". What the pause does when its decision expires is not defined yet. Reason: SR-9 forbids a silent continue.
+- The spending pause is one synthetic `budget_raise` decision with no run, resolved only by raising the limit in Settings (chair decision, 2026-11-21); the paused runs are not `blocked` and need no "Try again". It never counts as a Reject and has no 24-hour expiry: it ends when the limit is raised (`resolvedVia` `window`) or when the next local month begins (`spending-pause.expiresAt`, `resolvedVia` `expiry`), and the runs then continue under the limit (chair decision, 2026-11-21). Reason: SR-9 forbids a silent continue.
 - `flows.tryNextRun` on a flow with no schedule is `not_allowed` with reason `no_schedule`. Reason: the spec defines it only for scheduled flows.
 - A flow file's own `schedule` block is shown as a suggestion and never applied. Reason: SR-2 and j21 "Decisions and confirmations".
 - "Run it now" on a missed slot calls `flows.tryNextRun {flowId, missedStartId}`, a start with source `try_next` for the missed slot. Reason: the window's `flows.start` takes only `flows` and `again`.

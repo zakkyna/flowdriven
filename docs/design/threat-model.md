@@ -531,7 +531,7 @@ AGENTS.md: changing the runner, approvals, sandbox limits, flow hashing or signa
 | Required: the runner starts runs or programs | B-10, B-12, B-21, B-23, B-24 | Chains, `START`, agent installs, runs nobody watches, the busy fallback | T-03, T-21, T-22, T-23, T-24 |
 | Required: signatures and release | B-28, B-30 (Ask first, Chair steps) | Signature checks, updates, the `runAsNode` fuse | T-09, T-15, T-30 |
 | Recommended | B-06 (pending version 9), B-09, B-11, B-17, B-19, B-25 | Safety words, inputs, honest lines, the safe text renderer, memory | T-13, T-14, T-26, T-28 |
-| Not required | B-16, B-18, B-31 | UI only, or documents (B-31's `tools/checks/` change stays Ask first) | - |
+| Not required | B-16, B-18, B-31 | UI only, or documents (B-31 changes nothing in `tools/checks/`) | - |
 
 "Recommended" steps touch none of the five areas but carry a threat worth a second look; the chair may fold them into the next required review.
 

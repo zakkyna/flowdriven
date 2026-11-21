@@ -464,8 +464,8 @@ What the person experiences. In Settings, "Language" lists every language by its
 
 Requirements.
 - F-20.R1. English is the default. Nothing picks another language by itself.
-- F-20.R2. There is one words file per language in the shared package `packages/i18n` (new). `en.ts` is the source; its type gives the keys. Other languages are partial copies checked against it. One list imports them. Missing words show in English.
-- F-20.R3. A check that is part of `pnpm check` (a test in `packages/i18n`) fails, naming the file, the key and the fix in one line, on: a key used in code but missing in English, an English key never used, a language with a key English lacks, a changed `{placeholder}`, a missing `other` plural form, a plural form that is not one of the language's `Intl.PluralRules` categories, a code that is not a valid language tag, a code another file already uses, and a language file not in the list. Indonesian must be complete. For another language the check lists the missing keys as "not translated yet, shown in English" and passes.
+- F-20.R2. There is one words file per language in `apps/desktop/src/i18n/` (no new package, Q-04). `en.ts` is the source; its type gives the keys. Other languages are partial copies checked against it. One list imports them. Missing words show in English.
+- F-20.R3. A check that is part of `pnpm check` (the test `apps/desktop/src/i18n/i18n.test.ts`; nothing in `tools/checks/` changes) fails, naming the file, the key and the fix in one line, on: a key used in code but missing in English, an English key never used, a language with a key English lacks, a changed `{placeholder}`, a missing `other` plural form, a plural form that is not one of the language's `Intl.PluralRules` categories, a code that is not a valid language tag, a code another file already uses, and a language file not in the list. Indonesian must be complete. For another language the check lists the missing keys as "not translated yet, shown in English" and passes.
 - F-20.R4. Placeholders are `{name}`. A sentence is one key with placeholders, never glued from fragment keys. Counts use plural forms picked with `Intl.PluralRules`; `other` is required and is the fallback. Dates and times use `Intl.DateTimeFormat` in the chosen language.
 - F-20.R5. Data keeps codes, never FlowDriven sentences. Statuses, touch rules and result kinds are codes shown through the words files.
 - F-20.R6. Changing the language never rewrites a chat, a flow, a report or a memory item.
@@ -504,7 +504,7 @@ What the person experiences. Closing the window leaves a menu bar icon. A settin
 
 Requirements.
 - F-22.R1. When the last window closes, the app keeps running in the menu bar, and the menu offers "Open FlowDriven" and "Quit".
-- F-22.R2. "Keep running in the menu bar" and "Open at login" are settings, both on by default (Q-02, decided for V1).
+- F-22.R2. "Keep running in the menu bar" and "Open at login" are settings, both on by default (Q-02, decided for V1). "Open at login" works only in the installed app: while V1 runs from a checkout (Q-04), the switch is off and says it works in the installed app.
 - F-22.R3. A start missed while the Mac slept or the app was closed runs once at wake if it is inside the grace window. Otherwise Activity shows "Missed" for it. Missed starts never run twice.
 - F-22.R4. Quitting the app stops the schedules. The menu says so before quitting if a schedule is due within 24 hours (target).
 - F-22.R5. The menu bar part and the window use the same runner and store. There is one runner process.
@@ -525,6 +525,7 @@ Requirements.
 - F-23.R4. When an agent reports its own usage limit, runs wait with the reason shown ("Waiting to start" and why). Triggered runs wait when the weekly window is nearly used (utilization at or above 0.9) and the person gets one question: keep running triggered flows?
 - F-23.R5. The limit and the amount used are shown without run ids or token counts.
 - F-23.R6. The busy fallback (F-15.R4) never moves work to an agent that is not ready and never changes a flow's limits.
+- F-23.R7. A call billed per use whose agent reports no cost is refused, because the limit could not hold; the run is stuck and says why (decided for V1, revisable).
 
 Journeys and flow specs: j12 and j25, `flows/j12-settings.md`, `flows/j25-history-and-problems.md`. Release: V1 (B-24). Status: In the prototype (version 8) as a fixed sample; enforcement is the real work.
 
@@ -773,16 +774,34 @@ What was weighed. A limit in dollars is honest for API keys and paid credits. On
 
 Options that were considered. Only money charged per use (chosen); the agents' cost estimates even on a subscription (one number for everything, but an estimate that can be wrong).
 
-### Ask-first items in the V1 build plan
+### Q-04 How V1 is built without a question to the owner
 
-These stay Ask-first under AGENTS.md. The V1 build plan names each exact change, so the owner's approval of that plan is the yes for each one (AGENTS.md: "An approved plan task that names the exact change is the yes for that change only").
+Decided for V1 (revisable), by the chair, 2026-11-21, so that the V1 build needs no question to the owner:
 
-- Translations in language files, although AGENTS.md says everything is in English.
-- The new `packages/i18n` workspace folder (a change to `tools/checks/allowlist.json`).
-- Bundling the Plus Jakarta Sans font files (so the app loads no remote content).
-- Reject skipping an action instead of failing the run, and the other approval and sandbox changes of AD-06 and AD-07. Each gets one independent security review.
-- Deleting the tests of the builder-first screens when those screens retire.
-- The runner bundle that a packaged app needs.
+1. Translations. The owner asked for English and Bahasa Indonesia and for languages that contributors can add easily, so the language files are approved by that request. They are not an Ask-first item.
+2. No new workspace package. The words files live in `apps/desktop/src/i18n/`, and the language check is a test there (F-20). `tools/checks/` and its allowlist stay unchanged.
+3. No font files in V1. The app uses the system font stack. Bundling the clickable prototype's font is a later Ask-first item.
+4. The builder-first screens are unrouted in V1, not deleted. Their code and tests stay and keep passing. Removing them is a later Ask-first item.
+5. Packaging and the runner bundle stay out of V1 (B-30, before any public download). During V1 the app runs from a checkout (`pnpm start`).
+6. No CI change and no new dependency in V1: only packages already in `tools/checks/allowlist.json`.
+7. Changes to approvals and the sandbox (AD-06, AD-07, Reject skipping an action instead of failing the run, the Codex sandbox) follow the clickable prototype, which the owner approved. The build plan marks each task that makes such a change as a safety-core change, and each gets one independent security review before its pull request leaves draft.
+8. AGENTS.md is not edited in V1.
+
+The problem. AGENTS.md makes some changes Ask-first, and the owner wants no question before V1 is done.
+
+What was weighed. Each Ask-first item either follows from what the owner already asked or approved (translations, the prototype's behavior), or can wait without hurting V1 (fonts, deleting old screens, CI, packaging, new packages).
+
+Options that were considered. Keep the items for one bundled question (rejected: the owner asked for no questions); drop them from V1 (chosen); decide them for the owner (rejected: AGENTS.md says the owner decides them).
+
+### Ask-first items after V1
+
+Each stays Ask-first under AGENTS.md and is asked when its work is planned:
+- bundling the clickable prototype's font files;
+- removing the unrouted builder-first screens, their frozen contract copy and their tests;
+- moving the doc checks into `tools/checks/`;
+- pointing AGENTS.md's "Design:" line to `docs/design/` and saying there that the language files are the one place for other languages;
+- the runner bundle, packaging, signing and updates (B-30);
+- a shared words package, if V2's bot messages need words outside the app.
 
 ## 11. Assumptions and dependencies
 

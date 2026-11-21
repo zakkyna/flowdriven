@@ -349,8 +349,8 @@ Each decision gives context, decision, alternatives, consequences and the code i
 - Context. The repository will be public, for hand coders and AI agents. AGENTS.md is pinned by `tools/checks/test/agent-rules.test.mjs`. Decided for V1 (revisable): build step B-31, planned in `contributing-plan.md`.
 - Decision. A `README.md` quickstart (new); `CONTRIBUTING.md` (new) for people who code by hand (prototype first, the TDD loop, the main rules, safety areas that need a security review, commits and pull requests); AGENTS.md stays the AI-agent rule set and is not edited in V1; `docs/translating.md` (new) adds a language in at most ten steps, starting from `apps/desktop/src/i18n/en.ts`.
 - Alternatives. One guide serves neither reader; rewriting AGENTS.md breaks its pinned layout.
-- Consequences. Both paths meet at the design set, the plans and the gate. `tools/checks/` stays unchanged in V1, so the guides' script names and links are checked in review; a check script for them, AGENTS.md's "Design:" pointer and its sentence about the language files are later Ask-first changes.
-- Code. New `README.md`, `CONTRIBUTING.md`, `docs/translating.md`.
+- Consequences. Both paths meet at the design set, the plans and the gate. `tools/checks/` stays unchanged in V1, so the guides' script names and links are checked by one Vitest test, `apps/desktop/src/docs.test.ts`; moving that check into `tools/checks/`, AGENTS.md's "Design:" pointer and its sentence about the language files are later Ask-first changes.
+- Code. New `README.md`, `CONTRIBUTING.md`, `docs/translating.md`, `apps/desktop/src/docs.test.ts`.
 
 ### AD-22 Cards and suggested replies are data
 
