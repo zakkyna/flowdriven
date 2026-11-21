@@ -3,7 +3,9 @@ import { z } from "zod";
 import { FORMAT_ID, FORMAT_ID_V12 } from "../vocab.ts";
 import { InputDeclV12 } from "./inputs.ts";
 import { Requirement } from "./requirements.ts";
+import { Result } from "./result.ts";
 import { Duration, durationMs, Limits, OutputDecl, Step, valueId } from "./steps.ts";
+import { Touches } from "./touches.ts";
 export const Trigger = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("manual") }),
   z
@@ -122,6 +124,8 @@ export const FlowManifest = z.discriminatedUnion("format", [
     ...manifestFields,
     format: z.literal(FORMAT_ID_V12),
     inputs: z.array(InputDeclV12).default([]),
+    result: Result.optional(),
+    touches: Touches.optional(),
   }),
 ]);
 export type FlowManifest = z.infer<typeof FlowManifest>;
