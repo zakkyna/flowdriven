@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { MAX_FRAME_BYTES as CONTRACT_MAX } from "@flowdriven/contracts/v1";
+import { MAX_FRAME_BYTES as CONTRACT_MAX, CONTRACT_VERSION as ROOT_VERSION } from "@flowdriven/contracts";
 import { afterEach, expect, test, vi } from "vitest";
+import { CONTRACT_VERSION } from "./contract-names";
 import {
   ALL_TOPICS_EVENT,
   type ChildLike,
@@ -121,30 +122,6 @@ test("when the runner exits, waiting calls fail with The engine stopped. and the
   expect(children.at(1)?.kill).toHaveBeenCalled();
   expect(events).toHaveBeenCalledTimes(2);
 });
-test("at most three starts in 60 seconds, then unavailable until the app restarts", async () => {
-  let now = 0;
-  const children: FakeChild[] = [];
-  const link = make({
-    now: () => now,
-    spawn: () => {
-      const c = new FakeChild();
-      children.push(c);
-      return c;
-    },
-  });
-  for (let i = 0; i < 3; i++) {
-    const call = link.call("x", {});
-    children.at(i)?.emit("exit", 1, null);
-    await expect(call).rejects.toMatchObject({ code: "unavailable" });
-  }
-  await expect(link.call("x", {})).rejects.toMatchObject({
-    code: "unavailable",
-    message: "The engine stopped and cannot be restarted. Restart FlowDriven.",
-  });
-  now = 100_000;
-  await expect(link.call("x", {})).rejects.toMatchObject({ code: "unavailable" });
-  expect(children).toHaveLength(3);
-});
 test("stderr lines are prefixed and cut at 4,096 bytes", () => {
   const child = new FakeChild();
   const log = vi.fn();
@@ -224,4 +201,98 @@ test("a notice frame reaches onNotice and an event frame still reaches onEvent; 
   other.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notice", params: {} })}\n`);
   expect(other.kill).not.toHaveBeenCalled();
   other.emit("exit", 0, null);
+});
+
+test("TC-IPC-15 refuses a mismatched contract", async () => {
+  const child = new FakeChild();
+  const spawnFn = vi.fn(() => child);
+  const link = make({ spawn: spawnFn, stopWaitMs: 1 });
+  const frames: { id: number; method: string }[] = [];
+  child.stdin.on("data", (data) => frames.push(JSON.parse(String(data))));
+  const first = link.call("flows.list", {});
+  const rejection = expect(first).rejects.toMatchObject({ code: "unavailable", reason: "contract_mismatch" });
+  expect(frames[0]?.method).toBe("runner.info");
+  child.stdout.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id: frames[0]?.id, result: { contractVersion: 1 } })}\n`,
+  );
+  await rejection;
+  await expect(link.call("flows.list", {})).rejects.toMatchObject({ reason: "contract_mismatch" });
+  expect(child.kill).toHaveBeenCalled();
+  expect(spawnFn).toHaveBeenCalledOnce();
+  expect(frames).toHaveLength(1);
+});
+test("TC-IPC-16 waits for matching contract", async () => {
+  const child = new FakeChild();
+  const link = make({ spawn: () => child, stopWaitMs: 1 });
+  const frames: { id: number; method: string }[] = [];
+  child.stdin.on("data", (data) => frames.push(JSON.parse(String(data))));
+  const first = link.call("flows.list", {});
+  expect(frames.map((f) => f.method)).toEqual(["runner.info"]);
+  child.stdout.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id: frames[0]?.id, result: { contractVersion: 2 } })}\n`,
+  );
+  await Promise.resolve();
+  await Promise.resolve();
+  const second = link.call("flows.list", {});
+  await Promise.resolve();
+  expect(frames.map((f) => f.method)).toEqual(["runner.info", "flows.list", "flows.list"]);
+  for (const frame of frames.slice(1))
+    child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: frame.id, result: [] })}\n`);
+  await expect(first).resolves.toEqual([]);
+  await expect(second).resolves.toEqual([]);
+  child.emit("exit", 0, null);
+});
+test("TC-IPC-18 restart limit expires", async () => {
+  let now = 0;
+  const children: FakeChild[] = [];
+  const link = make({
+    now: () => now,
+    spawn: () => {
+      const child = new FakeChild();
+      children.push(child);
+      return child;
+    },
+    stopWaitMs: 1,
+  });
+  for (now of [0, 10000, 20000]) {
+    const pending = link.call("flows.list", {});
+    const rejected = expect(pending).rejects.toMatchObject({ reason: "engine_stopped" });
+    children.at(-1)?.emit("exit", 1, null);
+    await rejected;
+  }
+  now = 30000;
+  await expect(link.call("flows.list", {})).rejects.toMatchObject({ reason: "engine_restart_limit" });
+  expect(children).toHaveLength(3);
+  now = 95000;
+  const pending = link.call("flows.list", {});
+  const rejected = expect(pending).rejects.toMatchObject({ reason: "engine_stopped" });
+  expect(children).toHaveLength(4);
+  children.at(-1)?.emit("exit", 1, null);
+  await rejected;
+});
+
+test("main version matches the contract", () => {
+  expect(CONTRACT_VERSION).toBe(ROOT_VERSION);
+});
+
+test("runner error data keeps reason and params through the link", async () => {
+  const child = new FakeChild();
+  const frames: { id: number; method: string }[] = [];
+  child.stdin.on("data", (data) => frames.push(JSON.parse(String(data))));
+  const link = make({ spawn: () => child, stopWaitMs: 1 });
+  const call = link.call("flows.get", {});
+  child.stdout.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id: frames[0]?.id, result: { contractVersion: 2 } })}\n`,
+  );
+  await Promise.resolve();
+  await Promise.resolve();
+  child.stdout.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id: frames[1]?.id, error: { message: "The hash moved.", data: { code: "conflict", reason: "hash_mismatch", params: { flow: "Fill timesheet" } } } })}\n`,
+  );
+  await expect(call).rejects.toMatchObject({
+    code: "conflict",
+    reason: "hash_mismatch",
+    params: { flow: "Fill timesheet" },
+  });
+  child.emit("exit", 0, null);
 });

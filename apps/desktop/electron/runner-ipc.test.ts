@@ -1,4 +1,6 @@
+import { operationNames, RunnerTopic } from "@flowdriven/contracts";
 import { describe, expect, test, vi } from "vitest";
+import { OPERATION_NAMES, RUNNER_TOPICS } from "./contract-names";
 import {
   broadcastRunnerEvent,
   type FrameLike,
@@ -78,10 +80,122 @@ describe("runner IPC", () => {
           webContents: { mainFrame: { url: "https://example.com" }, send: foreign },
         },
       ],
-      { type: "changed" },
+      { type: "changed", topics: ["flows"] },
     );
-    expect(send).toHaveBeenCalledWith("runner:event", { type: "changed" });
+    expect(send).toHaveBeenCalledWith("runner:event", { type: "changed", topics: ["flows"] });
     expect(destroyed).not.toHaveBeenCalled();
     expect(foreign).not.toHaveBeenCalled();
   });
+});
+
+test("TC-IPC-08 rejects untrusted frames", async () => {
+  const { call, link } = setup();
+  for (const frame of [
+    null,
+    { ...own, parent: own },
+    ...[
+      "https://example.com/",
+      "app://flowdriven:8080/",
+      "app://sam@flowdriven/",
+      "app://other/",
+      "file:///index.html",
+    ].map((url) => ({ url, parent: null })),
+  ])
+    expect(await call(frame, "flows.list", {})).toMatchObject({ ok: false, error: { code: "not_allowed" } });
+  expect(link.call).not.toHaveBeenCalled();
+  expect(await call(own, "flows.list", {})).toMatchObject({ ok: true });
+});
+test("TC-IPC-09 rejects argument counts", async () => {
+  const { call, link } = setup();
+  for (const args of [[], ["flows.list"], ["flows.list", {}, {}]])
+    expect(await call(own, ...args)).toMatchObject({ ok: false, error: { code: "not_allowed" } });
+  expect(link.call).not.toHaveBeenCalled();
+});
+test("TC-IPC-10 accepts only live operations", async () => {
+  const { call, link } = setup();
+  for (const method of ["flows.nope", "flows.build", "harnesses.list", "queue.list", "usage.summary"])
+    expect(await call(own, method, {})).toMatchObject({ ok: false, error: { code: "not_found" } });
+  for (const method of ["Flows.list", "flows", "flows.list.extra", "flows.list ", "../x.y"])
+    expect(await call(own, method, {})).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+  expect(link.call).not.toHaveBeenCalled();
+  expect(await call(own, "flows.list", {})).toMatchObject({ ok: true });
+});
+test("TC-IPC-11 validates serialized input size", async () => {
+  const { call, link } = setup();
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+  for (const input of [
+    [],
+    null,
+    "x",
+    new Map(),
+    new (class Example {})(),
+    circular,
+    { x: 1n },
+    { flowId: "x".repeat(1_048_576) },
+  ])
+    expect(await call(own, "flows.get", input)).toMatchObject({
+      ok: false,
+      error: { code: "invalid_input" },
+    });
+  expect(link.call).not.toHaveBeenCalled();
+  expect(await call(own, "flows.get", { flowId: "example.fill-timesheet" })).toMatchObject({ ok: true });
+});
+test("TC-IPC-12 preserves reason and params", async () => {
+  const { call, link } = setup();
+  link.call
+    .mockRejectedValueOnce({
+      code: "conflict",
+      message: "The hash moved.",
+      reason: "hash_mismatch",
+      params: { flow: "Fill timesheet" },
+    })
+    .mockRejectedValueOnce(new Error("boom"))
+    .mockRejectedValueOnce({ code: "unavailable", message: "x", reason: "engine_stopped" });
+  expect(await call(own, "flows.get", {})).toEqual({
+    ok: false,
+    error: {
+      code: "conflict",
+      message: "The hash moved.",
+      reason: "hash_mismatch",
+      params: { flow: "Fill timesheet" },
+    },
+  });
+  expect(await call(own, "flows.get", {})).toEqual({
+    ok: false,
+    error: { code: "unavailable", message: "The engine stopped." },
+  });
+  expect(await call(own, "flows.get", {})).toEqual({
+    ok: false,
+    error: { code: "unavailable", message: "x", reason: "engine_stopped" },
+  });
+});
+test("TC-IPC-13 broadcasts only valid events", () => {
+  const send = vi.fn(),
+    foreign = vi.fn(),
+    destroyed = vi.fn();
+  const windows = [
+    { isDestroyed: () => false, webContents: { mainFrame: { url: own.url }, send } },
+    { isDestroyed: () => false, webContents: { mainFrame: { url: "https://example.com/" }, send: foreign } },
+    { isDestroyed: () => true, webContents: { mainFrame: { url: own.url }, send: destroyed } },
+  ];
+  const valid = { type: "changed", topics: ["flows", "chats"] };
+  for (const event of [
+    valid,
+    { type: "changed", topics: ["harnesses"] },
+    { type: "changed", topics: [] },
+    { type: "changed", topics: ["flows"], extra: 1 },
+    { type: "other" },
+    "x",
+    null,
+  ])
+    broadcastRunnerEvent(windows, event);
+  expect(send).toHaveBeenCalledExactlyOnceWith("runner:event", valid);
+  expect(foreign).not.toHaveBeenCalled();
+  expect(destroyed).not.toHaveBeenCalled();
+});
+
+test("main names match the contract", () => {
+  expect(OPERATION_NAMES).toEqual(operationNames);
+  expect(RUNNER_TOPICS).toEqual(RunnerTopic.options);
 });
