@@ -973,7 +973,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 | The calls of `flows.allowCapabilities` and `flows.withdrawCapabilities` in `service/capabilities.test.ts` and `readiness-web.test.ts` | Capability consent and its withdrawal are written | The calls assert the `retired` answer; the folder, command and connector checks they pinned are asserted through `flows.confirm` with pins (TC-RUL-16) | B-13.T2 |
 | The calls of `flows.capabilities` in `service/capabilities.test.ts` | The capability report of a flow | The call asserts the `retired` answer; the report is `flows.get` `touches` and `readiness.check` | B-18.T1 |
 | The calls of `queue.list` and `queue.move` in `service/handlers.test.ts` and `review-03b-r19.test.ts` | The queue is listed and a run is moved | The calls assert the `retired` answer (TC-SR2-19) | B-19.T1 |
-| The calls of `usage.summary` in `service/usage-summary.test.ts` and `review-03b-r19.test.ts` | The usage summary is returned | The calls assert the `retired` answer; the unit tests of `summarizeUsage` stay | B-20.T8 |
+| The calls of `usage.summary` in `service/usage-summary.test.ts` (`review-03b-r19.test.ts` only reads the operation table and stays as it is) | The usage summary is returned | The calls assert the `retired` answer; the unit tests of `summarizeUsage` stay | B-20.T8 |
 | `apps/desktop/src/screens/harnesses/Harnesses.test.tsx` and the other tests of the unrouted builder-first screens | The old screens and their consent dialog | Nothing changes: they stay and keep passing on the frozen version 1 island | none |
 
 ### Security review gates

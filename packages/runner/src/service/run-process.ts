@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { Notice } from "@flowdriven/contracts/v1";
+import { EngineError } from "../errors.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
 import { prepareDataDir } from "./data-dir.ts";
@@ -62,7 +63,12 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
   } catch (error) {
     const text = message(error);
     options.errors(text);
-    return text === "Another FlowDriven runner is using this data folder." ? EXIT.locked : EXIT.crash;
+    const reason = error instanceof EngineError ? error.reason : undefined;
+    if (reason === "store_newer") return 5;
+    if (reason === "backup_failed" || reason === "migration_failed") return 6;
+    return reason === "data_folder_locked" || text === "Another FlowDriven runner is using this data folder."
+      ? EXIT.locked
+      : EXIT.crash;
   }
   let timer: ReturnType<typeof setInterval> | undefined;
   let service: RunnerService | undefined;
