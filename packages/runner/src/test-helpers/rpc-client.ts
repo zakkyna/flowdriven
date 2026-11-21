@@ -10,7 +10,7 @@ import {
   type RunnerClient,
   RunnerError,
   type RunnerEvent,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 export function connectRpcClient(streams: {
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream;

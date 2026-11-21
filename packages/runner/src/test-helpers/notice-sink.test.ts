@@ -1,4 +1,4 @@
-import type { Notice } from "@flowdriven/contracts";
+import type { Notice } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
 import { createFakeNoticeSink } from "./notice-sink.ts";
 

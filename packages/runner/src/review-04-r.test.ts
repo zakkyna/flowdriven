@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Notice, operations } from "@flowdriven/contracts";
+import { Notice, operations } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Keeper } from "./keeper/types.ts";
 import { createRunnerService, type RunnerService } from "./service/service.ts";

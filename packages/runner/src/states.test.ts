@@ -7,7 +7,7 @@ import {
   RiskyAction,
   RunState,
   StepRunState,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import { CHECK_TYPES, REQUIREMENT_TYPES } from "@flowdriven/sdk";
 import { expect, test } from "vitest";
 import {

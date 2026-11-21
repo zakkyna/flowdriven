@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONTRACT_VERSION, parseFrame } from "@flowdriven/contracts";
+import { CONTRACT_VERSION_V1 as CONTRACT_VERSION, parseFrame } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { connectRpcClient } from "./test-helpers/rpc-client.ts";
 

@@ -1,4 +1,4 @@
-import type { Notice } from "@flowdriven/contracts";
+import type { Notice } from "@flowdriven/contracts/v1";
 
 export function createFakeNoticeSink(): { notices: Notice[]; send: (notice: Notice) => void } {
   const notices: Notice[] = [];
