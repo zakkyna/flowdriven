@@ -130,3 +130,18 @@ test("TC-CON-40 structured results and export", () => {
   ])
     expect(c.RunsExportOutput.safeParse(bad).success).toBe(false);
 });
+
+test("TC-CON-37 agent and skill inputs", async () => {
+  const { AgentIdInput } = await import("./agents.ts");
+  const { SkillIdInput } = await import("./skills.ts");
+  expect(AgentIdInput.safeParse({ agentId: "codex" }).success).toBe(true);
+  for (const input of [
+    {},
+    { agentId: "Codex" },
+    { agentId: "has space" },
+    { agentId: "codex", password: "x" },
+  ])
+    expect(AgentIdInput.safeParse(input).success).toBe(false);
+  expect(SkillIdInput.safeParse({ skillId: "skill" }).success).toBe(true);
+  expect(SkillIdInput.safeParse({ skillId: "skill", extra: true }).success).toBe(false);
+});
