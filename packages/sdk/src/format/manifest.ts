@@ -4,6 +4,7 @@ import { FORMAT_ID, FORMAT_ID_V12 } from "../vocab.ts";
 import { InputDeclV12 } from "./inputs.ts";
 import { Requirement } from "./requirements.ts";
 import { Result } from "./result.ts";
+import { scheduleSchema } from "./schedule.ts";
 import { Duration, durationMs, Limits, OutputDecl, Step, valueId } from "./steps.ts";
 import { Touches } from "./touches.ts";
 export const Trigger = z.discriminatedUnion("kind", [
@@ -125,6 +126,7 @@ export const FlowManifest = z.discriminatedUnion("format", [
     format: z.literal(FORMAT_ID_V12),
     inputs: z.array(InputDeclV12).default([]),
     result: Result.optional(),
+    schedule: scheduleSchema.optional(),
     touches: Touches.optional(),
   }),
 ]);

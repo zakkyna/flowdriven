@@ -46,6 +46,8 @@ export function validateManifest(
   const add = (code: string, path: string, severity: Issue["severity"] = "error") =>
     issues.push({ code, path, severity, message: code.replaceAll("_", " ") });
   if (manifest.format === "flowdriven-flow/1.2") {
+    if (manifest.schedule?.type === "after" && manifest.schedule.afterFlowId === manifest.id)
+      add("schedule_self", "schedule.afterFlowId");
     const hidden = (value: string | undefined, path: string) => {
       if (value !== undefined && hasHiddenText(value)) add("hidden_text", path);
     };

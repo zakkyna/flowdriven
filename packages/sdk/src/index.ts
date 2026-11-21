@@ -8,6 +8,7 @@ export * from "./format/manifest.ts";
 export * from "./format/parse.ts";
 export * from "./format/requirements.ts";
 export * from "./format/result.ts";
+export * from "./format/schedule.ts";
 export * from "./format/steps.ts";
 export * from "./format/touches.ts";
 export * from "./issues.ts";
