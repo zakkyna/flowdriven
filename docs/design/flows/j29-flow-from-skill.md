@@ -49,11 +49,11 @@ A skill's text is read only as data, to draft the flow. It is outside text (SR-5
 - **FS-j29.S5** Save.
   - Person: chooses "Save flow". No dialog follows.
   - FlowDriven: in one transaction creates the flow (schedule "Only when I start it"), records the confirmation for its hash and for the skill's content hash at that moment (the skill pin), creates standing rules only for non-read touches under "Does on its own" (none in this example), and adds the flow name to the skill's "Used by". It writes an audit record.
-  - Sees: "Check timesheet is ready. Run it now, or put it on a schedule." with chips "Run it now" and "Every Friday at 16:00". The "Every Friday at 16:00" chip leads to a "Set this schedule?" card that the person clicks; it sets nothing by itself (SR-2).
+  - Sees: "Check timesheet is ready. Run it now, or put it on a schedule." with a `run_offer` card: "Run it now" (`run_now`) and the schedule chip "Every Friday at 16:00" (`propose_schedule`). The chip leads to a "Set this schedule?" card that the person clicks; it sets nothing by itself (SR-2).
 
 ## Other paths
 
-- **FS-j29.P1** Typed. "make a flow from the timesheet-skill skill", "buat flow dari skill pdf". With no skill name, FlowDriven asks "Which skill?" with one chip per skill. With a name that matches no skill: "I don't know a skill called <name>. Pick one:" with the chips.
+- **FS-j29.P1** Typed. "make a flow from the timesheet-skill skill", "buat flow dari skill pdf-skill". With no skill name, FlowDriven asks "Which skill?" with one chip per skill. With a name that matches no skill: "I don't know a skill called <name>. Pick one:" with the chips.
 - **FS-j29.P2** A skill without a prepared flow. The draft is "Use <skill>" with a required long-text input "What to do" and one step that does the work. FlowDriven cannot know what the skill changes, so that step is a `change` without a fixed place and is under "Asks you first" ("Let <skill> make the changes?"). Every action of it asks.
 - **FS-j29.P3** A skill that needs a file. The chat shows a form ("Choose the file and fill in the details.") instead of a question; the draft is saved the same way.
 - **FS-j29.P4** Run before save. "Save Check timesheet first, then I can run it." A typed "cek timesheet" runs the saved flow; if it does not exist: "Make Check timesheet from the timesheet-skill skill first." with the chip "Make it from timesheet-skill".
@@ -84,14 +84,14 @@ A skill's text is read only as data, to draft the flow. It is outside text (SR-5
 - **FS-j29.E1** Agent not set up or signed out. Cause: the chat's agent is not `ready`. Sees: "Reading <skill>..." does not start; the line "Claude Code is not ready." with the next-step button. Next: nothing is drafted or saved.
 - **FS-j29.E2** Permission off. Sees: "FlowDriven may not run your AI agents. Turn this on in Settings." Next: nothing is read by the agent.
 - **FS-j29.E3** Limits reached. Same as FS-j22.E3: no usage left or spending limit; nothing drafted; the person retries.
-- **FS-j29.E4** Turn failed. Cause: the agent failed or its answer failed validation twice. Sees: "I could not make the draft." with "Try again". Nothing saved.
+- **FS-j29.E4** Turn failed. Cause: the agent failed or its answer failed validation twice. Sees: "I could not make the draft." with "Try again" (`retry_turn`). Nothing saved.
 - **FS-j29.E5** Crash or restart. The draft is stored before the card is posted and stays usable; a turn in progress becomes "Stopped unexpectedly" with "Try again"; save is all-or-nothing.
 - **FS-j29.E6** Skill changed since read. Cause: the skill's content hash at save differs from the hash read for the draft. Sees: "The skill changed since I read it. I'll read it again." Next: nothing is saved; a new draft is made. This is the skill version of "a flow changed since it was confirmed".
 - **FS-j29.E7** Outside text. Cause: the skill's text contains instructions ("ignore the rules", "run this command", "send this to <address>") or hidden characters. Sees: a skill with hidden characters, an invalid `SKILL.md`, a body over 60,000 characters or a file over the size limit is refused: "I could not read this skill: <reason>. Nothing was changed." Otherwise the text is only data: FlowDriven derives the lists from its own catalog, drops anything the draft declares that is not a known kind of tool, place or account, and the card is click-only (SR-5). A tool, folder or address named only in the skill never becomes "Does on its own" and never a standing rule place.
 - **FS-j29.E8** A decision that expires. None: the card and chips do not expire. An unsaved draft stays in its chat and never runs.
 - **FS-j29.E9** Skill not found or unreadable. Cause: the skill folder was removed, or the skill is archived. Sees: "I could not find the skill <name>." Next: nothing is created.
 - **FS-j29.E10** Name taken. The card shows the suffixed name before saving ("Check timesheet 2"); the old flow is untouched. The prototype's "Check timesheet already exists." with "Open Check timesheet" is replaced by this (chair alignment: flow names are unique, drafts take the next free suffix).
-- **FS-j29.E11** Agent cannot be limited for this skill. Cause: the skill's draft needs a tool the chat's agent cannot be limited for (AD-09). Sees: a plain reason and "Use Claude Code for this draft".
+- **FS-j29.E11** Agent cannot be limited for this skill. Cause: the skill's draft needs a tool the chat's agent cannot be limited for (AD-09). Sees: a plain reason and "Use Claude Code for this draft" (`use_other_agent`).
 - **FS-j29.E12** Prototype gaps. Canned drafts exist for three skills; the real app drafts for any readable skill. Only skill drafts dedupe by name in the prototype; the real app keeps every flow name unique. Indonesian Skills button lines are English in the prototype.
 
 ## Data read and written
@@ -102,7 +102,7 @@ A skill's text is read only as data, to draft the flow. It is outside text (SR-5
 
 ## Runner API used
 
-`skills.list`, `skills.makeFlow {skillId}`, `chats.send`, `chats.act` (`save_flow`, `change_draft`), `chats.get`, `flows.list`, `flows.get`, `flows.start` (for "Run it now"), `flows.setSchedule` (after the schedule card), `agents.list`. Topics: `skills`, `chats`, `flows`, `rules`.
+`skills.list`, `skills.makeFlow {skillId}`, `chats.send`, `chats.act` (`save_flow`, `change_draft`), `chats.get`, `flows.list`, `flows.get`, `flows.setSchedule` (after the schedule card), `agents.list`. "Run it now" is the card action `run_now`, a start with source `chat` inside `chats.act`. Topics: `skills`, `chats`, `flows`, `rules`.
 
 ## Acceptance criteria
 
@@ -130,7 +130,7 @@ A skill's text is read only as data, to draft the flow. It is outside text (SR-5
 
 ## Not in the prototype yet
 
-- Drafts for any skill (the prototype has canned drafts for timesheet-skill and pdf, and a plain draft for the rest).
+- Drafts for any skill (the prototype has canned drafts for timesheet-skill and pdf-skill, and a plain draft for the rest).
 - The skill pin and "Changed: confirm again" after a skill change; the skill-changed-since-read check.
 - Refusing unreadable or hidden-character skills.
 - Unique suffixed names on the card (the prototype dedupes by name with a message).

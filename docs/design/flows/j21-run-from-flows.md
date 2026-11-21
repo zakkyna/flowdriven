@@ -15,7 +15,7 @@ The person opens the list of flows, runs one with a click, reads what a flow nee
 ## Entry points and trigger
 
 - The left menu: "Flows" (`#/flows`) and a flow page (`#/flows/<flowId>`). A flow name link in the chat opens its page.
-- Triggers: the person clicks "Run"; a schedule time arrives; another flow finishes (type "after"). All of them call `flows.start` (or the scheduler) and then `START`: 1) a flow that is `new` or `changed` does not start and gets a confirm card in a chat; 2) missing required inputs are asked in a chat; 3) otherwise it starts.
+- Triggers: the person clicks "Run"; a schedule time arrives; another flow finishes (type "after"). The click calls `flows.start`; the scheduler, the end of a flow and "Try the next run now" reach `starts.request` inside the runner. All of them then follow `START`: 1) a flow that is `new` or `changed` does not start and gets a confirm card in a chat; 2) missing required inputs are asked in a chat; 3) otherwise it starts.
 - Sources used here: `flows` (Run), `schedule`, `after`, `try_next`, `again`.
 
 ## Preconditions
@@ -31,7 +31,7 @@ The person opens the list of flows, runs one with a click, reads what a flow nee
    - Sees: the heading "Flows", "Tasks you set up once. Run them whenever you like, or on a schedule.", a button "Make a new flow", and one card per flow: a tile, the name (a link), the summary, a small step track, the schedule line ("Only when I start it", "Every weekday at 17:00", "Every Monday at 08:00", "After <flow> finishes"), the result line ("Answer in chat" or "Report"), "Asks you: Duration, What you did" when a required input has no default and no remembered answer, a state badge ("New: confirm it once", "Changed: confirm again", "Running now", "Needs you", or the last result with its time), and one button: "Run"; "Running..." (disabled) while a run is active; "See what's waiting" when the active run needs the person; "Confirm first" when the flow is `new` or `changed`.
 2. **FS-j21.S2 Run a flow that needs nothing.**
    - Person: clicks "Run" on "Weekly supplier report".
-   - FlowDriven: `flows.start {flowId, source: "flows"}`. `START` finds it confirmed and its only input (days to look back, optional, default 7) filled, so it starts. The flow's result is `report`, so no chat is made.
+   - FlowDriven: `flows.start {flowId, source: "flows"}` returns `{outcome: "started", ...}`. `START` finds it confirmed and its only input (days to look back, optional, default 7) filled, so it starts. The flow's result is `report`, so no chat is made.
    - Sees: a toast "Started Weekly supplier report. Follow it in Activity." The card button turns to "Running...". The run appears in Activity under "Running now". When it ends, the run page shows the report lines. If it needs a decision, the item shows under "Needs you" and as a notification when no window is focused.
 3. **FS-j21.S3 Read a flow page.**
    - Person: opens "Fill timesheet".
@@ -39,12 +39,12 @@ The person opens the list of flows, runs one with a click, reads what a flow nee
    - Sees: the header (tile, name, description, "Made from the skill <skill>" when set), "Run", "Improve with chat", a menu (Duplicate, Delete); a banner "Check this flow once, then confirm it." with "Confirm" when the flow is `new` or `changed`; "What it does" (the steps; a step that asks shows a hand and "Asks you first"); "What it needs", with one line per input: "Remembers your last answer: Example Corp", "Default: Today", "Asks you", "Optional", each with its example, or "Nothing. It runs without asking you."; the result line ("Shows the answer in the chat" or "Leaves a report in Activity"); three columns "Does on its own", "Asks you first" and "Never does" (a standing rule appears under "Does on its own" as "<sentence> (you allowed this)" with "Ask me again"); "Schedule"; "Needs you" (only rows that are not ok, for example "Sign in to the timesheet service"); "Recent activity" (the last five runs with state words and a link "View activity", or "No activity yet.").
 4. **FS-j21.S4 Schedule it after another flow.**
    - Person: under "Schedule" chooses "After another flow finishes", then "Build APK and upload it" in the field "After flow".
-   - FlowDriven: `flows.setSchedule {flowId, hash, schedule: {type: "after", afterFlow}}`. The call carries the hash of the confirmed version. FlowDriven checks the schedule (FS-j21.E3), saves it, and records it in the audit log. For a flow with required inputs it shows "When it's time" with "Ask me in the chat" and "Use my last answers".
+   - FlowDriven: `flows.setSchedule {flowId, hash, schedule: {type: "after", afterFlowId}}`. The call carries the hash of the confirmed version. FlowDriven checks the schedule (FS-j21.E3), saves it, and records it in the audit log. For a flow with required inputs it shows "When it's time" with "Ask me in the chat" and "Use my last answers".
    - Sees: "Next: After Build APK and upload it finishes". When Build APK and upload it ends `done`, by any route, FlowDriven calls `starts.request(timesheet, "after", ...)`: if inputs are missing it asks in the same chat as the build when there is one, otherwise in a new chat from FlowDriven, with "Build APK and upload it finished, so Fill timesheet is next."
 
 ## Other paths
 
-- **FS-j21.P1 Run on a flow that needs details.** "Run" on "Fill timesheet" creates (or reuses) a chat from FlowDriven with "Fill timesheet needs a few details." and the question (FS-j27), and opens it. No run is created and no toast shows.
+- **FS-j21.P1 Run on a flow that needs details.** "Run" on "Fill timesheet" creates (or reuses) a chat from FlowDriven with "Fill timesheet needs a few details." and the question (FS-j27), and opens it (`flows.start` returns `{outcome: "asked", ...}`). No run is created and no toast shows.
 - **FS-j21.P2 Run on a new or changed flow.** The button reads "Confirm first". A click opens the flow's confirm dialog "Confirm <flow>?" (the same one as FS-j22). Only after "Confirm" does "Run" appear. From a schedule, `START` shows the confirm card in a chat and a "Needs you" item instead (FS-j21.E7).
 - **FS-j21.P3 Make a new flow.** The button "Make a new flow" opens a dialog "Choose how to start." with "Cancel", "Describe it in chat" (FS-j22) and "From a skill" (FS-j29).
 - **FS-j21.P4 Improve with chat.** Opens a new chat for this flow (FS-j23).
@@ -95,7 +95,7 @@ The person opens the list of flows, runs one with a click, reads what a flow nee
 ## Data read and written
 
 - Reads: `Flow` (state, inputs, result, touches, schedule, remembered, last inputs), `StandingRule`, `Run`, readiness items, `Settings`.
-- Writes: `Flow.schedule`, `Flow` state (`flows.confirm`, `flows.delete`, `flows.duplicate`), `StandingRule` (revoked), `Run`, `Chat` and `Message` (questions, confirm cards), `AuditRecord` (schedule changes, starts, confirmations).
+- Writes: the schedule (`schedules` row), `Flow` state (`flows.confirm`, `flows.delete`, `flows.duplicate`), `StandingRule` (revoked), `Run`, `Chat` and `Message` (questions, confirm cards), `AuditRecord` (schedule changes, starts, confirmations).
 
 ## Runner API used
 

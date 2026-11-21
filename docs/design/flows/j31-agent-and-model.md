@@ -39,7 +39,7 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
   - Sees: the button "Claude Code · Opus 5.5" and a small note in the chat (not a bubble): "Now using Claude Code · Opus 5.5". Other chats and the Settings default are unchanged. A run that is already going keeps its agent and model.
 - **FS-j31.S4** Run a flow on the choice.
   - Person: sends "run the weekly supplier report".
-  - FlowDriven: the run is started from the chat (`flows.start {flowId, source: "chat"}`), and the run records `agent: "claude-code"`, `model: "opus-5.5"`. The agent is started with its own model flag set to that model and no other flag added by the picker (SR-4).
+  - FlowDriven: the run is started from the chat (a start with source `chat`, inside the chat turn), and the run records `agent: "claude-code"`, `model: "opus-5.5"`. The agent is started with its own model flag set to that model and no other flag added by the picker (SR-4).
   - Sees: the run card "Claude Code · Opus 5.5"; the run page shows the same.
 - **FS-j31.S5** See a not-ready agent.
   - Person: opens the picker again.
@@ -54,10 +54,11 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 - **FS-j31.P4** Starts outside a chat. Schedule, Run on Flows, Run again, "after another flow", "Try the next run now", a scheduled question's run, a phone start and another AI tool's start use the main agent and its default model. "If <main agent> is busy, use <other agent>" applies only to these starts, never to a chat's choice (see `j12-settings.md`). The run records what it used.
 - **FS-j31.P5** Chats FlowDriven makes. A chat that FlowDriven starts (the 17:00 question) begins with the main agent and its default model, like a new chat.
 - **FS-j31.P6** Chain and several flows. A request to run several flows keeps the agent and model the chat had when the person chose "Start"; a later change applies to new requests only.
-- **FS-j31.P7** A flow the agent cannot be limited for. If the flow needs a tool the chat's agent cannot be limited for (AD-09), the run does not start. The chat says why in plain words, for example "This flow needs the mail account, and Codex cannot be limited for it yet." with "Run with Claude Code this time". That choice applies to this run only; the chat's choice stays.
+- **FS-j31.P7** A flow the agent cannot be limited for. If the flow needs a tool the chat's agent cannot be limited for (AD-09), the run does not start. The chat says why in plain words, for example "This flow needs the mail account, and Codex cannot be limited for it yet." with "Run with Claude Code this time" (`use_other_agent`). That choice applies to this run only; the chat's choice stays.
 - **FS-j31.P8** A model that went away. If a chat's stored model is no longer offered (the agent was updated), the chat falls back to that agent's default and adds "Sonnet 5.5 is no longer available. Now using Claude Code · <default>." (words from the language files).
 - **FS-j31.P9** Language. The button, menu, note and notes use the app language. Model and agent names are product names and stay.
 - **FS-j31.P10** Settings line. "Main AI agent" in Settings shows "New chats start with this agent and its default model."
+- **FS-j31.P11** The open menu is stable (version 9, final). It stays open across re-renders (a new message, a status change) until the person closes it or chooses; focus stays where the person put it; opening it never clears the start screen of an empty chat; the menu stays inside the window at every width from 320 to 1440 px; the chosen model shows a check icon and its name, and "Default" is a small tag.
 
 ## States
 
@@ -96,7 +97,7 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 
 ## Runner API used
 
-`chats.create`, `chats.get`, `chats.setAgent {chatId, agent, model}`, `chats.send`, `agents.list`, `agents.models {agentId}`, `agents.setUp {agentId}`, `agents.signIn {agentId}`, `agents.rescan`, `settings.get`, `settings.update` (`mainAgent`, `busyFallback`), `flows.start`, `runs.status`. Topics: `chats`, `agents`, `settings`, `runs`.
+`chats.create`, `chats.get`, `chats.setAgent {chatId, agent, model}`, `chats.send`, `agents.list`, `agents.models {agentId}`, `agents.setUp {agentId}`, `agents.signIn {agentId}`, `agents.rescan`, `settings.get`, `settings.update` (`mainAgent`, `busyFallback`), `runs.status`. Topics: `chats`, `agents`, `settings`, `runs`.
 
 ## Acceptance criteria
 
@@ -121,6 +122,7 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 - **FS-j31.A19** After a restart, the chat's choice and each run's recorded agent and model are unchanged.
 - **FS-j31.A20** A reached usage or spending limit never switches a chat's agent by itself; the chat offers "Choose another AI agent".
 - **FS-j31.A21** The start proof failing makes the run "Stuck" with the limits message and no step runs.
+- **FS-j31.A22** The open picker menu survives a re-render (a new message, a status change) and closes only on a choice, Escape or a click outside; focus is not moved by a re-render; opening it does not clear an empty chat's start screen; at every window width from 320 to 1440 px the menu lies inside the window; the chosen model shows a check icon and its name; "Default" is a small tag.
 
 ## Not in the prototype yet
 
@@ -132,5 +134,5 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 - A chain keeps the agent and model chosen at "Start"; reason: one request, one choice.
 - "Run with Claude Code this time" applies to one run and does not change the chat; reason: the person did not ask to switch the chat.
 - A usage limit offers "Choose another AI agent" instead of switching; reason: SR-9 says limits are never worked around silently, and the busy fallback is for starts outside a chat.
-- Note words for models (`mostCapable` "Most capable", `fastCapable` "Fast and capable", `fastest` "Fastest", `allRound` "All-round", `carefulCoding` "Careful with code") are my English wording; they live in `packages/i18n`.
+- Note words for models (`mostCapable` "Most capable", `fastCapable` "Fast and capable", `fastest` "Fastest", `allRound` "All-round", `carefulCoding` "Careful with code") are my English wording; they live in `apps/desktop/src/i18n`.
 - A "Run again" from the run page is a start outside a chat, so it uses the main agent's default model, not the old run's model.

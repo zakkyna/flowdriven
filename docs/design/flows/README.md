@@ -16,7 +16,7 @@ One flow spec describes one journey of the clickable prototype's Guide as the re
 
 Every file has these parts in this order:
 
-1. Title `# FS-jNN: <English title>`. Journeys that depend on prototype version 9 put the pending line directly under the title and under every heading that depends on it.
+1. Title `# FS-jNN: <English title>`. Version 9 of the clickable prototype is final, so no pending line is written.
 2. A table: Journey (id, Indonesian title from the Guide, English title), PRD features, Safety rules (SR ids, `START`), Prototype source (brief sections and prototype files), Status.
 3. `## Goal`: one or two sentences.
 4. `## Entry points and trigger`.

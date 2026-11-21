@@ -22,7 +22,7 @@ Contract version 2 holds the V1 operations only. The later operations of V2 and 
 | Activity, Search, Skills | - | `activity.summary`, `search.query`, `skills.list`, `skills.makeFlow` | - |
 | Other | `audit.list`, `readiness.check`, `readiness.install`, `triggers.list`, `triggers.setEnabled` | - | - |
 
-19 operations stay (most change a shape or a table field), 28 are new and 12 retire: contract version 2 has 47 operations.
+19 operations stay (most change a shape or a table field), 28 are new and 12 retire: contract version 2 has 47 live operations. The 12 retired names stay in the table as retired entries while the builder-first screens stay in the code, unrouted (chair decision for V1, revisable): the real runner answers each `unavailable` with reason `retired` (section 7).
 
 ## 2. Conventions
 
@@ -39,7 +39,7 @@ type ChatId = Id; type MessageId = Id; type DraftId = Id; type QuestionId = Id; 
 type AgentId = string;      // ^[a-z][a-z0-9-]{0,31}$: "claude-code", "codex"
 type SkillId = Id;          // "claude-code:<name>", "flowdriven:<name>"
 type TouchId = string;      // ^[a-z0-9][a-z0-9-]{0,63}$
-type LanguageCode = string; // ^[a-z]{2,3}(-[A-Z]{2})?$ and registered in packages/i18n
+type LanguageCode = string; // ^[a-z]{2,3}(-[A-Z]{2})?$ and one of the codes main passes at spawn (--languages), from apps/desktop/src/i18n/languages.ts
 ```
 
 ### 2.2 The operation table
@@ -60,17 +60,19 @@ type OperationDef = {
   phoneRule?: string;                   // required when restricted
   personOnly: boolean;                  // new: it changes a confirmation, decision, standing rule, schedule,
                                         // the agent permission or a limit (SR-2)
+  retired?: true;                       // new: a version 1 operation kept for the unrouted screens (section 7)
 };
 ```
 
 Rules that `operations.test.ts` checks over the whole table:
-1. The names are exactly the 47 of section 5 (a snapshot), so nothing is added or retired by accident.
+1. The live names are exactly the 47 of section 5 and the retired names exactly the 12 of section 7 (snapshots), so nothing is added or retired by accident.
 2. Every name matches `^[a-z]+\.[A-Za-z]+$` (the pattern main checks).
 3. `personOnly: true` implies `mcp: "no"` and `phone` is `"no"` or `"restricted"`.
 4. Decisions and permissions are never `mcp: "yes"`: no `approvals.*`, `rules.*`, `settings.*`, `flows.confirm`, `flows.setSchedule` or `chats.act` has `mcp: "yes"`.
 5. `restricted` has its rule text.
 6. `errors`, `reasons`, `reads` and `writes` use only listed values.
 7. Every input schema refuses an unknown key.
+8. A retired entry has `mcp: "no"` and `phone: "no"`, its real handler answers `unavailable` with reason `retired` and writes nothing, and no routed screen calls it (a source-rule test in `apps/desktop`).
 
 ### 2.3 Callers
 
@@ -85,11 +87,12 @@ The dispatcher (`service/handlers.ts`, `createDispatcher`) tags each call with i
 ### 2.4 Outcomes and errors
 
 - What the person should see is data in the output: a start that asked instead of starting, a form with invalid fields, a run that is still stuck.
-- An error means the call changed nothing: `RunnerError(code, message, {reason?, params?})`. `message` is an English line for logs and tests and is never shown. The renderer picks its words from `reason` and `params` through `packages/i18n`, and from `code` when there is no reason.
+- An error means the call changed nothing: `RunnerError(code, message, {reason?, params?})`. `message` is an English line for logs and tests and is never shown. The renderer picks its words from `reason` and `params` through `apps/desktop/src/i18n`, and from `code` when there is no reason.
 
 ### 2.5 Words and text
 
-- Outputs carry codes and `Line` values (`{key, params}`); the renderer draws them in the app language, or for chat lines in the language stored with the message (AD-14).
+- No words in `packages/*` (AD-14, chair decision for V1, revisable): the runner and the contracts carry codes, `Line` values and typed values, and everything a person reads is drawn in `apps/desktop`, by the renderer or, for system notifications and the menu bar menu, by Electron main. `packages/contracts/src/line-keys.ts` (new) lists every `Line` key the runner may emit (`LINE_KEYS`); `en.ts` must have each, which TypeScript and the language check verify.
+- Outputs carry codes and `Line` values (`{key, params}`); the renderer draws them in the app language, or for chat lines in the language stored with the message (AD-14). `params` hold raw values: names and text as they are, numbers as numbers, and moments as `IsoDateTime` (a param named `at` or `until`, or ending in `At`), which the renderer formats in the line's language and the person's zone.
 - Text written by a person, an agent or a flow author passes through as text with its `outside` mark (SR-5); the renderer draws it with the safe text renderer (AD-16).
 
 ### 2.6 Time and paging
@@ -289,13 +292,14 @@ type ChatView = {
   more: boolean;                                 // older messages exist (page with before)
   turn: { state: "idle" | "queued" | "thinking"; queued: number };   // the working indicator
   composerText: string;
+  starters?: { index: number; label: Line; code: "run" | "run_chain" | "make_flow" | "status"; flowIds?: FlowId[] }[];   // an empty chat only
 };
 type MessageView = {
   id: MessageId; seq: number; at: IsoDateTime;
   role: "person" | "agent" | "flowdriven";
   kind: "text" | "reply" | "line" | "note" | "result" | "card";
   text?: string; line?: Line;
-  result?: { runId: RunId; lines: string[] };
+  result?: { runId: RunId; lines: string[]; values: Record<string, TypedValue>; language: LanguageCode };   // the flow's answer lines with {inputId} placeholders; the renderer fills them
   card?: CardView;                               // section 8
   chips?: ChipView[];
   language?: string;                             // draw a line in this language
@@ -561,7 +565,7 @@ type SettingsPatch = {
 
 #### `chats.send` (new)
 
-- Input: `{chatId; text: string (1..16000, not blank); pasted?: boolean; fromChip?: boolean}`. `fromChip` is only for the starter chips of an empty chat; chips under a message use `chats.act` `suggestion`.
+- Input: `{chatId; text: string (1..16000, not blank); pasted?: boolean} | {chatId; starter: number}`. `starter` is the index of one of the empty chat's starter chips; chips under a message use `chats.act` `suggestion`.
 - Output: `{messageId: MessageId; turn: "queued" | "not_ready" | "form_open"}`. It returns at once; the answer arrives through the `chats` topic (AD-10).
 - Errors: `not_found`; `not_allowed: permission_off` (nothing is stored; the text stays in the composer, FS-j20.E2).
 - Does:
@@ -674,7 +678,7 @@ type SettingsPatch = {
 
 #### `starts.next` (new)
 
-- Input: `{withinHours: 1..48}`. Output: `{next?: {flowId: FlowId; flowName: string; at: IsoDateTime}}`.
+- Input: `{withinHours: 1..48}`. Output: `{next?: {flowId: FlowId; flowName: string; at: IsoDateTime}; language: LanguageCode}`; main draws the line in that language.
 - Does: the next due time schedule of a confirmed flow. Electron main calls it when the menu bar menu opens, for the line "Quitting stops your schedules. Next: <flow>, <time>." (FS-j28.P10).
 - Tests first: with schedules at 17:00 today and 08:00 Monday, `withinHours: 24` at 14:00 gives the 17:00 one; nothing due gives `{}`.
 
@@ -697,9 +701,9 @@ type SettingsPatch = {
 
 #### `runs.export` (changed)
 
-- Input: `{runId}`. Output: `{markdown: string; language: LanguageCode}`.
-- Does: the "Copy report" Markdown in the run's language (`data-model.md`, section 8); built on request, never stored.
-- Tests first: starts with `# <flow>, <when>`, has `Result: <words>`, `Ended: <time>` and `## Summary`; a test secret built at run time appears as "[hidden]"; a zero-width character built with `String.fromCodePoint(0x200b)` appears as its visible mark; no run id appears (FS-j25.A12).
+- Input: `{runId}`. Output: `{parts: ExportParts; language: LanguageCode}`, where `ExportParts` is `{flowName; startedAt; endedAt?; state: RunState; cause?: Cause; startWords?: Line; summary: string[]; steps: {title: string; state: StepRunState}[]; decisionLines: Line[]; answer?: {lines: string[]; values: Record<string, TypedValue>}; outside: boolean}`.
+- Does: the parts of "Copy report" (`data-model.md`, section 8), built on request and never stored. The runner masks anything that looks like a secret as "[hidden]" and replaces hidden characters with their visible marks in every text part before it returns them; the renderer builds the Markdown in the run's language (`apps/desktop/src/screens/activity/copy-report.ts`, new).
+- Tests first: runner (L3): a test secret built at run time appears as "[hidden]" in the parts; a zero-width character built with `String.fromCodePoint(0x200b)` appears as its visible mark; no part holds the run id. Renderer (L2): the Markdown starts with `# <flow>, <when>`, has `Result: <words>`, `Ended: <time>` and `## Summary`, in English and in Bahasa Indonesia (FS-j25.A12).
 
 #### `runs.resume` (changed)
 
@@ -827,7 +831,7 @@ Unchanged, for the manifest triggers of format 1.1 flows only; person schedules 
 | `queue.list`, `queue.move` | `activity.summary` (`running`, `waiting`, `behind`); moving a run to the front has no screen | B-19 |
 | `usage.summary` | `agents.list` (`usage`) and `settings.get` (`spending`) | B-20 |
 
-A retired name is removed from `operations`; a call to it gets JSON-RPC -32601, which `IpcRunnerClient` maps to `not_found` as today. Deleting the tests of the retiring screens and operations is the Ask-first item named in the build plan.
+The builder-first screens are unrouted in V1, not deleted: their code and tests stay and keep passing (chair decision for V1, revisable; AGENTS.md never skips a test). They form a frozen island: `packages/contracts/src/v1/` keeps a read-only copy of contract version 1 and `packages/fixtures/src/v1/` the version 1 sample and fixture client, used only by those screens and their tests. The retired names stay in `operations` as retired entries (`retired: true`, `mcp: "no"`, `phone: "no"`); the real runner answers each `unavailable` with reason `retired` and writes nothing, so nothing writes the frozen tables `capability_consents`, `consent_pins` and `grants`. Removing the island, with its tests, is a later Ask-first item.
 
 ## 8. Cards and card actions
 
@@ -945,6 +949,8 @@ Tests first for the card actions (`packages/runner/src/assistant/cards.test.ts`,
 
 ### 8.3 Chips
 
+Chips act by code, so they work in any language (brief 24.11). The starter chips of an empty chat are `ChatView.starters`, built by the runner from the person's own flows: "Run <flow>", "Run <flow>, then <flow>", "Make a new flow" and "What needs me?". `chats.send {chatId, starter}` posts the chip's label as the person's message (a `Line` with `fromChip`) and acts on its code without a brain call: `run` and `run_chain` take the path of a typed run, `make_flow` the path of `chats.create {subject: {kind: "make"}}`, `status` posts the `status` card.
+
 A chip under a message is one of: a suggestion (`chats.act` `suggestion` with its index; the runner knows the text, so the renderer cannot change it), an action of the message's card (`chats.act` with that action, for example "Use a form" -> `use_form`), or a link to another chat ("Answer in chat"). The starter chips of an empty chat belong to no message: they are sent with `chats.send {fromChip: true}`.
 
 ## 9. Events and topics
@@ -999,14 +1005,14 @@ type NoticeTarget =                                        // v2: inbox and buil
   | { screen: "flow"; flowId: NoticeId }                        // #/flows/<flowId>
   | { screen: "activity" }                                      // #/activity
   | { screen: "settings" };                                     // #/settings
-type Notice = { id: string; kind: NoticeKind; title: string /* 1..80 */; body: string /* 1..240 */; target: NoticeTarget };
+type Notice = { id: string; kind: NoticeKind; title: Line; body: Line; language: LanguageCode; target: NoticeTarget };   // drawn by main; at most 80 and 240 characters once drawn
 ```
 
-- The runner writes the title and body in the app language at the moment it sends (FS-j30.A16). They hold fixed words and the flow name only: never an email's text, a payload marked sensitive, an input value or a secret (F-16.R6).
+- The runner sends `title` and `body` as `Line` values with the app language at the moment it sends; main draws them with the words of `apps/desktop/src/i18n` (FS-j30.A16). `parseNotice` accepts only keys of `LINE_KEYS`. They hold fixed words and the flow name only: never an email's text, a payload marked sensitive, an input value or a secret (F-16.R6).
 - A notice id is stable per item (for example `approval:<id>`, `question:<id>`), so the same item never notifies twice. Throttling stays in `notify/policy.ts`: at most one per run every 10 minutes unless a decision waits.
 - New frame `notice_clear` (`{jsonrpc: "2.0", method: "notice_clear", params: {id: NoticeId}}`): the runner sends it when the item is decided, answered, cancelled, expired, or its run stops; main closes that notification (F-16.R3).
 
-Tests first: `notice.test.ts` refuses a body over 240 characters and an unknown key; the runner sends one `question_waiting` for a new question and none for a reused one (FS-j28.A12); a slot of a `changed` flow sends one `confirm_waiting`; resolving a decision sends `notice_clear` with `approval:<id>`.
+Tests first: `notice.test.ts` refuses a key outside `LINE_KEYS` and an unknown field; main's drawing test refuses a drawn body over 240 characters; the runner sends one `question_waiting` for a new question and none for a reused one (FS-j28.A12); a slot of a `changed` flow sends one `confirm_waiting`; resolving a decision sends `notice_clear` with `approval:<id>`.
 
 ## 11. Errors
 
@@ -1041,7 +1047,8 @@ The frame: `RpcErrorBody = {code: number; message: string; data: {code: RunnerEr
 | `setup_running` | conflict | Set up or Sign in is already running for that agent |
 | `install_unavailable` | unavailable | no catalog install command for this platform |
 | `model_unknown` | invalid_input | the agent did not list that model |
-| `language_unknown` | invalid_input | not a registered language |
+| `language_unknown` | invalid_input | not one of the codes main passed at spawn |
+| `retired` | unavailable | a version 1 operation kept only for the unrouted screens (section 7) |
 | `limit_not_above`, `limit_too_high` | invalid_input | a spending limit not above the current one, or above 10,000 |
 | `flow_deleted` | not_found | the flow was deleted |
 | `flow_running` | conflict | the flow has an active run (delete) |
@@ -1142,7 +1149,7 @@ Between main and the runner (stdio, newline-delimited JSON-RPC 2.0, `wire.ts`): 
 
 ### 12.5 Version check
 
-1. Main sends `runner.info` right after it spawns the runner and before it relays any call. When `contractVersion` is not `CONTRACT_VERSION`, main stops the runner, marks the link incompatible, does not restart it, and answers every `runner:call` with `{ok: false, error: {code: "unavailable", reason: "contract_mismatch"}}`.
+1. Main spawns the runner with `--languages=<codes>`, the codes of `apps/desktop/src/i18n/languages.ts`, then sends `runner.info` before it relays any call. When `contractVersion` is not `CONTRACT_VERSION`, main stops the runner, marks the link incompatible, does not restart it, and answers every `runner:call` with `{ok: false, error: {code: "unavailable", reason: "contract_mismatch"}}`.
 2. The renderer calls `runner.info` first. On a mismatch it shows "FlowDriven needs an update: the app and its engine do not match." with "Quit" (`window.quit`) and makes no other call (FS-j01.E8).
 3. Runner exit codes 3 (`data_folder_locked`), 5 (`store_newer`) and 6 (`migration_failed` or `backup_failed`) are not restarted; main answers every call with that reason, and the renderer shows its plain screen with "Quit".
 4. `FixtureRunnerClient` reports `contractVersion: 2`, `mode: "sample"`.
@@ -1153,8 +1160,8 @@ Tests first: `runner-link.test.ts` with a stub runner that reports version 1 get
 
 - The app and its runner ship together, so the contract version must be equal; there are no version ranges.
 - A version 7 runner opens stores of versions 0 to 7 and refuses a newer one (`data-model.md`, section 5).
-- Fixtures and sample data validate against contract 2 (`packages/fixtures/src/story-v2/`, new).
-- A retired operation answers -32601 (`not_found`).
+- Fixtures and sample data validate against contract 2 (`packages/fixtures/src/story-v2/`, new). The unrouted screens use the frozen copies `packages/contracts/src/v1/` and `packages/fixtures/src/v1/` (section 7).
+- A retired operation answers `unavailable` with reason `retired`.
 - The window API is versioned with the app. V2 and V3 operations raise `CONTRACT_VERSION` (section 13).
 
 ### 12.7 Color mode and background
@@ -1234,7 +1241,7 @@ Shared dispatcher tests (`service/handlers.test.ts`): an unknown name answers -3
   - "Change" on a plan (`j20-run-from-chat.md`) -> `change_plan`.
   - "Yes, every time" and "Only this time" (`j20-run-from-chat.md`, S8) -> `every_time` and `only_this_time`.
   - "Run now" and "Run it now" (`j22-make-a-flow.md`, `j29-flow-from-skill.md`) -> `run_now` on a `run_offer` card; the schedule chip "Every Friday at 16:00" (`j29-flow-from-skill.md`) -> `propose_schedule`.
-  - a chip "sent as the person's own message" (`j20-run-from-chat.md`, S2) -> `chats.act` `suggestion` (`j30-app-language.md`); starter chips of an empty chat -> `chats.send {fromChip: true}`.
+  - a chip "sent as the person's own message" (`j20-run-from-chat.md`, S2) -> `chats.act` `suggestion` (`j30-app-language.md`); starter chips of an empty chat -> `chats.send {chatId, starter}`, acting by code.
   - "Try again" after a failed turn (`j22-make-a-flow.md`, E4) -> `retry_turn`; "Run with Claude Code this time" (`j31-agent-and-model.md`) and "Use Claude Code for this run, draft or change" (`j20-run-from-chat.md`, `j22-make-a-flow.md`, `j23-improve-a-flow.md`) -> `use_other_agent`.
   - `flows.start {source: "again", inputs: <the run's inputs>}` (`j25-history-and-problems.md`, P2) -> `flows.start {source: "again", fromRunId}`.
   - `approvals.resolveSimilar {runId, group}` (`j24-decisions.md`) -> adds `approvalIds`.

@@ -37,15 +37,15 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
   - Sees: the toast "Waiting for you to sign in...", then "Running", then "Finished" with the toast "Run resumed". The report adds the honest lines, for example "Read 4 job pages after you signed in."
 - **FS-j25.S4** Copy the report.
   - Person: opens a run that shows "Finished" and chooses "Copy report".
-  - FlowDriven: `runs.export {runId}` returns Markdown; the renderer shows it in a dialog and copies it.
+  - FlowDriven: `runs.export {runId}` returns the report parts (the runner masks secrets and marks hidden characters); the renderer builds the Markdown in the run's language, shows it in a dialog and copies it.
   - Sees: a dialog with the text: `# <flow>, <when>`, `Result: Finished`, `Ended: 09:16`, `## Summary` and bullets. A "Copy" button; if the clipboard is blocked, "Press Cmd+C to copy".
 
 ## Other paths
 
 - **FS-j25.P1** Sections and filters. "Needs you" (decisions and waiting questions, see `j24-decisions.md`), "Running now" (with "Stop"), "Earlier" (newest first, filtered by All, Finished, Problems). The rail and top bar show the count of things that need you.
-- **FS-j25.P2** Run again. On any run whose flow still exists, "Run again" calls `flows.start {flowId, source: "again", inputs: <the run's inputs>}` and so goes through `START`: a `new` or `changed` flow shows the confirm card in a chat and does not start; missing required inputs are asked in a chat; otherwise it starts. It runs the flow's current confirmed version, not the old run's version (SR-3). The start message lists the values used. If the flow was deleted, the button is not shown.
+- **FS-j25.P2** Run again. On any run whose flow still exists, "Run again" calls `flows.start {flowId, source: "again", fromRunId}` (the runner takes the inputs of that run) and so goes through `START`: a `new` or `changed` flow shows the confirm card in a chat and does not start; missing required inputs are asked in a chat; otherwise it starts. It runs the flow's current confirmed version, not the old run's version (SR-3). The start message lists the values used. If the flow was deleted, the button is not shown.
 - **FS-j25.P3** Try again. Shown for `blocked` runs whose cause FlowDriven can re-check, and for `interrupted` runs. For a `blocked` run FlowDriven re-checks the cause: if it is gone the run starts again from the stopped step; if not, the page says "Still stuck: <reason>." and the run stays `blocked`. For an `interrupted` run (after a crash) "Try again" is the person's own action and resumes the steps that did not finish; the runner does this by itself after a restart only when every interrupted step is marked idempotent (SR-8).
-- **FS-j25.P4** Causes in plain words. The run page uses this table (the words may be refined in `packages/i18n`):
+- **FS-j25.P4** Causes in plain words. The run page uses this table (the words may be refined in `apps/desktop/src/i18n`):
 
 | State | Cause | Words | Button |
 |---|---|---|---|
@@ -54,7 +54,7 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
 | `blocked` | Permission off | "Allow FlowDriven to run AI agents in Settings." | "Open Settings" |
 | `blocked` | Agent not set up | "Set up Claude Code first." | "Set up Claude Code" |
 | `blocked` | Usage limit | "Claude Code has no usage left right now. It will be available again at 14:05." | "Try again" |
-| `blocked` | Spending limit | "The spending limit is reached." | "Raise limit" (opens the dialog of `j12-settings.md`) |
+| `waiting_approval` | Spending limit (a "Needs you" `budget_raise` decision, not `blocked`) | "Monthly limit reached. Raise it in Settings to continue." | "Raise limit" (opens Settings and the dialog of `j12-settings.md`); raising the limit resolves the decision and the run continues, so there is no "Try again" |
 | `blocked` | Checks keep failing | "The check for <step> still fails after 2 tries." | "Try again" |
 | `blocked` | A requirement is missing | "<Folder or account> is missing." | "Fix it" (readiness row) |
 | `blocked` | Flow not confirmed | "Confirm <flow> first." | "Confirm" |
@@ -69,6 +69,7 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
 - **FS-j25.P8** Queue. A second run of a flow that is already open is `queued` ("Waiting to start": "Waiting for the earlier run of this flow"). If the earlier run needs the person, the line "The earlier run needs you first." with "See what it needs" is shown.
 - **FS-j25.P9** Unknown run. An id that does not exist shows "This activity does not exist." with "Go to Activity".
 - **FS-j25.P10** After a flow change. A run page keeps the version the run used. A banner "This run used an earlier version of the flow." is shown when the flow has changed since.
+- **FS-j25.P12** A step that can send, post, pay, delete or merge never resumes by itself after a crash, even when marked idempotent, and the run page names what the interrupted step may have done: "This step may have sent: <title>. Check before you choose Try again." (Decided for V1, revisable; T-24; Not in the prototype yet.)
 
 ### Version 9 parts
 
@@ -100,9 +101,9 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
 
 - **FS-j25.E1** Agent not set up or signed out. Cause: the run's agent is `not_installed` or `needs_login`. Sees: "Waiting for sign-in" or "Stuck" with the cause row from FS-j25.P4 and the next-step button. Next: after the agent is `ready`, "Try again" resumes. The prototype checks only Claude Code for every run; the real app checks the agent the run uses.
 - **FS-j25.E2** Permission off. Cause: the permission for AI agents is off. Sees: runs started now are "Stuck" with "Allow FlowDriven to run AI agents in Settings." and "Open Settings". Turning it off while runs are open stops them (SR-8). Next: the person turns it on, then "Try again".
-- **FS-j25.E3** Limits reached. Cause: an agent's usage window or the monthly spending limit. Sees: the rows in FS-j25.P4 and one notification. Next: a run never continues silently (SR-9); the person raises the limit or waits and chooses "Try again".
+- **FS-j25.E3** Limits reached. Cause: an agent's usage window or the monthly spending limit. Sees: the rows in FS-j25.P4 and one notification. Next: a run never continues silently (SR-9); for the spending limit the person raises the limit in Settings and the run goes on by itself; for a usage limit the person waits and chooses "Try again".
 - **FS-j25.E4** Stopped or failed run. See FS-j25.P5 and P6. A stopped run keeps its finished steps; nothing half-done is hidden: the report says "Stopped before finishing."
-- **FS-j25.E5** Crash or restart. At start, runs that were `queued`, `checking`, `running` or `retrying` become `interrupted` (audit `run_interrupted`). Only runs whose interrupted steps are all idempotent resume by themselves; others wait for "Try again". Pending decisions keep their expiry times.
+- **FS-j25.E5** Crash or restart. At start, runs that were `queued`, `checking`, `running` or `retrying` become `interrupted` (audit `run_interrupted`). Only runs whose interrupted steps are all idempotent, and none of which can send, post, pay, delete or merge, resume by themselves; others wait for "Try again". Pending decisions keep their expiry times.
 - **FS-j25.E6** Flow changed since confirmed. Cause: the flow is `changed` or `new` when the person chooses "Run again". Sees: the confirm card in a chat (`START` rule 1) and no run. "Try again" on an old run keeps that run's confirmed version (FS-j25.P10).
 - **FS-j25.E7** Outside text. Cause: step evidence, an email subject or a web page says "sign in at this link" or "run this command". Sees: evidence from outside text is marked "Includes text from an email or web page", hidden characters are shown, links are shown but not opened by a click on the run page without main's check. Next: the text never steers the run, never sets the cause words and never adds a button (SR-5). The exported report keeps the tag.
 - **FS-j25.E8** A decision that expires. Cause: a decision waits 24 hours. Sees: "Expired" on the run page and the honest line in the report (`j24-decisions.md`). A sign-in wait is different: it lasts 12 hours, then the run is "Stuck" with the same cause. The prototype's 12 hours is only text; the real app enforces it.
@@ -114,11 +115,11 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
 ## Data read and written
 
 - Read: runs, steps, evidence, decisions, outputs, the audit log (`audit.list {runId}`), usage rows (for the cost line), agent status, settings.
-- Written: run and step states, `runs.resume` resets failed or interrupted steps to pending, audit records for every start, stop, resume and permission change (SR-7). The exported Markdown is built on request and not stored.
+- Written: run and step states, `runs.resume` resets failed or interrupted steps to pending, audit records for every start, stop, resume and permission change (SR-7). The report parts are built on request and not stored; the renderer builds the Markdown.
 
 ## Runner API used
 
-`activity.summary`, `runs.list`, `runs.status`, `runs.report`, `runs.export`, `runs.resume`, `runs.stop`, `flows.start {flowId, source: "again"}`, `flows.get`, `approvals.list`, `audit.list`, `agents.signIn`, `agents.list`, `settings.update` (limit, from the dialog). Topics: `runs`, `activity`, `approvals`, `agents`, `settings`.
+`activity.summary`, `runs.list`, `runs.status`, `runs.report`, `runs.export`, `runs.resume`, `runs.stop`, `flows.start {flowId, source: "again", fromRunId}`, `flows.get`, `approvals.list`, `audit.list`, `agents.signIn`, `agents.list`, `settings.update` (limit, from the dialog). Topics: `runs`, `activity`, `approvals`, `agents`, `settings`.
 
 ## Acceptance criteria
 
@@ -133,11 +134,11 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
 - **FS-j25.A9** "Run again" is not shown when the flow was deleted.
 - **FS-j25.A10** "Stop" ends the run with no dialog, sets `stopped`, expires its waiting decisions, and starts the next queued run of that flow.
 - **FS-j25.A11** `stopped` and `failed` runs offer "Run again" and "Copy report" and no "Try again".
-- **FS-j25.A12** "Copy report" returns Markdown that starts with `# <flow>, <when>`, has `Result: <words>`, `Ended: <time>` and `## Summary`; a run that did not finish lists its passed steps and ends with "<status words> before finishing." or "Stopped before finishing."; it has no tokens, no secrets and no run id; hidden characters are made visible; outside text keeps its tag.
+- **FS-j25.A12** "Copy report" gives Markdown (built by the renderer from the `runs.export` parts) that starts with `# <flow>, <when>`, has `Result: <words>`, `Ended: <time>` and `## Summary`; a run that did not finish lists its passed steps and ends with "<status words> before finishing." or "Stopped before finishing."; it has no tokens, no secrets and no run id; hidden characters are made visible; outside text keeps its tag.
 - **FS-j25.A13** An unknown run id shows "This activity does not exist." and "Go to Activity".
 - **FS-j25.A14** Empty Activity shows "Nothing needs you right now.", "Nothing is running." and "No activity to show."
 - **FS-j25.A15** With the permission off, a new run is `blocked` with "Allow FlowDriven to run AI agents in Settings."; turning the permission off stops open runs.
-- **FS-j25.A16** A reached usage or spending limit leaves the run `blocked` with its row from the table and one notification, and nothing continues by itself.
+- **FS-j25.A16** A reached usage limit leaves the run `blocked` with its row from the table and one notification; a reached spending limit pauses the run with a "Needs you" `budget_raise` decision that only raising the limit resolves; nothing continues by itself.
 - **FS-j25.A17** A run page keeps the version the run used and shows "This run used an earlier version of the flow." after the flow changed.
 - **FS-j25.A18** Evidence from outside text is tagged and never changes the cause words, the buttons or any permission.
 - **FS-j25.A19** (version 9) The run page and run card show the agent and model the run recorded.

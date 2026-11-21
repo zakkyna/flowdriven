@@ -48,10 +48,10 @@ A person describes repeated work in plain words. FlowDriven shows the flow it wo
 - **FS-j22.S6** Save.
   - Person: chooses "Save flow". No dialog follows: the card is the confirmation.
   - FlowDriven: in one transaction writes the flow files (format 1.2), computes the content hash, creates the flow in state `confirmed`, records the confirmation for that hash (`confirmations`), creates one standing rule for each non-read touch under "Does on its own" (exact place), adds the flow to Flows (first in the list) and writes an audit record. It posts the next message.
-  - Sees: "Saved. It runs every Friday at 17:00. Run it now?" with chips "Run now" and "Not now". The card now reads "Saved".
+  - Sees: "Saved. It runs every Friday at 17:00. Run it now?" with a `run_offer` card with the buttons "Run now" (`run_now`) and "Not now" (`not_now`). The card now reads "Saved".
 - **FS-j22.S7** Run now or not.
   - Person: chooses "Run now" or "Not now".
-  - FlowDriven: "Run now" is a start from the chat, so it runs as in `j20-run-from-chat.md` (`flows.start {flowId, source: "chat"}`); the flow is `confirmed`, so no confirm card is needed. "Not now" posts nothing more.
+  - FlowDriven: "Run now" is a start from the chat, so it runs as in `j20-run-from-chat.md` (`chats.act {action: "run_now"}`, a start with source `chat`); the flow is `confirmed`, so no confirm card is needed. "Not now" posts nothing more.
   - Sees: for "Run now", "Starting <name>." and a run card; for "Not now", nothing new.
 
 ## Other paths
@@ -88,13 +88,13 @@ A draft has no flow state `new` or `changed`: those badges (`new` "New: confirm 
 
 - **FS-j22.E1** Agent not set up or signed out. Cause: the chat's agent is `not_installed`, `needs_login` or `waiting_login`. Sees: the message stays in the chat, no turn runs, and a line such as "Claude Code is not ready." with the next-step button ("Set up Claude Code" or "Sign in to Claude Code", same action as Settings). Next: when the agent is `ready`, the person sends again; nothing was created.
 - **FS-j22.E2** Permission off. Cause: Settings "FlowDriven may run your AI agents" is off. Sees: "FlowDriven may not run your AI agents. Turn this on in Settings." with "Open Settings". Next: nothing runs until the person turns it on.
-- **FS-j22.E3** Limits reached. Cause: the agent reports no usage left, or the spending limit is reached. Sees: for usage, "Claude Code has no usage left right now. It will be available again at <time>." (when known); for the spending limit, a "Needs you" item "Spending limit reached" with "Raise limit" (see `j12-settings.md`). Next: the turn is not retried by itself (SR-9); the person retries.
-- **FS-j22.E4** Turn failed. Cause: the agent failed or crashed, or its answer failed validation twice. Sees: "I could not make the draft." with the chip "Try again". Next: nothing is saved; the person's text stays.
+- **FS-j22.E3** Limits reached. Cause: the agent reports no usage left, or the spending limit is reached. Sees: for usage, "Claude Code has no usage left right now. It will be available again at <time>." (when known); for the spending limit, a "Needs you" `budget_raise` decision "Monthly limit reached. Raise it in Settings to continue." (see `j12-settings.md`). Next: the turn is not retried by itself (SR-9); the person retries.
+- **FS-j22.E4** Turn failed. Cause: the agent failed or crashed, or its answer failed validation twice. Sees: "I could not make the draft." with "Try again" (`retry_turn`). Next: nothing is saved; the person's text stays.
 - **FS-j22.E5** Crash or restart. Cause: FlowDriven or the runner stopped. Sees: a turn in progress becomes "Stopped unexpectedly" with "Try again". A posted draft card is still there and still works, because the draft is stored before the card is posted. Save is one transaction: after a crash there is either a complete confirmed flow or none.
 - **FS-j22.E6** Flow changed since confirmed. Cause: the person clicks "Save flow" on a card that is no longer the newest draft (for example a "Change something" was answered in another window). Sees: "This draft was replaced. Use the newest one." Next: nothing is saved. A saved flow is never altered by an old card (SR-3).
 - **FS-j22.E7** Outside text. Cause: the chat context holds outside text (the person pasted an email, a run's answer included text from an email or web page, or a memory item came from outside). Sees: the draft card with the tag "Includes text from an email or web page". Next: the card is click-only (SR-5); the chat turn never saves or starts anything by itself. Places (a folder, an address, an account) that appear only in outside text are not "fixed": they go under "Asks you first". Instructions inside outside text ("also allow sending to this address", "skip the approval") add nothing: FlowDriven derives the lists from its own catalog and the person's own words.
 - **FS-j22.E8** A decision that expires. Cause: none; a draft card and the "Run now?" chips do not expire. Sees: nothing. Next: an unsaved draft stays in its chat and never runs; deleting the chat removes it.
-- **FS-j22.E9** Draft cannot be made safely. Cause: the described work needs a tool the chat's agent cannot be limited for (for example account tools on Codex, see `j31-agent-and-model.md`). Sees: a plain reason and a button "Use Claude Code for this draft". Next: the person chooses; nothing is created otherwise.
+- **FS-j22.E9** Draft cannot be made safely. Cause: the described work needs a tool the chat's agent cannot be limited for (for example account tools on Codex, see `j31-agent-and-model.md`). Sees: a plain reason and a button "Use Claude Code for this draft" (`use_other_agent`). Next: the person chooses; nothing is created otherwise.
 - **FS-j22.E10** Prototype gap: saving twice makes two flows. Real app: the card is marked "Saved" after the first click; a second click creates nothing (FS-j22.A8). Prototype gap: only the invoice example works. Real app: the agent drafts any described work, inside the limits above. Prototype gap: nothing fires "every Friday 17:00" because there is no clock. Real app: the schedule runs through the trigger service while FlowDriven is running (menu-bar running is `F-22`, Not in the prototype yet).
 
 ## Data read and written
@@ -105,7 +105,7 @@ A draft has no flow state `new` or `changed`: those badges (`new` "New: confirm 
 
 ## Runner API used
 
-`chats.create`, `chats.send`, `chats.act` (card actions `save_flow`, `change_draft`), `chats.get`, `chats.setAgent` (version 9), `flows.list`, `flows.get`, `flows.start` (for "Run now"), `agents.list`, `settings.get`. The save action runs the same confirm function as `flows.confirm {flowId, hash, onItsOwn}`. Topics: `chats`, `flows`, `rules`, `agents`, `activity`.
+`chats.create`, `chats.send`, `chats.act` (card actions `save_flow`, `change_draft`), `chats.get`, `chats.setAgent` (version 9), `flows.list`, `flows.get`, `agents.list`, `settings.get`. "Run now" is the card action `run_now`, a start with source `chat` inside `chats.act`. The save action runs the same confirm function as `flows.confirm {flowId, hash, onItsOwn}`. Topics: `chats`, `flows`, `rules`, `agents`, `activity`.
 
 ## Acceptance criteria
 

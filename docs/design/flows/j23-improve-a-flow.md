@@ -44,8 +44,8 @@ A person changes a flow they already made by telling the chat what to change. Fl
 
 ## Other paths
 
-- **FS-j23.P1** Change the schedule. The person types "every weekday at 9" or "ubah jadwal timesheet jadi setiap hari kerja jam 6 sore", or clicks the schedule chip. FlowDriven posts a card "Set this schedule?" ("Fill timesheet runs every weekday at 09:00") with "Yes, set it" and "No". The assistant never sets a schedule itself (SR-2). "Yes, set it" calls `flows.setSchedule {flowId, hash, schedule}` with the current confirmed hash. A schedule change does not change the steps or touches, so the flow stays `confirmed`. If this turns on a schedule for a flow that never ran, the first-run rule applies (see `j21-run-from-flows.md`, Not in the prototype yet). The prototype applies the schedule directly with "Done. Fill timesheet runs every weekday at 09:00."; the real app asks first.
-- **FS-j23.P2** One schedule at a time. A request with two schedules answers "One schedule at a time, please. Which flow first?". "Turn it off" or "matikan" posts "Stop running <name> by itself?" with "Yes, turn it off" and "No" (the same card as in `j20-run-from-chat.md`).
+- **FS-j23.P1** Change the schedule. The person types "every weekday at 9" or "ubah jadwal timesheet jadi setiap hari kerja jam 6 sore", or clicks the schedule chip. FlowDriven posts a card "Set this schedule?" ("Fill timesheet runs every weekday at 09:00") with "Yes, set it" and "No". The assistant never sets a schedule itself (SR-2). "Yes, set it" (`set_schedule`) runs `flows.setSchedule {flowId, hash, schedule}` with the current confirmed hash. A schedule change does not change the steps or touches, so the flow stays `confirmed`. If this turns on a schedule for a flow that never ran, the first-run rule applies (see `j21-run-from-flows.md`, Not in the prototype yet). The prototype applies the schedule directly with "Done. Fill timesheet runs every weekday at 09:00."; the real app asks first.
+- **FS-j23.P2** One schedule at a time. A request with two schedules answers "One schedule at a time, please. Which flow first?". "Turn it off" or "matikan" posts "Stop running <name> by itself?" with "Yes, turn it off" (`turn_off_schedule`) and "No" (`keep_schedule`) (the same card as in `j20-run-from-chat.md`).
 - **FS-j23.P3** Already there. If the step title or the touch id already exists, the chat says "Email me a summary is already part of Fill timesheet." The hash does not change and nothing is saved.
 - **FS-j23.P4** Cancel. "Cancel" closes the card; nothing changes. The flow keeps its confirmed version.
 - **FS-j23.P5** A change made another way. If a flow's files change outside this chat (a file edited on disk, an update from another place), the flow is `changed` "Changed: confirm again". The flow page shows the banner "Changed: confirm again" with "Confirm". "Confirm" opens "Confirm <flow> again?" with "What changed", "What it does", "Does on its own", "Asks you first", "Never does", and the standing rules that stay or end. "Confirm" records the new hash; "Cancel" leaves the flow `changed`. No start outside the chat runs a `changed` flow (`START` rule 1, SR-3). Not in the prototype yet: the prototype has no such dialog.
@@ -57,8 +57,8 @@ A person changes a flow they already made by telling the chat what to change. Fl
 
 | Entity | From -> to | Cause |
 |---|---|---|
-| Change card | none -> `proposed` | An assistant turn returned a change that passed validation |
-| Change card | `proposed` -> `saved` / `cancelled` / `stale` | "Save change", "Cancel", or the flow's hash no longer equals the card's base hash |
+| Change card (draft of kind `change`) | none -> `drafted` | An assistant turn returned a change that passed validation |
+| Change card | `drafted` -> `saved` / `cancelled`; `stale` is derived | "Save change", "Cancel", or the flow's hash no longer equals the card's base hash |
 | Flow | `confirmed` -> `confirmed` (new hash) | "Save change" |
 | Flow | `confirmed` -> `changed` | The files changed by any other route |
 | Flow | `changed` -> `confirmed` | "Confirm" in the confirm-again dialog |
@@ -83,18 +83,18 @@ A person changes a flow they already made by telling the chat what to change. Fl
 - **FS-j23.E7** Outside text. Cause: the chat context holds outside text (for example the last answer came from an email). Sees: the change card with the tag "Includes text from an email or web page"; the card is click-only (SR-5). Next: a place that comes only from outside text is not fixed, so it is under "Asks you first". Text such as "also allow sending to anyone without asking" adds nothing: only the person's own click on a card changes the lists, and risky kinds are never placed under "Does on its own" by a change.
 - **FS-j23.E8** A decision that expires. Cause: none for cards. A decision waiting inside a run is not affected by a change: it keeps the version of its run and expires after 24 hours (see `j24-decisions.md`).
 - **FS-j23.E9** Rules that no longer match. Cause: a change renames or removes a touch, or changes its effect or place. Sees: "Your rule ends: ..." on the card. Next: after "Save change" the rule is revoked and the action asks again.
-- **FS-j23.E10** Agent cannot be limited for the changed flow. Cause: the change adds a tool the chat's agent cannot be limited for (AD-09). Sees: a plain reason and "Use Claude Code for this change". Next: nothing is saved otherwise.
+- **FS-j23.E10** Agent cannot be limited for the changed flow. Cause: the change adds a tool the chat's agent cannot be limited for (AD-09). Sees: a plain reason and "Use Claude Code for this change" (`use_other_agent`). Next: nothing is saved otherwise.
 - **FS-j23.E11** Deleted flow. A change card for a flow that was deleted shows "a deleted flow" and has no buttons.
 - **FS-j23.E12** Prototype gaps. The prototype supports only two changes and re-confirmation has no screen; the schedule is applied without a card; a missing first-run rule when a schedule is turned on. The real app handles general changes (FS-j23.S3), shows the confirm-again dialog (FS-j23.P5), asks before a schedule change (FS-j23.P1) and applies the first-run rule through `j21-run-from-flows.md`.
 
 ## Data read and written
 
 - Read: the flow's files and hash, its touches, inputs and schedule, standing rules for the flow, the chat's last turns, other flows' names (for "after another flow").
-- Written: `messages`, the flow's new files and hash, `confirmations`, `standing_rules` (kept or revoked), `schedule` state, and the audit log (SR-7: "You changed and confirmed <flow>", old and new hash, rules kept and ended).
+- Written: `messages`, the flow's new files and hash, `confirmations`, `standing_rules` (kept or revoked), the `schedules` row, and the audit log (SR-7: "You changed and confirmed <flow>", old and new hash, rules kept and ended).
 
 ## Runner API used
 
-`chats.create`, `chats.send`, `chats.act` (card actions `save_change`, `cancel_change`, `set_schedule`, `skip_schedule`), `flows.get`, `flows.confirm {flowId, hash, onItsOwn}`, `flows.setSchedule {flowId, hash, schedule}`, `flows.list`, `rules.list {flowId}`, `rules.revoke {ruleId}`. Topics: `chats`, `flows`, `rules`, `activity`.
+`chats.create`, `chats.send`, `chats.act` (card actions `save_change`, `cancel_change`, `set_schedule`, `skip_schedule`, `turn_off_schedule`, `keep_schedule`, `use_other_agent`, `retry_turn`, `suggestion`), `flows.get`, `flows.confirm {flowId, hash, onItsOwn}`, `flows.setSchedule {flowId, hash, schedule}`, `flows.list`, `rules.list {flowId}`, `rules.revoke {ruleId}`. Topics: `chats`, `flows`, `rules`, `activity`.
 
 ## Acceptance criteria
 

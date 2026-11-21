@@ -101,7 +101,7 @@ P7 depends on version 9; the others do not.
   A value for an input the flow does not declare is ignored. Next: only the invalid part is asked again.
 - **FS-j27.E4 Limits reached.** Input limits are in E3. Run limits (spending, usage, daily) pause the run after the inputs are given, with a "Needs you" item (FS-j20.E4, SR-9).
 - **FS-j27.E5 A stopped or failed run.** The remembered answers and the last answers were saved at start, so "Run again" and "Use my last answers" work (FS-j25).
-- **FS-j27.E6 Crash or restart.** The waiting question and its card are in the store and still wait. The composer draft is kept (`drafts`). Values typed in a form but not yet submitted are view state and are lost. A restart never starts a run that was waiting for details.
+- **FS-j27.E6 Crash or restart.** The waiting question and its card are in the store and still wait. The unsent composer text is kept with the chat (`chats.setComposer`; the `drafts` table holds flow drafts only). Values typed in a form but not yet submitted are view state and are lost. A restart never starts a run that was waiting for details.
 - **FS-j27.E7 The flow changed since it was confirmed, with a question open.** Cause: the flow was improved before the person answered. Person sees: after the answer, `START` rule 1 shows "Confirm <flow> first?"; the values given are kept and used after "Confirm". If the flow's input list changed, values for removed inputs are dropped and new required inputs are asked again.
 - **FS-j27.E8 Computer asleep, or FlowDriven closed, at a scheduled time.** A question that FlowDriven posts for a schedule (FS-j28) belongs to the slot's day. When the person answers later, "today" and "now" resolve to the slot's date and time, not to the time of the answer, so the entry lands on the right day. If the slot is missed (FS-j28.E8) no question is posted.
 - **FS-j27.E9 Prototype gap: keyword parsing.** The prototype read sentences with word lists in English and Indonesian. In the real app the agent extracts values and FlowDriven validates them with its own parsers, so other phrasings and other languages work.
@@ -110,11 +110,11 @@ P7 depends on version 9; the others do not.
 ## Data read and written
 
 - Reads: `Flow` (input declarations, result, answer template), `remembered`, last inputs, `Chat`, `waiting_questions`, `Settings` (the person's time zone from the operating system).
-- Writes: `waiting_questions`, `Message` and `Card` (questions, forms, the "Starting ..." line), `remembered` and last inputs (at run start), `Run` (resolved inputs), `AuditRecord` (start, source `chat` or `proactive`).
+- Writes: `waiting_questions`, `Message` and `Card` (questions, forms, the "Starting ..." line), `remembered` and last inputs (at run start), `Run` (resolved inputs), `AuditRecord` (`start_requested`, source `chat` or `proactive`).
 
 ## Runner API used
 
-`chats.send`, `chats.act` (actions `use_form`, `submit_form`, `cancel_question`, `use_last_answers`), `chats.get`, `flows.get`, `flows.start`, `runs.status`. Topics: `chats`, `runs`, `flows`.
+`chats.send`, `chats.act` (actions `use_form`, `submit_form`, `cancel_question`, `use_last_answers`), `chats.get`, `chats.setComposer`, `flows.get`, `runs.status`. Chat starts happen inside `chats.act`. Topics: `chats`, `runs`, `flows`.
 
 ## Acceptance criteria
 

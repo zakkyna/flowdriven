@@ -28,7 +28,7 @@ The sections are in this order: Appearance, Language (version 9), AI agents, Per
 
 1. **FS-j12.S1 Open Settings.**
    - Person: clicks "Settings".
-   - FlowDriven: calls `settings.get`, `agents.list`, `activity.summary` (for the spent amount).
+   - FlowDriven: calls `settings.get` (with `spending`) and `agents.list`.
    - Sees: the sections above.
 2. **FS-j12.S2 Appearance.**
    - Person: chooses "Light", then "Dark", then "Auto".
@@ -40,18 +40,18 @@ The sections are in this order: Appearance, Language (version 9), AI agents, Per
    - Sees: the row shows "Waiting for you to sign in..." and no button; when signed in the badge reads "Ready". Rows show a "Set up" button for `not_installed` (it also gives permission, as in FS-j01) and "Sign in" for `needs_login`; the button is hidden while `installing` or `waiting_login`.
 4. **FS-j12.S4 Main AI agent.**
    - Person: chooses Codex under "Main AI agent".
-   - FlowDriven: `settings.update {mainAgent: {agent: "codex", model: <its default>}}`. A radio is disabled unless the agent is `ready` ("Set up or sign in first"). From now on new chats start with Codex and its default model (version 9), and every start outside a chat (schedule, Run on the Flows list, "after another flow") uses Codex with its default model. Chats already open and runs already going keep what they use.
+   - FlowDriven: `settings.update {patch: {mainAgent: {agent: "codex", model: <its default>}}}`. A radio is disabled unless the agent is `ready` ("Set up or sign in first"). From now on new chats start with Codex and its default model (version 9), and every start outside a chat (schedule, Run on the Flows list, "after another flow") uses Codex with its default model. Chats already open and runs already going keep what they use.
    - Sees: a toast "Main AI agent: Codex"; the line "New chats start with this agent and its default model." (version 9); the toggle "If Claude Code is busy, use Codex" (the words name the main agent and the other ready agent; they are shown only when two agents are ready).
 5. **FS-j12.S5 Raise the spending limit.**
    - Person: clicks "Raise limit".
-   - FlowDriven: opens a dialog with the field "Monthly limit ($)" (minimum 1, default 25). The title line updates as the person types: "Raise the limit to $25?". "Raise" calls `settings.update {spendingLimit: 25}`; "Cancel" closes. FlowDriven resolves every waiting limit decision ("Needs you" for budget) and lets those runs continue.
+   - FlowDriven: opens a dialog with the field "Monthly limit ($)" (minimum 1, default 25). The title line updates as the person types: "Raise the limit to $25?". "Raise" calls `settings.update {patch: {spendingLimit: 25}}`; "Cancel" closes. FlowDriven resolves every waiting limit decision ("Needs you" for budget) and lets those runs continue.
    - Sees: before: "Used $9.20 of $10.00 this month". After: a toast "Limit raised to $25." and "Used $9.20 of $25.00 this month". An amount that is not above the current limit shows "Enter an amount above $10." in the dialog and nothing is saved.
 
 ## Other paths
 
 P4 depends on version 9; the other paths do not.
 
-- **FS-j12.P1 Turn the permission on.** The switch "FlowDriven may run your AI agents" (off -> on) opens a dialog "Before you start": "FlowDriven runs your flows on the AI agents on this Mac: Claude Code, Codex and any you add later. Give permission once for all of them. FlowDriven only does what each flow is allowed to do, and asks you before anything risky." Buttons "Give permission" and "Cancel". Giving it sets `agentPermission` to `on` and writes an audit record.
+- **FS-j12.P1 Turn the permission on.** The switch "FlowDriven may run your AI agents" (off -> on) opens a dialog "Before you start": "FlowDriven runs your flows on the AI agents on this Mac: Claude Code, Codex and any you add later. Give permission once for all of them. FlowDriven only does what each flow is allowed to do, and asks you before anything risky." The dialog adds one sentence: "What your AI agents read is sent to the companies that make them, under their terms." (Decided for V1, revisable; T-27; Not in the prototype yet.) Buttons "Give permission" and "Cancel". Giving it sets `agentPermission` to `on` and writes an audit record.
 - **FS-j12.P2 Turn the permission off.** The switch (on -> off) opens "Stop FlowDriven from running AI agents?" with "Flows stop until you turn this on again." and buttons "Turn off" (danger) and "Keep on". "Turn off" sets `agentPermission` to `off`, stops every active run (`runs.stop` for each; state `stopped`), expires their waiting decisions, and stops every automatic start (SR-8). Starts that come due while it is off are recorded as "Missed" and are not run later. No new chat turn is sent to an agent.
 - **FS-j12.P3 Busy fallback.** The toggle "If Claude Code is busy, use Codex" applies only to starts outside a chat. "Busy" means the main agent reported its usage limit or has no free slot for this run. A start moves to the other agent only if that agent is `ready` and can run the flow with the limits FlowDriven needs; otherwise it waits on the main agent.
 - **FS-j12.P4 Language.** Two radios, "English" and "Bahasa Indonesia", each in its own language, and the line "Chats and flows keep the words they were written in. FlowDriven answers in the language you write in." Details in FS-j30 (version 9).
@@ -83,7 +83,7 @@ P4 depends on version 9; the other paths do not.
 - **FS-j12.E1 Agent not set up or signed out.** Cause: an agent row is `not_installed` or `needs_login`. Person sees: the badge and one button ("Set up" or "Sign in"); the agent's radio under "Main AI agent" is disabled with "Set up or sign in first". If the current main agent becomes signed out, `mainAgent` stays and its radio shows the state; new chats start with the first ready agent and show a note; with none ready the composer shows the next-step button.
 - **FS-j12.E2 Permission off.** Cause: switch off. Person sees: the switch off; in a chat, sending shows "FlowDriven may not run your AI agents. Turn this on in Settings." (the message stays in the composer); a Run on the Flows list shows the same line with "Open Settings". No run is created. Chat turns count as agent calls, so they need the permission too.
 - **FS-j12.E3 Missing or invalid input.** The limit field: empty disables "Raise"; a non-number, zero or a negative value shows "Enter an amount above $<limit>."; an amount not above the current limit shows the same line; more than two decimals is rounded to cents; above $10,000 shows "Enter an amount up to $10,000." Nothing is saved on error.
-- **FS-j12.E4 Limits reached.** Cause: spent amount reaches the limit, or an agent reports its usage limit. Person sees: "Used $10.00 of $10.00 this month" with "Limit reached"; new runs and running steps pause and a "Needs you" item says "Monthly limit reached. Raise it in Settings to continue." (SR-9). Nothing continues silently. The spending limit counts money charged per use only; agents on a subscription are bound by their own usage limits (Decided for V1, revisable: the spending limit counts only money charged per use, Q-03) and the screen says so when every agent is on a plan.
+- **FS-j12.E4 Limits reached.** Cause: spent amount reaches the limit, or an agent reports its usage limit. Person sees: "Used $10.00 of $10.00 this month" with "Limit reached"; new runs and running steps pause and a "Needs you" `budget_raise` decision says "Monthly limit reached. Raise it in Settings to continue." (SR-9); the runs are not `blocked`, and raising the limit resolves the decision and they continue. Nothing continues silently. The spending limit counts money charged per use only; agents on a subscription are bound by their own usage limits (Decided for V1, revisable: the spending limit counts only money charged per use, Q-03) and the screen says so when every agent is on a plan.
 - **FS-j12.E5 Stopped or failed run.** Turning the permission off stops runs; each shows "Stopped by you" and its report says "Stopped because you turned off permission." A run that failed earlier is untouched. If `settings.update` fails (runner unavailable) a toast "Could not save. Try again." shows and the control returns to its old value.
 - **FS-j12.E6 Crash or restart.** Settings are in the store (`settings` table) and survive. The color mode is in main's own file and survives. If that file cannot be read, Auto is used. After a restart with permission `off`, nothing starts.
 - **FS-j12.E7 Flow changed since confirmed.** Not caused here: the main agent, the model and the limit are not part of a flow's content hash, so changing them never makes a flow "Changed: confirm again" (SR-3).
@@ -99,7 +99,7 @@ P4 depends on version 9; the other paths do not.
 
 ## Runner API used
 
-`settings.get`, `settings.update`, `agents.list`, `agents.setUp`, `agents.signIn`, `agents.rescan`, `agents.models`, `runs.stop`, `approvals.list`, `approvals.resolve` (internal, when the limit is raised), `activity.summary`. Preload `window` API: set theme, set open at login. Topics: `settings`, `agents`, `runs`, `approvals`, `activity`.
+`settings.get`, `settings.update`, `agents.list`, `agents.setUp`, `agents.signIn`, `agents.rescan`, `agents.models`, `runs.stop`, `approvals.list`. Raising the limit resolves the `budget_raise` decision inside `settings.update`; `approvals.resolve` on it gives `raise_in_settings`. Preload `window` API: set theme, set open at login. Topics: `settings`, `agents`, `runs`, `approvals`, `activity`.
 
 ## Acceptance criteria
 

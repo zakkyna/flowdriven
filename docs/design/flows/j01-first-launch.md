@@ -73,6 +73,7 @@ Steps S1 (language options) and S4 (the agent and model pill) depend on version 
 - One click gives the permission for all agents. There is no consent dialog and no per-agent consent (owner decision, 2026-11-18). The card text and the Settings switch say so.
 - The install is one click with no confirm dialog (owner decision, 2026-11-18). FlowDriven runs only the command from its own catalog; the screen text and agent output never supply a command.
 - Nothing is confirmed twice. "Install it yourself" and "Scan again" ask nothing.
+- The "Get started" card has one more sentence: "What your AI agents read is sent to the companies that make them, under their terms." (Decided for V1, revisable; T-27; Not in the prototype yet.)
 - Deliberately not asked: the sign-in itself (done in the agent's own window), a try run, naming the agent.
 
 ## Errors and edge cases
