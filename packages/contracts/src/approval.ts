@@ -23,27 +23,32 @@ export const ApprovalState = z.enum([
   "allowed_always",
 ]);
 export type ApprovalState = z.infer<typeof ApprovalState>;
+const payloadText = z.string().max(4000);
+const payloadList = z.array(payloadText).max(50);
 export const Payload = z.discriminatedUnion("kind", [
-  z.object({
+  z.strictObject({
     kind: z.literal("email"),
-    to: z.array(z.string()).min(1),
-    cc: z.array(z.string()).optional(),
-    subject: z.string(),
-    body: z.string(),
+    to: payloadList.min(1),
+    cc: payloadList.optional(),
+    subject: payloadText,
+    body: payloadText,
   }),
-  z.object({ kind: z.literal("post"), platform: z.string(), text: z.string(), media: z.array(z.string()) }),
-  z.object({
+  z.strictObject({ kind: z.literal("post"), platform: payloadText, text: payloadText, media: payloadList }),
+  z.strictObject({
     kind: z.literal("diff"),
-    files: z.array(z.object({ path: z.string(), patch: z.string() })).min(1),
+    files: z
+      .array(z.strictObject({ path: payloadText, patch: payloadText }))
+      .min(1)
+      .max(50),
   }),
-  z.object({ kind: z.literal("amount"), amountUsd: z.number(), description: z.string() }),
-  z.object({ kind: z.literal("text"), text: z.string() }),
-  z.object({
+  z.strictObject({ kind: z.literal("amount"), amountUsd: z.number(), description: payloadText }),
+  z.strictObject({ kind: z.literal("text"), text: payloadText }),
+  z.strictObject({
     kind: z.literal("choice"),
-    question: z.string(),
-    options: z.array(z.object({ key: z.string(), label: z.string() })),
+    question: payloadText,
+    options: z.array(z.strictObject({ key: payloadText, label: payloadText })).max(50),
     maxPick: z.number().int().min(1),
-    approves: z.array(z.string().min(1)).default([]),
+    approves: z.array(z.string().min(1).max(4000)).max(50).default([]),
   }),
 ]);
 export type Payload = z.infer<typeof Payload>;
@@ -122,13 +127,21 @@ export const Approval = ApprovalFields.superRefine((approval, ctx) => {
     (approval.kind !== "risky_action" ||
       approval.state !== "pending" ||
       approval.effect !== "change" ||
-      !approval.fixedPlace)
+      !approval.fixedPlace ||
+      !approval.place ||
+      !["account", "folder"].includes(approval.place.kind) ||
+      approval.outside === true)
   )
     ctx.addIssue({
       code: "custom",
       path: ["canAlwaysAllow"],
       message: "Always allow needs a pending change at a fixed place.",
     });
+  if (
+    approval.state === "allowed_always" &&
+    (approval.kind !== "risky_action" || approval.effect !== "change" || !approval.ruleId)
+  )
+    ctx.addIssue({ code: "custom", path: ["state"], message: "Always allowed needs a change and a rule." });
 });
 export type Approval = z.infer<typeof Approval>;
 export const ApprovalDecision = z.enum(["approve", "edit", "reject", "always_allow"]);
@@ -153,7 +166,11 @@ export const ApprovalsResolveInput = z
     editedText: z.string().min(1).max(4000).optional(),
     editedSubject: z.string().min(1).max(300).optional(),
   })
-  .refine((v) => (v.decision === "edit") === (v.editedText !== undefined));
+  .refine(
+    (v) =>
+      (v.decision === "edit") === (v.editedText !== undefined) &&
+      (v.editedSubject === undefined || v.decision === "edit"),
+  );
 export type ApprovalsResolveInput = z.infer<typeof ApprovalsResolveInput>;
 export const ApprovalsResolveOutput = z.strictObject({
   decision: Approval,

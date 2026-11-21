@@ -361,3 +361,26 @@ test("TC-CON-23 detail and manifest preserve version 2 fields", async () => {
   for (const key of ["signOff", "saved", "stepCount", "playback", "conversation", "stepStatus", "canUndo"])
     expect(c.FlowDetail.safeParse({ ...detail, [key]: true }).success).toBe(false);
 });
+
+test("TC-CON-23 standing rule place matches effect", async () => {
+  const { StandingRuleView } = await import("./flow.ts");
+  const rule = {
+    id: "rule-1",
+    flowId: "f",
+    touchId: "touch",
+    sentence: "s",
+    effect: "change",
+    place: { kind: "account", value: "a", label: "A" },
+    createdAt: "2026-11-12T00:00:00Z",
+    createdBy: "confirm",
+  };
+  for (const [effect, kinds] of [
+    ["change", ["account", "folder"]],
+    ["local_write", ["folder"]],
+    ["run_command", ["command"]],
+  ] as const)
+    for (const kind of ["account", "folder", "command", "address"])
+      expect(StandingRuleView.safeParse({ ...rule, effect, place: { ...rule.place, kind } }).success).toBe(
+        (kinds as readonly string[]).includes(kind),
+      );
+});

@@ -122,6 +122,7 @@ test("TC-CON-13 approval refinements", () => {
       riskyAction: undefined,
       canAlwaysAllow: true,
       fixedPlace: true,
+      place: { kind: "account", value: "a", label: "A" },
     }).success,
   ).toBe(true);
   expect(
@@ -143,9 +144,15 @@ test("TC-CON-13 approval refinements", () => {
     expect(Approval.safeParse(global).success).toBe(true);
     expect(Approval.safeParse({ ...global, runId: "r" }).success).toBe(false);
   }
-  expect(Approval.safeParse({ ...a, state: "allowed_always", ruleId: "rule-000000000001" }).success).toBe(
-    true,
-  );
+  expect(
+    Approval.safeParse({
+      ...a,
+      effect: "change",
+      riskyAction: undefined,
+      state: "allowed_always",
+      ruleId: "rule-000000000001",
+    }).success,
+  ).toBe(true);
   for (const kind of ["flow_sign_off", "requirement_addition"]) {
     expect(
       Approval.safeParse({
@@ -209,4 +216,61 @@ test("TC-CON-35 rule operation inputs", async () => {
   expect(RulesListInput.safeParse({ extra: true }).success).toBe(false);
   expect(RulesRevokeInput.safeParse({ ruleId: "rule-1" }).success).toBe(true);
   expect(RulesRevokeInput.safeParse({ ruleId: "bad id" }).success).toBe(false);
+});
+
+const changeApproval = {
+  ...base,
+  riskyAction: undefined,
+  effect: "change",
+  fixedPlace: true,
+  canAlwaysAllow: true,
+};
+const accountPlace = { kind: "account", value: "a", label: "A" };
+
+test("TC-CON-13 always allow requires a safe fixed place", () => {
+  expect(Approval.safeParse({ ...changeApproval, place: accountPlace }).success).toBe(true);
+  for (const bad of [
+    changeApproval,
+    { ...changeApproval, place: { ...accountPlace, kind: "address" } },
+    { ...changeApproval, place: accountPlace, outside: true },
+  ])
+    expect(Approval.safeParse(bad).success).toBe(false);
+});
+test("TC-CON-13 allowed always requires a change and rule", () => {
+  const allowed = { ...changeApproval, canAlwaysAllow: false, state: "allowed_always", ruleId: "rule-1" };
+  expect(Approval.safeParse(allowed).success).toBe(true);
+  for (const bad of [
+    { ...base, state: "allowed_always", ruleId: "rule-1" },
+    { ...allowed, ruleId: undefined },
+    { ...allowed, kind: "flow_sign_off" },
+  ])
+    expect(Approval.safeParse(bad).success).toBe(false);
+});
+test("TC-CON-35 edited subject requires edit", async () => {
+  const { ApprovalsResolveInput } = await import("./approval.ts");
+  expect(
+    ApprovalsResolveInput.safeParse({ approvalId: "ap-1", decision: "approve", editedSubject: "x" }).success,
+  ).toBe(false);
+});
+test("TC-CON-13 payload variants reject unknown keys and bound contents", async () => {
+  const { Payload } = await import("./approval.ts");
+  const variants = [
+    { kind: "email", to: ["a"], subject: "s", body: "b" },
+    { kind: "post", platform: "p", text: "t", media: [] },
+    { kind: "diff", files: [{ path: "p", patch: "x" }] },
+    { kind: "amount", amountUsd: 1, description: "d" },
+    { kind: "text", text: "t" },
+    { kind: "choice", question: "q", options: [{ key: "k", label: "l" }], maxPick: 1 },
+  ];
+  for (const payload of variants) {
+    expect(Payload.safeParse(payload).success).toBe(true);
+    expect(Payload.safeParse({ ...payload, extra: true }).success).toBe(false);
+  }
+  for (const payload of [
+    { kind: "text", text: "x".repeat(4001) },
+    { kind: "email", to: Array(51).fill("a"), subject: "s", body: "b" },
+    { kind: "diff", files: [{ path: "p", patch: "x", extra: true }] },
+    { kind: "choice", question: "q", options: [{ key: "k", label: "l", extra: true }], maxPick: 1 },
+  ])
+    expect(Payload.safeParse(payload).success).toBe(false);
 });

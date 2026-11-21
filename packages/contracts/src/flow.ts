@@ -330,17 +330,25 @@ export const TouchView = z.strictObject({
   byRule: Id.optional(),
 });
 export type TouchView = z.infer<typeof TouchView>;
-export const StandingRuleView = z.strictObject({
-  id: Id,
-  flowId: Id,
-  touchId: TouchId,
-  sentence: z.string(),
-  effect: RuleEffect,
-  place: Place,
-  createdAt: IsoDateTime,
-  createdBy: z.enum(["always_allow", "confirm"]),
-  lastUsedAt: IsoDateTime.optional(),
-});
+export const StandingRuleView = z
+  .strictObject({
+    id: Id,
+    flowId: Id,
+    touchId: TouchId,
+    sentence: z.string(),
+    effect: RuleEffect,
+    place: Place,
+    createdAt: IsoDateTime,
+    createdBy: z.enum(["always_allow", "confirm"]),
+    lastUsedAt: IsoDateTime.optional(),
+  })
+  .refine((rule) =>
+    rule.effect === "change"
+      ? ["account", "folder"].includes(rule.place.kind)
+      : rule.effect === "local_write"
+        ? rule.place.kind === "folder"
+        : rule.place.kind === "command",
+  );
 export type StandingRuleView = z.infer<typeof StandingRuleView>;
 const touchLists = z.strictObject({
   onItsOwn: z.array(TouchId),

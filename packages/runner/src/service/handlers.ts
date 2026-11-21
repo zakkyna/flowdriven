@@ -76,7 +76,7 @@ export function createDispatcher({
     if (!Object.hasOwn(operations, name))
       throw new RunnerError("not_found", `There is no operation ${name}.`);
     const rootKey = name as V2Name;
-    if (caller !== "window" && operations[rootKey].personOnly) {
+    if (caller !== "window" && (operations[rootKey].personOnly || "retired" in operations[rootKey])) {
       audit("caller_refused", { operation: name, caller });
       throw new RunnerError("not_allowed", "Caller is not allowed.", { reason: "caller_not_allowed" });
     }

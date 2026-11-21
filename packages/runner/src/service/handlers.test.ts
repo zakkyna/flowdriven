@@ -396,3 +396,38 @@ test("TC-ENG-25 selects version 2 before legacy and validates each map with its 
   await expect(old("runner.info", {})).resolves.toEqual({ contractVersion: 1, mode: "demo" });
   await expect(old("agents.list", {})).rejects.toMatchObject({ code: "unavailable" });
 });
+
+test("TC-SR2-02 retired operations refuse tool and phone but reach window handlers", async () => {
+  const audit = vi.fn();
+  const reached = vi.fn(() => {
+    throw new Error("reached legacy handler");
+  });
+  const dispatch = createDispatcher({
+    v2: {},
+    legacy: {
+      "harnesses.setConsent": reached,
+      "flows.allowCapabilities": reached,
+      "flows.withdrawCapabilities": reached,
+    },
+    audit,
+  });
+  const rows = [
+    ["harnesses.setConsent", { harnessId: "h", consent: "given" }],
+    ["flows.allowCapabilities", { flowId: "f", hash: `sha256:${"a".repeat(64)}` }],
+    ["flows.withdrawCapabilities", { flowId: "f" }],
+  ] as const;
+  for (const [name, input] of rows) {
+    for (const caller of ["tool", "phone"] as const) {
+      await expect(dispatch(name, input, caller)).rejects.toMatchObject({
+        code: "not_allowed",
+        reason: "caller_not_allowed",
+      });
+      expect(audit).toHaveBeenCalledWith("caller_refused", { operation: name, caller });
+    }
+    await expect(dispatch(name, input, "window")).rejects.toMatchObject({
+      code: "unavailable",
+      reason: "internal_error",
+    });
+  }
+  expect(reached).toHaveBeenCalledTimes(3);
+});
