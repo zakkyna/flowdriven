@@ -21,7 +21,7 @@ Contract version 2 holds the V1 operations only. The later operations of V2 and 
 | Activity, Search, Skills | - | `activity.summary`, `search.query`, `skills.list`, `skills.makeFlow` | - |
 | Other | `audit.list`, `readiness.check`, `readiness.install`, `triggers.list`, `triggers.setEnabled` | - | - |
 
-19 operations stay (most change a shape or a table field), 26 are new and 12 retire: contract version 2 has 45 live operations. The 12 retired names stay in the table as retired entries while the builder-first screens stay in the code, unrouted (owner decision for V1, revisable): the real runner answers each `unavailable` with reason `retired` (section 7). `flows.duplicate` and `starts.next` are not in version 2 (section 7).
+19 operations stay (most change a shape or a table field), 26 are new and 12 retire: contract version 2 has 45 live operations. The 12 retired names stay in the table as retired entries while the builder-first screens stay in the code, unrouted (owner decision for V1, revisable). B-01 marks them retired in the table; each keeps working in the real runner until the step it leaves with, and from that step answers `unavailable` with reason `retired` (the table of section 7). `flows.duplicate` and `starts.next` are not in version 2 (section 7).
 
 ## 2. Conventions
 
@@ -71,7 +71,7 @@ Rules that `operations.test.ts` checks over the whole table:
 5. `restricted` has its rule text.
 6. `errors`, `reasons`, `reads` and `writes` use only listed values.
 7. Every input schema refuses an unknown key.
-8. A retired entry has `mcp: "no"` and `phone: "no"`, its real handler answers `unavailable` with reason `retired` and writes nothing, and no routed screen calls it (a source-rule test in `apps/desktop`).
+8. A retired entry has `mcp: "no"` and `phone: "no"`, and no routed screen calls it (a source-rule test in `apps/desktop`). Its real handler keeps working until the step it leaves with (section 7); from that step it answers `unavailable` with reason `retired` and writes nothing.
 
 ### 2.3 Callers
 
@@ -572,7 +572,7 @@ type SettingsPatch = {
 
 - Input: `{chatId; messageId} & ChatAct`, where `ChatAct` is the union of section 8.2.
 - Output: `{card: CardView; posted: MessageId[]; starts?: StartOutcome[]; fields?: FieldProblem[]}`.
-- Errors: `not_found` (message, card, `flow_deleted`); `invalid_input: unknown_action` and value errors; `conflict: card_answered`, `card_replaced`, `card_stale`, `question_answered`, `hash_mismatch`; `not_allowed: permission_off`, `flow_not_confirmed`, `place_not_fixed`, `never_does`, `always_asks`.
+- Errors: `not_found` (message, card, `flow_deleted`); `invalid_input: unknown_action` and value errors; `conflict: card_answered`, `card_replaced`, `card_stale`, `question_answered`, `hash_mismatch`; `not_allowed: permission_off`, `flow_not_confirmed`, `place_not_fixed`, `never_does`, `always_asks`, `needs_keychain` (`save_flow` of a draft whose flow declares a `secret_ref` input; nothing is saved).
 - Topics: writes `chats`, `flows`, `rules`, `runs`, `approvals`, `activity`. Person only.
 - Does: section 8.
 - Tests first: one per action in section 8.2, plus the common rules of 8.1 (a second click returns `conflict: card_answered` and changes nothing; an action of another card type gives `unknown_action`).
@@ -629,10 +629,10 @@ type SettingsPatch = {
 
 - Input: `{flowId; hash: ContentHash; onItsOwn: TouchId[] (0..100, unique); pins?: Record<string, string (1..600)> (at most 50)}`.
 - Output: `{flow: FlowDetail; rules: {created: RuleId[]; kept: RuleId[]; ended: RuleId[]}}`.
-- Errors: `not_found` (`flow_deleted`); `conflict: hash_mismatch` (the hash is not the head); `invalid_input: touch_unknown`, `pins_missing`, `pin_invalid`; `not_allowed: place_not_fixed`, `never_does`, `always_asks` (a touch of a risky kind, `send`, `post`, `pay`, `delete` or `merge`, is in `onItsOwn`).
+- Errors: `not_found` (`flow_deleted`); `conflict: hash_mismatch` (the hash is not the head); `invalid_input: touch_unknown`, `pins_missing`, `pin_invalid`; `not_allowed: place_not_fixed`, `never_does`, `always_asks` (a touch of a risky kind, `send`, `post`, `pay`, `delete` or `merge`, is in `onItsOwn`), `needs_keychain` (the flow version declares an input of type `secret_ref`: V1 refuses to confirm it and writes nothing, because the keychain comes in V2).
 - Topics: writes `flows`, `rules`, `chats`, `activity`. Person only.
 - Does: writes the confirmation for exactly `hash` with `onItsOwn` and the pins; creates a standing rule for each non-read touch in `onItsOwn` (in V1 only `local_write`, `run_command` and `change` can be there, each with a place kind that fits its effect: `change` an `account` or a `folder`, `local_write` a `folder`, `run_command` a `command`; any other place kind is `place_not_fixed`), keeps a rule whose touch still exists with the same id, effect and place and is still in `onItsOwn`, and revokes the rest (AD-07); closes the flow's open confirm-kind waiting question; open confirm cards of the flow show as answered and do not start anything. Audit `flow_confirmed`, `rule_created`, `rule_revoked`. The same function serves Save flow, Save change and the `confirm_flow` card action.
-- Tests first: confirming hash H2 when the head is H3 gives `conflict: hash_mismatch` and writes nothing; a `change` touch with a fixed place in `onItsOwn` makes one rule; a `send`, `post`, `pay`, `delete` or `merge` touch in `onItsOwn` gives `not_allowed: always_asks` and writes nothing (no confirmation, no rule); a touch without a fixed place gives `not_allowed: place_not_fixed`; a `not_allowed` touch gives `never_does`; a re-confirm after a change keeps the matching rule and revokes the one whose place changed (FS-j24.A14).
+- Tests first: confirming hash H2 when the head is H3 gives `conflict: hash_mismatch` and writes nothing; a `change` touch with a fixed place in `onItsOwn` makes one rule; a `send`, `post`, `pay`, `delete` or `merge` touch in `onItsOwn` gives `not_allowed: always_asks` and writes nothing (no confirmation, no rule); a touch without a fixed place gives `not_allowed: place_not_fixed`; a `not_allowed` touch gives `never_does`; a re-confirm after a change keeps the matching rule and revokes the one whose place changed (FS-j24.A14); a flow version that declares a `secret_ref` input gives `not_allowed: needs_keychain` and writes nothing (no confirmation, no rule).
 
 #### `flows.setSchedule` (new)
 
@@ -800,7 +800,7 @@ Unchanged, for the manifest triggers of format 1.1 flows only; person schedules 
 
 | Retired | Replaced by | Leaves with |
 |---|---|---|
-| `flows.build` | the assistant: `chats.send` and the `draft` card (`save_flow`) | B-01 (it already answers `unavailable`) |
+| `flows.build` | the assistant: `chats.send` and the `draft` card (`save_flow`) | B-01 (it already answers `unavailable` today; from B-01 with reason `retired`) |
 | `flows.update` | the assistant: the `change` card (`save_change`) | B-01 |
 | `flows.run` | `flows.start`; one-time flows `{description}` are dropped | B-10 |
 | `flows.capabilities` | `flows.get` (`touches`, `lists`, `pinsNeeded`) and `readiness.check` | B-18 |
@@ -811,7 +811,9 @@ Unchanged, for the manifest triggers of format 1.1 flows only; person schedules 
 | `queue.list`, `queue.move` | `activity.summary` (`running`, `waiting`, `behind`); moving a run to the front has no screen | B-19 |
 | `usage.summary` | `agents.list` (`usage`) and `settings.get` (`spending`) | B-20 |
 
-The builder-first screens are unrouted in V1, not deleted: their code and tests stay and keep passing (owner decision for V1, revisable; AGENTS.md never skips a test). "Unrouted" means the route still parses but no menu item or link leads to it, and the version 1 fixture operations they call stay in `packages/fixtures/src/v1/` until their tests are retired. A test whose subject V1 deliberately replaces (for example a screen test that pins old Settings words, or the old contract-version snapshot) is rewritten in the same task to the new behaviour with an equally strict assertion (`test-plan.md`, section 1; the list is the "Tests that change" register in `build-order.md`). They form a frozen island: `packages/contracts/src/v1/` keeps a read-only copy of contract version 1 and `packages/fixtures/src/v1/` the version 1 sample and fixture client, used only by those screens and their tests. The retired names stay in `operations` as retired entries (`retired: true`, `mcp: "no"`, `phone: "no"`); the real runner answers each `unavailable` with reason `retired` and writes nothing, so nothing writes the frozen tables `capability_consents`, `consent_pins` and `grants`. Removing the island, with its tests, is a later Ask-first item.
+While V1 is built, the runner serves an operation that has no version 2 handler yet from a legacy handler map typed over `@flowdriven/contracts/v1` (`build-order.md`, B-01.T10): `createDispatcher` takes the version 2 handler map, partial until V1 is complete, and the legacy map. A live operation leaves the legacy map in the task that builds its version 2 handler; a retired operation stays there until the step it leaves with, and from then on answers `unavailable` with reason `retired`.
+
+The builder-first screens are unrouted in V1, not deleted: their code and tests stay and keep passing (owner decision for V1, revisable; AGENTS.md never skips a test). "Unrouted" means the route still parses but no menu item or link leads to it, and the version 1 fixture operations they call stay in `packages/fixtures/src/v1/` until their tests are retired. A test whose subject V1 deliberately replaces (for example a screen test that pins old Settings words, or the old contract-version snapshot) is rewritten in the same task to the new behaviour with an equally strict assertion (`test-plan.md`, section 1; the list is the "Tests that change" register in `build-order.md`). They form a frozen island: `packages/contracts/src/v1/` keeps a read-only copy of contract version 1 and `packages/fixtures/src/v1/` the version 1 sample and fixture client, used only by those screens and their tests. The retired names stay in `operations` as retired entries (`retired: true`, `mcp: "no"`, `phone: "no"`). B-01 only marks them retired in the table, so no runner test breaks in B-01: each operation keeps working in the real runner until the step in the "Leaves with" column, and from that step answers `unavailable` with reason `retired` and writes nothing. The task of that step makes the change and rewrites the existing runner tests that call the operation, each with an equally strict assertion (the "Tests that change" register in `build-order.md`). Once they have all left, nothing writes the frozen tables `capability_consents`, `consent_pins` and `grants`. Removing the island, with its tests, is a later Ask-first item.
 
 Two operations were designed for version 2 and then left V1 (decided 2026-11-21): `flows.duplicate` ("Duplicate" on the flow page) and `starts.next` (the menu-bar line). They are not retired entries, because contract version 1 never had them; the snapshot of live names (2.2) does not hold them. Both go into the prototype first, later.
 
@@ -1029,7 +1031,7 @@ The frame: `RpcErrorBody = {code: number; message: string; data: {code: RunnerEr
 | `install_unavailable` | unavailable | no catalog install command for this platform |
 | `model_unknown` | invalid_input | the agent did not list that model |
 | `language_unknown` | invalid_input | not one of the codes main passed at spawn |
-| `retired` | unavailable | a version 1 operation kept only for the unrouted screens (section 7) |
+| `retired` | unavailable | a version 1 operation kept only for the unrouted screens, from the step it leaves with (section 7) |
 | `limit_not_above`, `limit_too_high` | invalid_input | a spending limit not above the current one, or above 10,000 |
 | `flow_deleted` | not_found | the flow was deleted |
 | `flow_running` | conflict | the flow has an active run (delete) |
@@ -1039,6 +1041,7 @@ The frame: `RpcErrorBody = {code: number; message: string; data: {code: RunnerEr
 | `place_not_fixed` | not_allowed | a rule or "Does on its own" needs a fixed place the touch does not have, or the place kind does not fit the effect (change: account or folder; local_write: folder; run_command: command) |
 | `never_does` | not_allowed | the touch's rule is `not_allowed` |
 | `always_asks` | not_allowed | a risky kind (`send`, `post`, `pay`, `delete`, `merge`) was put in `onItsOwn`, or "Always allow for this flow" was asked for a decision of that kind: it always asks in V1 |
+| `needs_keychain` | not_allowed | `flows.confirm`, or `chats.act` `save_flow`, on a flow version that declares a `secret_ref` input: V1 holds no secret, so it cannot be confirmed (the keychain comes in V2) |
 | `pins_missing`, `pin_invalid` | invalid_input | a folder that needs a pin has none, or the path is not allowed |
 | `schedule_self`, `schedule_loop`, `schedule_target_missing`, `bad_time`, `bad_day`, `last_answers_incomplete` | invalid_input | the schedule checks of FS-j21.E3 |
 | `no_schedule` | not_allowed | "Try the next run now" on a manual flow |
@@ -1139,8 +1142,8 @@ Tests first: `runner-link.test.ts` with a stub runner that reports version 1 get
 
 - The app and its runner ship together, so the contract version must be equal; there are no version ranges.
 - A version 7 runner opens stores of versions 0 to 7 and refuses a newer one (`data-model.md`, section 5).
-- Fixtures and sample data validate against contract 2 (`packages/fixtures/src/story-v2/`, new). They are synthetic: the sample story and the fake agents' scripts are written by hand, never recorded from a real account or a real agent run, and a test scans fixtures and test helpers for local paths, `@` addresses and long tokens. The unrouted screens use the frozen copies `packages/contracts/src/v1/` and `packages/fixtures/src/v1/` (section 7).
-- A retired operation answers `unavailable` with reason `retired`.
+- Fixtures and sample data validate against contract 2 (`packages/fixtures/src/story-v2/`, new). They are synthetic: the sample story and the fake agents' scripts are written by hand, never recorded from a real account or a real agent run, and a test scans fixtures and test helpers for absolute local paths, `@` addresses and long tokens. The unrouted screens use the frozen copies `packages/contracts/src/v1/` and `packages/fixtures/src/v1/` (section 7).
+- A retired operation answers `unavailable` with reason `retired` from the step it leaves with (section 7), and works as before until then.
 - The window API is versioned with the app. V2 and V3 operations raise `CONTRACT_VERSION` (section 13).
 
 ### 12.7 Color mode

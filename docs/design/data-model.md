@@ -684,11 +684,11 @@ All tables, with their key columns. Every `data` column holds the JSON of the en
 | `consent_pins` | frozen | `flow_id`, `pins` | `flow_id` | - | none; read once by the migration |
 
 Notes:
-- "Frozen" tables stay on disk, unchanged, so the migration only adds. Version 7 code reads them only during the migration and never writes them. A later store version drops them, one release after V1.
+- "Frozen" tables stay on disk, unchanged, so the migration only adds. Version 7 code reads them during the migration; the only writers are the retired operations that keep working until the step each leaves with (`runner-api.md`, section 7), and none writes them after the last of those steps. A later store version drops them, one release after V1.
 - Foreign keys are used only from chat parts to `chats`, so deleting a chat removes its messages, drafts and questions in one statement. Other tables keep today's style without foreign keys, because runs, decisions and audit records outlive their flows and chats.
 - New table and index names follow today's style: lowercase, the table name first (`runs_flow`, `runs_state`, `approvals_run`, `approvals_state`, `audit_log_run`, `usage_events_at`, `flow_heads_name`, `standing_rules_flow`, `schedules_after`, `starts_key`, `starts_flow_at`, `starts_outcome_at`, `chats_updated`, `messages_chat_seq`, `messages_card`, `drafts_chat`, `waiting_questions_open`, `waiting_questions_chat`).
 - The new statements live in `packages/runner/src/schema.ts` next to today's, as a new `SCHEMA_V7` text; the steps live in `packages/runner/src/migrate.ts` (new).
-- The retired version 1 operations stay in the contract for the unrouted builder-first screens, but the real runner answers each `unavailable` with reason `retired` (`runner-api.md`, section 7), so nothing writes a frozen table.
+- The retired version 1 operations stay in the contract for the unrouted builder-first screens, and B-01 only marks them retired in the table: each keeps working in the real runner until the step it leaves with and from then answers `unavailable` with reason `retired` (`runner-api.md`, section 7), so once they have all left nothing writes a frozen table.
 - Search (AD-17) uses `LIKE` with `ESCAPE '\'` over `chats.title`, `messages.search_text`, `flow_heads.name` and `flow_heads.summary`, with a result limit. No full-text index in version 7.
 
 ## 5. Migration from version 6

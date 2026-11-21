@@ -22,7 +22,7 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 
 - At least one AI agent is installed (the button also shows a not-ready agent, with its status words, so the person can fix it).
 - Each agent reports its own models (`agents.models`): Claude Code's model names, Codex's list, or a catalog for that CLI version when the agent cannot list them.
-- Codex is offered as a chat agent only when it has a tool-free mode (decided by the Codex research step, B-22); until then it is not offered for chats and is used only for flows it can be limited for (Removed from V1: Codex as a chat agent without a tool-free mode).
+- Codex is offered as a chat agent only when it has a tool-free mode (decided by the Codex research task, B-22.T1, a Chair step without network that reads only the local `--help` and version output of the installed tool and records a synthetic profile with hand-typed values); until then it is not offered for chats and is used only for flows it can be limited for (Removed from V1: Codex as a chat agent without a tool-free mode).
 
 ## Main path
 

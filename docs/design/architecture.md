@@ -149,7 +149,7 @@ Still a gap: prompt injection has no complete fix; a steered turn can still make
 
 Enforced by: V1 holds no secret; agents get only `HOME`, `USER`, `PATH`, `TMPDIR`, `LANG` (`claude/env.ts`; the same for Codex); sign-in is learned only from the agents' status commands (section 8.5); from V2 secrets sit behind main (AD-19). Decided for V1 (revisable): the runner masks secret-looking text by a named pattern list (`sk-` keys, `ghp_` tokens, `Bearer` values and the values of `secret_ref` inputs) as "[hidden]" in the parts of "Copy report" (`runs.export`) and in the run page's text. There is no other redactor.
 
-Still a gap: run output, chat answers and step evidence are stored as the agent wrote them. A secret in the person's own files that an agent reads may appear on the run page and reaches the model maker (B7), and a secret that matches no named pattern is not masked. A flow that declares a `secret_ref` input cannot be confirmed in V1.
+Still a gap: run output, chat answers and step evidence are stored as the agent wrote them. A secret in the person's own files that an agent reads may appear on the run page and reaches the model maker (B7), and a secret that matches no named pattern is not masked. A flow that declares a `secret_ref` input cannot be confirmed in V1: `flows.confirm` and `chats.act` `save_flow` answer `not_allowed` with reason `needs_keychain` and save nothing (the keychain comes in V2).
 
 ### SR-7 Everything is on the record
 
@@ -188,10 +188,10 @@ Each decision gives context, decision, alternatives, consequences and the code i
 ### AD-01 Keep the engine, add an assistant layer, rebuild the renderer
 
 - Context. The engine works end to end (about 1,950 tests, many pinning security-review findings); the approved product is chat first.
-- Decision. Keep the runner and add `assistant/` (chat turns, intents, cards), `inputs/`, `results/`, `starts/` (start rule, schedules, proactive questions), `rules/` (effects, standing rules, decisions), `agents/` (registry, models, set up, conformance), `codex/` and `search/`. Rebuild the renderer chat first. Decided for V1 (revisable): Builder, Inbox, Runs, Readiness and Harnesses are unrouted when their replacements land, not deleted; their code and tests stay in a frozen island and keep passing (section 13.3).
+- Decision. Keep the runner and add `assistant/` (chat turns, intents, cards), `inputs/`, `results/`, `starts/` (start rule, schedules, proactive questions), `rules/` (effects, standing rules, decisions), `agents/` (registry, models, set up, conformance), `codex/` and `search/`. Rebuild the renderer chat first. Decided for V1 (revisable): Builder, Inbox, Runs, Readiness and Harnesses are unrouted in B-16.T2, not deleted: their routes still parse, nothing links to them and there are no redirects; their code and tests stay in a frozen island and keep passing (section 13.3).
 - Alternatives. A new engine loses the tested safety core; keeping the builder screens beside a chat means two products and jargon.
 - Consequences. New modules use `Engine` and `Store`; the engine changes only for Reject skips, `stopped`, `needs_login` and one model per run. The M1 flow keeps running.
-- Code. Section 5.3; the five old screen folders are unrouted after B-19 and kept with `packages/contracts/src/v1/` and `packages/fixtures/src/v1/` (new).
+- Code. Section 5.3; the five old screen folders are unrouted in B-16.T2 and kept with `packages/contracts/src/v1/` and `packages/fixtures/src/v1/` (new).
 
 ### AD-02 Process model unchanged; the app stays alive when its window closes
 
@@ -206,7 +206,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 - Context. `CONTRACT_VERSION = 1` is returned by `runner.info` and never compared.
 - Decision. Version 2 in `packages/contracts`: new operations and read models; run states add `stopped` and `needs_login`; step states add `stopped`; decision states add `approved_edited` and `allowed_always`; events stay `changed` with topics, adding `chats`, `rules`, `activity`, `agents`, `skills`, `memory`, `phone`, `market`. The app checks `contractVersion` at start and refuses a mismatch. A contract change is its own build step (B-01). Decisions, rules, settings and permissions are never `mcp: yes`. `runner-api.md` owns the operations.
 - Alternatives. Data in events adds a second path; no check lets a stale part misread data.
-- Consequences. `FixtureRunnerClient` implements version 2 first. Contract version 2 has 45 live operations plus 12 retired entries. Retired operations (`flows.build`, `flows.update`, `flows.run {description}`, `harnesses.*`, `queue.*`, `usage.summary`) stay in the table as retired entries (`retired: true`, `mcp: "no"`, `phone: "no"`) that the runner answers `unavailable` with reason `retired`, so nothing writes the frozen consent tables. The runner and contracts carry codes and `Line` values, never words (AD-14).
+- Consequences. `FixtureRunnerClient` implements version 2 first. Contract version 2 has 45 live operations plus 12 retired entries. Retired operations (`flows.build`, `flows.update`, `flows.run {description}`, `flows.capabilities`, `flows.allowCapabilities`, `flows.withdrawCapabilities`, `harnesses.*`, `queue.*`, `usage.summary`) stay in the table as retired entries (`retired: true`, `mcp: "no"`, `phone: "no"`). B-01 only marks them retired in the table; each keeps working in the real runner until the step it leaves with (`runner-api.md`, section 7), from which it answers `unavailable` with reason `retired`, so once they have left no operation writes the frozen consent tables. The runner and contracts carry codes and `Line` values, never words (AD-14). While V1 is built, `createDispatcher` takes the version 2 handler map (partial until V1 is complete) and a legacy map typed over `@flowdriven/contracts/v1`; an operation leaves the legacy map in the task that builds its version 2 handler, and a retired one at its leave step (`runner-api.md` section 7). While V1 is built, `createDispatcher` takes the version 2 handler map (partial until V1 is complete) and a legacy map typed over `@flowdriven/contracts/v1`; an operation leaves the legacy map in the task that builds its version 2 handler, and a retired one at its leave step (`runner-api.md` section 7).
 - Code. `version.ts`, `run.ts`, `approval.ts`, `flow.ts`, `settings.ts`, `operations.ts`, `client.ts`, `notice.ts`; new `chat.ts`, `card.ts`, `rules.ts`, `agents.ts`, `activity.ts`, `search.ts`, `skills.ts`, `line-keys.ts`, `window.ts`, and the frozen copy `src/v1/`; `runner/create-client.ts`.
 
 ### AD-04 Flow format 1.2, additive
@@ -252,7 +252,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 ### AD-09 Codex adapter
 
 - Context. No Codex code exists; its behavior is unrecorded.
-- Decision. A research step comes first (B-22; Chair step: network). It reads Codex's public help and documentation and writes a synthetic agent profile; nothing is recorded from a real agent, and a real run, if the owner watches one, stays in `.workflow/scratch/` and is never committed. The fake codex's scripts are written by hand from the documented shapes; a Vitest test scans fixtures and test helpers for local paths, `@` addresses and long tokens. Until the research is done, cases use an injected agent profile and assert the exact value the profile gives. Always `-s workspace-write` or `-s read-only` explicitly, the model flag, JSON events, the prompt on stdin, its own sign-in status command. If FlowDriven can answer Codex's approval requests, the same `decide` applies (`enforced`); if not, Codex runs only steps that read and write the flow's folders and run declared commands in its sandbox (`folder_limited`), and account tools reach it only through the gateway (V3). A flow needing a tool Codex cannot be limited for starts nothing: the chat says "Codex cannot run this flow safely yet. Choose Claude Code in the picker to run it." (`chat.agentCannotRunFlow`, PU-26). No card offers a one-time switch of agent. Codex is offered as a chat agent only if it has a tool-free mode.
+- Decision. A research task comes first (B-22.T1; Chair step, no network). It reads only the local `--help` and version output of the installed Codex command-line tool, never a web page, and records a synthetic agent profile with hand-typed values; nothing is recorded from a real agent, and a real run, if the owner watches one, stays in `.workflow/scratch/` and is never committed. The fake codex's scripts are written by hand from the profile's shapes; a Vitest test scans fixtures and test helpers for absolute local paths, `@` addresses and long tokens. Until the research is done, cases use an injected agent profile and assert the exact value the profile gives. Always `-s workspace-write` or `-s read-only` explicitly, the model flag, JSON events, the prompt on stdin, its own sign-in status command. If FlowDriven can answer Codex's approval requests, the same `decide` applies (`enforced`); if not, Codex runs only steps that read and write the flow's folders and run declared commands in its sandbox (`folder_limited`), and account tools reach it only through the gateway (V3). A flow needing a tool Codex cannot be limited for starts nothing: the chat says "Codex cannot run this flow safely yet. Choose Claude Code in the picker to run it." (`chat.agentCannotRunFlow`, PU-26). No card offers a one-time switch of agent. Codex is offered as a chat agent only if it has a tool-free mode.
 - Alternatives. Assuming a protocol before the research; leaving Codex out of V1; committing a real recording (it could carry a home path, account ids or an address). The Codex sandbox is a safety-core change: one independent security review.
 - Consequences. V1 Codex runs local steps unless the research shows per-call approvals (section 8.3; one fix in section 17). Codex's read scope is part of the research and of section 16, item 2; until then the declared-folders read limit is claimed for Claude Code only.
 - Code. New `codex/adapter.ts`, `codex/args.ts`, `codex/stream.ts`, `codex/fixtures/` (hand-written), `test-helpers/fake-codex.ts`.
@@ -295,7 +295,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 - Decision. Decided for V1 (revisable): one words file per language in `apps/desktop/src/i18n/`, as the prototype brief "English and Bahasa Indonesia" says (its "Real app" part), with no new workspace package. `en.ts` is the source and its type gives the keys; other languages are partial copies typed against it; one list imports them; `{name}` placeholders; plural forms with `Intl.PluralRules`; dates with `Intl.DateTimeFormat`; numbers with `Intl.NumberFormat` in the app language; durations and clock times through one helper using the `time` group, while data keeps codes and short forms (`2h`, `17:00`). A Vitest test, `apps/desktop/src/i18n/i18n.test.ts`, run by `pnpm test` inside `pnpm check`, enforces the rules of that brief ("One file per language", "Fixes after the re-check"; section 10); `tools/checks/` stays unchanged. One general rule: no words in `packages/*`. The runner and contracts carry codes, `Line` values (a key and raw params; a moment is an `IsoDateTime` the renderer formats) and typed values; everything a person reads is drawn in `apps/desktop`, by the renderer or by Electron main (system notifications). The runner never builds a sentence: it emits a message code with values (a `Line`), and runner tests assert codes and params, never sentences; a sentence quoted in a runner case is only the English drawing of its `Line`. A sentence is one key with placeholders, never glued from fragment keys. Every card, the inputs form and its example placeholders included, and every button and chip follow the app language when shown; chips are matched by a code, so either language works. FlowDriven's own posted lines (the 17:00 question, "<flow> needs a few details.", "<flow> finished, so <next> is next.", "Done. The report is in Activity.") follow the chat's language. The agent answers in the language the person writes in. Translations live only in the language files; they are approved by the owner's request for English, Bahasa Indonesia and easy added languages, so they are not an Ask-first item.
 - Alternatives. An i18n library is not allowlisted; a shared words package would add a workspace folder, and words in the runner would break the one rule.
 - Consequences. Main passes the registered language codes at spawn (`--languages=en,id`); the runner refuses other codes for the app language and ignores them for a chat's language. Notices carry `title` and `body` as `Line` values with no params, plus the app language, and main draws them: fixed text only, never a decision title, a flow name, a payload or an input value. Switching rewrites nothing. V2 bot messages need words outside the window; that is decided when V2 is planned. Section 10.
-- Code. New `apps/desktop/src/i18n/` (`en.ts`, `id.ts`, `languages.ts`, `t.ts`, `plural.ts`, `when.ts`, `i18n.test.ts`) and `packages/contracts/src/line-keys.ts`; `service/args.ts` (`--languages`), `notify/policy.ts`, `results/report-lines.ts`, `assistant/cards.ts` emit `Line` values; `notifier.ts` draws them.
+- Code. New `apps/desktop/src/i18n/` (`en.ts`, `id.ts`, `languages.ts`, `t.ts`, `plural.ts`, `when.ts`, `check.ts`, `test-helpers/tree.ts`, `i18n.test.ts`) and `packages/contracts/src/line-keys.ts`; the prototype's English and Indonesian word files are copied by a Chair step (B-06.T10) into `.workflow/scratch/prototype-words/` (git-ignored, never committed) before B-06.T3 builds `en.ts` and `id.ts`, and B-06.T3 reads them from there; `service/args.ts` (`--languages`), `notify/policy.ts`, `results/report-lines.ts`, `assistant/cards.ts` emit `Line` values; `notifier.ts` draws them.
 
 ### AD-15 Appearance
 
@@ -318,7 +318,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 - Context. NF-04: 150 ms with 1,000 chats and 200 flows.
 - Decision. Plain `LIKE` queries over chat titles, message text, flow names and summaries in the runner, limited results; full-text search later.
 - Alternatives. Full-text search depends on the SQLite build in Node (section 16, item 3); an index in the renderer breaks "view state only".
-- Consequences. `%` and `_` escaped, case folded, at most 20 results per group; outside tags kept.
+- Consequences. `%` and `_` escaped, case folded; the limits are those of `SearchResult` in `runner-api.md` (section 4; `search.query` is in 6.11): at most 20 chats (5 when the text is empty) and at most 50 flows (every flow, at most 200, when the text is empty); outside tags kept.
 - Code. New `search/query.ts`, contracts `search.ts`.
 
 ### AD-18 Memory, Skills, Marketplace, Phone & bots
@@ -349,8 +349,8 @@ Each decision gives context, decision, alternatives, consequences and the code i
 - Context. The repository will be public, for hand coders and AI agents. AGENTS.md is pinned by `tools/checks/test/agent-rules.test.mjs`. Decided for V1 (revisable): build step B-31, planned in `contributing-plan.md`.
 - Decision. A `README.md` quickstart (new) with a short safety note (what the agents' makers receive, what FlowDriven cannot catch, that commands use the person's rights); `CONTRIBUTING.md` (new) for people who code by hand (prototype first, the TDD loop, the main rules, one line each for the AI-agent rules that matter most with a link to AGENTS.md, safety areas that need a security review, commits and pull requests); AGENTS.md stays the AI-agent rule set and is not edited in V1; `docs/translating.md` (new) adds a language in at most ten steps, starting from `apps/desktop/src/i18n/en.ts`.
 - Alternatives. One guide serves neither reader; rewriting AGENTS.md breaks its pinned layout.
-- Consequences. Both paths meet at the design set, the plans and the gate. `tools/checks/` stays unchanged in V1, so the guides' script names and links are checked by one Vitest test, `apps/desktop/src/docs.test.ts`; moving that check into `tools/checks/`, AGENTS.md's "Design:" pointer and its sentence about the language files are later Ask-first changes.
-- Code. New `README.md`, `CONTRIBUTING.md`, `docs/translating.md`, `apps/desktop/src/docs.test.ts`.
+- Consequences. Both paths meet at the design set, the plans and the gate. `tools/checks/` stays unchanged in V1, so the guides' script names and links are checked in TypeScript: `apps/desktop/src/docs-check.ts` (new, `checkDocs(root)`) and its Vitest test `apps/desktop/src/docs.test.ts`, owned by the first B-31 task, with the guides after it; a test that needs a script of `tools/checks/` (the hidden-character check) runs it as a child process and asserts its exit code and output, and never imports it; moving that check into `tools/checks/`, AGENTS.md's "Design:" pointer and its sentence about the language files are later Ask-first changes.
+- Code. New `apps/desktop/src/docs-check.ts`, `apps/desktop/src/docs.test.ts`, `README.md`, `CONTRIBUTING.md`, `docs/translating.md`.
 
 ### AD-22 Cards and suggested replies are data
 
@@ -421,7 +421,7 @@ Dependencies point one way: `apps/desktop` -> `contracts`, `fixtures`; `runner` 
 | `screens/builder/`, `screens/inbox/`, `screens/runs/`, `screens/readiness/`, `screens/harnesses/` | Unrouted in V1, kept with their tests on the frozen version 1 contract (section 13.3) |
 | `nav/`, `runner/`, `ui/`, `styles/`, `test/` | Kept |
 
-Routes: `#/welcome`, `#/chat`, `#/chat/<chatId>`, `#/flows`, `#/flows/<flowId>`, `#/activity`, `#/activity/<runId>`, `#/skills`, `#/settings`; later `#/memory`, `#/phone`, `#/marketplace`, `#/marketplace/<listingId>`. Old routes redirect: `#/builder` to `#/flows` (with an id to that flow), `#/inbox` and `#/runs` to `#/activity`, `#/runs/<runId>` to `#/activity/<runId>`, `#/readiness/<flowId>` to `#/flows/<flowId>`, `#/harnesses` to `#/settings`.
+Routes: `#/welcome`, `#/chat`, `#/chat/<chatId>`, `#/flows`, `#/flows/<flowId>`, `#/activity`, `#/activity/<runId>`, `#/skills`, `#/settings`; later `#/memory`, `#/phone`, `#/marketplace`, `#/marketplace/<listingId>`. The old routes (`#/builder`, `#/inbox`, `#/runs`, `#/runs/<runId>`, `#/readiness/<flowId>`, `#/harnesses`) still parse and show their old screens from B-16.T2, but no menu item, button or link leads to them; there are no redirects.
 
 The V1 menu is New chat, Search, Flows, Activity, Skills and Settings; other items appear when their release ships. V1 Settings has Appearance, Language, AI agents, Permission, Main AI agent, Spending limit and Notifications.
 
@@ -660,11 +660,11 @@ Kept as built: `buildClaudeArgs`, the prompt on stdin, refused flags, the hook c
 - `chat`: `--tools ""` with `--json-schema <intent schema>`, an empty folder, no MCP server, `--no-chrome`; the start proof expects exactly `StructuredOutput`.
 - The start proof checks that `system/init` reports a model of the chosen alias (the catalog holds each alias's id prefix).
 - An `auth` outcome makes the run `needs_login`, not `blocked`.
-- The catalog adds install, sign-in and status commands, settled by a research step first (B-21: the agent's public help and documentation); until then cases use an injected agent profile and assert the exact value the profile gives.
+- The catalog adds install, sign-in and status commands, settled by a research task first (B-21.T4, a Chair step without network: the local `--help` and version output of the installed tools, recorded as a synthetic profile with hand-typed values); until then cases use an injected agent profile and assert the exact value the profile gives.
 
 ### 8.3 Codex adapter plan
 
-Research step first (B-22; Chair step: network): read Codex's public help and documentation and write a synthetic agent profile and hand-written fake scripts for the help and version, sign-in status both ways, a non-interactive JSON run (read, file change, command, refused command, failure, usage limit), a structured answer, and Stop; `test-helpers/fake-codex.ts` replays them. Nothing is recorded from a real agent (owner decision, 2026-11-21); a real run, if the owner watches one, stays in `.workflow/scratch/`, never in the repository, and a test scans fixtures and test helpers for local paths, `@` addresses and long tokens. Expected, to confirm: `codex exec --json`, `-s read-only` or `-s workspace-write`, `-m <model>`, `-C <folder>`, the prompt on stdin, an output schema option, a sign-in status subcommand.
+Research task first (B-22.T1; Chair step, no network): read only the local `--help` and version output of the installed Codex command-line tool, never a web page, and write a synthetic agent profile with hand-typed values and hand-written fake scripts for the help and version, sign-in status both ways, a non-interactive JSON run (read, file change, command, refused command, failure, usage limit), a structured answer, and Stop; `test-helpers/fake-codex.ts` replays them. Nothing is recorded from a real agent (owner decision, 2026-11-21); a real run, if the owner watches one, stays in `.workflow/scratch/`, never in the repository, and a test scans fixtures and test helpers for absolute local paths, `@` addresses and long tokens. Expected, to confirm: `codex exec --json`, `-s read-only` or `-s workspace-write`, `-m <model>`, `-C <folder>`, the prompt on stdin, an output schema option, a sign-in status subcommand.
 
 | Unknown | Decides | If no |
 |---|---|---|
@@ -811,7 +811,7 @@ Contract errors are `not_found`, `invalid_input`, `not_allowed`, `unavailable` a
 |---|---|
 | NF-01 first screen within 2 s | Local bundle over `app://`; the runner starts in parallel; only `runner.info` and `settings.get` come first |
 | NF-02, NF-03 | The sent text shows as view state; `chats.send` and `flows.start` return at once |
-| NF-04, NF-05 | `LIKE` on plain columns, 20 results per group; titles-only chat list; paged "Earlier" |
+| NF-04, NF-05 | `LIKE` on plain columns, at most 20 chats and 50 flows per search (`search.query`); titles-only chat list; paged "Earlier" |
 | NF-06 decision within 2 s, notification within 5 s | Written when the held step stops; the notice goes in the same tick |
 | NF-07 Stop within 2 s | SIGKILL after a 1-second grace (section 17) |
 | NF-08 | 30-second tick |
@@ -839,7 +839,7 @@ Contract errors are `not_found`, `invalid_input`, `not_allowed`, `unavailable` a
 ### 12.6 Testing seams
 
 - `now()`, the zone (AD-23) and ids are injected through the shared test harness (B-00, `test-plan.md` section 4); date cases run in UTC and `Asia/Bangkok`.
-- Agent paths (`claudePath`, `codexPath` (new)), `startChild`, `runCapture`, `caffeinate` and the probes are injected. Fakes: the fake claude (runs the real hook script), the fake codex (`test-helpers/fake-codex.ts` (new), replays hand-written scripts built from the agent's public documentation), the fake brain (`test-helpers/fake-brain.ts` (new), a scripted `chat` returning intents); the scripted harness stays for engine tests.
+- Agent paths (`claudePath`, `codexPath` (new)), `startChild`, `runCapture`, `caffeinate` and the probes are injected. Fakes: the fake claude (runs the real hook script), the fake codex (`test-helpers/fake-codex.ts` (new), replays hand-written scripts built from the synthetic agent profile), the fake brain (`test-helpers/fake-brain.ts` (new), a scripted `chat` returning intents); the scripted harness stays for engine tests.
 - Real SQLite in a temporary data folder; a version-6 fixture for the migration; `renderApp` with `FixtureRunnerClient` (`story-v2/`) under happy-dom. Layers are in `test-plan.md`.
 
 ## 13. Migration from the current code
@@ -862,12 +862,12 @@ The engine and checks, the store, the Claude Code adapter with hook channel, sta
 
 ### 13.3 Unrouted and frozen
 
-Decided for V1 (revisable): nothing of the builder-first app is deleted in V1, and tests of the unrouted screens keep passing (AGENTS.md forbids skipping tests). A test of behaviour that V1 deliberately changes is moved to the new behaviour in the same task, with an equally strict assertion that cites the flow spec (`build-order.md` lists them). For retired screens the route stays parseable but unlinked, and fixture operations stay until their tests are retired.
+Decided for V1 (revisable): nothing of the builder-first app is deleted in V1, and tests of the unrouted screens keep passing (AGENTS.md forbids skipping tests). A test of behaviour that V1 deliberately changes is moved to the new behaviour in the same task, with an equally strict assertion that cites the flow spec (`build-order.md` lists them). For retired screens the route stays parseable but unlinked (from B-16.T2; there are no redirects), and fixture operations stay until their tests are retired.
 
 | What | V1 treatment |
 |---|---|
-| `screens/builder/`, `screens/inbox/`, `screens/runs/`, `screens/readiness/`, `screens/harnesses/` | Unrouted when their replacements land (B-19); their code and tests stay in a frozen island: `packages/contracts/src/v1/` keeps a read-only copy of contract version 1 and `packages/fixtures/src/v1/` the version 1 sample and fixture client, used only by these screens and their tests |
-| `flows.build`, `flows.update`, `flows.run {description}`, `harnesses.*`, `queue.*`, `usage.summary` | Retired entries in the operation table (`retired: true`, `mcp: "no"`, `phone: "no"`); the real runner answers `unavailable` with reason `retired`, so nothing writes the frozen consent tables |
+| `screens/builder/`, `screens/inbox/`, `screens/runs/`, `screens/readiness/`, `screens/harnesses/` | Unrouted in B-16.T2 (the routes still parse, nothing links to them, no redirects); their code and tests stay in a frozen island: `packages/contracts/src/v1/` keeps a read-only copy of contract version 1 and `packages/fixtures/src/v1/` the version 1 sample and fixture client, used only by these screens and their tests |
+| `flows.build`, `flows.update`, `flows.run {description}`, `flows.capabilities`, `flows.allowCapabilities`, `flows.withdrawCapabilities`, `harnesses.*`, `queue.*`, `usage.summary` | Retired entries in the operation table (`retired: true`, `mcp: "no"`, `phone: "no"`), marked by B-01. Each keeps working in the real runner until the step it leaves with (`runner-api.md`, section 7) and from then answers `unavailable` with reason `retired`, so once they have left no operation writes the frozen consent tables |
 | `theme.ts` and the `data-theme` override; the effort-to-model choice for runs | No longer used by the new shell (B-20) or for runs (B-07); the code stays |
 
 Removing the island is a later Ask-first item.
@@ -892,7 +892,7 @@ The Needs column gives the main dependencies; the full lists, per task, and the 
 |---|---|---|
 | B-00 | Shared test harness (Harness H, `test-plan.md` section 4): temporary data folder and store opener, injected clock with an IANA zone, counting ids, fake notice sink, call-recording seam, fake brain, injected agent profiles, fixture scan | - |
 | B-01 | Contract version 2 | B-00 |
-| B-02 | Flow format 1.2 | B-00 |
+| B-02 | Flow format 1.2 | B-00 (the format code imports neither contract) |
 | B-03 | Store version 7 and migration | B-01, B-02 |
 | B-04 | Safety core: the one decision, places, Reject skips | B-02, B-03 |
 | B-05 | Decisions and standing rules service | B-04 |
@@ -906,13 +906,13 @@ The Needs column gives the main dependencies; the full lists, per task, and the 
 | B-13 | Make a flow, Save flow | B-04, B-08 |
 | B-14 | Improve a flow | B-13 |
 | B-15 | Flows from skills | B-13 |
-| B-16 | Renderer shell | B-01, B-06 |
+| B-16 | Renderer shell; the old screens are unrouted in B-16.T2 | B-01, B-06 |
 | B-17 | Chat screen and picker | B-08, B-16 |
 | B-18 | Flows screen and flow page | B-12, B-16 |
-| B-19 | Activity and run page; old screens unrouted | B-05, B-11, B-16 |
+| B-19 | Activity and run page | B-05, B-11, B-16 |
 | B-20 | Settings, color mode | B-06, B-07, B-16 |
-| B-21 | First launch and the pinned agent catalog; its research task B-21.T4 (Chair step: network; the agents' public help and documentation, nothing recorded) is done before B-07 | B-07, B-20 |
-| B-22 | Codex adapter (a research step first, Chair step: network; it reads public documentation and writes a synthetic agent profile; nothing is recorded from a real agent) | B-07 |
+| B-21 | First launch and the pinned agent catalog; its research task B-21.T4 (Chair step, no network: the local `--help` and version output of the installed tools, recorded as a synthetic profile with hand-typed values) is done before B-07 | B-07, B-20 |
+| B-22 | Codex adapter (a research task first, B-22.T1, Chair step without network; it reads only the local `--help` and version output of the installed tool and records a synthetic profile with hand-typed values; nothing is recorded from a real agent) | B-07 (T4 also B-10 and B-19.T2; T6 also B-21.T5; T7 also B-13, B-14, B-15; T1 none) |
 | B-23 | Keep the app alive when the window closes (as today), missed starts at wake | B-12 |
 | B-24 | Spending limit and busy fallback | B-07, B-12 |
 | B-25, B-26, B-27 | Memory; Phone & bots and other AI tools; skill updates (V2) | V1 |
@@ -951,7 +951,7 @@ Decisions built into V1 and revisable later. A PU id (the register in `prd.md`) 
 | The language files are approved by the owner's request for English, Bahasa Indonesia and easy added languages; they are not an Ask-first item | AD-14 |
 | No new workspace package: the words live in `apps/desktop/src/i18n/`, checked by `apps/desktop/src/i18n/i18n.test.ts` in `pnpm test`; no words in `packages/*`, which carry codes, `Line` values and typed values; `line-keys.ts` lists the runner's keys; main draws notices and passes `--languages=en,id`; the renderer builds "Copy report" and fills chat results | AD-14, section 10 |
 | No font files in V1: the system font stack; the prototype's font is a later Ask-first item | AD-16 |
-| The builder-first screens are unrouted, not deleted; a frozen island keeps contract version 1 and its fixtures for them and their tests; retired operations answer `unavailable` with reason `retired` | AD-01, AD-03, section 13.3 |
+| The builder-first screens are unrouted, not deleted; a frozen island keeps contract version 1 and its fixtures for them and their tests; retired operations are marked in the table by B-01 and answer `unavailable` with reason `retired` from the step each leaves with | AD-01, AD-03, section 13.3 |
 | Packaging and the runner bundle stay out of V1 (B-30); V1 runs from a checkout | AD-20 |
 | No CI change and no new dependency in V1 | Section 1.2 |
 | Approval and sandbox changes (AD-06, AD-07, Reject skipping, the Codex sandbox) follow the approved clickable prototype; each task that makes one is a safety-core change with one independent security review before its pull request leaves draft | AD-06, AD-07, AD-09 |
@@ -960,7 +960,7 @@ Decisions built into V1 and revisable later. A PU id (the register in `prd.md`) 
 | A start with the permission off is refused with "Turn on permission"; no run is created; a run going when it is turned off becomes `stopped` | Sections 7.2, 9.1 |
 | No menu-bar icon, no Open at login, no first run on schedule-on, no Duplicate, no Missed, Skipped or Run late rows, no one-time use of another agent: all go into the prototype first, later | AD-02, sections 9.4 to 9.6 |
 | The runner never builds sentences; notices are fixed text with no params | AD-14, section 10 |
-| Research first (B-21, B-22) from the agents' public documentation; fixtures and fake scripts are synthetic and hand-written, never a real recording; Codex is not offered for chats without a tool-free mode | AD-09, section 8.3 |
+| Research first (B-21.T4, B-22.T1) from the local `--help` and version output of the installed tools, no network; fixtures and fake scripts are synthetic and hand-written, never a real recording; Codex is not offered for chats without a tool-free mode | AD-09, section 8.3 |
 | The shared test harness is the first V1 step (B-00) | Section 14 |
 | Signing, notarization, tags and releases are the owner's own steps; agents prepare configuration with no secret | AD-20 |
 | The review gates read AGENTS.md broadly (`threat-model.md` sections 8 and 11) | `threat-model.md` |
@@ -975,7 +975,7 @@ Each is settled by a spike before the step that needs it; a spike with a real ag
 3. `node:sqlite` in Electron 45's Node (B-03): a backup call, JSON functions, full-text search, `secure_delete`, rollback of `user_version` on a failed migration.
 4. The runner bundle (B-30): one JavaScript file built with allowlisted tools, how `runnerEntry` finds it, the `runAsNode` fuse or a shipped Node.
 5. Removed from V1 with Open at login and the menu bar (owner decision, 2026-11-21); it returns with them, prototype first.
-6. The catalogs' install and sign-in commands and package names (the research task B-21.T4 for both agents; B-22.T1 for the rest of Codex), read first from the agents' public documentation, and whether sign-in needs a Terminal window.
+6. The catalogs' install and sign-in commands and package names (the research task B-21.T4 for both agents; B-22.T1 for the rest of Codex), read first from the local `--help` and version output of the installed tools, and whether sign-in needs a Terminal window.
 7. The model id prefix each Claude Code alias reports in `system/init`.
 
 ## 17. Drafter's calls
@@ -986,7 +986,7 @@ Each is settled by a spike before the step that needs it; a spike with a real ag
 - AD-02: V1 adds no menu-bar icon and no Open at login; the app keeps today's macOS behaviour of staying alive when its window closes. This removes the old flaw that Open at login cannot work from a checkout.
 - Added `rules/effects.ts` to the design's module map for the effect catalog, and a `covers` field on touches so each declared tool or command maps to exactly one touch. `data-model.md` 3.1 carries it.
 - Starter chips act by code like every other chip (the prototype brief "English and Bahasa Indonesia", "Fixes after the re-check"): `chats.send {chatId, starter}` (`runner-api.md` 8.3).
-- The contributor guides' script names and links are checked by one Vitest test, `apps/desktop/src/docs.test.ts`, because `tools/checks/` stays unchanged in V1; moving that check into `tools/checks/` is a later Ask-first change.
+- The contributor guides' script names and links are checked by `checkDocs(root)` in `apps/desktop/src/docs-check.ts` and the Vitest test `apps/desktop/src/docs.test.ts` (both new, owned by the first B-31 task), because `tools/checks/` stays unchanged in V1 and a TypeScript test never imports its `.mjs` scripts; moving that check into `tools/checks/` is a later Ask-first change.
 - "Copy report" is drawn by the renderer in the app language (the prototype brief "English and Bahasa Indonesia", "The chat") from structured parts, so `runs.export` in `runner-api.md` 6.7 returns parts, not Markdown in the run's language.
 - One `starts.request` serves typed chat starts too; a chain's next flow uses source `after` with the key `chain:<id>:<n>` and the plan's agent and model (`runner-api.md` 8.2).
 - A place becomes the person's when they confirm the version that names it; run data never does. This enforces SR-5's rule on rule places while a flow drafted from a skill can still get "Always allow".

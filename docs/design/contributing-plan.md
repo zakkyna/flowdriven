@@ -65,12 +65,12 @@ At most ten steps, matching the clickable prototype brief ('One file per languag
 
 ## Checks for B-31
 
-Docs get Vitest tests, not new scripts in `tools/checks/`, because `tools/checks/` is an Ask-first area and V1 changes nothing there (`prd.md`, Q-04). The cases are in `test-cases/platform.md` under "DOC":
+Docs get TypeScript checks and Vitest tests, not new scripts in `tools/checks/`, because `tools/checks/` is an Ask-first area and V1 changes nothing there (`prd.md`, Q-04). The cases are in `test-cases/platform.md` under "DOC":
 - every `pnpm <script>` named in `README.md`, `CONTRIBUTING.md` and `docs/translating.md` exists in the root `package.json`;
 - every relative link in those files points to a file that exists;
 - `docs/translating.md` steps work: a test language file added by a test, with two words, passes the language check and falls back to English for the rest (this is the same case as the I18N tests);
-- the hidden-character check covers the new files (it scans every tracked file already).
+- the hidden-character check covers the new files (it scans every tracked file already); the test runs `node tools/checks/hidden-chars.mjs` as a child process against a temporary folder and asserts its exit code and output, because a TypeScript test cannot import an `.mjs` script of `tools/checks/` (no type declarations, and the folder is Ask first).
 
-The first two checks are one Vitest test, `apps/desktop/src/docs.test.ts` (the `ui` project, which reads the files with Node's `fs`). Moving them into `tools/checks/` is a later Ask-first item.
+The first two checks are the function `checkDocs(root)` in `apps/desktop/src/docs-check.ts` (new) and its test `apps/desktop/src/docs.test.ts` (new, the `ui` project, which reads the files with Node's `fs`). The first B-31 task builds both, and the guides come after it, so each guide's checks can fail first. Moving them into `tools/checks/` is a later Ask-first item.
 
 The rule "no test is skipped" (`test-plan.md` section 3) is enforced the same way. Biome's recommended preset, which `biome.json` uses (checked with Biome 2.6.3), does not flag `.skip`, `.only` or `.todo`, so a Vitest test scans the test files for them. Turning on Biome's `noFocusedTests` and `noSkippedTests` rules in `biome.json` would be a further change that the owner approves in a plan task first.
