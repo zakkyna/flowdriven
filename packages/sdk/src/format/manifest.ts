@@ -1,6 +1,7 @@
 import "../config.ts";
 import { z } from "zod";
-import { FORMAT_ID } from "../vocab.ts";
+import { FORMAT_ID, FORMAT_ID_V12 } from "../vocab.ts";
+import { InputDeclV12 } from "./inputs.ts";
 import { Requirement } from "./requirements.ts";
 import { Duration, durationMs, Limits, OutputDecl, Step, valueId } from "./steps.ts";
 export const Trigger = z.discriminatedUnion("kind", [
@@ -76,8 +77,7 @@ export const ParamDecl = z.strictObject({
   label: z.string().optional(),
 });
 export type ParamDecl = z.infer<typeof ParamDecl>;
-export const FlowManifest = z.strictObject({
-  format: z.literal(FORMAT_ID),
+const manifestFields = {
   id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/),
   name: z.string(),
   summary: z.string().default(""),
@@ -100,7 +100,6 @@ export const FlowManifest = z.strictObject({
   publisher: z.string().optional(),
   license: z.string().default("UNLICENSED"),
   kind: z.enum(["build", "light"]),
-  inputs: z.array(InputDecl).default([]),
   outputs: z.array(OutputDecl).default([]),
   requirements: z.array(Requirement).default([]),
   defaults: z
@@ -116,5 +115,17 @@ export const FlowManifest = z.strictObject({
   approvals: z.strictObject({ extra_risky: z.array(z.string()).default([]) }).default({ extra_risky: [] }),
   memory: z.array(z.string()).default([]),
   steps: z.array(Step).min(1),
-});
+};
+export const FlowManifest = z.discriminatedUnion("format", [
+  z.strictObject({ ...manifestFields, format: z.literal(FORMAT_ID), inputs: z.array(InputDecl).default([]) }),
+  z.strictObject({
+    ...manifestFields,
+    format: z.literal(FORMAT_ID_V12),
+    inputs: z.array(InputDeclV12).default([]),
+  }),
+]);
 export type FlowManifest = z.infer<typeof FlowManifest>;
+export function detectFormat(raw: unknown): "1.1" | "1.2" | undefined {
+  if (typeof raw !== "object" || raw === null || !("format" in raw)) return undefined;
+  return raw.format === FORMAT_ID ? "1.1" : raw.format === FORMAT_ID_V12 ? "1.2" : undefined;
+}
