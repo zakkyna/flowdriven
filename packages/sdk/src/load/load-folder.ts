@@ -2,12 +2,19 @@ import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FlowManifest } from "../format/manifest.ts";
 import { parseManifest } from "../format/parse.ts";
+import type { Schedule } from "../format/schedule.ts";
 import { contentHash, FlowFileError, type FlowFiles } from "../hash/canonical.ts";
 import type { Issue } from "../issues.ts";
 import { validateManifest } from "../validate/validate.ts";
 import { parseFlowYaml } from "./parse-yaml.ts";
 
-export type LoadedFlow = { manifest: FlowManifest; files: FlowFiles; hash: string; issues: Issue[] };
+export type LoadedFlow = {
+  manifest: FlowManifest;
+  files: FlowFiles;
+  hash: string;
+  issues: Issue[];
+  suggestedSchedule?: Schedule;
+};
 export function loadFlowFolder(dir: string): LoadedFlow {
   const files = new Map<string, Uint8Array>();
   let total = 0;
@@ -53,6 +60,9 @@ export function loadFlowFolder(dir: string): LoadedFlow {
     };
   return {
     manifest: parsed.manifest,
+    ...(parsed.manifest.format === "flowdriven-flow/1.2" && parsed.manifest.schedule
+      ? { suggestedSchedule: parsed.manifest.schedule }
+      : {}),
     files,
     hash,
     issues: validateManifest(parsed.manifest, { files: new Set(files.keys()) }),
