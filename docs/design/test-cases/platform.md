@@ -204,7 +204,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/chat.test.ts (new)
 - Given: the `chats.send` input schema.
 - When: texts are parsed.
-- Then: text "Run Fill timesheet" passes; "" fails; "   \n " (blank) fails; a 16,000-character text passes; 16,001 fails; `pasted: true` and `fromChip: true` pass; `pasted: "yes"` fails; an extra key fails. The output `{messageId, turn: "queued"}` passes for turn values `queued`, `not_ready`, `form_open` and fails for "done".
+- Then: text "Run Fill timesheet" passes; "" fails; "   \n " (blank) fails; a 16,000-character text passes; 16,001 fails; `pasted: true` passes; `{chatId, starter: 0}` passes in place of `text`; `fromChip: true` fails as an unknown key; `starter: -1` and `starter: 1.5` fail; `pasted: "yes"` fails; an extra key fails. The output `{messageId, turn: "queued"}` passes for turn values `queued`, `not_ready`, `form_open` and fails for "done".
 - Traces: F-03, AD-10, FS-j20.E2
 - Build step: B-01
 - Fails first because: `chat.ts` does not exist.
@@ -244,7 +244,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/agents.test.ts (new)
 - Given: `Agent`, `Model` and the `agents.models` output schema.
 - When: samples are parsed.
-- Then: an agent `{id: "claude-code", name: "Claude Code", maker: "Anthropic", state: "ready", accountLine: {key: "agents.accountClaude"}, risk: "gray", riskNote: {key: "agents.riskGray"}, canSetUp: true, billing: "plan", capability: {tier: "enforced", accountTools: true}}` passes; `state: "waiting_login"` passes and "signed_out" fails; `risk: "official"` passes and "safe" fails; `capability.tier: "folder_limited"` passes. The model list `[{id: "sonnet-5.5", name: "Sonnet 5.5", note: "allRound", isDefault: true}, {id: "opus-5.5", name: "Opus 5.5", note: "mostCapable", isDefault: false}]` passes; a list with two defaults fails; a list with none fails; a model note "cheap" fails; an empty list fails.
+- Then: an agent `{id: "claude-code", name: "Claude Code", maker: "Anthropic", state: "ready", accountLine: {key: "agents.accountClaude"}, risk: "gray", riskNote: {key: "agents.riskGray"}, canSetUp: true, billing: "plan", capability: {tier: "enforced", accountTools: true}}` passes; `state: "waiting_login"` passes and "signed_out" fails; `risk: "official"` passes and "safe" fails; `capability.tier: "folder_limited"` passes. The model list `[{id: "sonnet-5.5", name: "Sonnet 5.5", note: "fastCapable", isDefault: true}, {id: "opus-5.5", name: "Opus 5.5", note: "mostCapable", isDefault: false}]` passes; a list with two defaults fails; a list with none fails; a model note "cheap" fails; an empty list fails.
 - Traces: AD-08, F-01, F-21
 - Build step: B-01
 - Fails first because: `agents.ts` does not exist.
@@ -284,7 +284,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/run.test.ts
 - Given: `Cause`, `InputProblem`, `FieldProblem`.
 - When: samples are parsed.
-- Then: `Cause` accepts the 17 codes of runner-api section 3 (`agent_signed_out, site_sign_in, permission_off, agent_not_set_up, usage_limit, spending_limit, checks_failing, requirement_missing, flow_not_confirmed, limits_not_applied, crash, step_failed, stopped, flow_deleted, agent_cannot_be_limited, daily_limit, internal_error`) and fails for "unknown"; `params` values must be strings. `InputProblem` accepts `empty, unreadable, zero, too_long, too_long_text, out_of_range, not_a_choice, hidden_characters` and fails for "invalid". `{inputId: "duration", problem: "zero"}` and `{inputId: "n", problem: "out_of_range", params: {min: 1, max: 10}}` pass; `params: {min: "1"}` fails.
+- Then: `Cause` accepts the 18 codes of runner-api section 3 (`agent_signed_out, site_sign_in, permission_off, agent_not_set_up, usage_limit, spending_limit, checks_failing, requirement_missing, flow_not_confirmed, limits_not_applied, crash, step_failed, stopped, flow_deleted, agent_cannot_be_limited, daily_limit, cost_not_reported, internal_error`) and fails for "unknown"; `params` values must be strings. `InputProblem` accepts `empty, unreadable, zero, too_long, too_long_text, out_of_range, not_a_choice, hidden_characters` and fails for "invalid". `{inputId: "duration", problem: "zero"}` and `{inputId: "n", problem: "out_of_range", params: {min: 1, max: 10}}` pass; `params: {min: "1"}` fails.
 - Traces: FS-j27.E3, FS-j25.P4, AD-11
 - Build step: B-01
 - Fails first because: version 1 has no `cause` and no input problem codes.
@@ -414,7 +414,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/line-keys.test.ts (new)
 - Given: `LINE_KEYS` from `packages/contracts/src/line-keys.ts` (new), the list of every key the runner may emit in a `Line`.
 - When: it is read.
-- Then: every entry matches the `Line` key pattern and the list has no duplicate; it contains `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer24h`, `report.doneByRule`, `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `notice.questionTitle`, `notice.questionBody`; no entry holds a space or a sentence.
+- Then: every entry matches the `Line` key pattern and the list has no duplicate; it contains `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer`, `report.doneByRule`, `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `notice.questionTitle`, `notice.questionBody`; no entry holds a space or a sentence.
 - Traces: AD-14, F-20
 - Build step: B-06
 - Fails first because: `line-keys.ts` does not exist.
@@ -434,7 +434,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/chat.test.ts (new)
 - Given: the `MessageView` result shape and the `runs.export` output schema.
 - When: samples are parsed.
-- Then: a result message `{kind: "result", result: {runId: "run-000000000001", lines: ["Logged {duration} for {customer}."], values: {duration: {type: "duration", value: 120}, customer: {type: "text", value: "Example Corp"}}}, language: "en"}` passes; `values` is required; a value of an unknown `type` fails; 10 lines pass and 11 fail. The export output `{language: "en", flowName: "Fill timesheet", startedAt: "2026-11-19T02:00:00.000Z", endedAt: "2026-11-19T02:12:00.000Z", state: "done", summary: [{text: "Logged 2h", outside: false}], decisionLines: [{key: "report.youSaidNo", params: {title: "x"}}]}` passes; a `markdown` key fails as unknown; `summary` with 21 parts fails; a part text of 4,001 characters fails.
+- Then: a result message `{kind: "result", result: {runId: "run-000000000001", lines: ["Logged {duration} for {customer}."], values: {duration: {type: "duration", value: 120}, customer: {type: "text", value: "Example Corp"}}}, language: "en"}` passes; `values` is required; a value of an unknown `type` fails; 10 lines pass and 11 fail. The export output `{language: "en", flowName: "Fill timesheet", startedAt: "2026-11-19T02:00:00.000Z", endedAt: "2026-11-19T02:12:00.000Z", state: "done", summary: [{text: "Logged 2h", outside: false}], steps: [{title: "Log the hours", state: "passed", outside: false}], decisionLines: [{key: "report.youSaidNo", params: {title: "x"}}]}` passes; a `markdown` key fails as unknown; `summary` with 21 parts fails; a part text of 4,001 characters fails.
 - Traces: AD-12, AD-14, FS-j25.A12
 - Build step: B-01
 - Fails first because: the result message holds finished lines and the export output is `{markdown}`.
@@ -1093,7 +1093,7 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - File: packages/runner/src/engine-stop.test.ts (new)
 - Given: a run of `example.build-apk` on the fake claude with a step scripted `pause` (a long step), an injected kill seam recording `killGroup(pid, signal)` and the clock.
 - When: `runs.stop {runId}` is called while the step runs.
-- Then: the output is `{run, changed: true}`; the run and its running step are `stopped`; `cause` is `{code: "stopped"}` and `stoppedBy` is "person"; the kill seam saw SIGTERM for the group at once and SIGKILL after 2,000 ms if the group still lived (second test: a script with `ignore_sigterm`); the fake child's process group is gone within 2 seconds; the audit has `run_stopped`; no dialog or confirmation call exists in the handler.
+- Then: the output is `{run, changed: true}`; the run and its running step are `stopped`; `cause` is `{code: "stopped"}` and `stoppedBy` is "person"; the kill seam saw SIGTERM for the group at once and SIGKILL after 1,000 ms if the group still lived (second test: a script with `ignore_sigterm`); the fake child's process group is gone within 2 seconds; the audit has `run_stopped`; no dialog or confirmation call exists in the handler.
 - Traces: SR-8, NF-07, F-04
 - Build step: B-10
 - Fails first because: `runs.stop` does not exist and `stopped` is not a state.
@@ -1173,7 +1173,7 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - File: packages/runner/src/engine-reject.test.ts (new)
 - Given: decision `ap-000000000001` created at T0 with `expiresAt` T0 + 24 h; the run is `waiting_approval`.
 - When: the clock is set to T0 + 24 h - 1 ms and `engine.sweepExpired()` runs; then to T0 + 24 h and it runs again.
-- Then: after the first sweep the decision is `pending`; after the second it is `expired` with `resolvedVia: "expiry"`; the step is `skipped` with `because: "expired"`; the run continues and ends `done`; `decisionLines` has `{key: "report.noAnswer24h", params: {title}}` ("No answer in 24 hours: <title>. It was not done."); the action never ran; the audit has `decision_expired` with `why: "expiry"`; `approvals.resolve` with `approve` now gives `conflict: decision_expired`.
+- Then: after the first sweep the decision is `pending`; after the second it is `expired` with `resolvedVia: "expiry"`; the step is `skipped` with `because: "expired"`; the run continues and ends `done`; `decisionLines` has `{key: "report.noAnswer", params: {title}}` ("No answer in 24 hours: <title>. It was not done."); the action never ran; the audit has `decision_expired` with `why: "expiry"`; `approvals.resolve` with `approve` now gives `conflict: decision_expired`.
 - Traces: AD-07, FS-j24.A16, SR-8
 - Build step: B-05
 - Fails first because: an expired risky decision fails the step and run.
@@ -1456,7 +1456,7 @@ Shared setup: harness H with the fake brain. `createFakeBrain(script)` takes ent
 - Layer: L3
 - File: packages/runner/src/assistant/turn.test.ts (new)
 - Given: app language "en"; a chat in `en`; the fake brain answers with `language: "id"`, then `language: "xx"`.
-- When: the person types "tolong jalankan Build APK", then a chip is sent with `chats.send {fromChip: true}` and the brain answers `id` again after a reset to `en`, then a typed message gets `language: "xx"`.
+- When: the person types "tolong jalankan Build APK", then a starter chip is sent with `chats.send {chatId, starter: 0}` and the brain answers `id` again after a reset to `en`, then a typed message gets `language: "xx"`.
 - Then: after the typed text the chat has `language: "id"` and `languageSource: "typed"` and FlowDriven's next posted line is stored as a `Line` with `language: "id"` on the message; the chip message leaves the language unchanged; "xx" (unregistered) is ignored; no message already stored changes its `language`.
 - Traces: FS-j30.P2, F-20, AD-14
 - Build step: B-06
@@ -1637,7 +1637,7 @@ Shared setup: harness H with the fake brain. `createFakeBrain(script)` takes ent
 - File: packages/runner/src/service/line-keys.test.ts (new)
 - Given: a scripted session on harness H: a chat with a run, a rejection, a stop, a failed turn, an agent change, a scheduled question, a missed slot and a skill draft, in app language "id".
 - When: every `Line` stored in `messages`, `decisionLines` of runs, `notice` frames and `starts` rows is collected; and the non-test source of `packages/runner/src` is scanned for `key: "<string>"` literals.
-- Then: every collected `Line.key` is in `LINE_KEYS`; every `key:` literal found in the source is in `LINE_KEYS`; every key of `LINE_KEYS` exists in `packages/i18n/src/en.ts`; no stored `Line` params hold a sentence of FlowDriven (only ids, names, times as `IsoDateTime`, numbers and the person's own text); no runner source file imports `packages/i18n/src/en.ts` for a text (it may import the key type only).
+- Then: every collected `Line.key` is in `LINE_KEYS`; every `key:` literal found in the source is in `LINE_KEYS`; every key of `LINE_KEYS` exists in `apps/desktop/src/i18n/en.ts` (TC-I18N-32); no stored `Line` params hold a sentence of FlowDriven (only ids, names, times as `IsoDateTime`, numbers and the person's own text); no runner source file imports anything from `apps/desktop`.
 - Traces: AD-14, F-20, NF-17
 - Build step: B-06
 - Fails first because: `LINE_KEYS` and the rule do not exist; version 1 stores English sentences.
@@ -1928,7 +1928,7 @@ Shared setup: `parseValue(decl, raw, ctx)` in `packages/runner/src/inputs/parse.
 
 ## RES Results
 
-Shared setup: `fillAnswer(result, values, outputs, {language, zone})` in `packages/runner/src/results/answer.ts` (new) returns the answer lines. `decisionLines(run)` is in `results/report-lines.ts` (new). The sample flow `example.fill-timesheet` has `result: {kind: "chat", answer: ["Logged {duration} for {customer}, {project}.", "{date}, {start}.", "Note: {did}"]}`. Date format is a short weekday, day and short month ("Thu 19 Nov" in English, "Kam 19 Nov" in Indonesian); times are 24-hour `HH:MM`; durations read "2h" or "1h 30m".
+Shared setup: `pickAnswerLines(result, language)` in `packages/runner/src/results/answer.ts` (new) picks the answer lines of the run's language, and the renderer's `fillAnswerLines` fills them. `decisionLines(run)` is in `results/report-lines.ts` (new). The sample flow `example.fill-timesheet` has `result: {kind: "chat", answer: ["Logged {duration} for {customer}, {project}.", "{date}, {start}.", "Note: {did}"]}`. Date format is a short weekday, day and short month ("Thu 19 Nov" in English, "Kam 19 Nov" in Indonesian); times are 24-hour `HH:MM`; durations read "2h" or "1h 30m".
 
 ### TC-RES-01 The renderer fills the answer lines from the run's typed values
 - Layer: L1
@@ -1995,7 +1995,7 @@ Shared setup: `fillAnswer(result, values, outputs, {language, zone})` in `packag
 - File: packages/runner/src/results/report-lines.test.ts (new)
 - Given: a run with decisions titled "Log 8 hours to Project Example?": one `approved`, one `approved_edited`, one `allowed_always`, one `rejected`, one `expired`, and one call that ran by a standing rule.
 - When: `decisionLines(run)` runs.
-- Then: the keys in order of time are `report.youApproved`, `report.youApprovedEdited`, `report.youApproved` (an Always allow reads as an approval), `report.youSaidNo`, `report.noAnswer24h`, `report.doneByRule`, each with `params: {title}`; the renderer draws the English lines "You approved: ...", "You approved your edited version: ...", "You said no: ... It was not done.", "No answer in 24 hours: ... It was not done.", "Done by your rule: ...".
+- Then: the keys in order of time are `report.youApproved`, `report.youApprovedEdited`, `report.youApproved` (an Always allow reads as an approval), `report.youSaidNo`, `report.noAnswer`, `report.doneByRule`, each with `params: {title}`; the renderer draws the English lines "You approved: ...", "You approved your edited version: ...", "You said no: ... It was not done.", "No answer in 24 hours: ... It was not done.", "Done by your rule: ...".
 - Traces: AD-12, FS-j24.P2, SR-7
 - Build step: B-11
 - Fails first because: `report-lines.ts` does not exist.
@@ -2025,7 +2025,7 @@ Shared setup: `fillAnswer(result, values, outputs, {language, zone})` in `packag
 - File: packages/runner/src/service/runs-handlers.test.ts (new)
 - Given: a run of `example.fill-timesheet` started 2026-11-19T02:00:00Z (09:00 in `Asia/Jakarta`), ended `done` at 2026-11-19T02:12:00Z, language "en", with one rejected decision titled "Send reply to Sam Example?" and summary lines from the run.
 - When: `runs.export {runId}` is called.
-- Then: the output has exactly the keys `language, flowName, startedAt, endedAt, state, cause?, summary, decisionLines`; `language` is "en"; `flowName` is "Fill timesheet"; moments are `IsoDateTime` strings; `state` is "done"; `summary` is a list of `{text, outside}` parts; `decisionLines` is `[{key: "report.youSaidNo", params: {title: "Send reply to Sam Example?"}}]`; the output holds no Markdown, no run id (`run-` followed by 12 hex digits), no token count, no cost and no sentence written by FlowDriven; nothing is stored (a second call after the data changes gives the new data).
+- Then: the output has exactly the keys `language, flowName, startedAt, endedAt, state, cause?, summary, steps, decisionLines` and `answer?` for a `chat` result; `language` is "en"; `flowName` is "Fill timesheet"; moments are `IsoDateTime` strings; `state` is "done"; `summary` is a list of `{text, outside}` parts; `decisionLines` is `[{key: "report.youSaidNo", params: {title: "Send reply to Sam Example?"}}]`; the output holds no Markdown, no run id (`run-` followed by 12 hex digits), no token count, no cost and no sentence written by FlowDriven; nothing is stored (a second call after the data changes gives the new data).
 - Traces: FS-j25.A12, F-14, NF-21, AD-14
 - Build step: B-19
 - Fails first because: `runs.export` returns `{markdown}` in version 1.
@@ -2369,7 +2369,7 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 - File: packages/runner/src/starts/start-rule.test.ts (new)
 - Given: `busyFallback: true`; main agent `claude-code` reporting its usage limit; `codex` `ready` with capability `{tier: "enforced", accountTools: true}`.
 - When: a start with source `flows`, one with source `schedule` and one typed in a chat on `claude-code` are made; then with `codex` `needs_login`; then with `busyFallback: false`.
-- Then: the first two start on `codex` with its default model `gpt-6.1-terra` and `agent.choice: "busy_fallback"`; the chat start runs on the chat's agent (`choice: "chat"`) and waits on its usage limit (it never falls back); with `codex` not ready the start waits on the main agent; with the setting off no start falls back.
+- Then: the first two start on `codex` with its default model `gpt-6.1-sol` and `agent.choice: "busy_fallback"`; the chat start runs on the chat's agent (`choice: "chat"`) and waits on its usage limit (it never falls back); with `codex` not ready the start waits on the main agent; with the setting off no start falls back.
 - Traces: FS-j12.P3, FS-j12.A7, AD-08
 - Build step: B-24
 - Fails first because: nothing reads the setting.
@@ -2650,7 +2650,7 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 
 ## AGT Agents and models
 
-Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) lists `claude-code` and `codex`. The fake claude is `packages/runner/src/test-helpers/fake-claude.ts`; the fake codex is `packages/runner/src/test-helpers/fake-codex.ts` with `fake-codex-script.ts` (new), a Node script that logs every call (arguments, environment names, prompt, files read) to a calls file, answers its version, help, sign-in status and model list commands, and plays scripted events. The event names of the fake codex script are fixed by the fakes until the B-22 research step records the real CLI; if the recording changes a flag name or an event name, the cases below change in the same task. Sample models: Claude Code `opus-5.5` ("Opus 5.5", `mostCapable`), `sonnet-5.5` ("Sonnet 5.5", `allRound`, default), `haiku-5.5` ("Haiku 5.5", `fastest`); Codex `gpt-6.1-sol` ("GPT-6.1 Sol", `mostCapable`), `gpt-6.1-terra` ("GPT-6.1 Terra", `carefulCoding`, default), `gpt-6-luna` ("GPT-6 Luna", `fastCapable`). Install and sign-in polling use the injected clock; the poll is every 2 seconds.
+Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) lists `claude-code` and `codex`. The fake claude is `packages/runner/src/test-helpers/fake-claude.ts`; the fake codex is `packages/runner/src/test-helpers/fake-codex.ts` with `fake-codex-script.ts` (new), a Node script that logs every call (arguments, environment names, prompt, files read) to a calls file, answers its version, help, sign-in status and model list commands, and plays scripted events. The event names of the fake codex script are fixed by the fakes until the B-22 research step records the real CLI; if the recording changes a flag name or an event name, the cases below change in the same task. Sample models: Claude Code `opus-5.5` ("Opus 5.5", `mostCapable`), `sonnet-5.5` ("Sonnet 5.5", `fastCapable`, default), `haiku-5.5` ("Haiku 5.5", `fastest`); Codex `gpt-6.1-sol` ("GPT-6.1 Sol", `allRound`, default), `gpt-6.1-terra` ("GPT-6.1 Terra", `carefulCoding`), `gpt-6-luna` ("GPT-6 Luna", `fastest`) (brief 25.1). Install and sign-in polling use the injected clock; the poll is every 2 seconds.
 
 ### TC-AGT-01 The agent catalog
 - Layer: L1
@@ -2777,7 +2777,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - File: packages/runner/src/agents/models.test.ts (new)
 - Given: the fake claude at CLI version 2.5.0 (no model list command, catalog entry for that version) and the fake codex whose list command prints `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`; and a second fake codex whose list command fails (fallback to the catalog).
 - When: `agents.models {agentId}` is called for each.
-- Then: Claude Code returns `opus-5.5`, `sonnet-5.5`, `haiku-5.5` from the catalog with `source: "catalog"` on the agent row; Codex returns its own three with `source: "agent"`; the failing Codex returns the catalog list with `source: "catalog"`; every id matches `^[a-z][a-z0-9.-]{0,63}$`; each list has exactly one `isDefault: true` (`sonnet-5.5` and `gpt-6.1-terra`); the lists of the two agents are different; `agents.list` includes `models` and `defaultModel` for ready agents only.
+- Then: Claude Code returns `opus-5.5`, `sonnet-5.5`, `haiku-5.5` from the catalog with `source: "catalog"` on the agent row; Codex returns its own three with `source: "agent"`; the failing Codex returns the catalog list with `source: "catalog"`; every id matches `^[a-z][a-z0-9.-]{0,63}$`; each list has exactly one `isDefault: true` (`sonnet-5.5` and `gpt-6.1-sol`); the lists of the two agents are different; `agents.list` includes `models` and `defaultModel` for ready agents only.
 - Traces: AD-08, F-21, FS-j31
 - Build step: B-07
 - Fails first because: `models.ts` does not exist.
@@ -2795,9 +2795,9 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 ### TC-AGT-15 A chat that FlowDriven starts gets the main agent and its default model
 - Layer: L3
 - File: packages/runner/src/starts/proactive.test.ts (new)
-- Given: `settings.mainAgent` is `{agent: "codex", model: "gpt-6.1-sol"}` (the main agent and its default model, chosen by the person in Settings); Codex lists `gpt-6.1-terra` as the model its own picker marks `isDefault`; Claude Code is `ready` too.
+- Given: `settings.mainAgent` is `{agent: "codex", model: "gpt-6.1-terra"}` (saved in Settings while an older catalog made Terra the default); Codex now marks `gpt-6.1-sol` as `isDefault`; Claude Code is `ready` too.
 - When: FlowDriven makes a chat by itself: a scheduled question, the confirm card of a start outside a chat, and the answer chat of a `chat` result of a scheduled run.
-- Then: each new chat has `from: "flowdriven"`, `agent: "codex"`, `model: "gpt-6.1-sol"` (the main agent's default model as saved in Settings, not the model the agent marks `isDefault`), `agentSource: "main_default"`; a run that starts from such a chat after the person answers uses that chat's agent and model, with `agent.choice: "chat"`; changing the main agent afterwards does not change these chats.
+- Then: each new chat has `from: "flowdriven"`, `agent: "codex"`, `model: "gpt-6.1-terra"` (the model saved with the main agent in Settings, not the model the agent now marks `isDefault`), `agentSource: "main_default"`; a run that starts from such a chat after the person answers uses that chat's agent and model, with `agent.choice: "chat"`; changing the main agent afterwards does not change these chats.
 - Traces: FS-j31.P1, F-21, AD-08, FS-j12.A7
 - Build step: B-12
 - Fails first because: chats do not have an agent and model.
@@ -3017,7 +3017,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - File: packages/runner/src/agents/conformance.test.ts (new)
 - Given: each fake scripted with a long step that also starts a grandchild process in the same group, and one that ignores SIGTERM.
 - When: `adapter.stop` is called mid-step (through `runs.stop`).
-- Then: the child and the grandchild are gone within 2 seconds for both fakes (checked with the injected kill seam and a `process.kill(pid, 0)` probe); for the SIGTERM-ignoring script SIGKILL follows after the 2,000 ms grace; no zombie remains.
+- Then: the child and the grandchild are gone within 2 seconds for both fakes (checked with the injected kill seam and a `process.kill(pid, 0)` probe); for the SIGTERM-ignoring script SIGKILL follows after the 1,000 ms grace; no zombie remains.
 - Traces: SR-8, NF-07
 - Build step: B-22
 - Fails first because: the shared suite does not exist.
@@ -3197,7 +3197,7 @@ Every active operation has a schema case (L1, contracts) and a handler case (L3,
 
 - Count: 307 cases, above the 150 to 250 aim, because every operation needs a schema case and a handler case and the migration, the Codex adapter and the conformance suite each need several. The build tasks can take them in groups by build step.
 - Chair decision of 2026-11-21 applied: the runner emits codes and `Line` values only (`LINE_KEYS`, TC-CON-38, TC-AST-36); a chat result stores template lines and typed values and the renderer fills them (TC-RES-01, TC-RES-02, TC-RES-04); `runs.export` returns structured parts and the renderer builds the Markdown (TC-RES-10 to TC-RES-15); a notice carries `title` and `body` as `Line` values plus `language` (TC-CON-27, TC-STR-20); retired operations stay in the table with `retired: true` and answer `unavailable` with reason `retired` (TC-CON-02, TC-CON-03, TC-ENG-25); `v1/` copies are read-only (TC-CON-39); the runner takes `--languages=en,id` (TC-AGT-30, TC-AGT-40). No case adds a dependency or touches CI.
-- Message keys and part names are mine where `runner-api.md` gives none: `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `chat.tellMe`, `chat.whatToChange`, `notice.questionTitle`, `notice.questionBody`; `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer24h`, `report.doneByRule` (only `report.youSaidNo` is named in `runner-api.md`). Reason: tests need exact keys; the build may rename them if the cases change in the same task.
+- Message keys and part names are mine where `runner-api.md` gives none: `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `chat.tellMe`, `chat.whatToChange`, `notice.questionTitle`, `notice.questionBody`; `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer`, `report.doneByRule` (only `report.youSaidNo` is named in `runner-api.md`). Reason: tests need exact keys; the build may rename them if the cases change in the same task.
 - A hidden character in an export part is marked `[U+200B]` by the runner (a code, not words); the renderer adds the words around it. This differs from the journey cases, which show `[U+200B hidden character]` in the finished Markdown; TC-RES-14 and the journey case then agree only after the renderer builds the text.
 - Parser choices the specs leave open: a bare number is not a duration; a relative or `..` path is not a `file` value; only `http` and `https` urls without credentials pass; an invalid optional input is dropped, never asked (TC-INP-15); `remember: true` on a `date` or `time` input is a format error `remember_date_time` (TC-SDK-05).
 - Format 1.2 choices: 1.2-only keys in a 1.1 file are errors `needs_format_1_2`; `answer` on a `report` result is `answer_on_report`; placeholders are `{inputId}` and `{outputs.<id>}`; a touch place must name a declared requirement (`touch_place_undeclared`); a risky effect with `runs_alone` is a warning `risky_claims_runs_alone` and never a grant. The input question text is the input's `label` plus `example`; the SDK has no separate `question` key (the data model lists none).
@@ -3861,10 +3861,10 @@ Fakes for this group (in `apps/desktop/electron/test-helpers/fakes.ts` (new)): `
 - File: apps/desktop/electron/window.test.ts
 - Given: `createMainWindow({...})` with a fake `BrowserWindow` constructor that records its options, for a real window and for a capture window
 - When: the options are read
-- Then: `width` 1280, `height` 800, `minWidth` 1100, `minHeight` 720, `title` "FlowDriven", `backgroundColor` equal to `windowBackground(false)` for light and `windowBackground(true)` for dark; `webPreferences` equals the object of TC-ELE-01 (with the runner flag only for the real window); the loaded URL starts with `app://flowdriven/index.html`.
+- Then: `width` 1280, `height` 800, `minWidth` 480, `minHeight` 600 (the narrow drawer layout must be reachable, `architecture.md` section 17), `title` "FlowDriven", `backgroundColor` equal to `windowBackground(false)` for light and `windowBackground(true)` for dark; `webPreferences` equals the object of TC-ELE-01 (with the runner flag only for the real window); the loaded URL starts with `app://flowdriven/index.html`.
 - Traces: NF-23, AD-15
 - Build step: B-16
-- Fails first because: the test is new and pins values that the shell rebuild must not change.
+- Fails first because: the minimum size is 1100 by 720 today.
 
 ### TC-ELE-03 The content security policy is exact and both copies match
 - Layer: L1
@@ -4973,7 +4973,7 @@ Release V2, contract version 3. Code in `packages/runner/src/phone/` (new): `sec
 - File: packages/runner/src/phone/decisions.test.ts (new)
 - Given: a pending decision `a1` of effect `send` ("Send reply to Sam Example?") and `a2` of effect `change`; `u1` paired; the clock at T0
 - When: `u1` taps Approve on `a1`; then taps "Tap again to confirm" at T0 + 20 s; then repeats that tap; and, separately, taps Approve on `a1` and then confirms with a token from `a2`, and confirms after T0 + 70 s
-- Then: the first tap calls no `approvals.resolve` and the bot edits its message to the second button with a new token bound to `a1` and `u1`; the second tap calls `approvals.resolve {approvalId: "a1", decision: "approve"}` once with `source: "phone"`; the repeat does nothing (`card_answered`); the wrong-decision token and the late token (after 60 seconds) resolve nothing; `a2` resolves with one tap.
+- Then: the first tap calls no `approvals.resolve` and the bot edits its message to the second button with a new token bound to `a1` and `u1`; the second tap calls `approvals.resolve {approvalId: "a1", decision: "approve"}` once from the `phone` caller; the repeat does nothing (`card_answered`); the wrong-decision token and the late token (after 60 seconds) resolve nothing; `a2` resolves with one tap.
 - Traces: FS-j26.A10, FS-j26.S7, T-17, T-05
 - Build step: B-26
 - Fails first because: `decisions.ts` does not exist.
@@ -4981,8 +4981,8 @@ Release V2, contract version 3. Code in `packages/runner/src/phone/` (new): `sec
 ### TC-PHN-11 The phone never edits, never approves a batch, never makes a rule
 - Layer: L3
 - File: packages/runner/src/phone/decisions.test.ts (new)
-- Given: a pending decision with `alwaysAllowOffered: true` and similar items
-- When: the phone message for it is built; then callbacks with the data of "edit", "always_allow" and "approve_similar" are processed; then `approvals.resolve {decision: "always_allow", source: "phone"}` and `{decision: "edit", source: "phone"}` run directly
+- Given: a pending decision with `canAlwaysAllow: true` and similar items
+- When: the phone message for it is built; then callbacks with the data of "edit", "always_allow" and "approve_similar" are processed; then `approvals.resolve {decision: "always_allow"}` and `{decision: "edit"}` run directly from the `phone` caller
 - Then: the message has only the buttons Approve and Reject; the callbacks are refused with the answer "That can only be done in FlowDriven." and `phone_refused`; the two direct calls give `not_allowed` reason `phone_no_rules`; `rules.list` is unchanged and no standing rule exists.
 - Traces: FS-j26.A10, FS-j26.A11, SR-2, T-17
 - Build step: B-26
@@ -5297,9 +5297,9 @@ Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). De
 
 ## Writer's calls, shell and later components
 
-- Words location (chair, 2026-11-21). All I18N cases use `apps/desktop/src/i18n/` and the Vitest file `i18n.test.ts`; the journey cases TC-j30-03, -15 to -24 and -26 still name `packages/i18n/src/...` and, for TC-j30-26, words in `packages/runner/src/notify/policy.ts`. They must be moved to the new paths, and TC-j30-26 must test that main draws the notice and the menu from `Line` values and the language (TC-ELE-17, TC-ELE-18, TC-ELE-22 here).
+- Words location (chair, 2026-11-21). All I18N cases use `apps/desktop/src/i18n/` and the Vitest file `i18n.test.ts`; the journey cases use the same paths, and TC-j30-26 tests that main draws the notice and the menu from `Line` values and the language (as TC-ELE-17, TC-ELE-18 and TC-ELE-22 here).
 - Runner emits codes only. `packages/contracts/src/line-keys.ts` exports `LINE_KEYS`; the check counts those keys as used (TC-I18N-16) and TC-I18N-32 checks English and Indonesian have each. Key names this group chose: `notice.questionTitle`, `notice.questionBody`, `notice.decisionBody` (value "{title}"), `status.waitingForYou`, `phone.decisionLead` ("FlowDriven: {title}"), `phone.needsYou`, `chat.starting`, `text.outsideTag`, `text.linkNotOpened`; their English text is in the cases.
-- Contract shapes this group assumes: a notice is `{id, kind, title: Line, body: Line, language, target}`; `starts.next` returns `{language, next: {flowName, at} | null}`; the runner started with `--languages=en,id` refuses `settings.update {patch: {language}}` for another code with `language_unknown`. `runner-api.md` sections 6.6 and 10 must carry these.
+- Contract shapes this group assumes: a notice is `{id, kind, title: Line, body: Line, language, target}`; `starts.next` returns `{language, next: {flowName, at} | null}`; the runner started with `--languages=en,id` refuses `settings.update {patch: {language}}` for another code with `language_unknown`. `runner-api.md` sections 6.6 and 10 carry these.
 - Main renders a notice into at most 80 characters of title and 240 of body, cutting with "..." (ASCII). The V2 bot module draws its lines through an injected `renderLine`, because no package holds words.
 - Electron main imports the words from `apps/desktop/src/i18n`; `tsconfig.electron.json` must include that folder.
 - Check result shape: `checkLanguages` returns `{findings, untranslated}`; the journey cases read `.findings`. Finding kinds added beyond the journeys: `missing_other_form`, `unknown_plural_form`, `invalid_code`, `duplicate_code`, `file_name_code_mismatch`, `markup_in_value`, `web_address_in_value`, `unknown_placeholder`, `bad_placeholder`, `glued_sentence`, `unused_line_key`. Reason: brief 24.11 lists each rule and the failing line must name file, key and fix.

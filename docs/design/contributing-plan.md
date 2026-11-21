@@ -23,6 +23,7 @@ A short page with:
 - requirements: macOS, Node 24.14.0 or later, pnpm 10.9.0, and for real runs at least one AI agent (Claude Code or Codex) signed in through its own flow;
 - quickstart: `pnpm install --frozen-lockfile`, then `pnpm dev:web` (the screens in a browser with sample data, no agent needed) or `pnpm start` (the real app);
 - the gate: `pnpm format`, then `pnpm check`;
+- a short safety note: the residual risks of `threat-model.md` section 9 that have no place in the app yet (pasted passwords go to the AI agent, a hostile program on the Mac can change FlowDriven's data, what Always allow means for flows that read email or web pages);
 - where to go next: `CONTRIBUTING.md`, `AGENTS.md`, `docs/design/README.md`, `docs/translating.md`;
 - licences: AGPL-3.0 for the app, MIT for the SDK, the flow format and the adapter kit.
 

@@ -1004,7 +1004,7 @@ FlowDriven never passes a permission-bypass or full-access flag. Codex always ge
 ### TC-SR4-08 Codex: the model choice changes only the model flag, never the sandbox, tools or approvals
 - Layer: L3
 - File: packages/runner/src/codex/model-flag.test.ts (new)
-- Given: FLOW-BUILD confirmed; the fake codex announcing tier `enforced`; run A on its default `gpt-6.1-terra`, run B on `gpt-6-luna` (non-default).
+- Given: FLOW-BUILD confirmed; the fake codex announcing tier `enforced`; run A on its default `gpt-6.1-sol`, run B on `gpt-6-luna` (non-default).
 - When: both runs play the same script: a read in `app-sources`, a write in `builds-out`, `flutter build apk`, a write outside the folder, a held `send`.
 - Then: (a) the argument arrays are equal after the two tokens of the model flag are removed: the same `-s workspace-write`, the same writable-folder arguments, the same MCP config argument, the same approval-related arguments, no new flag in B; (b) the compiled policies are deep-equal; (c) the fake's effective sandbox event is `workspace-write` in both; (d) the decisions are equal row by row: read and write inside run, declared command runs, outside write refused, send held in both; (e) `-s` never changes to `danger-full-access`, and nothing about the sandbox is derived from the model id (a model id containing `full-access` is refused by TC-SR4-05 before this point).
 - Traces: SR-4, AD-08, AD-09, FS-j31.A12, F-21.R3, T-19

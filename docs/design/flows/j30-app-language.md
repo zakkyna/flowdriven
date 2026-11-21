@@ -118,7 +118,7 @@ The person reads FlowDriven in English (the default) or Bahasa Indonesia and can
 
 ## Not in the prototype yet
 
-- The shared package `apps/desktop/src/i18n` and its files; the check in `pnpm check`; `docs/translating.md`; `Intl` dates and numbers; the standing instruction to the agent and the language the turn reports; FlowDriven's lines coming from the runner as `Line` values and drawn in the chat's language; notifications and menu bar drawn by main in the app language; the failed-save line.
+- The words module `apps/desktop/src/i18n` and its files; the check in `pnpm check`; `docs/translating.md`; `Intl` dates and numbers; the standing instruction to the agent and the language the turn reports; FlowDriven's lines coming from the runner as `Line` values and drawn in the chat's language; notifications and menu bar drawn by main in the app language; the failed-save line.
 
 ## Drafter's calls
 

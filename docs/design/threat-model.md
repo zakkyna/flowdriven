@@ -329,8 +329,6 @@ Tampering, denial of service. Actors: a misbehaving agent, a bad build dependenc
 
 ### T-19 Bypass flags and model-picker misuse
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 Elevation of privilege. Actors: a stranger, a malicious flow, a misbehaving agent. Assets: the agents' limits, money. Impact High; likelihood Medium.
 
 - Scenario: text asks for `--dangerously-skip-permissions` or Codex's `danger-full-access`; a model id `opus --permission-mode bypassPermissions` reaches the command line; the busy fallback picks an agent that cannot be limited.
@@ -412,8 +410,6 @@ Information disclosure; privacy. Actor: the model makers. Assets: files, mail, c
 
 ### T-28 A misleading translation or hidden characters in a language file
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 Spoofing of meaning. Actor: a malicious translator. Assets: decisions. Impact Medium (buttons act by id); likelihood Low.
 
 - Scenario: "Reject" translated as approve; "Asks you first" and "Does on its own" swapped; a renamed `{name}`; a bidi control; an instruction planted in a FlowDriven chat line.
@@ -483,8 +479,6 @@ Tampering. Actor: a compromised dependency or vendor update. Assets: the app. Im
 
 ### 7.6 The agent and model picker
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 | Abuse | What stops it | Threat |
 |---|---|---|
 | A model id carrying a flag | Pattern plus the agent's own list | T-19 |
@@ -492,8 +486,6 @@ Tampering. Actor: a compromised dependency or vendor update. Assets: the app. Im
 | Text says "use the most capable model" | Only a click changes it; costs count against limits | T-19, T-22 |
 
 ### 7.7 Languages
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 | Abuse | What stops it | Threat |
 |---|---|---|
@@ -521,7 +513,7 @@ Not in the prototype yet (F-22).
 
 ## 8. Security review gates
 
-AGENTS.md: changing the runner, approvals, sandbox limits, flow hashing or signature checks is Ask first, asked as a product decision in plain words, and gets one independent security review before merge. Under the owner update of 2026-11-21, the V1 build plan names these items and its approval is the yes for each. The reviewer did not build the change, reads it as a diff from a default-branch checkout (CLAUDE.md), and each finding is fixed or recorded as a known limit (test-plan section 9) and pinned by a `review-*.test.ts` file.
+AGENTS.md: changing the runner, approvals, sandbox limits, flow hashing or signature checks is Ask first, asked as a product decision in plain words, and gets one independent security review before merge. Under the decisions for V1 (`prd.md`, Q-04), the behaviour these steps build follows the clickable prototype the owner approved, so no V1 step waits for another question; each still gets its review. The reviewer did not build the change, reads it as a diff from a default-branch checkout (CLAUDE.md), and each finding is fixed or recorded as a known limit (test-plan section 9) and pinned by a `review-*.test.ts` file.
 
 | Gate | Steps | Why | Focus |
 |---|---|---|---|
@@ -530,8 +522,8 @@ AGENTS.md: changing the runner, approvals, sandbox limits, flow hashing or signa
 | Required: sandbox limits | B-07, B-22 | Model flag only; the Codex sandbox | T-12, T-18, T-19 |
 | Required: the runner starts runs or programs | B-10, B-12, B-21, B-23, B-24 | Chains, `START`, agent installs, runs nobody watches, the busy fallback | T-03, T-21, T-22, T-23, T-24 |
 | Required: signatures and release | B-28, B-30 (Ask first, Chair steps) | Signature checks, updates, the `runAsNode` fuse | T-09, T-15, T-30 |
-| Recommended | B-06 (pending version 9), B-09, B-11, B-17, B-19, B-25 | Safety words, inputs, honest lines, the safe text renderer, memory | T-13, T-14, T-26, T-28 |
-| Not required | B-16, B-18, B-31 | UI only, or documents (B-31 changes nothing in `tools/checks/`) | - |
+| Recommended | B-06, B-09, B-11, B-16, B-17, B-19, B-25 | Safety words, inputs, honest lines, the safe text renderer (B-16), the chat cards, memory | T-13, T-14, T-26, T-28 |
+| Not required | B-18, B-31 | UI only, or documents (B-31 changes nothing in `tools/checks/`) | - |
 
 "Recommended" steps touch none of the five areas but carry a threat worth a second look; the chair may fold them into the next required review.
 
@@ -541,12 +533,12 @@ AGENTS.md: changing the runner, approvals, sandbox limits, flow hashing or signa
 |---|---|---|
 | "What your AI agents read is sent to the companies that make them, under their terms." | Welcome card, permission dialog (Not in the prototype yet) | T-27 |
 | "FlowDriven checks every action your AI agent tries and asks before anything risky. It cannot catch every trick hidden in an email or a web page, so read what you approve." | Permission dialog (Not in the prototype yet) | T-01, T-25 |
-| "With Always allow for this flow, you no longer see each one before it goes. If the flow reads email or web pages, a stranger's words can shape what it sends there." | Safety page; decision cards with the outside tag (Not in the prototype yet) | T-07 |
+| "With Always allow for this flow, you no longer see each one before it goes. If the flow reads email or web pages, a stranger's words can shape what it sends there." | README safety note (B-31); decision cards with the outside tag (Not in the prototype yet) | T-07 |
 | "Commands your flows run use your rights on this Mac. FlowDriven limits which commands run, but macOS does not fence them in yet." | Confirm dialog of a flow with commands (Not in the prototype yet) | T-18 |
 | "This uses your personal browser. Every site you are logged into is reachable from it." | The own-browser route, as today | T-08 |
 | "If FlowDriven stopped in the middle of a send, it does not try again by itself. Check before you choose Try again." | Run page of an interrupted run (Not in the prototype yet) | T-24 |
-| "Do not paste passwords into the chat. What you type goes to your AI agent." | Safety page | T-20 |
-| "A program you installed that works against you can change FlowDriven's data. FlowDriven cannot protect you from it." | Safety page | T-15 |
+| "Do not paste passwords into the chat. What you type goes to your AI agent." | README safety note (B-31); a Safety page in the app is a later prototype item | T-20 |
+| "A program you installed that works against you can change FlowDriven's data. FlowDriven cannot protect you from it." | README safety note (B-31) | T-15 |
 | "Anyone holding your unlocked phone with the bot chat open can answer for you. Messages pass through Telegram's or Discord's servers." | Phone & bots (V2, Not in the prototype yet) | T-17 |
 | "Scanning reduces risk. It does not prove a flow is safe." | Marketplace listing, as today | T-09 |
 

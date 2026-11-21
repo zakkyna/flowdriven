@@ -2753,7 +2753,7 @@ Words and lines (chair decision, 2026-11-21): the words live in `apps/desktop/sr
 ### TC-j24-40 The honest decision lines
 - Layer: L1
 - File: apps/desktop/src/screens/activity/decisionLines.test.ts (new)
-- Given: the `decisionLines` of a run as the runner returns them, `Line` values with the keys `report.youApproved` (title "Send reply to Sam Example."), `report.youApprovedEdited` (title "Send reply to Alex Example."), `report.youApprovedAlways` (title "Log hours."), `report.doneByRule` (title "Log hours."), `report.youSaidNo` (title "Post the update.") and `report.noAnswer24h` (title "Send reply to Robin Example."); the runner emits only these codes and params (a runner case checks them in TC-j24-39).
+- Given: the `decisionLines` of a run as the runner returns them, `Line` values with the keys `report.youApproved` (title "Send reply to Sam Example."), `report.youApprovedEdited` (title "Send reply to Alex Example."), `report.youApproved` (title "Log hours."; an Always allow reads as an approval), `report.doneByRule` (title "Log hours."), `report.youSaidNo` (title "Post the update.") and `report.noAnswer` (title "Send reply to Robin Example."); the runner emits only these codes and params (a runner case checks them in TC-j24-39).
 - When: `drawDecisionLines(lines, "en")` is called.
 - Then: it returns exactly, in order, `["You approved: Send reply to Sam Example.", "You approved your edited text: Send reply to Alex Example.", "You approved: Log hours. You chose to always allow it for this flow.", "Done by your rule: Log hours.", "You said no: Post the update. It was not done.", "No answer in 24 hours: Send reply to Robin Example. It was not done."]` (titles lose a trailing "?" and a trailing "." is not doubled).
 - Traces: FS-j24.S5, FS-j24.A6, FS-j24.A12, FS-j24.A15, F-13, F-06, SR-7
@@ -2785,7 +2785,7 @@ Words and lines (chair decision, 2026-11-21): the words live in `apps/desktop/sr
 - File: packages/runner/src/service/notify-wiring.test.ts
 - Given: the runner with a fake notice sink; a flow run that makes progress, passes steps and finishes `done`; a second run that creates a decision; a third run that is blocked.
 - When: the three runs execute.
-- Then: the first run sends no notice; the second sends exactly one notice with `kind` `approval_waiting`, a title `Line` (key `notice.waitingForYou`; main draws "Waiting for you") and the decision title "Send reply to Sam Example?" as its body text, whose target opens the decision on its run page; the third sends the problem notice (`run_blocked`); no notice is sent for progress, a passed step or success; resolving the decision removes its notice.
+- Then: the first run sends no notice; the second sends exactly one notice with `kind` `approval_waiting`, a title `Line` (key `status.waitingForYou`; main draws "Waiting for you") and the decision title "Send reply to Sam Example?" as its body text, whose target opens the decision on its run page; the third sends the problem notice (`run_blocked`); no notice is sent for progress, a passed step or success; resolving the decision removes its notice.
 - Traces: FS-j24.P10, FS-j24.A23, F-16, F-13
 - Build step: B-12
 - Fails first because: the existing notice body is "<flow>: an approval is waiting." and decision titles are not used.
@@ -3064,7 +3064,7 @@ Words and lines (chair decision, 2026-11-21): the words live in `apps/desktop/sr
 - File: packages/runner/src/engine-stop.test.ts (new)
 - Given: the fake claude with a play that `pause`s and records its process id; run R1 of Weekly supplier report is `running` with a pending decision D1 on it; run R2 of the same flow is `queued` ("Waiting for the earlier run of this flow"). `graceMs` is 50 ms; a second play ignores SIGTERM (`ignore_sigterm`).
 - When: `runs.stop {runId: R1}`.
-- Then: the call returns without a confirmation step; the agent's process group is gone (`process.kill(-pgid, 0)` throws ESRCH) within 1 s, also for the play that ignores SIGTERM (SIGKILL after grace); R1 is `stopped` and its running step is `stopped`; D1 is `expired`; R2 moves `queued` -> `checking` -> `running`; the audit log has one `run_stopped` record with the detail "You stopped this run." `runs.stop` on a `done` run returns the run unchanged with `changed: false`.
+- Then: the call returns without a confirmation step; the agent's process group is gone (`process.kill(-pgid, 0)` throws ESRCH) within 2 s, also for the play that ignores SIGTERM (SIGKILL after the 1-second grace); R1 is `stopped` and its running step is `stopped`; D1 is `expired`; R2 moves `queued` -> `checking` -> `running`; the audit log has one `run_stopped` record with the detail "You stopped this run." `runs.stop` on a `done` run returns the run unchanged with `changed: false`.
 - Traces: FS-j25.P6, FS-j25.A10, SR-8, F-14
 - Build step: B-10
 - Fails first because: `runs.stop` does not exist.
@@ -4352,7 +4352,7 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 - File: packages/runner/src/notify/policy.test.ts
 - Given: `createNoticePolicy({nowMs})`; the event {kind: "question_waiting", flowId: "example.fill-timesheet", flowName: "Fill timesheet", chatId: "c13", questionId: "q1"}
 - When: `decide(event)` runs twice, then for flow "Weekly supplier report" with question "q2" within one minute
-- Then: the first returns {id: "question:q1", kind: "question_waiting", title: `{key: "notice.questionWaiting.title", params: {flow: "Fill timesheet"}}`, body: `{key: "notice.questionWaiting.body"}`, target: {screen: "chat", chatId: "c13"}} (codes and `Line` values only; the runner holds no words, and main draws them, TC-j28-21); the second returns `undefined`; the third returns a notice (no throttle between flows); a flow name of 100 characters with a control character is cut to 60 and cleaned; the event type has no field that could carry an input value.
+- Then: the first returns {id: "question:q1", kind: "question_waiting", title: `{key: "notice.questionTitle", params: {flow: "Fill timesheet"}}`, body: `{key: "notice.questionBody"}`, target: {screen: "chat", chatId: "c13"}} (codes and `Line` values only; the runner holds no words, and main draws them, TC-j28-21); the second returns `undefined`; the third returns a notice (no throttle between flows); a flow name of 100 characters with a control character is cut to 60 and cleaned; the event type has no field that could carry an input value.
 - Traces: FS-j28.P8, FS-j28.A12, F-16
 - Build step: B-12
 - Fails first because: the kind `question_waiting` does not exist.
