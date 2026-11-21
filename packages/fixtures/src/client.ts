@@ -37,6 +37,7 @@ export const PREVIEW_AGENT_REPLY =
   "This preview runs on sample data, so I can't change the flow from chat yet. Use the step list for now.";
 export interface FixtureRunnerClient extends RunnerClient {
   readonly state: FixtureState;
+  readonly calls: { operation: OperationName; input: OperationInput<OperationName> }[];
 }
 
 type Handlers = { [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> };
@@ -605,9 +606,12 @@ export function createFixtureRunnerClient(
       return state.settings;
     },
   };
+  const calls: FixtureRunnerClient["calls"] = [];
   return {
     state,
+    calls,
     async call<N extends OperationName>(name: N, input: OperationInput<N>): Promise<OperationOutput<N>> {
+      calls.push({ operation: name, input });
       const definition = operations[name];
       const parsed = definition.input.safeParse(input);
       if (!parsed.success)
