@@ -52,3 +52,30 @@ test("nothing in the runner spawns process.execPath", () => {
   ))
     expect(readFileSync(file, "utf8")).not.toContain("process.execPath");
 });
+
+test("TC-REPO-08 real V1 sources use no network", async () => {
+  const { findNetworkUse } = await import("./test-helpers/network-rules.ts");
+  const root = join(pkgs, "..");
+  const folders = [
+    "packages/contracts/src",
+    "packages/sdk/src",
+    "packages/runner/src",
+    "packages/fixtures/src",
+    "apps/desktop/electron",
+    "apps/desktop/src",
+  ];
+  const findings: string[] = [];
+  for (const folder of folders) {
+    for (const path of readdirSync(join(root, folder), { recursive: true, encoding: "utf8" })) {
+      if (!/\.(?:ts|tsx|mts)$/.test(path) || /\.test\.(?:ts|tsx|mts)$/.test(path)) continue;
+      const file = join(root, folder, path);
+      for (const finding of findNetworkUse(readFileSync(file, "utf8"))) {
+        findings.push(`${relative(root, file)}: ${finding}`);
+      }
+    }
+  }
+  expect(
+    findings,
+    "V1 has no exemptions; only phone/transport.ts and market/transport.ts may use network in later releases",
+  ).toEqual([]);
+});
