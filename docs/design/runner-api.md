@@ -702,7 +702,7 @@ type SettingsPatch = {
 #### `runs.export` (changed)
 
 - Input: `{runId}`. Output: `{parts: ExportParts; language: LanguageCode}`, where `ExportParts` is `{flowName; startedAt; endedAt?; state: RunState; cause?: Cause; startWords?: Line; summary: string[]; steps: {title: string; state: StepRunState}[]; decisionLines: Line[]; answer?: {lines: string[]; values: Record<string, TypedValue>}; outside: boolean}`.
-- Does: the parts of "Copy report" (`data-model.md`, section 8), built on request and never stored. The runner masks anything that looks like a secret as "[hidden]" and replaces hidden characters with their visible marks in every text part before it returns them; the renderer builds the Markdown in the run's language (`apps/desktop/src/screens/activity/copy-report.ts`, new).
+- Does: the parts of "Copy report" (`data-model.md`, section 8), built on request and never stored. The runner masks anything that looks like a secret as "[hidden]" and replaces hidden characters with their visible marks in every text part before it returns them; the renderer builds the Markdown in the app language, with the answer lines in the run's language (`apps/desktop/src/screens/activity/copy-report.ts`, new).
 - Tests first: runner (L3): a test secret built at run time appears as "[hidden]" in the parts; a zero-width character built with `String.fromCodePoint(0x200b)` appears as its visible mark; no part holds the run id. Renderer (L2): the Markdown starts with `# <flow>, <when>`, has `Result: <words>`, `Ended: <time>` and `## Summary`, in English and in Bahasa Indonesia (FS-j25.A12).
 
 #### `runs.resume` (changed)

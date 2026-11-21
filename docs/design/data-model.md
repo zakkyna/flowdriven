@@ -819,7 +819,7 @@ Quitting and removing `<data folder>` removes everything the runner stored, incl
 
 ## 8. Export
 
-- **Copy report** (`runs.export`): parts built on request from the run and never stored; the renderer turns them into Markdown in the run's language; no token numbers and no run id; hidden characters shown as visible marks; outside text keeps its tag; anything that looks like a secret is masked as "[hidden]" (FS-j25.A12, FS-j25.E11). It leaves the app only by the person's click (NF-21).
+- **Copy report** (`runs.export`): parts built on request from the run and never stored; the renderer turns them into Markdown in the app language, with the answer lines in the run's language; no token numbers and no run id; hidden characters shown as visible marks; outside text keeps its tag; anything that looks like a secret is masked as "[hidden]" (FS-j25.A12, FS-j25.E11). It leaves the app only by the person's click (NF-21).
 - **Memory** (V2, `memory.export`): Markdown on request; memory never goes into a log, a bug report or a published package (spec R18).
 - **No other export in V1.** There is no automatic export, no telemetry and no upload (NF-18). The store is a plain SQLite file in the person's data folder, and the backups are full copies of it.
 

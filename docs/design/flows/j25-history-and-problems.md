@@ -37,7 +37,7 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
   - Sees: the toast "Waiting for you to sign in...", then "Running", then "Finished" with the toast "Run resumed". The report adds the honest lines, for example "Read 4 job pages after you signed in."
 - **FS-j25.S4** Copy the report.
   - Person: opens a run that shows "Finished" and chooses "Copy report".
-  - FlowDriven: `runs.export {runId}` returns the report parts (the runner masks secrets and marks hidden characters); the renderer builds the Markdown in the run's language, shows it in a dialog and copies it.
+  - FlowDriven: `runs.export {runId}` returns the report parts (the runner masks secrets and marks hidden characters); the renderer builds the Markdown in the app language, with the answer lines in the run's language, shows it in a dialog and copies it.
   - Sees: a dialog with the text: `# <flow>, <when>`, `Result: Finished`, `Ended: 09:16`, `## Summary` and bullets. A "Copy" button; if the clipboard is blocked, "Press Cmd+C to copy".
 
 ## Other paths

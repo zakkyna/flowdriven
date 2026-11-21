@@ -355,7 +355,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 ### AD-22 Cards and suggested replies are data
 
 - Context. Card buttons change state ("Confirm", "Save flow", "Start", "Yes, set it"); brief 24.10 says cards follow the app language and chips are matched by a code.
-- Decision. A card is a typed record in a message: `type`, ids, values, a base (the flow hash, run state or decision state it was made for) and a state (`open`, `answered`, `replaced`, `cancelled`, `stale`, `flow_deleted`), with no FlowDriven sentence; the renderer draws it in the app language. Each button and chip has a code; a click is `chats.act {chatId, messageId, action, values?}`, which the runner accepts only if the card offers the action, is open and still has its base, else `conflict` (`card_answered`, `card_stale`). Decision and run cards call `approvals.resolve` and `runs.stop` directly, so a decision is answered in one place. Typed text never presses a button ("Use the buttons on the card above."). A suggestion chip is sent by its index (`suggestion`); the runner, which keeps its words, posts them in the app language as the person's message without changing the chat's language.
+- Decision. A card is a typed record in a message: `type`, ids, values, a base (the flow hash, run state or decision state it was made for) and a state (`open`, `answered`, `replaced`, `cancelled`, `stale`, `flow_deleted`), with no FlowDriven sentence; the renderer draws it in the app language. Each button and chip has a code; a click is `chats.act {chatId, messageId, action, values?}`, which the runner accepts only if the card offers the action, is open and still has its base, else `conflict` (`card_answered`, `card_stale`). Decision and run cards call `approvals.resolve` and `runs.stop` directly, so a decision is answered in one place. Typed text never presses a button ("Use the buttons on the card above."). A suggestion chip is sent by its index (`suggestion`); the runner, which keeps the chip's label (a `Line`, or the agent's own text), posts that label as the person's message without changing the chat's language. Starter chips are sent by index too (`chats.send {chatId, starter}`) and act by their code without a brain call (`runner-api.md` 8.3).
 - Alternatives. Re-reading chip labels as text depends on language.
 - Consequences. A click is the person's act (SR-2); cards survive a language switch.
 - Code. New `packages/contracts/src/card.ts`, `assistant/cards.ts`, the `chats.act` handler, `screens/chat/` cards.
@@ -506,7 +506,7 @@ When the call was held, the agent's process already ended, so the agent is told 
 
 ### 6.6 Expiry counts as Reject
 
-`engine.sweepExpired` (every 60 s and on reads) expires decisions after 24 hours (`APPROVAL_EXPIRY_HOURS`; audit `decision_expired`). An expired held call or sign-off follows 6.5 (`because: "expired"`) with "No answer in 24 hours: <step title>. It was not done." An `ask` keeps its `on_expiry`. An expired spending-limit decision ends its run `blocked`. Stop or permission off expires a run's pending decisions at once. Expiry is Not in the prototype yet.
+`engine.sweepExpired` (every 60 s and on reads) expires decisions after 24 hours (`APPROVAL_EXPIRY_HOURS`; audit `decision_expired`). An expired held call or sign-off follows 6.5 (`because: "expired"`) with "No answer in 24 hours: <step title>. It was not done." An `ask` keeps its `on_expiry`. The spending pause (`budget_raise`) has no 24-hour expiry: it ends when the person raises the limit or the next local month begins, and the paused runs continue (`data-model.md` 3.15). Stop or permission off expires a run's pending decisions at once. Expiry is Not in the prototype yet.
 
 ### 6.7 Audit records
 
@@ -688,7 +688,7 @@ Research step (Chair step, owner watching, B-22): on a throwaway folder, record 
 
 - Usage limits come from the agent (Claude Code `rate_limit_event`; Codex research): above the five-hour line one process at a time; above the seven-day line triggered runs wait and the person gets "Keep running triggered flows?" (`weekly_limit`); a rejection backs off 15, 30, 60 minutes; waiting runs show the reason.
 - Busy fallback: for a start from any source but `chat`, if `busyFallback` is on and the main agent is busy (the keeper would wait for its usage limit, or it was rate limited), the run uses the other agent with its default model, only if that agent is `ready` and can run every step (section 7.7). Decided once per run and recorded; never mid-run.
-- Spending limit (Decided for V1, revisable, Q-03): counts only money charged per use. The month's spending is the sum of `cost_usd` of `usage_events` rows billed `per_use` or unknown (`data-model.md` 3.17); `plan` rows are bound by the agent's own limits. When it reaches `spendingLimit`, the runner writes the `spending-pause` setting and one `budget_raise` decision with no run; runs whose next call bills per use or unknown wait, a chat turn on such an agent fails with `spending_limit`, and only raising the limit in Settings resolves it (`limit_raised`). A per-use call that reports no cost (Codex, until its research) is refused while a limit is set.
+- Spending limit (Decided for V1, revisable, Q-03): counts only money charged per use. The month's spending is the sum of `cost_usd` of `usage_events` rows billed `per_use` or unknown (`data-model.md` 3.17); `plan` rows are bound by the agent's own limits. When it reaches `spendingLimit`, the runner writes the `spending-pause` setting and one `budget_raise` decision with no run; runs whose next call bills per use or unknown wait, a chat turn on such an agent fails with `spending_limit`, and the pause ends when the person raises the limit in Settings (`limit_raised`) or the next local month begins; then the paused runs continue. A per-use call that reports no cost (Codex, until its research) is refused while a limit is set.
 
 ## 9. Starts
 
@@ -877,7 +877,7 @@ Removing the island is a later Ask-first item.
 
 ### 13.5 Ask-first items
 
-None in V1: the translations come from the owner's request, the approval and sandbox changes follow the approved clickable prototype (each with one independent security review), and V1 adds no workspace package, font file, dependency, CI change or edit to `tools/checks/` or AGENTS.md. Later Ask-first items: removing the frozen island; the prototype's font files; AGENTS.md's "Design:" pointer and its sentence about the language files; a check script for the contributor guides in `tools/checks/`; packaging and the runner bundle with its root script (B-30).
+None in V1: the translations come from the owner's request, the approval and sandbox changes follow the approved clickable prototype (each with one independent security review), and V1 adds no workspace package, font file, dependency, CI change or edit to `tools/checks/` or AGENTS.md. Later Ask-first items: removing the frozen island; the prototype's font files; AGENTS.md's "Design:" pointer and its sentence about the language files; moving the contributor guides' check into `tools/checks/`; packaging and the runner bundle with its root script (B-30).
 
 ## 14. Build order overview
 
@@ -965,9 +965,9 @@ Each is settled by a spike before the step that needs it; a spike with a real ag
 - AD-09 flaw: Codex's `workspace-write` is expected to allow reads outside the flow's folders, so the folder-limited tier cannot keep SR-1's read scope. Fix: on that tier Codex runs only steps that take no outside text; the research checks for a read limit.
 - AD-10 flaw: Codex may have no tool-free mode for chat turns. Fix: Codex answers chats only if the research finds one; otherwise the picker says so and offers Claude Code (Not in the prototype yet).
 - AD-02 and AD-20 flaw: Open at login cannot work from a checkout; it takes effect in the packaged app, and Settings says so until then (Not in the prototype yet).
-- Added `rules/effects.ts` to the chair's module map for the effect catalog, and a `covers` field on touches so each declared tool or command maps to exactly one touch. `data-model.md` 3.1 lists touches without it and needs to add it (or another link from touch to tools).
-- Starter chips should act by code like every other chip (brief 24.11); `runner-api.md` 8.3 sends them as text with `fromChip`, so that operation needs the chip's code.
-- The contributor guides' script names and links are checked in review in V1, because `tools/checks/` stays unchanged; the two automated checks of `contributing-plan.md` wait for a later Ask-first change.
+- Added `rules/effects.ts` to the chair's module map for the effect catalog, and a `covers` field on touches so each declared tool or command maps to exactly one touch. `data-model.md` 3.1 carries it.
+- Starter chips act by code like every other chip (brief 24.11): `chats.send {chatId, starter}` (`runner-api.md` 8.3).
+- The contributor guides' script names and links are checked by one Vitest test, `apps/desktop/src/docs.test.ts`, because `tools/checks/` stays unchanged in V1; moving that check into `tools/checks/` is a later Ask-first change.
 - "Copy report" is drawn by the renderer in the app language (brief 24.2) from structured parts, so `runs.export` in `runner-api.md` 6.7 returns parts, not Markdown in the run's language.
 - One `starts.request` serves typed chat starts too; a chain's next flow uses source `after` with the key `chain:<id>:<n>` and the plan's agent and model (`runner-api.md` 8.2).
 - A place becomes the person's when they confirm the version that names it; run data never does. This enforces SR-5's rule on rule places while a flow drafted from a skill can still get "Always allow".
