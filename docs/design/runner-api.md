@@ -1,6 +1,6 @@
 # FlowDriven runner API (contract version 2)
 
-Status: draft for review, 2026-11-21.
+Status: complete for the V1 build, 2026-11-21.
 
 This file is the runner API contract version 2: every operation the renderer (and later a paired phone and other AI tools on this Mac) can call, the read models they return, the cards of the chat and their actions, the events and notices, the error codes, and the IPC layer between the window, Electron main and the runner. It lives in `packages/contracts` and extends contract version 1; most operations stay. The architecture decisions it follows are in `architecture.md` (AD-02 processes, AD-03 contract, AD-06 and AD-07 decisions and rules, AD-10 assistant, AD-13 starts, AD-14 words, AD-15 appearance, AD-16 renderer). The stored entities behind these read models are in `data-model.md`. Safety rules `SR-1` to `SR-9` and the start rule `START` are defined in `architecture.md`.
 
@@ -585,7 +585,7 @@ type SettingsPatch = {
 
 - Input: `{chatId; agent: AgentId; model: ModelId}`. Output: `ChatSummary`.
 - Errors: `not_found` (chat; `agent_unknown`); `invalid_input: model_unknown`; `not_allowed: agent_not_ready`.
-- Does: stores the choice for this chat only, posts the note "Now using <agent> · <model>" and audits `chat_agent_changed` (FS-j31.S3). Running runs keep theirs. Only the model flag of later calls changes (SR-4).
+- Does: stores the choice for this chat only, posts the note "Now using <agent> · <model>" and audits `chat_agent_changed` (FS-j31.S3). Running runs keep theirs. Later calls use the chosen agent with the chosen model through that agent's own model flag; nothing else in them changes: not the sandbox, the tools, the places or the approvals (SR-4).
 - Tests first: other chats and `settings.mainAgent` are unchanged; a model id with a space or a leading dash is refused by the schema; a model the agent did not list gives `model_unknown`.
 
 #### `chats.setComposer` (new)

@@ -1,12 +1,12 @@
 # FlowDriven product requirements (PRD)
 
-Status: draft for the owner's review, 2026-11-21. This file owns the ids `F-01`.., `NF-01`.., `M-01`.. and the decisions `Q-01`..`Q-03` (decided for V1, revisable; section 10). Other files in `docs/design/` cite them. The safety rules `SR-1`..`SR-9` and the start rule `START` are owned by `docs/design/architecture.md`; this file restates them in plain words.
+Status: complete for the V1 build, 2026-11-21. This file owns the ids `F-01`.., `NF-01`.., `M-01`.. and the decisions `Q-01`..`Q-03` (decided for V1, revisable; section 10). Other files in `docs/design/` cite them. The safety rules `SR-1`..`SR-9` and the start rule `START` are owned by `docs/design/architecture.md`; this file restates them in plain words.
 
-How to read the ids: `F-07.R3` is requirement 3 of feature F-07. A requirement is written so one test can show it true or false. A number marked "target" is the drafter's own proposal and needs the owner's yes. Other numbers come from the original spec or from the code that exists today.
+How to read the ids: `F-07.R3` is requirement 3 of feature F-07. A requirement is written so one test can show it true or false. A number marked "target" is the drafter's own proposal, decided for V1 (revisable) and measured during V1. Other numbers come from the original spec or from the code that exists today.
 
 A feature is marked with one of three flags:
 - "In the prototype (version 8)": the owner has tried it.
-- "In the prototype (version 9)": it follows the final brief sections 24.9, 24.10 and 25 of the clickable prototype (the language setting, one file per language, and the AI agent and model picker).
+- "In the prototype (version 9)": it follows the final brief sections 24.9 to 24.11 and 25 of the clickable prototype (the language setting, one file per language, and the AI agent and model picker).
 - "Not in the prototype yet": it must go into the prototype and be approved before it is built (AGENTS.md: prototype first).
 
 ## 1. Purpose
@@ -359,7 +359,7 @@ Requirements.
 - F-14.R1. Run states and their words: `queued` "Waiting to start", `checking` "Starting", `running` "Running", `waiting_approval` "Needs you", `needs_login` "Waiting for sign-in", `retrying` "Trying again", `blocked` "Stuck", `interrupted` "Stopped unexpectedly", `stopped` "Stopped by you", `done` "Finished", `failed` "Failed".
 - F-14.R2. "Needs you" lists waiting decisions and waiting scheduled questions, newest first. A waiting question shows first as "<flow name> is waiting for your answer" with "Answer in chat".
 - F-14.R3. "Earlier" shows every past run with flow name, state words with icon, and when. "Finished" shows `done`. "Problems" shows `failed`, `blocked`, `interrupted` and `needs_login`.
-- F-14.R4. A `needs_login` run says in plain words who asked for sign-in and that FlowDriven never passes a sign-in or robot check; it waits up to 12 hours, then fails with a clear reason. "Sign in and continue" resumes it.
+- F-14.R4. A `needs_login` run says in plain words who asked for sign-in and that FlowDriven never passes a sign-in or robot check; it waits up to 12 hours, then it is stuck (`blocked`) with the reason in plain words. "Sign in and continue" resumes it.
 - F-14.R5. `blocked` and `interrupted` runs offer "Try again". A `failed` or `stopped` run offers only "Run again" and "Copy report".
 - F-14.R6. A run page shows every step with its state, evidence in plain words and every decision line. The agent's own words are shown as text, never as HTML.
 - F-14.R7. "Run again" is shown only while the flow exists. It goes through `START` with source `again` and the same inputs.
@@ -465,8 +465,8 @@ What the person experiences. In Settings, "Language" lists every language by its
 Requirements.
 - F-20.R1. English is the default. Nothing picks another language by itself.
 - F-20.R2. There is one words file per language in the shared package `packages/i18n` (new). `en.ts` is the source; its type gives the keys. Other languages are partial copies checked against it. One list imports them. Missing words show in English.
-- F-20.R3. A check that is part of `pnpm check` fails on: a key used in code but missing in English, an English key never used, a language with a key English lacks, a changed `{placeholder}`, missing plural forms, and a language file not in the list. Indonesian must be complete.
-- F-20.R4. Placeholders are `{name}`. Counts use plural forms picked with `Intl.PluralRules`. Dates and times use `Intl.DateTimeFormat` in the chosen language.
+- F-20.R3. A check that is part of `pnpm check` (a test in `packages/i18n`) fails, naming the file, the key and the fix in one line, on: a key used in code but missing in English, an English key never used, a language with a key English lacks, a changed `{placeholder}`, a missing `other` plural form, a plural form that is not one of the language's `Intl.PluralRules` categories, a code that is not a valid language tag, a code another file already uses, and a language file not in the list. Indonesian must be complete. For another language the check lists the missing keys as "not translated yet, shown in English" and passes.
+- F-20.R4. Placeholders are `{name}`. A sentence is one key with placeholders, never glued from fragment keys. Counts use plural forms picked with `Intl.PluralRules`; `other` is required and is the fallback. Dates and times use `Intl.DateTimeFormat` in the chosen language.
 - F-20.R5. Data keeps codes, never FlowDriven sentences. Statuses, touch rules and result kinds are codes shown through the words files.
 - F-20.R6. Changing the language never rewrites a chat, a flow, a report or a memory item.
 - F-20.R7. FlowDriven's own posted lines follow the chat's language; cards and buttons follow the app language (F-06.R5).
@@ -479,7 +479,7 @@ Journeys and flow specs: j30, `flows/j30-app-language.md`. Release: V1 (B-06). S
 
 What it is. Each chat chooses which AI agent answers and with which model. (Owner decision, 2026-11-21.)
 
-What the person experiences. A button in the composer with the agent's status dot, name and model: "Claude Code · Sonnet 5.5". It opens a menu above the composer: one group per agent, headed by its name and status. A ready agent lists its models with a note and the tag "Default". An agent that is not ready shows its next step ("Sign in to Codex", "Set up Codex"). The last item is "Manage AI agents". Changing the choice adds a small note: "Now using Codex · GPT-6.1 Sol".
+What the person experiences. A button in the composer with the agent's name and model: "Claude Code · Sonnet 5.5". When the agent is not ready, the button also shows its status in words ("Needs sign-in"). It opens a menu above the composer: one group per agent, headed by its name and status. A ready agent lists its models with a note and the tag "Default". An agent that is not ready shows its next step ("Sign in to Codex", "Set up Codex"). The last item is "Manage AI agents". Changing the choice adds a small note: "Now using Codex · GPT-6.1 Sol".
 
 Requirements.
 - F-21.R1. A new chat starts with the main agent and its default model from Settings. Changing the choice changes only that chat.
@@ -488,9 +488,11 @@ Requirements.
 - F-21.R4. A run started from the chat uses the chat's agent and model. A run already going keeps its own.
 - F-21.R5. A run keeps the agent and model it ran on and the run card and run page name them (F-04.R11, F-14.R10).
 - F-21.R6. An agent that is not ready cannot be chosen. The menu shows its next step and does what the same button does in Settings.
-- F-21.R7. The menu works with the keyboard: Arrow keys move, Enter chooses, Escape closes and returns focus to the button. Models are menu items with radio state, grouped under each agent's name. The button's accessible name says both agent and model; on a phone-width screen it shows the dot and model only.
+- F-21.R7. The menu works with the keyboard: Arrow keys move, Enter chooses, Escape closes and returns focus to the button. Models are menu items with radio state, grouped under each agent's name. The button's accessible name always says the agent, the model and the status; on a phone-width screen the button shows the model only.
 - F-21.R8. The change note appears in the app language and is not a bubble.
 - F-21.R9. The chat's agent answers the chat turns too (F-03.R3) with no tools.
+- F-21.R10. The menu stays open across updates (a new message, a status change) until the person chooses or closes it. Focus stays where the person put it. Opening it never clears an empty chat's start screen. It stays inside the window at every width from 320 to 1440 px. The chosen model shows a check icon and its name; "Default" is a small tag.
+- F-21.R11. A chat FlowDriven starts (the 17:00 question, an "after" question) begins with the main agent and its default model, like a new chat, so the button always shows what a run will use.
 
 Journeys and flow specs: j31, `flows/j31-agent-and-model.md`. Release: V1 (B-07, B-17, B-22 for Codex). Status: In the prototype (version 9).
 
@@ -836,7 +838,7 @@ Other build steps and where they fit: B-01 contract version 2 (all features, com
 - F-09.R8 (first run when a schedule is turned on) follows the owner decision of 2026-11-18 but is Not in the prototype yet, so it must go into the prototype first.
 - Expiry of decisions after 24 hours, the "Missed" row, system notifications and install or sign-in failure paths are marked Not in the prototype yet, because the prototype does not show them.
 - The skill archive hint went into F-24 (V2), not F-12, to keep V1 small.
-- Success measure targets (M-01, M-02, M-04, M-05, M-09, M-10, M-11) and performance numbers marked "target" are my proposals, not sourced.
+- Success measure targets (M-01, M-02, M-04, M-05, M-09, M-10, M-11) and performance numbers marked "target" are the drafter's proposals, not sourced; they are decided for V1 (revisable).
 - The defaults follow the decisions for V1: Open at login on (Q-02); the spending limit counts per-use charges only (Q-03). The limit's starting amount ($10.00 a month, as in the clickable prototype) is a target.
 - V1 includes F-20, F-21 and F-22 as the chair proposed; all three wait for prototype approval, and F-20 and F-21 follow the final version 9 sections of the brief.
 - The "Other AI tools" switch is off by default (F-18.R8): a safe default the brief does not state.

@@ -1,6 +1,6 @@
 # FlowDriven data model
 
-Status: draft for review, 2026-11-21.
+Status: complete for the V1 build, 2026-11-21.
 
 This file lists every entity the real app stores, the tables of store version 7, the migration from store version 6, and how long data is kept. It extends the store that exists today; it replaces nothing. It follows the architecture decisions in `architecture.md`: AD-05 (the store), AD-06 and AD-07 (decisions and standing rules), AD-10 (the assistant), AD-13 (starts and schedules) and AD-14 (words). The read models the screens get, and the operations that write these entities, are in `runner-api.md`. The safety rules `SR-1` to `SR-9` and the start rule `START` are defined in `architecture.md`; this file cites them.
 
