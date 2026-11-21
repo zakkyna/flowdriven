@@ -18,6 +18,7 @@ export function buildState(scenario: Scenario = "story-v2") {
     decisions: structuredClone(story.decisions),
     rules: structuredClone(story.rules),
     audit: [] as AuditRecord[],
+    counters: { chat: 0, message: 0, run: 0, start: 0, question: 0 },
     triggerSwitches: {} as Record<string, { hash: string }>,
     resumeBlockers: Object.fromEntries(
       story.runs

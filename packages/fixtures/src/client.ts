@@ -1,5 +1,7 @@
 import {
+  CardAction,
   CONTRACT_VERSION,
+  FlowsConfirmInput,
   isResumable,
   type LiveOperationName,
   type OperationInput,
@@ -25,6 +27,7 @@ export function createFixtureRunnerClient(
 ): FixtureRunnerClient {
   const state = buildState(options.scenario);
   const calls: FixtureRunnerClient["calls"] = [];
+  const revokedRules: typeof state.rules = [];
   const listeners = new Set<(event: RunnerEvent) => void>();
   const now = () => (options.now?.() ?? new Date(FIXTURE_NOW)).toISOString();
   const find = <T>(items: T[], predicate: (item: T) => boolean): T => {
@@ -101,7 +104,623 @@ export function createFixtureRunnerClient(
       ];
     });
   };
+  const mainAgent = () => {
+    const main = state.settings.mainAgent;
+    if (!main) throw new RunnerError("not_allowed", "No main agent.", { reason: "agent_not_ready" });
+    return main;
+  };
   const handlers: Handlers = {
+    "agents.list": () => state.agents,
+    "agents.rescan": () => ({ agents: state.agents, found: [] }),
+    "agents.setUp": ({ agentId }) => {
+      const agent = find(state.agents, (a) => a.id === agentId);
+      state.settings.agentPermission = "on";
+      return agent;
+    },
+    "agents.signIn": ({ agentId }) => {
+      const agent = find(state.agents, (a) => a.id === agentId);
+      if (agent.state === "not_installed")
+        throw new RunnerError("not_allowed", "Agent not installed.", { reason: "agent_not_installed" });
+      if (agent.state !== "ready") agent.state = "waiting_login";
+      return agent;
+    },
+    "agents.models": ({ agentId }) => {
+      const agent = find(state.agents, (a) => a.id === agentId);
+      if (agent.state !== "ready")
+        throw new RunnerError("not_allowed", "Agent not ready.", { reason: "agent_not_ready" });
+      return agent.models ?? [];
+    },
+    "chats.list": () => state.chats.map((c) => c.chat).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    "chats.get": ({ chatId, before, limit }) => {
+      const chat = find(state.chats, (c) => c.chat.id === chatId);
+      const messages = chat.messages
+        .filter((m) => before === undefined || m.seq < before)
+        .map((m) => {
+          if (m.card?.type !== "decision") return m;
+          const decisionId = m.card.decision.id;
+          const decision = state.decisions.find((d) => d.id === decisionId);
+          return decision ? { ...m, card: { ...m.card, decision } } : m;
+        });
+      return { ...chat, messages: messages.slice(-(limit ?? 200)), more: messages.length > (limit ?? 200) };
+    },
+    "chats.create": ({ subject }) => {
+      if (subject?.kind === "improve") flow(subject.flowId);
+      let chat = state.chats.find((c) => c.messages.length === 0);
+      const reused = !!chat;
+      if (!chat) {
+        const chatId = `chat-fixture-${++state.counters.chat}`;
+        chat = {
+          chat: {
+            id: chatId,
+            title: "New chat",
+            updatedAt: now(),
+            from: "person",
+            agent: mainAgent().agent,
+            model: mainAgent().model,
+            language: state.settings.language,
+            waiting: false,
+            ...(subject ? { subject } : {}),
+          },
+          messages: [],
+          more: false,
+          turn: { state: "idle", queued: 0 },
+          composerText: "",
+        };
+        state.chats.push(chat);
+      }
+      chat.chat.updatedAt = now();
+      return { chatId: chat.chat.id, reused };
+    },
+    "chats.send": (input) => {
+      const chat = find(state.chats, (c) => c.chat.id === input.chatId);
+      if (state.settings.agentPermission !== "on")
+        throw new RunnerError("not_allowed", "Permission is off.", { reason: "permission_off" });
+      const text =
+        "text" in input ? input.text : chat.starters?.find((s) => s.index === input.starter)?.label.key;
+      if (!text) throw new RunnerError("invalid_input", "Unknown starter.");
+      const messageId = `message-fixture-${++state.counters.message}`;
+      if (!chat.messages.some((m) => m.role === "person")) chat.chat.title = text.slice(0, 40);
+      chat.messages.push({
+        id: messageId,
+        seq: Math.max(-1, ...chat.messages.map((m) => m.seq)) + 1,
+        at: now(),
+        role: "person",
+        kind: "text",
+        text,
+        outside: "pasted" in input && !!input.pasted,
+      });
+      chat.chat.updatedAt = now();
+      chat.composerText = "";
+      const form = chat.messages.some((m) => m.card?.type === "form" && m.card.state === "open");
+      const agent = state.agents.find((a) => a.id === chat.chat.agent);
+      const turn = form ? "form_open" : agent?.state !== "ready" ? "not_ready" : "queued";
+      if (turn === "queued") {
+        chat.turn.state = "queued";
+        chat.turn.queued++;
+      }
+      return { messageId, turn };
+    },
+    "chats.setAgent": ({ chatId, agent: agentId, model }) => {
+      const chat = find(state.chats, (c) => c.chat.id === chatId);
+      const agent = find(state.agents, (a) => a.id === agentId);
+      if (agent.state !== "ready")
+        throw new RunnerError("not_allowed", "Agent not ready.", { reason: "agent_not_ready" });
+      if (!agent.models?.some((m) => m.id === model))
+        throw new RunnerError("invalid_input", "Unknown model.", { reason: "model_unknown" });
+      chat.chat.agent = agentId;
+      chat.chat.model = model;
+      audit("chat_agent_changed", { chatId, agent: agentId, model });
+      return chat.chat;
+    },
+    "chats.setComposer": ({ chatId, text }) => {
+      find(state.chats, (c) => c.chat.id === chatId).composerText = text;
+      return {};
+    },
+    "chats.delete": ({ chatId }) => {
+      const chat = find(state.chats, (c) => c.chat.id === chatId);
+      state.chats.splice(state.chats.indexOf(chat), 1);
+      audit("chat_deleted", { chatId });
+      return { deleted: true };
+    },
+    "chats.act": (input) => {
+      const chat = find(state.chats, (c) => c.chat.id === input.chatId);
+      const card = find(chat.messages, (m) => m.id === input.messageId && !!m.card).card;
+      if (!card) throw new RunnerError("not_found", "Card not found.");
+      const actions: Record<string, string[]> = {
+        plan: ["start", "change_plan"],
+        ask_run: ["run", "not_now"],
+        confirm: ["confirm_flow"],
+        inputs_ask: ["use_form", "use_last_answers", "cancel_question"],
+        form: ["submit_form", "cancel_question"],
+        draft: ["save_flow", "change_draft"],
+        change: ["save_change", "cancel_change"],
+        schedule: ["set_schedule", "skip_schedule"],
+        unschedule: ["turn_off_schedule", "keep_schedule"],
+        stop: ["stop_runs", "keep_running"],
+        repeat_offer: ["every_time", "only_this_time"],
+        run_offer: ["run_now", "not_now", "propose_schedule"],
+        choose: ["choose"],
+        turn_failed: ["retry_turn"],
+      };
+      const message = find(chat.messages, (m) => m.id === input.messageId);
+      if (
+        !actions[card.type]?.includes(input.action) &&
+        !(input.action === "suggestion" && message.chips?.some((c) => c.kind === "suggestion"))
+      )
+        throw new RunnerError("invalid_input", "Unknown action.", { reason: "unknown_action" });
+      if (card.state === "flow_deleted")
+        throw new RunnerError("not_found", "Flow deleted.", { reason: "flow_deleted" });
+      if (card.state === "stale") throw new RunnerError("conflict", "Card stale.", { reason: "card_stale" });
+      if (card.state === "replaced")
+        throw new RunnerError("conflict", "Card replaced.", { reason: "card_replaced" });
+      if (card.state !== "open")
+        throw new RunnerError("conflict", "Card answered.", { reason: "card_answered" });
+      if (
+        ["start", "run", "run_now", "submit_form", "use_last_answers"].includes(input.action) &&
+        state.settings.agentPermission !== "on"
+      )
+        throw new RunnerError("not_allowed", "Permission is off.", { reason: "permission_off" });
+      const starts: import("@flowdriven/contracts").StartOutcome[] = [];
+      if (input.action === "confirm_flow" && card.type === "confirm")
+        handlers["flows.confirm"]?.(
+          FlowsConfirmInput.parse({
+            flowId: card.flowId,
+            ...(typeof input.values === "object" && input.values !== null ? input.values : {}),
+          }),
+        );
+      if ((input.action === "run" || input.action === "run_now") && "flowId" in card) {
+        const result = handlers["flows.start"]?.({ flowId: card.flowId, source: "flows" });
+        if (result) starts.push(result);
+      }
+      if (input.action === "start" && card.type === "plan")
+        for (const item of card.items) {
+          const result = handlers["flows.start"]?.({ flowId: item.flowId, source: "flows" });
+          if (result) starts.push(result);
+        }
+      if (input.action === "stop_runs" && card.type === "stop")
+        for (const item of card.runs) handlers["runs.stop"]?.({ runId: item.runId });
+      if (input.action === "set_schedule" && card.type === "schedule") {
+        const f = flow(card.flowId);
+        const s = card.schedule;
+        const schedule =
+          s.type === "after" && s.afterFlow
+            ? { type: "after" as const, afterFlowId: s.afterFlow.id, whenItsTime: s.whenItsTime }
+            : s.type === "weekly" && s.time && s.day
+              ? { type: "weekly" as const, time: s.time, day: s.day, whenItsTime: s.whenItsTime }
+              : (s.type === "daily" || s.type === "weekdays") && s.time
+                ? { type: s.type, time: s.time, whenItsTime: s.whenItsTime }
+                : { type: "manual" as const };
+        handlers["flows.setSchedule"]?.({ flowId: card.flowId, hash: f.hash, schedule });
+      }
+      card.state = "answered";
+      card.answer = { action: CardAction.parse(input.action), at: now() };
+      return { card, posted: [], ...(starts.length ? { starts } : {}) };
+    },
+    "flows.start": ({ flowId, source, ...rest }) => {
+      const f = flow(flowId);
+      const startId = `start-fixture-${++state.counters.start}`;
+      if (source === "again" && "fromRunId" in rest) run(rest.fromRunId);
+      if (state.settings.agentPermission !== "on")
+        return { outcome: "refused", startId, reason: "permission_off" };
+      if (
+        f.summary.state !== "confirmed" ||
+        f.inputs.some((i) => i.required && !i.default && !i.remembered)
+      ) {
+        let chat = state.chats.find((c) => c.chat.from === "flowdriven");
+        if (!chat) {
+          const id = `chat-fixture-${++state.counters.chat}`;
+          chat = {
+            chat: {
+              id,
+              title: f.summary.name,
+              updatedAt: now(),
+              from: "flowdriven",
+              agent: mainAgent().agent,
+              model: mainAgent().model,
+              language: state.settings.language,
+              waiting: true,
+            },
+            messages: [],
+            more: false,
+            turn: { state: "idle", queued: 0 },
+            composerText: "",
+          };
+          state.chats.push(chat);
+        }
+        const existing = state.chats
+          .flatMap((c) => c.messages.map((message) => ({ c, message })))
+          .find(
+            ({ message }) =>
+              message.card &&
+              (message.card.type === "inputs_ask" || message.card.type === "confirm") &&
+              message.card.flowId === flowId &&
+              message.card.state === "open",
+          );
+        if (existing)
+          return {
+            outcome: existing.message.card?.type === "confirm" ? "needs_confirmation" : "asked",
+            startId,
+            chatId: existing.c.chat.id,
+            questionId: existing.message.id,
+            reused: true,
+          };
+        const questionId = `question-fixture-${++state.counters.question}`;
+        const card: import("@flowdriven/contracts").CardView =
+          f.summary.state === "confirmed"
+            ? {
+                type: "inputs_ask",
+                state: "open",
+                flowId,
+                name: f.summary.name,
+                questionId,
+                missing: f.inputs
+                  .filter((i) => i.required && !i.default && !i.remembered)
+                  .map((i) => ({ inputId: i.id, label: i.label })),
+                known: [],
+                canUseLast: false,
+              }
+            : {
+                type: "confirm",
+                state: "open",
+                flowId,
+                name: f.summary.name,
+                hash: f.hash,
+                // biome-ignore lint/suspicious/noThenProperty: The contract names this field then.
+                then: "start",
+              };
+        chat.messages.push({
+          id: questionId,
+          seq: Math.max(-1, ...chat.messages.map((m) => m.seq)) + 1,
+          at: now(),
+          role: "flowdriven",
+          kind: "card",
+          card,
+          outside: false,
+        });
+        chat.chat.waiting = true;
+        return {
+          outcome: f.summary.state === "confirmed" ? "asked" : "needs_confirmation",
+          startId,
+          chatId: chat.chat.id,
+          questionId,
+          reused: false,
+        };
+      }
+      const runId = `run-fixture-${++state.counters.run}`;
+      state.runs.push({
+        id: runId,
+        flowId,
+        flowName: f.summary.name,
+        flowVersion: f.version,
+        flowHash: f.hash,
+        source,
+        agent: mainAgent().agent,
+        model: mainAgent().model,
+        versionChanged: false,
+        oneTime: false,
+        project: "",
+        state: "queued",
+        startedAt: now(),
+        inputs: [],
+        steps: [],
+        approvalIds: [],
+        outputs: [],
+        usage: [],
+        estimatedCostUsd: 0,
+        decisionLines: [],
+        costLine: { kind: "plan" },
+        canRunAgain: true,
+        canTryAgain: false,
+      });
+      return { outcome: "started", startId, runId };
+    },
+    "flows.confirm": ({ flowId, hash, onItsOwn, pins }) => {
+      const f = flow(flowId);
+      if (f.hash !== hash) throw new RunnerError("conflict", "Hash mismatch.", { reason: "hash_mismatch" });
+      if (f.manifest.inputs.some((i) => i.type === "secret_ref"))
+        throw new RunnerError("not_allowed", "Needs keychain.", { reason: "needs_keychain" });
+      if (f.pinsNeeded.some((p) => !pins?.[p.requirementId]))
+        throw new RunnerError("invalid_input", "Pins missing.", { reason: "pins_missing" });
+      for (const id of onItsOwn) {
+        const t = f.touches.find((item) => item.id === id);
+        if (!t) throw new RunnerError("invalid_input", "Unknown touch.", { reason: "touch_unknown" });
+        if (t.declared === "not_allowed")
+          throw new RunnerError("not_allowed", "Never does.", { reason: "never_does" });
+        if (["send", "post", "pay", "delete", "merge"].includes(t.effect))
+          throw new RunnerError("not_allowed", "Always asks.", { reason: "always_asks" });
+        if (
+          t.effect !== "read" &&
+          (!t.fixedPlace ||
+            !t.place ||
+            !(
+              t.effect === "change"
+                ? ["account", "folder"]
+                : t.effect === "local_write"
+                  ? ["folder"]
+                  : ["command"]
+            ).includes(t.place.kind))
+        )
+          throw new RunnerError("not_allowed", "Place not fixed.", { reason: "place_not_fixed" });
+      }
+      const created: string[] = [],
+        kept: string[] = [],
+        ended: string[] = [];
+      for (const rule of [...state.rules.filter((r) => r.flowId === flowId)]) {
+        const t = f.touches.find((item) => item.id === rule.touchId);
+        if (
+          onItsOwn.includes(rule.touchId) &&
+          t?.effect === rule.effect &&
+          t.place?.kind === rule.place.kind &&
+          t.place.value === rule.place.value
+        )
+          kept.push(rule.id);
+        else {
+          state.rules.splice(state.rules.indexOf(rule), 1);
+          revokedRules.push(rule);
+          ended.push(rule.id);
+        }
+      }
+      for (const t of f.touches) {
+        delete t.byRule;
+        if (
+          onItsOwn.includes(t.id) &&
+          t.effect !== "read" &&
+          t.place &&
+          (t.effect === "change" || t.effect === "local_write" || t.effect === "run_command")
+        ) {
+          let rule = state.rules.find((r) => r.flowId === flowId && r.touchId === t.id);
+          if (!rule) {
+            rule = {
+              id: `rule-fixture-${++state.counters.start}`,
+              flowId,
+              touchId: t.id,
+              sentence: t.sentence,
+              effect: t.effect,
+              place: t.place,
+              createdAt: now(),
+              createdBy: "confirm",
+            };
+            state.rules.push(rule);
+            created.push(rule.id);
+          }
+          t.byRule = rule.id;
+        }
+        t.list =
+          t.effect === "read" || onItsOwn.includes(t.id)
+            ? "on_its_own"
+            : t.declared === "not_allowed"
+              ? "never"
+              : "asks_first";
+      }
+      f.rules = state.rules.filter((r) => r.flowId === flowId);
+      f.lists = {
+        onItsOwn: f.touches.filter((t) => t.list === "on_its_own").map((t) => t.id),
+        asksFirst: f.touches.filter((t) => t.list === "asks_first").map((t) => t.id),
+        never: f.touches.filter((t) => t.list === "never").map((t) => t.id),
+      };
+      f.confirmed = { hash, at: now() };
+      f.summary.state = "confirmed";
+      audit("flow_confirmed", { flowId });
+      return { flow: f, rules: { created, kept, ended } };
+    },
+    "flows.setSchedule": ({ flowId, hash, schedule }) => {
+      const f = flow(flowId);
+      if (f.hash !== hash) throw new RunnerError("conflict", "Hash mismatch.", { reason: "hash_mismatch" });
+      if (f.summary.state !== "confirmed" || f.confirmed?.hash !== hash)
+        throw new RunnerError("not_allowed", "Flow not confirmed.", { reason: "flow_not_confirmed" });
+      if (schedule.type === "after") {
+        if (schedule.afterFlowId === flowId)
+          throw new RunnerError("invalid_input", "Self schedule.", { reason: "schedule_self" });
+        if (!state.flows.some((item) => item.summary.id === schedule.afterFlowId))
+          throw new RunnerError("invalid_input", "Missing target.", { reason: "schedule_target_missing" });
+        let next: string | undefined = schedule.afterFlowId;
+        const visited = new Set([flowId]);
+        while (next) {
+          if (visited.has(next))
+            throw new RunnerError("invalid_input", "Schedule loop.", { reason: "schedule_loop" });
+          visited.add(next);
+          next = state.flows.find((item) => item.summary.id === next)?.summary.schedule.afterFlow?.id;
+        }
+      }
+      const needsAnswers = f.inputs.some((i) => i.required && !i.default && !i.remembered);
+      if (schedule.type !== "manual" && schedule.whenItsTime === "last" && needsAnswers)
+        throw new RunnerError("invalid_input", "Answers incomplete.", { reason: "last_answers_incomplete" });
+      const view: import("@flowdriven/contracts").ScheduleView = {
+        type: schedule.type,
+        whenItsTime: schedule.type === "manual" ? "ask" : (schedule.whenItsTime ?? "ask"),
+        needsAnswers,
+        canUseLast: !needsAnswers,
+        ...("time" in schedule ? { time: schedule.time } : {}),
+        ...("day" in schedule ? { day: schedule.day } : {}),
+        ...(schedule.type === "after"
+          ? { afterFlow: { id: schedule.afterFlowId, name: flow(schedule.afterFlowId).summary.name } }
+          : {}),
+      };
+      f.summary.schedule = view;
+      audit("schedule_changed", { flowId });
+      return { schedule: view };
+    },
+    "flows.tryNextRun": ({ flowId }) => {
+      const f = flow(flowId);
+      if (f.summary.schedule.type === "manual")
+        throw new RunnerError("not_allowed", "No schedule.", { reason: "no_schedule" });
+      const start = handlers["flows.start"]?.({ flowId, source: "flows" });
+      if (!start) throw new RunnerError("unavailable", "Start unavailable.");
+      return start;
+    },
+    "flows.delete": ({ flowId }) => {
+      const f = flow(flowId);
+      if (
+        state.runs.some(
+          (r) =>
+            r.flowId === flowId && ["checking", "running", "retrying", "waiting_approval"].includes(r.state),
+        )
+      )
+        throw new RunnerError("conflict", "Flow running.", { reason: "flow_running" });
+      for (const r of state.runs.filter(
+        (r) => r.flowId === flowId && ["queued", "needs_login", "blocked", "interrupted"].includes(r.state),
+      ))
+        handlers["runs.stop"]?.({ runId: r.id });
+      const schedulesTurnedOff: string[] = [];
+      for (const other of state.flows)
+        if (other.summary.schedule.afterFlow?.id === flowId) {
+          other.summary.schedule = {
+            type: "manual",
+            whenItsTime: "ask",
+            needsAnswers: false,
+            canUseLast: false,
+          };
+          schedulesTurnedOff.push(other.summary.id);
+        }
+      for (const rule of state.rules.filter((r) => r.flowId === flowId))
+        handlers["rules.revoke"]?.({ ruleId: rule.id });
+      for (const chat of state.chats)
+        for (const m of chat.messages)
+          if (m.card && "flowId" in m.card && m.card.flowId === flowId) m.card.state = "flow_deleted";
+      for (const skill of state.skills) skill.usedBy = skill.usedBy.filter((item) => item.flowId !== flowId);
+      state.flows.splice(state.flows.indexOf(f), 1);
+      audit("flow_deleted", { flowId });
+      return { deleted: true, schedulesTurnedOff };
+    },
+    "runs.stop": ({ runId }) => {
+      const r = run(runId);
+      const changed = [
+        "queued",
+        "checking",
+        "running",
+        "retrying",
+        "waiting_approval",
+        "needs_login",
+      ].includes(r.state);
+      if (changed) {
+        r.state = "stopped";
+        r.cause = { code: "stopped" };
+        r.endedAt = now();
+        r.canTryAgain = false;
+        for (const step of r.steps)
+          if (["running", "retrying", "waiting_approval"].includes(step.state)) step.state = "stopped";
+        for (const d of state.decisions.filter((d) => d.runId === runId && d.state === "pending")) {
+          d.state = "expired";
+          d.resolvedAt = now();
+          d.resolvedVia = "stop";
+          d.canAlwaysAllow = false;
+        }
+        audit("run_stopped", {}, runId);
+      }
+      return { run: RunSummary.strip().parse(r), changed };
+    },
+    "approvals.resolveSimilar": ({ runId, group, approvalIds }) => {
+      run(runId);
+      expire();
+      const decisions = state.decisions.filter(
+        (d) => d.runId === runId && d.similarGroup === group && d.state === "pending",
+      );
+      if (decisions.length !== approvalIds.length || decisions.some((d) => !approvalIds.includes(d.id)))
+        throw new RunnerError("conflict", "List changed.", {
+          reason: "list_changed",
+          params: { ids: decisions.map((d) => d.id).join(",") },
+        });
+      if (decisions.some((d) => d.kind !== "risky_action" || !["send", "post"].includes(d.riskyAction ?? "")))
+        throw new RunnerError("not_allowed", "Not batchable.", { reason: "kind_not_batchable" });
+      for (const d of decisions) handlers["approvals.resolve"]?.({ approvalId: d.id, decision: "approve" });
+      audit("decisions_batch", { runId, count: decisions.length });
+      return { decisions };
+    },
+    "rules.list": ({ flowId }) =>
+      state.rules
+        .filter((r) => !flowId || r.flowId === flowId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    "rules.revoke": ({ ruleId }) => {
+      const active = state.rules.find((r) => r.id === ruleId);
+      const rule = active ?? find(revokedRules, (r) => r.id === ruleId);
+      if (active) {
+        state.rules.splice(state.rules.indexOf(active), 1);
+        revokedRules.push(active);
+        const f = state.flows.find((item) => item.summary.id === rule.flowId);
+        if (f) {
+          f.rules = f.rules.filter((r) => r.id !== ruleId);
+          const t = f.touches.find((item) => item.byRule === ruleId);
+          if (t) {
+            delete t.byRule;
+            t.list = "asks_first";
+            f.lists.onItsOwn = f.lists.onItsOwn.filter((id) => id !== t.id);
+            if (!f.lists.asksFirst.includes(t.id)) f.lists.asksFirst.push(t.id);
+          }
+        }
+        audit("rule_revoked", { ruleId, by: "ask_me_again" });
+      }
+      return { rule, changed: !!active };
+    },
+    "activity.summary": ({ filter, before, limit }) => {
+      expire();
+      const needsYou = state.decisions
+        .filter((d) => d.state === "pending")
+        .map((decision) => ({ kind: "decision" as const, decision }));
+      const rows = state.runs
+        .filter((r) => !before || r.startedAt < before)
+        .map((r) => RunSummary.strip().parse(r))
+        .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+      const running = rows.filter((r) =>
+        ["queued", "checking", "running", "retrying", "waiting_approval"].includes(r.state),
+      );
+      const earlier = rows
+        .filter((r) =>
+          filter === "finished"
+            ? r.state === "done"
+            : filter === "problems"
+              ? ["failed", "blocked", "interrupted", "needs_login"].includes(r.state)
+              : ["done", "failed", "blocked", "interrupted", "needs_login", "stopped"].includes(r.state),
+        )
+        .slice(0, limit ?? 200)
+        .map((r) => ({ kind: "run" as const, run: r }));
+      return { needsYou, needsYouCount: needsYou.length, running, earlier };
+    },
+    "search.query": ({ text }) => {
+      const q = text.toLocaleLowerCase();
+      const chats = state.chats
+        .filter(
+          (c) =>
+            !q ||
+            c.chat.title.toLocaleLowerCase().includes(q) ||
+            c.messages.some(
+              (m) =>
+                (m.text ?? "").toLocaleLowerCase().includes(q) ||
+                m.result?.lines.some((line) => line.toLocaleLowerCase().includes(q)),
+            ),
+        )
+        .sort((a, b) => b.chat.updatedAt.localeCompare(a.chat.updatedAt))
+        .slice(0, q ? 20 : 5)
+        .map((c) => ({
+          chatId: c.chat.id,
+          title: c.chat.title,
+          updatedAt: c.chat.updatedAt,
+          outside: false,
+        }));
+      const flows = state.flows
+        .filter((f) => !q || `${f.summary.name} ${f.summary.summary}`.toLocaleLowerCase().includes(q))
+        .slice(0, q ? 50 : 200)
+        .map((f) => ({ flowId: f.summary.id, name: f.summary.name, summary: f.summary.summary }));
+      return { recent: !q, chats, flows };
+    },
+    "skills.list": () => state.skills,
+    "skills.makeFlow": ({ skillId }) => {
+      const skill = find(state.skills, (s) => s.id === skillId);
+      const result = handlers["chats.create"]?.({});
+      if (!result) throw new RunnerError("unavailable", "Chat unavailable.");
+      const chat = find(state.chats, (c) => c.chat.id === result.chatId);
+      chat.chat.subject = { kind: "skill" };
+      const id = `message-fixture-${++state.counters.message}`;
+      chat.messages.push({
+        id,
+        seq: 0,
+        at: now(),
+        role: "person",
+        kind: "line",
+        line: { key: "chat.makeFromSkill", params: { skill: skill.name } },
+        outside: false,
+      });
+      return { chatId: result.chatId };
+    },
     "runner.info": () => ({
       contractVersion: CONTRACT_VERSION,
       appVersion: "0.1.0",

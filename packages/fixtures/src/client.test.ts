@@ -103,7 +103,10 @@ test("TC-CON-42 expiry, refusal and unfinished operations", async () => {
     code: "not_allowed",
     reason: "not_resumable",
   });
-  await expect(client.call("agents.list", {})).rejects.toMatchObject({ code: "unavailable" });
+  expect((await client.call("agents.list", {})).map((agent) => [agent.id, agent.state])).toEqual([
+    ["claude-code", "ready"],
+    ["codex", "not_installed"],
+  ]);
   expect(
     operations["runs.export"].output.safeParse(await client.call("runs.export", { runId: "run-apk-done" }))
       .success,
@@ -235,4 +238,158 @@ test("TC-CON-42 readiness reports requirements in the manifest", async () => {
   expect(report.ready).toBe(false);
   expect(report.items[0]).toMatchObject({ requirementId: "sample-tool", state: "unchecked" });
   expect(operations["readiness.check"].output.safeParse(report).success).toBe(true);
+});
+
+test("TC-CON-43 new operations return contract shapes and retain writes", async () => {
+  const client = createFixtureRunnerClient({ scenario: "story-v2" });
+  const expectedCalls: { operation: string; input: unknown }[] = [];
+  const check = async <N extends import("@flowdriven/contracts").LiveOperationName>(
+    name: N,
+    input: import("@flowdriven/contracts").OperationInput<N>,
+  ) => {
+    expectedCalls.push({ operation: name, input });
+    const output = await client.call(name, input);
+    expect(operations[name].output.safeParse(output).success, name).toBe(true);
+    return output;
+  };
+  const flows = await check("flows.list", {});
+  expect(flows.map((item) => item.id).sort()).toEqual([
+    "example.build-apk",
+    "example.email-triage",
+    "example.fill-timesheet",
+    "example.job-review",
+    "example.weekly-supplier-report",
+  ]);
+  const firstFlow = flows[0];
+  if (!firstFlow) throw new Error("Missing flow");
+  const f = await check("flows.get", { flowId: firstFlow.id });
+  const agents = await check("agents.list", {});
+  const agent = agents.find((item) => item.state === "ready");
+  if (!agent || !agent.defaultModel) throw new Error("Missing ready agent");
+  await check("agents.setUp", { agentId: agent.id });
+  await check("agents.signIn", { agentId: agent.id });
+  await check("agents.rescan", {});
+  await check("agents.models", { agentId: agent.id });
+  await check("chats.list", {});
+  const { chatId } = await check("chats.create", {});
+  await check("chats.setAgent", { chatId, agent: agent.id, model: agent.defaultModel });
+  await check("chats.setComposer", { chatId, text: "draft" });
+  const sent = await check("chats.send", { chatId, text: "Hello fixture" });
+  expect(
+    (await check("chats.get", { chatId })).messages.some(
+      (m) => m.id === sent.messageId && m.text === "Hello fixture",
+    ),
+  ).toBe(true);
+  const chat = client.state.chats.find((item) => item.chat.id === chatId);
+  if (!chat) throw new Error("Missing chat");
+  chat.messages.push({
+    id: "test-card",
+    seq: 10,
+    at: "2026-11-20T03:00:00.000Z",
+    role: "flowdriven",
+    kind: "card",
+    outside: false,
+    card: { type: "ask_run", state: "open", flowId: f.summary.id, name: f.summary.name, values: [] },
+  });
+  await check("chats.act", { chatId, messageId: "test-card", action: "not_now" });
+  await check("flows.confirm", { flowId: f.summary.id, hash: f.hash, onItsOwn: [] });
+  await check("flows.start", { flowId: f.summary.id, source: "flows" });
+  await check("flows.setSchedule", {
+    flowId: f.summary.id,
+    hash: f.hash,
+    schedule: { type: "weekly", day: "mon", time: "17:00", whenItsTime: "ask" },
+  });
+  await check("flows.tryNextRun", { flowId: f.summary.id });
+  const decisions = await check("approvals.list", {});
+  const decision = decisions[0];
+  if (!decision || !decision.runId) throw new Error("Missing decision");
+  const originals = client.state.decisions;
+  originals.push(
+    {
+      ...decision,
+      id: "batch-1",
+      effect: "send",
+      riskyAction: "send",
+      canAlwaysAllow: false,
+      similarGroup: "batch",
+    },
+    {
+      ...decision,
+      id: "batch-2",
+      effect: "send",
+      riskyAction: "send",
+      canAlwaysAllow: false,
+      similarGroup: "batch",
+    },
+  );
+  await check("approvals.resolveSimilar", {
+    runId: decision.runId,
+    group: "batch",
+    approvalIds: ["batch-1", "batch-2"],
+  });
+  const rules = await check("rules.list", {});
+  await check("activity.summary", {});
+  await check("search.query", { text: "" });
+  await check("search.query", { text: "invoice" });
+  const skills = await check("skills.list", {});
+  const skill = skills[0];
+  const rule = rules[0];
+  if (!skill || !rule) throw new Error("Missing skill or rule");
+  await check("skills.makeFlow", { skillId: skill.id });
+  const runs = await check("runs.list", {});
+  const firstRun = runs[0];
+  if (!firstRun) throw new Error("Missing run");
+  await check("runs.stop", { runId: firstRun.id });
+  await check("rules.revoke", { ruleId: rule.id });
+  expect((await check("rules.list", {})).map((rule) => rule.id)).not.toContain(rule.id);
+  await check("chats.delete", { chatId });
+  const deletable = flows.find(
+    (item) => !runs.some((r) => r.flowId === item.id && ["running", "waiting_approval"].includes(r.state)),
+  );
+  if (!deletable) throw new Error("Missing deletable flow");
+  await check("flows.delete", { flowId: deletable.id });
+  expect(client.calls).toEqual(expectedCalls);
+});
+
+test("TC-CON-43 card actions check the card and permission before answering", async () => {
+  const client = createFixtureRunnerClient();
+  const chat = client.state.chats[0];
+  if (!chat) throw new Error("Missing chat");
+  chat.messages.push({
+    id: "card-test",
+    seq: 2,
+    at: "2026-11-20T03:00:00.000Z",
+    role: "flowdriven",
+    kind: "card",
+    outside: false,
+    card: { type: "ask_run", state: "open", flowId: "example.build-apk", name: "Build APK", values: [] },
+  });
+  const input = { chatId: chat.chat.id, messageId: "card-test" };
+  await expect(client.call("chats.act", { ...input, action: "use_form" })).rejects.toMatchObject({
+    code: "invalid_input",
+    reason: "unknown_action",
+  });
+  client.state.settings.agentPermission = "off";
+  await expect(client.call("chats.act", { ...input, action: "run" })).rejects.toMatchObject({
+    code: "not_allowed",
+    reason: "permission_off",
+  });
+  expect(chat.messages[2]?.card?.state).toBe("open");
+  await client.call("chats.act", { ...input, action: "not_now" });
+  await expect(client.call("chats.act", { ...input, action: "not_now" })).rejects.toMatchObject({
+    code: "conflict",
+    reason: "card_answered",
+  });
+});
+
+test("TC-CON-43 a start needing inputs posts and reuses its question", async () => {
+  const client = createFixtureRunnerClient();
+  const input = { flowId: "example.fill-timesheet", source: "flows" } as const;
+  const first = await client.call("flows.start", input);
+  const second = await client.call("flows.start", input);
+  expect(first.outcome).toBe("asked");
+  if (first.outcome !== "asked" || second.outcome !== "asked") throw new Error("Missing question");
+  expect(second).toMatchObject({ chatId: first.chatId, questionId: first.questionId, reused: true });
+  const chat = await client.call("chats.get", { chatId: first.chatId });
+  expect(chat.messages.some((m) => m.id === first.questionId && m.card?.type === "inputs_ask")).toBe(true);
 });
