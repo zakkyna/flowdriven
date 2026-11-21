@@ -1,5 +1,5 @@
 import { rmSync } from "node:fs";
-import { ReadinessReport } from "@flowdriven/contracts";
+import { ReadinessReport } from "@flowdriven/contracts/v1";
 import { FlowManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { CONNECTORS } from "../connectors/catalog.ts";

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdtempSync, rmdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type Notice, operations, type RunnerTopic } from "@flowdriven/contracts";
+import { type Notice, operations, type RunnerTopic } from "@flowdriven/contracts/v1";
 import { STOP } from "../claude/browser-post.ts";
 import { visible } from "../claude/text.ts";
 import { demoFlow } from "../demo/demo-flow.ts";

@@ -1,6 +1,6 @@
 import { isAbsolute } from "node:path";
 import {
-  CONTRACT_VERSION,
+  CONTRACT_VERSION_V1 as CONTRACT_VERSION,
   type HarnessCard,
   KeeperSettings,
   type OperationInput,
@@ -10,7 +10,7 @@ import {
   RUNNER_ERROR_CODES,
   RunnerError,
   type RunnerErrorCode,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import { FlowManifest, hasErrors, type Value } from "@flowdriven/sdk";
 import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
 import type { Engine } from "../engine.ts";

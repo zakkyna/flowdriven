@@ -1,4 +1,4 @@
-import { Notice } from "@flowdriven/contracts";
+import { Notice } from "@flowdriven/contracts/v1";
 import { createNoticePolicy, type NoticeEvent } from "../notify/policy.ts";
 import type { RunState } from "../states.ts";
 import type { ApprovalRow, Store } from "../storage.ts";

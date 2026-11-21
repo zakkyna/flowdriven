@@ -1,5 +1,5 @@
 import { PassThrough } from "node:stream";
-import { RunnerError } from "@flowdriven/contracts";
+import { RunnerError } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
 import { connectRpcClient } from "../test-helpers/rpc-client.ts";
 import { serveRpc } from "./server.ts";

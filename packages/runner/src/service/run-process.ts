@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { Notice } from "@flowdriven/contracts";
+import type { Notice } from "@flowdriven/contracts/v1";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
 import { prepareDataDir } from "./data-dir.ts";

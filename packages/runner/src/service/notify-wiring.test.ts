@@ -1,4 +1,4 @@
-import type { Notice } from "@flowdriven/contracts";
+import type { Notice } from "@flowdriven/contracts/v1";
 import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { createEngine } from "../engine.ts";

@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Approval } from "@flowdriven/contracts";
+import { Approval } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { createKeeper } from "../keeper/keeper.ts";
 import type { Ticket } from "../keeper/types.ts";

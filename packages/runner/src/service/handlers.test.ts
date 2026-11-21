@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Approval, FlowDetail, RunDetail, RunSummary } from "@flowdriven/contracts";
+import { Approval, FlowDetail, RunDetail, RunSummary } from "@flowdriven/contracts/v1";
 import { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";

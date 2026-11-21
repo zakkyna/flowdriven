@@ -1,4 +1,4 @@
-import type { HarnessUsage, LimitWindow, Totals, UsageSummary } from "@flowdriven/contracts";
+import type { HarnessUsage, LimitWindow, Totals, UsageSummary } from "@flowdriven/contracts/v1";
 import type { HarnessQuota, QuotaWindow } from "../keeper/types.ts";
 import type { Store, UsageEventRow } from "../storage.ts";
 

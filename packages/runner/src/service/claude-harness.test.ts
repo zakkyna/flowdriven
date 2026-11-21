@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HarnessCard } from "@flowdriven/contracts";
+import { HarnessCard } from "@flowdriven/contracts/v1";
 import { FlowManifest, validateManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";

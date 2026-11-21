@@ -1,4 +1,4 @@
-import { Approval } from "@flowdriven/contracts";
+import { Approval } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
 import type { ApprovalRow, RunRow } from "../storage.ts";

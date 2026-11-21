@@ -1,4 +1,4 @@
-import { StepUsage, UsageSummary } from "@flowdriven/contracts";
+import { StepUsage, UsageSummary } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
 import { parseUsage } from "../claude/stream.ts";
 import { sumUsage } from "../report.ts";

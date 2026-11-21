@@ -1,4 +1,4 @@
-import { TriggerStatus } from "@flowdriven/contracts";
+import { TriggerStatus } from "@flowdriven/contracts/v1";
 import type { TriggerView } from "../triggers/service.ts";
 
 export function toTriggerStatus(view: TriggerView): TriggerStatus {

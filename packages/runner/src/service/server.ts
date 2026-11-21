@@ -13,7 +13,7 @@ import {
   type RunnerEvent,
   rpcFailure,
   rpcResult,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 export type RpcServerOptions = {
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream & { readonly writableNeedDrain?: boolean };

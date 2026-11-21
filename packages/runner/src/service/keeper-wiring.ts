@@ -1,5 +1,5 @@
 import { totalmem } from "node:os";
-import { DEFAULT_KEEPER, KeeperSettings, type RunnerTopic } from "@flowdriven/contracts";
+import { DEFAULT_KEEPER, KeeperSettings, type RunnerTopic } from "@flowdriven/contracts/v1";
 import type { HarnessAdapter } from "../harness.ts";
 import { HISTORY_RUNS } from "../keeper/constants.ts";
 import { defaultWeightMb, weightFromPeaks } from "../keeper/gate.ts";

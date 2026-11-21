@@ -1,4 +1,4 @@
-import { FlowCapabilities } from "@flowdriven/contracts";
+import { FlowCapabilities } from "@flowdriven/contracts/v1";
 import { FlowManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";

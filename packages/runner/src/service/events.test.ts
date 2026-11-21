@@ -1,4 +1,4 @@
-import type { RunnerTopic } from "@flowdriven/contracts";
+import type { RunnerTopic } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";

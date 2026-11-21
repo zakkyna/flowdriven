@@ -2,7 +2,7 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { CONTRACT_VERSION, type RunnerEvent } from "@flowdriven/contracts";
+import { CONTRACT_VERSION_V1 as CONTRACT_VERSION, type RunnerEvent } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { openSqliteStore } from "../sqlite-store.ts";

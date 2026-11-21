@@ -1,4 +1,4 @@
-import { DEFAULT_KEEPER, type RunnerTopic } from "@flowdriven/contracts";
+import { DEFAULT_KEEPER, type RunnerTopic } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import type { HarnessAdapter, StepRequest } from "../harness.ts";
 import { openSqliteStore } from "../sqlite-store.ts";

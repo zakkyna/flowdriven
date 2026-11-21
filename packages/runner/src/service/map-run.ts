@@ -6,7 +6,7 @@ import {
   RunDetail,
   RunSummary,
   type SkipReason,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import type { LeafStep, Value } from "@flowdriven/sdk";
 import type { RunView } from "../engine.ts";
 import { limits } from "../exec/limits.ts";

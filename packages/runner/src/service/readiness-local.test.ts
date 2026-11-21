@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ReadinessReport } from "@flowdriven/contracts";
+import { ReadinessReport } from "@flowdriven/contracts/v1";
 import { FlowManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
 import { scriptedHarness } from "../scripted-harness.ts";

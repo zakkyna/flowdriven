@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { FlowCapabilities, RunnerError } from "@flowdriven/contracts";
+import { FlowCapabilities, RunnerError } from "@flowdriven/contracts/v1";
 import { FlowManifest, parseTemplate } from "@flowdriven/sdk";
 import { visible } from "../claude/text.ts";
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";

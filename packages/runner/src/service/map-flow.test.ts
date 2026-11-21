@@ -1,4 +1,4 @@
-import { FlowDetail, FlowManifest, FlowSummary, ReadinessReport, Settings } from "@flowdriven/contracts";
+import { FlowDetail, FlowManifest, FlowSummary, ReadinessReport, Settings } from "@flowdriven/contracts/v1";
 import { Check, Requirement, Trigger } from "@flowdriven/sdk";
 import { expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";

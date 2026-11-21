@@ -6,7 +6,7 @@ import {
   isReady,
   ReadinessReport,
   Settings,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import {
   type Check,
   type LeafStep,

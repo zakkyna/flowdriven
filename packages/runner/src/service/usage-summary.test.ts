@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HarnessCard, UsageSummary } from "@flowdriven/contracts";
+import type { HarnessCard, UsageSummary } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store, UsageEventRow } from "../storage.ts";

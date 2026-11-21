@@ -1,4 +1,4 @@
-import { RunnerTopic } from "@flowdriven/contracts";
+import { RunnerTopic } from "@flowdriven/contracts/v1";
 import type { Store } from "../storage.ts";
 
 export function createChangeEmitter(

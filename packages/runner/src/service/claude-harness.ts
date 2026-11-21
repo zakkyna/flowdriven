@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type HarnessCard, RunnerError } from "@flowdriven/contracts";
+import { type HarnessCard, RunnerError } from "@flowdriven/contracts/v1";
 import type { FlowManifest, Requirement, Value } from "@flowdriven/sdk";
 import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapter.ts";
 import type { ConnectorFact } from "../claude/connector-scan.ts";
