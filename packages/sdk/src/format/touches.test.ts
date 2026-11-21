@@ -77,6 +77,12 @@ test("TC-SDK-09 touch shape and limits", () => {
     { rule: "allowed_always" },
   ])
     expect(parse([{ ...touch, ...bad }]).ok).toBe(false);
+  for (const key of ["onItsOwn", "byRule"]) {
+    const result = parse([{ ...touch, [key]: true }]);
+    expect(result.ok ? [] : result.issues).toContainEqual(
+      expect.objectContaining({ code: "unknown_field", path: `touches.0.${key}` }),
+    );
+  }
   expect(parse(Array.from({ length: 101 }, (_, i) => ({ ...touch, id: `item-${i}` }))).ok).toBe(false);
   const duplicate = parse([touch, touch]);
   expect(duplicate.ok ? [] : duplicate.issues).toContainEqual(
@@ -97,10 +103,14 @@ test("TC-SDK-10 and TC-SDK-11 validate places and risky claims", () => {
   ] as const) {
     const parsed = parseManifest(flowV12({ requirements, touches: [{ ...touch, place }] }));
     expect(parsed.ok).toBe(true);
-    if (parsed.ok)
-      expect(validateManifest(parsed.manifest).some((i) => i.code === "touch_place_undeclared")).toBe(
-        Boolean(code),
-      );
+    if (parsed.ok) {
+      const issues = validateManifest(parsed.manifest);
+      expect(issues.some((i) => i.code === "touch_place_undeclared")).toBe(Boolean(code));
+      if (code)
+        expect(issues).toContainEqual(
+          expect.objectContaining({ code, severity: "error", path: "touches.0.place" }),
+        );
+    }
   }
   for (const [overrides, code] of [
     [{ rule: "not_allowed" }, "touch_never_has_place"],
@@ -120,7 +130,7 @@ test("TC-SDK-10 and TC-SDK-11 validate places and risky claims", () => {
         overrides.rule,
       );
       expect(validateManifest(parsed.manifest)).toContainEqual(
-        expect.objectContaining({ code, severity: "warning" }),
+        expect.objectContaining({ code, severity: "warning", path: "touches.0" }),
       );
     }
   }

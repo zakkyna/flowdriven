@@ -17,13 +17,9 @@ test("TC-SDK-04 new input types and choice alias", async () => {
     expect(InputDeclV12.safeParse(input(type)).success).toBe(true);
   for (const type of ["choice", "enum"])
     expect(InputDeclV12.parse(input(type, { choices })).type).toBe("choice");
-  for (const c of [
-    undefined,
-    [],
-    Array(51).fill(choices[0]),
-    [{ key: "Bug Fix", label: "Bad" }],
-    [choices[0], choices[0]],
-  ])
+  const manyChoices = Array.from({ length: 51 }, (_, i) => ({ key: `c${i}`, label: `Choice ${i}` }));
+  expect(InputDeclV12.safeParse(input("choice", { choices: manyChoices.slice(0, 50) })).success).toBe(true);
+  for (const c of [undefined, [], manyChoices, [{ key: "Bug Fix", label: "Bad" }], [choices[0], choices[0]]])
     expect(InputDeclV12.safeParse(input("choice", { choices: c })).success).toBe(false);
   expect(InputDeclV12.safeParse(input("datetime")).success).toBe(false);
 });

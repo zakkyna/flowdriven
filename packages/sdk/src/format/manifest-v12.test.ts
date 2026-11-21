@@ -8,8 +8,10 @@ import { parseManifest } from "./parse.ts";
 test("TC-SDK-01 accepts 1.2 and detects formats", async () => {
   const { detectFormat } = await import("./manifest.ts");
   for (const version of ["1.1", "1.2", "1.3", "1", ""]) {
-    const raw = { ...flow(), format: `flowdriven-flow/${version}` };
-    expect(parseManifest(raw).ok).toBe(version === "1.1" || version === "1.2");
+    const raw = { ...flow(), format: version ? `flowdriven-flow/${version}` : "" };
+    const result = parseManifest(raw);
+    expect(result.ok).toBe(version === "1.1" || version === "1.2");
+    if (!result.ok) expect(result.issues).toContainEqual(expect.objectContaining({ path: "format" }));
     expect(detectFormat(raw)).toBe(version === "1.1" || version === "1.2" ? version : undefined);
   }
 });
