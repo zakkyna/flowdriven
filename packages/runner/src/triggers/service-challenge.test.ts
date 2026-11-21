@@ -239,6 +239,7 @@ test("the three-blocked-runs pause of plan 04 still works", async () => {
 });
 test("through the runner service: a run that becomes blocked with exactly the challenge sentence pauses its trigger at once, and one blocked with another sentence does not", async () => {
   const inner = await openSqliteStore(":memory:");
+  inner.putSetting("agentPermission", "on");
   // The service in live mode with a scripted harness blocks every run at the readiness check. This
   // shim swaps the sentence of that block, standing in for the sentence a harness reply would give.
   let sentence: string | undefined;
@@ -310,6 +311,7 @@ test("through the runner service: a run that becomes blocked with exactly the ch
 });
 test("a run blocked by a challenge that pauses its trigger sends one notice, and one that no trigger started sends the present Run blocked notice", async () => {
   const inner = await openSqliteStore(":memory:");
+  inner.putSetting("agentPermission", "on");
   const store: Store = new Proxy(inner, {
     get(target, key, receiver) {
       const value: unknown = Reflect.get(target, key, receiver);

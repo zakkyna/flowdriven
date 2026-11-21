@@ -21,6 +21,7 @@ const hash = `sha256:${"1".repeat(64)}`;
 async function rig(mode: "live" | "demo" = "live", cap = 24, start = true) {
   const dataDir = dirname(tempPath());
   const store = await openSqliteStore(":memory:");
+  store.putSetting("agentPermission", "on");
   let time = Date.parse("2026-11-12T00:00:00.000Z");
   let id = 0;
   const jobs: (() => void)[] = [];
@@ -190,4 +191,28 @@ test("a recorded detail with supplementary characters is accepted by triggers.li
   });
   const detail = (await r.list()).at(0)?.last?.detail;
   expect(detail).toBe(String.fromCodePoint(0x1f600).repeat(200));
+});
+
+test("TC-j12-32 automatic starts refuse unset and off permission", async () => {
+  const r = await rig();
+  await r.enable(1);
+  for (const permission of ["unset", "off"]) {
+    r.store.putSetting("agentPermission", permission);
+    await r.advance();
+    expect(r.store.listRuns({ flowId: r.manifest.id })).toEqual([]);
+    expect((await r.list()).at(0)).toMatchObject({ last: { outcome: "refused", detail: "permission_off" } });
+  }
+  r.service.stop();
+  const restarted = createRunnerService({
+    store: r.store,
+    dataDir: dirname(tempPath()),
+    mode: "live",
+    now: () => new Date("2026-11-12T03:00:00.000Z"),
+    harness: scriptedHarness({ steps: {} }),
+    keeper: { every: () => () => {} },
+    triggers: { every: () => () => {} },
+  });
+  await restarted.start().settled;
+  expect(r.store.listRuns({ flowId: r.manifest.id })).toEqual([]);
+  restarted.stop();
 });

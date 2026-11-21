@@ -1,4 +1,5 @@
 import { isAbsolute } from "node:path";
+import type { SettingsPatch } from "@flowdriven/contracts";
 import {
   operations,
   RunnerError,
@@ -29,16 +30,11 @@ import type { HarnessService } from "./claude-harness.ts";
 import { ALLOW_FIRST } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
-import {
-  defaultSettings,
-  type LocalChecks,
-  toFlowDetail,
-  toFlowSummary,
-  toReadinessReport,
-} from "./map-flow.ts";
+import { type LocalChecks, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
 import { toQueueView } from "./map-queue.ts";
 import { runTrigger, toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
 import { toTriggerStatus } from "./map-trigger.ts";
+import { readSettings } from "./settings.ts";
 import { liveWindow, summarizeUsage } from "./usage-summary.ts";
 import type { createWeekly } from "./weekly-limit.ts";
 
@@ -87,39 +83,6 @@ export function createDispatcher({
     const legacyHandler = legacy[legacyKey] as ((input: unknown) => unknown) | undefined;
     const handler = v2Handler ?? legacyHandler;
     if (!handler) throw new RunnerError("unavailable", "Operation unavailable.");
-    if (
-      !v2Handler &&
-      name === "settings.update" &&
-      typeof input === "object" &&
-      input !== null &&
-      "patch" in input
-    ) {
-      const patch = input.patch;
-      if (typeof patch === "object" && patch !== null && !Array.isArray(patch)) {
-        if (Object.keys(patch).some((key) => key !== "keeper"))
-          throw new RunnerError("unavailable", "Changing settings arrives with the agent.");
-        if ("keeper" in patch && typeof patch.keeper === "object" && patch.keeper !== null) {
-          const keeper = patch.keeper;
-          const extra = (value: object, allowed: string[]) =>
-            Object.keys(value).some((key) => !allowed.includes(key));
-          if (
-            extra(keeper, ["ceiling", "reserveMb", "quotaLines", "effortModels"]) ||
-            ("quotaLines" in keeper &&
-              typeof keeper.quotaLines === "object" &&
-              keeper.quotaLines !== null &&
-              extra(keeper.quotaLines, ["fiveHour", "sevenDay"])) ||
-            ("effortModels" in keeper &&
-              typeof keeper.effortModels === "object" &&
-              keeper.effortModels !== null &&
-              Object.values(keeper.effortModels).some(
-                (model: unknown) =>
-                  typeof model === "object" && model !== null && extra(model, ["low", "medium", "high"]),
-              ))
-          )
-            throw new RunnerError("invalid_input", "Invalid keeper settings.");
-        }
-      }
-    }
     const schema = v2Handler ? operations[rootKey] : legacyOperations[legacyKey];
     const parsed = schema.input.safeParse(input);
     if (!parsed.success)
@@ -155,7 +118,7 @@ export function createHandlers({
   webCheck,
   connectors,
   local,
-}: HandlerContext): Omit<Handlers, "runner.info"> {
+}: HandlerContext): Omit<Handlers, "runner.info" | "settings.get" | "settings.update"> {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
     if (!row) throw new RunnerError("not_found", `There is no flow ${id}.`);
@@ -198,9 +161,6 @@ export function createHandlers({
   }
   function unavailable(message: string): never {
     throw new RunnerError("unavailable", message);
-  }
-  function settings() {
-    return { ...defaultSettings(now().toISOString()), keeper: readKeeperSettings(store) };
   }
   function quotaOf(id: string): HarnessQuota {
     if (keeper) return keeper.quotaOf(id);
@@ -436,7 +396,6 @@ export function createHandlers({
       return queue();
     },
     "usage.summary": summary,
-    "settings.get": settings,
     "triggers.list": ({ flowId }) => {
       flow(flowId);
       if (!triggers) return unavailable("Trigger service is unavailable.");
@@ -459,18 +418,64 @@ export function createHandlers({
       }
       return toTriggerStatus(triggers.setEnabled(flowId, index, enabled, hash));
     },
-    "settings.update": ({ patch }) => {
-      if (!patch.keeper || Object.keys(patch).some((key) => key !== "keeper"))
-        return unavailable("Changing settings arrives with the agent.");
-      const current = readKeeperSettings(store);
-      const keeper = KeeperSettings.parse({
-        ...current,
-        ...patch.keeper,
-        quotaLines: { ...current.quotaLines, ...patch.keeper.quotaLines },
-        effortModels: { ...current.effortModels, ...patch.keeper.effortModels },
+  };
+}
+
+export function createSettingsHandlers(store: Store, now: () => Date) {
+  const get = () => readSettings(store, now());
+  return {
+    get,
+    update: ({ patch }: { patch: SettingsPatch }) => {
+      const before = get();
+      if (
+        patch.spendingLimit !== undefined &&
+        Math.round(patch.spendingLimit * 100) / 100 <= before.spendingLimit
+      )
+        throw new RunnerError("invalid_input", "Limit must be above the current limit.", {
+          reason: "limit_not_above",
+          params: { limit: before.spendingLimit },
+        });
+      store.transaction(() => {
+        for (const key of [
+          "language",
+          "agentPermission",
+          "mainAgent",
+          "busyFallback",
+          "spendingLimit",
+        ] as const) {
+          let value = patch[key];
+          if (value === undefined) continue;
+          if (key === "spendingLimit" && typeof value === "number") value = Math.round(value * 100) / 100;
+          if (JSON.stringify(value) === JSON.stringify(before[key])) continue;
+          store.putSetting(key, value);
+          store.appendAudit({
+            at: now().toISOString(),
+            kind: key === "agentPermission" ? "permission_changed" : "setting_changed",
+            detail:
+              key === "agentPermission"
+                ? { from: before[key], to: value, source: "window" }
+                : { key, from: before[key], to: value },
+          });
+        }
+        if (patch.keeper) {
+          const current = readKeeperSettings(store);
+          const keeper = KeeperSettings.parse({
+            ...current,
+            ...patch.keeper,
+            quotaLines: { ...current.quotaLines, ...patch.keeper.quotaLines },
+            effortModels: { ...current.effortModels, ...patch.keeper.effortModels },
+          });
+          if (JSON.stringify(keeper) !== JSON.stringify(current)) {
+            store.putSetting("keeper", keeper);
+            store.appendAudit({
+              at: now().toISOString(),
+              kind: "setting_changed",
+              detail: { key: "keeper", from: current, to: keeper },
+            });
+          }
+        }
       });
-      store.putSetting("keeper", keeper);
-      return settings();
+      return get();
     },
   };
 }

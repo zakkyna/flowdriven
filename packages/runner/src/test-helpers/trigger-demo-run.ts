@@ -18,6 +18,7 @@ export async function runTriggerDemo(): Promise<string[]> {
     ],
   });
   const store = await openSqliteStore(":memory:");
+  store.putSetting("agentPermission", "on");
   const notices: Notice[] = [];
   const ids = new Map<string, number>();
   let time = Date.parse("2026-11-12T00:00:00.000Z");

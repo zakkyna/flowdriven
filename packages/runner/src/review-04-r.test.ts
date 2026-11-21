@@ -47,6 +47,7 @@ async function rig(consent = false) {
   const dataDir = dirname(tempPath());
   const home = makeFakeHome();
   const store = await openSqliteStore(":memory:");
+  store.putSetting("agentPermission", "on");
   let time = Date.parse("2026-11-12T00:00:00.000Z");
   let nextId = 0;
   const jobs: (() => void)[] = [];

@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Settings } from "@flowdriven/contracts/v1";
+import type { Settings } from "@flowdriven/contracts";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
@@ -51,7 +51,7 @@ test("the ceiling is set through settings.update, takes effect at once, keeps th
   expect(readKeeperSettings(s.store)).toMatchObject({ ceiling: 1, reserveMb: 2000 });
   expect(((await (await rigOver(s.store)).call("settings.get", {})) as Settings).keeper.ceiling).toBe(1);
   await expect(s.call("settings.update", { patch: { brain: { main: "x" } } })).rejects.toThrow(
-    "Changing settings arrives with the agent.",
+    'Unrecognized key: "brain"',
   );
   await expect(s.call("settings.update", { patch: { keeper: { ceiling: 0 } } })).rejects.toThrow();
 });
@@ -68,10 +68,10 @@ test("model patches keep other harnesses and mixed patches do not change setting
   });
   await expect(
     s.call("settings.update", { patch: { keeper: { ceiling: 2 }, offerSaveOneTime: true } }),
-  ).rejects.toThrow("Changing settings arrives with the agent.");
+  ).rejects.toMatchObject({ code: "invalid_input" });
   await expect(
     s.call("settings.update", { patch: { keeper: { ceiling: 2 }, unknown: true } }),
-  ).rejects.toThrow("Changing settings arrives with the agent.");
+  ).rejects.toMatchObject({ code: "invalid_input" });
   await expect(
     s.call("settings.update", { patch: { keeper: { ceiling: 2, unknown: true } } }),
   ).rejects.toThrow();

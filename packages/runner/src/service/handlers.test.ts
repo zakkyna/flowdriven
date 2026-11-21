@@ -188,10 +188,10 @@ test("the six not-built operations answer unavailable with their sentences", asy
       { harnessId: "x", consent: "given" },
       "Harness consent arrives with the harness adapters.",
     ],
-    ["settings.update", { patch: {} }, "Changing settings arrives with the agent."],
   ] as const;
   for (const [name, input, message] of cases)
     await expect(s.call(name, input)).rejects.toMatchObject({ code: "unavailable", message });
+  await expect(s.call("settings.update", { patch: {} })).rejects.toMatchObject({ code: "invalid_input" });
 });
 test("harnesses.list is empty, settings.get has the defaults and readiness.check has one unchecked row per requirement", async () => {
   const { service: s } = await setup();
@@ -200,7 +200,11 @@ test("harnesses.list is empty, settings.get has the defaults and readiness.check
   s.engine.registerFlow(d.manifest, DEMO_HASH, d.files);
   expect(await s.call("harnesses.list", {})).toEqual([]);
   expect(await s.call("settings.get", {})).toMatchObject({
-    budget: { month: "2026-11", capUsd: 0, spentUsd: 0 },
+    language: "en",
+    agentPermission: "unset",
+    mainAgent: null,
+    busyFallback: false,
+    spendingLimit: 10,
   });
   expect(await s.call("readiness.check", { flowId: d.manifest.id })).toMatchObject({
     items: [{ requirementId: "server", state: "unchecked" }],
@@ -450,4 +454,83 @@ test("TC-AGT-32 runner.info reports live, demo and sample modes", async () => {
     storeVersion: 7,
     mode: "sample",
   });
+});
+
+test("TC-j12-32 settings defaults and choices survive a restart", async () => {
+  const dataDir = dir();
+  const path = join(dataDir, "store.sqlite");
+  const store = await openSqliteStore(path);
+  const make = (s: Store) => createRunnerService({ store: s, dataDir, mode: "demo", now: fixed });
+  const first = make(store);
+  await first.start().settled;
+  expect(await first.call("settings.get", {})).toMatchObject({
+    language: "en",
+    agentPermission: "unset",
+    mainAgent: null,
+    busyFallback: false,
+    spendingLimit: 10,
+  });
+  const patch = {
+    language: "id",
+    agentPermission: "on",
+    mainAgent: { agent: "codex", model: "gpt-6.1-terra" },
+    busyFallback: true,
+    spendingLimit: 40,
+  };
+  const updated = await first.call("settings.update", { patch });
+  first.stop();
+  store.close();
+  const reopened = await openSqliteStore(path);
+  const second = make(reopened);
+  services.push({ service: second, store: reopened });
+  await second.start().settled;
+  expect(await second.call("settings.get", {})).toEqual(updated);
+});
+
+test("TC-j28-40 background is rejected without changes or audit", async () => {
+  const { service, store } = await setup();
+  const before = await service.call("settings.get", {});
+  expect(before).not.toHaveProperty("background");
+  const audit = store.listAudit().filter((row) => row.kind === "setting_changed");
+  await expect(
+    service.call("settings.update", { patch: { background: { keepRunning: false, openAtLogin: false } } }),
+  ).rejects.toMatchObject({ code: "invalid_input" });
+  expect(await service.call("settings.get", {})).toEqual(before);
+  expect(store.listAudit().filter((row) => row.kind === "setting_changed")).toEqual(audit);
+});
+
+test("settings updates validate limits, round cents and audit changed keys", async () => {
+  const { service, store } = await setup();
+  for (const value of [10, 5, 10.001])
+    await expect(service.call("settings.update", { patch: { spendingLimit: value } })).rejects.toMatchObject({
+      code: "invalid_input",
+      reason: "limit_not_above",
+    });
+  await expect(service.call("settings.update", { patch: { spendingLimit: 10001 } })).rejects.toMatchObject({
+    code: "invalid_input",
+  });
+  expect(
+    await service.call("settings.update", { patch: { spendingLimit: 25.004, agentPermission: "on" } }),
+  ).toMatchObject({
+    spendingLimit: 25,
+    spending: { month: "2026-11", spentUsd: 0, limitUsd: 25, state: "ok", allOnPlans: false },
+  });
+  expect(
+    store.listAudit().filter((row) => ["setting_changed", "permission_changed"].includes(row.kind)),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        kind: "setting_changed",
+        detail: expect.objectContaining({ key: "spendingLimit", from: 10, to: 25 }),
+      }),
+      expect.objectContaining({
+        kind: "permission_changed",
+        detail: expect.objectContaining({
+          from: "unset",
+          to: "on",
+          source: "window",
+        }),
+      }),
+    ]),
+  );
 });

@@ -294,6 +294,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     overlap: "skip" | "queue",
     onClaim?: () => void,
   ): TriggerRow {
+    if (store.getSetting("agentPermission") !== "on") return record(row, "refused", "permission_off");
     const now = deps.now();
     const day = deps.dayOf(now);
     const cap = manifest.limits?.max_runs_per_day ?? DEFAULT_DAILY_CAP;
