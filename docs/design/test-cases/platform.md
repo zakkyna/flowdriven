@@ -2,7 +2,11 @@
 
 Status: complete for the V1 build, 2026-11-21.
 
-These are the component test cases (511 cases): the parts underneath the journeys (`journeys.md`) and the safety rules (`safety.md`), and the parts no journey reaches. Every case follows `test-plan.md`: layer, file, Given, When, Then, traces, build step, and why it fails first, so it can be written as the failing test of its build task (`build-order.md`). No case uses the network, a real agent or a real account. Time and ids are injected. Hidden characters are built at test time with `String.fromCodePoint`. Sample names only: flows `example.fill-timesheet`, `example.build-apk`, `example.weekly-supplier-report`, `example.email-triage`, `example.job-review`; model ids `opus-5.5`, `sonnet-5.5`, `haiku-5.5`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`.
+These are the component test cases (516 cases): the parts underneath the journeys (`journeys.md`) and the safety rules (`safety.md`), and the parts no journey reaches. Every case follows `test-plan.md`: layer, file, Given, When, Then, traces, build step, and why it fails first, so it can be written as the failing test of its build task (`build-order.md`). No case uses the network, a real agent or a real account. Time and ids are injected.
+
+Words and lines (owner decision, 2026-11-21): the words live in `apps/desktop/src/i18n/`; the runner never builds a sentence. It emits a message code with values (a `Line`: a key from `packages/contracts/src/line-keys.ts` and its params), and the renderer, or Electron main for a system notification, turns it into words. Where a runner case here quotes a FlowDriven sentence (a chat line, a run page line, a notice), the quoted sentence is only the English drawing of its `Line`: the case asserts the key and the params, and only a renderer (L2) or main-process case asserts the words. Sentences that FlowDriven gives to an agent (a hook reason) are not `Line` values and are asserted as written. V1 ships no font files (system font stack).
+
+V1 scope (owner decisions, 2026-11-21, revisable): the contract has 45 live operations plus 12 retired entries; there is no first run when a schedule is turned on, no menu bar icon, no Open at login (the app stays alive when its window closes), no Duplicate, no Missed or Skipped rows in Activity (missed and skipped slots stay as `starts` rows), no `other_agent` card, and no Always allow or standing rule for a send, post, pay, delete or merge. The cases below test that behaviour. Hidden characters are built at test time with `String.fromCodePoint`. Sample names only: flows `example.fill-timesheet`, `example.build-apk`, `example.weekly-supplier-report`, `example.email-triage`, `example.job-review`; model ids `opus-5.5`, `sonnet-5.5`, `haiku-5.5`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`.
 
 | Group | Cases |
 |---|---|
@@ -11,13 +15,13 @@ These are the component test cases (511 cases): the parts underneath the journey
 | STO Store version 7 | 38 |
 | ENG Engine | 25 |
 | AST Assistant | 36 |
-| INP Inputs | 28 |
+| INP Inputs | 29 |
 | RES Results | 15 |
 | STR Start rule and schedules | 30 |
 | RUL Decisions and standing rules | 26 |
 | AGT Agents and models | 40 |
 | SRCH Search | 10 |
-| I18N Words and languages (`apps/desktop/src/i18n`) | 34 |
+| I18N Words and languages (`apps/desktop/src/i18n`) | 35 |
 | IPC Preload and the IPC layer | 28 |
 | ELE Electron main | 28 |
 | UI Shared renderer parts | 29 |
@@ -26,15 +30,15 @@ These are the component test cases (511 cases): the parts underneath the journey
 | MKT Marketplace client (V3) | 18 |
 | PHN Phone and bots, and other AI tools (V2) | 19 |
 | DOC Contributor guides (B-31) | 12 |
-| Repository checks | 10 |
+| Repository checks | 13 |
 
 ## Shared setup (core components)
 
 Shared setup used by the L3 cases below.
 
-- Harness H (L3): `createRunnerService` on a temporary data folder, the sample flows of `packages/fixtures/src/story-v2/` (new) registered, the fake claude (`packages/runner/src/test-helpers/fake-claude.ts`) signed in with models `opus-5.5`, `sonnet-5.5`, `haiku-5.5`, the fake brain (`packages/runner/src/test-helpers/fake-brain.ts`, new), a fake notice sink, an injected clock and a counting id generator (`run-000000000001`, `ap-000000000001`, and so on). Calls go through `createDispatcher` with caller `window` unless a case says otherwise.
-- Zone: the suite runs with `TZ=UTC`. A case that names `Asia/Jakarta` or `Europe/Amsterdam` runs in a child process with that zone (the pattern of `packages/runner/src/triggers/schedule-dst.test.ts`). Local 17:00 Thu 2026-11-19 in Asia/Jakarta is 10:00Z.
-- Flow `example.fill-timesheet` "Fill timesheet": inputs `date` (date, default `today`), `start` (time, optional), `duration` (duration, required), `customer`, `project`, `activity` (choice Meeting, Bug fix, Feature work; all three `remember`), `did` (longtext, required); one touch `log-hours` (effect `change`, place `{kind: "account", value: "timesheet-account", label: "Timesheet account"}`, rule `asks_first`). Remembered: Example Corp, Project Example, Feature work.
+- Harness H (L3): a runner service on a temporary data folder with the sample flows, the fake claude, the fake brain, a fake notice sink, an injected clock and a counting id generator (`run-000000000001`, `ap-000000000001`, and so on); calls go through `createDispatcher` with caller `window` unless a case says otherwise. It is defined once, in `test-plan.md` section 4, and built by the first V1 step, B-00 "Shared test harness"; the cases here only name what they add to it.
+- Zone: product code receives an IANA zone and uses `Intl` with `timeZone`, never process `TZ`; a case that names `Asia/Bangkok` (UTC+07:00, no daylight saving) or `Europe/Amsterdam` passes that zone to the code under test (`withTimeZone(zone, fn)` of `test-plan.md` section 3 restores anything it changes). Local 17:00 Thu 2026-11-19 in Asia/Bangkok is 10:00Z.
+- Flow `example.fill-timesheet` "Fill timesheet": inputs `date` (date, default `today`), `start` (time, optional), `duration` (duration, required), `customer`, `project`, `activity` (choice Meeting, Bug fix, Feature work; all three `remember`), `did` (longtext, required); one touch `log-hours` (effect `change`, place `{kind: "account", value: "timesheet-account", label: "Timesheet account"}`, rule `asks_first`; the only touch of the sample flows that can be allowed always in V1, with the folder upload of `example.build-apk`). Remembered: Example Corp, Project Example, Feature work.
 - Flow hashes in cases are written `H1`, `H2`, `H3`: distinct `sha256:` values built by `contentHash` of the sample files.
 
 ## CON Contracts
@@ -49,12 +53,12 @@ Shared setup used by the L3 cases below.
 - Build step: B-01
 - Fails first because: `CONTRACT_VERSION` is 1, `checkContractVersion` does not exist, and `runner.info` has no `appVersion` or `storeVersion`.
 
-### TC-CON-02 The operation table holds 47 active operations and 12 retired entries
+### TC-CON-02 The operation table holds 45 active operations and 12 retired entries
 - Layer: L1
 - File: packages/contracts/src/operations.test.ts
 - Given: `Object.entries(operations)` and a new export `operationNames` (a readonly array of the active names that Electron main uses as its allow-list).
 - When: the entries are split by the new field `retired` (true or absent).
-- Then: the sorted names of the active entries (not `retired`) equal `activity.summary`, `agents.list`, `agents.models`, `agents.rescan`, `agents.setUp`, `agents.signIn`, `approvals.answer`, `approvals.list`, `approvals.resolve`, `approvals.resolveSimilar`, `audit.list`, `chats.act`, `chats.create`, `chats.delete`, `chats.get`, `chats.list`, `chats.send`, `chats.setAgent`, `chats.setComposer`, `flows.confirm`, `flows.delete`, `flows.duplicate`, `flows.get`, `flows.import`, `flows.list`, `flows.setSchedule`, `flows.start`, `flows.tryNextRun`, `readiness.check`, `readiness.install`, `rules.list`, `rules.revoke`, `runner.info`, `runs.export`, `runs.list`, `runs.report`, `runs.resume`, `runs.status`, `runs.stop`, `search.query`, `settings.get`, `settings.update`, `skills.list`, `skills.makeFlow`, `starts.next`, `triggers.list`, `triggers.setEnabled` (47); `operationNames` holds exactly those 47; the entries with `retired: true` are exactly the 12 names of TC-CON-03; the table has 59 keys in all.
+- Then: the sorted names of the active entries (not `retired`) equal `activity.summary`, `agents.list`, `agents.models`, `agents.rescan`, `agents.setUp`, `agents.signIn`, `approvals.answer`, `approvals.list`, `approvals.resolve`, `approvals.resolveSimilar`, `audit.list`, `chats.act`, `chats.create`, `chats.delete`, `chats.get`, `chats.list`, `chats.send`, `chats.setAgent`, `chats.setComposer`, `flows.confirm`, `flows.delete`, `flows.get`, `flows.import`, `flows.list`, `flows.setSchedule`, `flows.start`, `flows.tryNextRun`, `readiness.check`, `readiness.install`, `rules.list`, `rules.revoke`, `runner.info`, `runs.export`, `runs.list`, `runs.report`, `runs.resume`, `runs.status`, `runs.stop`, `search.query`, `settings.get`, `settings.update`, `skills.list`, `skills.makeFlow`, `triggers.list`, `triggers.setEnabled` (45; `flows.duplicate` and `starts.next` are not in the contract); `operationNames` holds exactly those 45; the entries with `retired: true` are exactly the 12 names of TC-CON-03; the table has 57 keys in all.
 - Traces: AD-03, AD-01, F-01
 - Build step: B-01
 - Fails first because: the table holds the version 1 names as active operations and has no `retired` field.
@@ -84,7 +88,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/operations.test.ts
 - Given: the table.
 - When: `mcp` and `phone` are read for every operation.
-- Then: `mcp` is "yes" only for `flows.list`; "restricted" for `flows.get`, `flows.start`, `runs.status`, `approvals.list`; "no" for the other 42. `phone` is "yes" for `flows.list` and `runs.stop`; "restricted" for `flows.start`, `runs.status`, `approvals.list`, `approvals.resolve`, `approvals.answer`, `activity.summary`; "no" for the rest. Every "restricted" entry has a non-empty `mcpRule` (or `phoneRule`) string of at most 300 characters.
+- Then: `mcp` is "yes" only for `flows.list`; "restricted" for `flows.get`, `flows.start`, `runs.status`, `approvals.list`; "no" for the other 40. `phone` is "yes" for `flows.list` and `runs.stop`; "restricted" for `flows.start`, `runs.status`, `approvals.list`, `approvals.resolve`, `approvals.answer`, `activity.summary`; "no" for the rest. Every "restricted" entry has a non-empty `mcpRule` (or `phoneRule`) string of at most 300 characters.
 - Traces: AD-18, SR-2, F-18
 - Build step: B-01
 - Fails first because: the version 1 table marks `flows.run`, `flows.build` and `approvals.*` as `mcp: "yes"` or "restricted" and has no `phone` column.
@@ -94,7 +98,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/operations.test.ts
 - Given: the table.
 - When: every operation whose name starts with `approvals.`, `rules.`, `settings.` or is `flows.confirm`, `flows.setSchedule`, `chats.act` is read.
-- Then: none has `mcp: "yes"`. Each of the three names `approvals.resolve`, `approvals.answer`, `chats.act` has `mcp: "no"`. `approvals.list` has `mcp: "restricted"` and its `mcpRule` contains "titles".
+- Then: none has `mcp: "yes"`. Each of the three names `approvals.resolve`, `approvals.answer`, `chats.act` has `mcp: "no"`. `approvals.list` has `mcp: "restricted"` and its `mcpRule` says that the list gives the flow id, the step id and the state only (no title, no payload, no flow name).
 - Traces: SR-2, AD-18, T-02
 - Build step: B-01
 - Fails first because: version 1 has `approvals.resolve` as `mcp: "restricted"`.
@@ -114,7 +118,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/operations.test.ts
 - Given: each operation's `errors` and `reasons`, and the reason-to-code map of runner-api section 11.2 exported as `REASON_CODE`.
 - When: every reason of every operation is checked.
-- Then: each reason is a key of `REASON_CODE`; `REASON_CODE[reason]` is in that operation's `errors`; for example `approvals.resolve` has errors `not_found, conflict, invalid_input, not_allowed` and reasons including `already_answered`, `decision_expired`, `edit_not_allowed`, `empty_text`, `hidden_characters`, `place_not_fixed`, `raise_in_settings`, `phone_no_rules`; `agents.setUp` has `setup_running` (conflict) and `install_unavailable` (unavailable); `REASON_CODE.card_answered` is "conflict", `REASON_CODE.permission_off` is "not_allowed" and `REASON_CODE.retired` is "unavailable".
+- Then: each reason is a key of `REASON_CODE`; `REASON_CODE[reason]` is in that operation's `errors`; for example `approvals.resolve` has errors `not_found, conflict, invalid_input, not_allowed` and reasons including `already_answered`, `decision_expired`, `edit_not_allowed`, `empty_text`, `hidden_characters`, `place_not_fixed`, `raise_in_settings`, `phone_no_rules`; `agents.setUp` has `setup_running` (conflict) and `install_unavailable` (unavailable); `REASON_CODE.card_answered` is "conflict", `REASON_CODE.permission_off` is "not_allowed" and `REASON_CODE.retired` is "unavailable"; the new reason `always_asks` is `not_allowed` and is in the reasons of `flows.confirm`, `chats.act` and `approvals.resolve` (a risky kind put under "Does on its own" or allowed always); `flows.start` has `permission_off` in its refusal reasons and `chats.send` has `permission_off` among its `not_allowed` reasons.
 - Traces: AD-03, runner-api section 11
 - Build step: B-01
 - Fails first because: `reasons` and `REASON_CODE` do not exist and there is no `conflict` code.
@@ -122,9 +126,9 @@ Shared setup used by the L3 cases below.
 ### TC-CON-09 Every input schema refuses an unknown key
 - Layer: L1
 - File: packages/contracts/src/operations.test.ts
-- Given: a map `validInputs` from each of the 47 active names (retired entries are skipped) to a minimal valid input built from the sample ids (for example `flows.start` -> `{flowId: "example.build-apk", source: "flows"}`, `search.query` -> `{text: ""}`, `runner.info` -> `{}`).
+- Given: a map `validInputs` from each of the 45 active names (retired entries are skipped) to a minimal valid input built from the sample ids (for example `flows.start` -> `{flowId: "example.build-apk", source: "flows"}`, `search.query` -> `{text: ""}`, `runner.info` -> `{}`).
 - When: for each name the valid input is parsed, then parsed again with an extra key `extra: 1` added at the top level.
-- Then: the valid input passes for all 47; the input with `extra` fails for all 47 with an issue whose code is `unrecognized_keys`.
+- Then: the valid input passes for all 45; the input with `extra` fails for all 45 with an issue whose code is `unrecognized_keys`.
 - Traces: AD-03, SR-2
 - Build step: B-01
 - Fails first because: the version 1 schemas are not all strict and the new operations have no schema.
@@ -164,7 +168,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/approval.test.ts
 - Given: a valid `risky_action` approval with `effect: "send"`, `riskyAction: "send"`, an `email` payload, a flow and a run.
 - When: fields are changed one at a time and the object is parsed.
-- Then: the valid object passes. Removing `effect` fails. `effect: "change"` with `riskyAction: "send"` fails. `effect: "send"` without `riskyAction` fails. `effect: "change"` with no `riskyAction` passes. `kind: "ask"` with an `email` payload fails; `kind: "risky_action"` with a `choice` payload fails; `kind: "ask"` with a `choice` payload passes. `kind: "weekly_limit"` and `kind: "budget_raise"` with a `text` payload, no run, step or item pass; with a `runId` they fail. `kind: "flow_sign_off"` and `kind: "requirement_addition"` still parse. `state: "allowed_always"` with `ruleId: "rule-000000000001"` passes. Summary of 201 characters fails.
+- Then: the valid object passes. Removing `effect` fails. `effect: "change"` with `riskyAction: "send"` fails. `effect: "send"` without `riskyAction` fails. `effect: "change"` with no `riskyAction` passes. `kind: "ask"` with an `email` payload fails; `kind: "risky_action"` with a `choice` payload fails; `kind: "ask"` with a `choice` payload passes. `kind: "weekly_limit"` and `kind: "budget_raise"` with a `text` payload, no run, step or item pass; with a `runId` they fail. `kind: "flow_sign_off"` and `kind: "requirement_addition"` still parse. `state: "allowed_always"` with `ruleId: "rule-000000000001"` passes. `canAlwaysAllow: true` with `effect: "send"`, `post`, `pay`, `delete` or `merge` fails (a risky kind never offers Always allow, even with `fixedPlace: true`); `canAlwaysAllow: true` with `effect: "change"` and `fixedPlace: true` passes; with `effect: "change"` and `fixedPlace: false` it fails. Summary of 201 characters fails.
 - Traces: AD-07, SR-1, F-13
 - Build step: B-01
 - Fails first because: `Approval` has no `effect`, `place`, `ruleId` or `canAlwaysAllow`.
@@ -174,7 +178,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/flow.test.ts
 - Given: the `ScheduleSpec` input and `ScheduleView` output schemas.
 - When: samples are parsed.
-- Then: `{type: "manual"}`, `{type: "daily", time: "00:00"}`, `{type: "weekdays", time: "17:00", whenItsTime: "ask"}`, `{type: "weekly", day: "mon", time: "08:00", whenItsTime: "last"}`, `{type: "after", afterFlowId: "example.build-apk"}` pass. Times "24:00", "25:00", "7:5", "17:60", "5pm" fail. `weekly` without `day` fails; `day: "monday"` fails; `after` without `afterFlowId` fails; `manual` with a `time` fails; `daily` without `time` fails; an extra key fails. A `ScheduleView` needs `whenItsTime`, `needsAnswers`, `canUseLast`, `firstRunNote`; `nextAt` is optional and must be an `IsoDateTime`.
+- Then: `{type: "manual"}`, `{type: "daily", time: "00:00"}`, `{type: "weekdays", time: "17:00", whenItsTime: "ask"}`, `{type: "weekly", day: "mon", time: "08:00", whenItsTime: "last"}`, `{type: "after", afterFlowId: "example.build-apk"}` pass. Times "24:00", "25:00", "7:5", "17:60", "5pm" fail. `weekly` without `day` fails; `day: "monday"` fails; `after` without `afterFlowId` fails; `manual` with a `time` fails; `daily` without `time` fails; an extra key fails. A `ScheduleView` needs `whenItsTime`, `needsAnswers`, `canUseLast`; `nextAt` is optional and must be an `IsoDateTime`; a `firstRunNote` key fails as unknown, and so does a `firstRun` key in the `flows.setSchedule` input (turning a schedule on never starts a run).
 - Traces: AD-04, AD-13, F-09, FS-j21.E3
 - Build step: B-01
 - Fails first because: `ScheduleSpec` does not exist in contracts.
@@ -214,7 +218,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/card.test.ts (new)
 - Given: the `ChatAct` schema (the part of the `chats.act` input after `chatId` and `messageId`).
 - When: one sample per action is parsed.
-- Then: the 31 actions of runner-api section 8.2 each pass in their valid shape (for example `{action: "confirm_flow", values: {hash: H1, onItsOwn: ["log-hours"]}}`, `{action: "submit_form", values: {fields: {duration: "2 hours"}}}`, `{action: "choose", values: {option: "example.build-apk"}}`, `{action: "suggestion", values: {chip: 0}}`). `confirm_flow` without `values` fails; `submit_form` with 51 fields fails; a field value of 4,001 characters fails; `suggestion` with `chip: -1` or `1.5` fails; `start` with a `values` key fails; the action "approve" and "delete_flow" fail.
+- Then: the 26 actions of the `ChatAct` union of runner-api section 8.2 each pass in their valid shape (for example `{action: "confirm_flow", values: {hash: H1, onItsOwn: ["log-hours"]}}`, `{action: "submit_form", values: {fields: {duration: "2 hours"}}}`, `{action: "choose", values: {option: "example.build-apk"}}`, `{action: "suggestion", values: {chip: 0}}`). `confirm_flow` without `values` fails; `submit_form` with 51 fields fails; a field value of 4,001 characters fails; `suggestion` with `chip: -1` or `1.5` fails; `start` with a `values` key fails; the actions "approve", "delete_flow" and "use_other_agent" fail.
 - Traces: AD-10, SR-2, runner-api section 8
 - Build step: B-01
 - Fails first because: no `ChatAct` exists.
@@ -224,7 +228,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/card.test.ts (new)
 - Given: the `CardView` schema.
 - When: one sample of each type is parsed.
-- Then: the 19 card types `plan, ask_run, confirm, inputs_ask, form, runs, decision, draft, change, schedule, unschedule, stop, status, repeat_offer, run_offer, choose, agent_needed, other_agent, turn_failed` each pass; a card of type "banner" fails; `state` accepts `open, answered, replaced, cancelled, stale, flow_deleted` and fails for "closed"; a `plan` with `mode: "chain"` and zero items fails; `turn_failed` accepts the six `failure` codes; `agent_needed` with `need: "permission"` and no `agentId` passes.
+- Then: the 18 card types `plan, ask_run, confirm, inputs_ask, form, runs, decision, draft, change, schedule, unschedule, stop, status, repeat_offer, run_offer, choose, agent_needed, turn_failed` each pass; a card of type "banner" or "other_agent" fails; `state` accepts `open, answered, replaced, cancelled, stale, flow_deleted` and fails for "closed"; a `plan` with `mode: "chain"` and zero items fails; `turn_failed` accepts the six `failure` codes; `agent_needed` with `need: "permission"` and no `agentId` passes; a `DraftView` with a `rulesKept` or `rulesEnded` key fails as unknown (V1 shows no such lines).
 - Traces: AD-10, F-03, runner-api section 8
 - Build step: B-01
 - Fails first because: no card schema exists.
@@ -234,7 +238,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/settings.test.ts
 - Given: `Settings` and `SettingsPatch`.
 - When: samples are parsed.
-- Then: `{language: "en", agentPermission: "unset", mainAgent: null, busyFallback: false, spendingLimit: 10, spending: {month: "2026-11", spentUsd: 0, limitUsd: 10, state: "ok", allOnPlans: false}, background: {keepRunning: true, openAtLogin: true}, keeper: <default>}` passes. A patch `{}` fails (at least one key); `{agentPermission: "unset"}` fails; `{agentPermission: "off"}` passes; `{mainAgent: {agent: "codex", model: "gpt-6.1-terra"}}` passes and `model: "gpt 6"` fails; `{spendingLimit: 25}` passes; 10000 passes; 10001, 0, -5 and `NaN` fail; `{language: "EN"}` fails; `{background: {keepRunning: false}}` passes; an unknown key fails. `spending.state` accepts `ok, warning, reached`.
+- Then: `{language: "en", agentPermission: "unset", mainAgent: null, busyFallback: false, spendingLimit: 10, spending: {month: "2026-11", spentUsd: 0, limitUsd: 10, state: "ok", allOnPlans: false}, keeper: <default>}` passes (V1 has no `background` setting). A patch `{}` fails (at least one key); `{agentPermission: "unset"}` fails; `{agentPermission: "off"}` passes; `{mainAgent: {agent: "codex", model: "gpt-6.1-terra"}}` passes and `model: "gpt 6"` fails; `{spendingLimit: 25}` passes; 10000 passes; 10001, 0, -5 and `NaN` fail; `{language: "EN"}` fails; `{background: {keepRunning: false}}` fails as an unknown key; an unknown key fails. `spending.state` accepts `ok, warning, reached`.
 - Traces: F-15, F-23, AD-05, SR-9
 - Build step: B-01
 - Fails first because: version 1 `Settings` has `brain`, `backends` and `budget`.
@@ -274,7 +278,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/activity.test.ts (new)
 - Given: `ActivitySummary`, `EarlierRow`, `SearchResult`, `Skill`.
 - When: samples are parsed.
-- Then: an `EarlierRow` of kind `missed` with reason `permission_off` passes and reason "asleep" fails; kind `skipped` accepts `question_open` and `still_running` only; `NeedsYouItem` of kind `question` needs `questionKind` "inputs" or "confirm". A `SearchResult` with 21 chats and `recent: false` fails (at most 20); with `recent: true` and 5 chats passes; 51 flows with `recent: false` fails and 200 flows with `recent: true` passes. A `Skill` with `problem: "hidden_characters"` and `readable: false` passes; `problem: "virus"` fails; `origin` accepts `agent, flowdriven, library`.
+- Then: an `EarlierRow` is a run row only: a row of kind `missed` or `skipped`, and the keys `canRunNow`, `ranLate` and `missedStartId`, fail as unknown (V1 Activity has no Missed, Skipped or Run late rows; the slots are `starts` rows only); `NeedsYouItem` of kind `question` needs `questionKind` "inputs" or "confirm". A `SearchResult` with 21 chats and `recent: false` fails (at most 20); with `recent: true` and 5 chats passes; 51 flows with `recent: false` fails and 200 flows with `recent: true` passes. A `Skill` with `problem: "hidden_characters"` and `readable: false` passes; `problem: "virus"` fails; `origin` accepts `agent, flowdriven, library`.
 - Traces: F-14, F-02, F-12, AD-17
 - Build step: B-01
 - Fails first because: these files do not exist.
@@ -299,15 +303,15 @@ Shared setup used by the L3 cases below.
 - Build step: B-01
 - Fails first because: `RunSummary` has no `source`, `agent`, `cause` or `versionChanged`.
 
-### TC-CON-27 Notice schema: lines, language and the new kinds
+### TC-CON-27 Notice schema: fixed lines, language and the kinds
 - Layer: L1
 - File: packages/contracts/src/notice.test.ts
-- Given: the `Notice` and `NoticeTarget` schemas; a notice carries `title` and `body` as `Line` values and the app language (the runner holds no words).
+- Given: the `Notice` and `NoticeTarget` schemas; a notice carries `title` and `body` as `Line` values with no params and the app language (the runner holds no words, and a notice holds no decision title, flow name, payload or input value).
 - When: samples are parsed.
-- Then: `{id: "question:wq-000000000001", kind: "question_waiting", title: {key: "notice.questionTitle", params: {flow: "Fill timesheet"}}, body: {key: "notice.questionBody"}, language: "en", target: {screen: "chat", chatId: "chat-000000000001"}}` passes; a `title` that is a plain string fails; `language: "english"` fails; a param value of 400 characters passes and 401 fails; an unknown key fails; targets `{screen: "run", runId, approvalId}`, `{screen: "flow", flowId}`, `{screen: "activity"}`, `{screen: "settings"}` pass; `{screen: "inbox"}` and `{screen: "builder", flowId}` fail; kinds `approval_waiting, run_blocked, weekly_limit, flood_cap, trigger_paused, question_waiting` pass and "run_done" fails.
+- Then: `{id: "question:wq-000000000001", kind: "question_waiting", title: {key: "notice.questionTitle"}, body: {key: "notice.questionBody"}, language: "en", target: {screen: "chat", chatId: "chat-000000000001"}}` passes; a `title` or `body` with a `params` key fails (even an empty object is refused); a `title` that is a plain string fails; the key per kind is fixed: `approval_waiting` takes `notice.decisionTitle` and `notice.decisionBody`, `question_waiting` and `confirm_waiting` take `notice.questionTitle` and `notice.questionBody`, `run_blocked` takes `notice.problemTitle` and `notice.problemBody`, `weekly_limit`, `flood_cap` and `trigger_paused` take `notice.limitTitle` and `notice.limitBody`, and any other key for a kind fails; `language: "english"` fails; an unknown key fails; targets `{screen: "run", runId, approvalId}`, `{screen: "flow", flowId}`, `{screen: "activity"}`, `{screen: "settings"}` pass; `{screen: "inbox"}` and `{screen: "builder", flowId}` fail; kinds `approval_waiting, run_blocked, weekly_limit, flood_cap, trigger_paused, question_waiting` pass and "run_done" fails.
 - Traces: F-16, AD-13, AD-14, FS-j28.A12
 - Build step: B-01
-- Fails first because: the version 1 notice has string `title` and `body` and no `language`, and the target union still has `inbox` and `builder`.
+- Fails first because: the version 1 notice has string `title` and `body` and no `language`, the target union still has `inbox` and `builder`, and no fixed-key rule exists.
 
 ### TC-CON-28 Events and topics
 - Layer: L1
@@ -344,7 +348,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/window.test.ts (new)
 - Given: `WindowPrefs`, `WindowReply`, and the setter inputs exported from `window.ts` (new).
 - When: samples are parsed.
-- Then: `{colorMode: "system", keepRunning: true, openAtLogin: true, platform: "darwin"}` passes; `colorMode` accepts `light, system, dark` and fails for "auto"; `platform: "freebsd"` fails; `{ok: true, result: <prefs>}` and `{ok: false, error: {code: "not_allowed", message: "x"}}` pass; error code "conflict" fails; the `setBackground` patch `{}` fails (at least one key), `{keepRunning: false}` passes, `{keepRunning: "no"}` fails, `{other: true}` fails.
+- Then: `{colorMode: "system", platform: "darwin"}` passes (`WindowPrefs` has no `keepRunning` and no `openAtLogin`, and a sample that holds either key fails as unknown); `colorMode` accepts `light, system, dark` and fails for "auto"; `platform: "freebsd"` fails; `{ok: true, result: <prefs>}` and `{ok: false, error: {code: "not_allowed", message: "x"}}` pass; error code "conflict" fails; the window API has four calls (`getPrefs`, `setColorMode`, `openLink`, `quit`) and no `setBackground`; the `setColorMode` input accepts the three modes only and an object or a second argument fails.
 - Traces: AD-15, F-22, F-15
 - Build step: B-01
 - Fails first because: `window.ts` does not exist.
@@ -392,9 +396,9 @@ Shared setup used by the L3 cases below.
 ### TC-CON-36 Paging, limits and list inputs
 - Layer: L1
 - File: packages/contracts/src/operations.test.ts
-- Given: the inputs of `runs.list`, `activity.summary`, `audit.list`, `chats.get`, `starts.next`, `search.query`.
+- Given: the inputs of `runs.list`, `activity.summary`, `audit.list`, `chats.get`, `search.query`.
 - When: limits are tried.
-- Then: `runs.list {limit: 200}` passes and `limit: 201` or `0` fails; `before` must be an `IsoDateTime`; `runs.list {source: "voice"}` fails and `{source: "schedule", state: "stopped"}` passes; `activity.summary {filter: "problems"}` passes and `{filter: "errors"}` fails; `audit.list {limit: 500}` passes and 501 fails; `chats.get {chatId, limit: 500}` passes and 501 fails, `before: 0` passes; `starts.next {withinHours: 48}` passes, 0 and 49 fail, 1.5 fails.
+- Then: `runs.list {limit: 200}` passes and `limit: 201` or `0` fails; `before` must be an `IsoDateTime`; `runs.list {source: "voice"}` fails and `{source: "schedule", state: "stopped"}` passes; `activity.summary {filter: "problems"}` passes and `{filter: "errors"}` fails; `audit.list {limit: 500}` passes and 501 fails; `chats.get {chatId, limit: 500}` passes and 501 fails, `before: 0` passes; `starts.next` is not an operation of the contract (V1 has no menu bar line).
 - Traces: runner-api section 2.6, F-14
 - Build step: B-01
 - Fails first because: the version 1 inputs have no paging.
@@ -402,9 +406,9 @@ Shared setup used by the L3 cases below.
 ### TC-CON-37 Inputs of chats, flows, skills and agents
 - Layer: L1
 - File: packages/contracts/src/chat.test.ts (new)
-- Given: the inputs of `chats.create`, `chats.setAgent`, `chats.setComposer`, `chats.delete`, `flows.import`, `flows.duplicate`, `flows.delete`, `flows.tryNextRun`, `skills.makeFlow`, `agents.setUp`, `agents.signIn`, `agents.models`.
+- Given: the inputs of `chats.create`, `chats.setAgent`, `chats.setComposer`, `chats.delete`, `flows.import`, `flows.delete`, `flows.tryNextRun`, `skills.makeFlow`, `agents.setUp`, `agents.signIn`, `agents.models`.
 - When: samples are parsed.
-- Then: `chats.create {}`, `{subject: {kind: "make"}}` and `{subject: {kind: "improve", flowId: "example.fill-timesheet"}}` pass; `{subject: {kind: "improve"}}` and `{subject: {kind: "skill"}}` fail; `chats.setAgent {chatId, agent: "codex", model: "gpt-6.1-terra"}` passes and `model: "-m"` fails; `chats.setComposer` text of 16,000 passes, 16,001 fails, "" passes; `flows.import {path}` of 1,024 characters passes and 1,025 or "" fails; `flows.tryNextRun {flowId, missedStartId}` passes; `agents.setUp {agentId: "Codex"}` fails; every one of these refuses an extra key.
+- Then: `chats.create {}`, `{subject: {kind: "make"}}` and `{subject: {kind: "improve", flowId: "example.fill-timesheet"}}` pass; `{subject: {kind: "improve"}}` and `{subject: {kind: "skill"}}` fail; `chats.setAgent {chatId, agent: "codex", model: "gpt-6.1-terra"}` passes and `model: "-m"` fails; `chats.setComposer` text of 16,000 passes, 16,001 fails, "" passes; `flows.import {path}` of 1,024 characters passes and 1,025 or "" fails; `flows.tryNextRun {flowId}` passes and `{flowId, missedStartId}` fails as an unknown key; `flows.duplicate` is not an operation; `agents.setUp {agentId: "Codex"}` fails; every one of these refuses an extra key.
 - Traces: runner-api section 6, SR-4
 - Build step: B-01
 - Fails first because: none of these schemas exists.
@@ -414,7 +418,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/line-keys.test.ts (new)
 - Given: `LINE_KEYS` from `packages/contracts/src/line-keys.ts` (new), the list of every key the runner may emit in a `Line`.
 - When: it is read.
-- Then: every entry matches the `Line` key pattern and the list has no duplicate; it contains `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer`, `report.doneByRule`, `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `notice.questionTitle`, `notice.questionBody`; no entry holds a space or a sentence.
+- Then: every entry matches the `Line` key pattern and the list has no duplicate; it contains `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer`, `report.doneByRule`, `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `notice.decisionTitle`, `notice.decisionBody`, `notice.questionTitle`, `notice.questionBody`, `notice.problemTitle`, `notice.problemBody`, `notice.limitTitle`, `notice.limitBody`, `chat.permissionOff`, `chat.agentCannotRunFlow`, `flows.empty`, `chat.nothingWaiting`; it does not contain `decision.askAgainAfterNo`; no entry holds a space or a sentence.
 - Traces: AD-14, F-20
 - Build step: B-06
 - Fails first because: `line-keys.ts` does not exist.
@@ -546,7 +550,7 @@ Shared setup used by the L3 cases below.
 - File: packages/sdk/src/format/touches.test.ts (new)
 - Given: a touch `{id: "mail-summary", sentence: "Emails you a summary", effect: "send", place: {kind: "address", value: "own-address", label: "Your address"}, rule: "runs_alone"}` (the address is a sample).
 - When: the manifest is parsed and validated.
-- Then: parsing succeeds; `validateManifest` returns the warning `risky_claims_runs_alone` at the touch's path; the parsed touch keeps `rule: "runs_alone"` as the author's claim (the confirm lists of B-04 decide the placement; this case only pins that the SDK neither grants nor strips it).
+- Then: parsing succeeds; `validateManifest` returns the warning `risky_claims_runs_alone` at the touch's path; the parsed touch keeps `rule: "runs_alone"` as the author's claim (the confirm lists of B-04 decide the placement, and a send always asks first in V1 whatever the claim; this case only pins that the SDK neither grants nor strips it).
 - Traces: SR-1, SR-2, AD-06
 - Build step: B-02
 - Fails first because: the warning code does not exist.
@@ -854,12 +858,12 @@ All paths are inside the test's temporary folder; there is no secret and no real
 - Build step: B-03
 - Fails first because: `starts` does not exist.
 
-### TC-STO-22 One active standing rule per flow, touch, effect and place
+### TC-STO-22 One active standing rule per flow, touch, effect and place; none for a risky kind
 - Layer: L1
 - File: packages/runner/src/sqlite-store-v7.test.ts (new)
 - Given: `store.makeRule({flowId, touchId: "log-hours", effect: "change", place: {kind: "account", value: "timesheet-account", label: "Timesheet account"}})`.
-- When: it is called twice; then the rule is revoked and it is called again; then with `place.value` "other-account"; then with place `{kind: "site", value: "timesheet-account"}`.
-- Then: the second call returns the same `id` and `store.listRules()` has 1 active row; after revoking, a new id is made; the other two calls make separate rules (a place is equal only when `kind` and `value` are both equal; `label` is never compared, so a call with another label returns the first rule).
+- When: it is called twice; then the rule is revoked and it is called again; then with `place.value` "other-account"; then with place `{kind: "folder", value: "timesheet-account"}`; then with effect `send` (touch `summary-to-me`, place `{kind: "address", value: "me@example.test"}`), `post`, `pay`, `delete` and `merge`; then with effect `change` and place `{kind: "address", value: "me@example.test"}`.
+- Then: the second call returns the same `id` and `store.listRules()` has 1 active row; after revoking, a new id is made; the next two calls make separate rules (a place is equal only when `kind` and `value` are both equal; `label` is never compared, so a call with another label returns the first rule); the five calls with a risky effect throw `rule_effect_not_allowed` and `standing_rules` has no such row (V1 stores no standing rule for send, post, pay, delete or merge, `data-model.md` 3.3); the call with a `change` and an `address` place throws `rule_place_not_allowed` (place kinds per effect in V1: `account` or `folder` for `change`, `folder` for `local_write`, `command` for `run_command`).
 - Traces: SR-1, AD-07
 - Build step: B-03
 - Fails first because: `standing_rules` does not exist.
@@ -887,7 +891,7 @@ All paths are inside the test's temporary folder; there is no secret and no real
 ### TC-STO-25 Save flow is one transaction
 - Layer: L3
 - File: packages/runner/src/sqlite-store-v7.test.ts (new)
-- Given: a draft with the files of a flow, schedule `{type: "weekdays", time: "17:00", whenItsTime: "ask"}`, one touch in `onItsOwn`, and a failure injected at the audit insert.
+- Given: a draft with the files of a flow, schedule `{type: "weekdays", time: "17:00", whenItsTime: "ask"}`, one `change` touch with a fixed place in `onItsOwn`, and a failure injected at the audit insert.
 - When: `store.saveFlow(draftId)` runs.
 - Then: it throws; there is no row in `flow_heads`, `flows`, `confirmations`, `standing_rules` or `schedules` for the new id; the draft is still `drafted`; its card is still `open`. Without the failure all of them exist, the draft is `saved`, and a second `saveFlow` returns the same flow and creates nothing.
 - Traces: FS-j22.A14, FS-j22.A5, SR-3
@@ -919,7 +923,7 @@ All paths are inside the test's temporary folder; there is no secret and no real
 - File: packages/runner/src/service/settings-handlers.test.ts (new)
 - Given: an empty version 7 store, the runner started with `--languages=en,id`, and a `settings` row `language` holding "xx" in a second test.
 - When: `settings.get` runs.
-- Then: the first gives `language: "en"`, `agentPermission: "unset"`, `mainAgent: null`, `busyFallback: false`, `spendingLimit: 10`, `background: {keepRunning: true, openAtLogin: true}`; the second gives `language: "en"` (an unregistered code reads as "en").
+- Then: the first gives `language: "en"`, `agentPermission: "unset"`, `mainAgent: null`, `busyFallback: false`, `spendingLimit: 10` and no `background` key; the second gives `language: "en"` (an unregistered code reads as "en").
 - Traces: F-15, AD-05, FS-j12
 - Build step: B-03
 - Fails first because: `settings.get` returns the version 1 shape.
@@ -981,7 +985,7 @@ All paths are inside the test's temporary folder; there is no secret and no real
 - When: `flows.delete {flowId: "example.fill-timesheet"}` is called with the `running` run present, then after that run is stopped.
 - Then: the first call gives `conflict: flow_running` and changes nothing; the second returns `{deleted: true, schedulesTurnedOff: ["example.build-apk"]}`; `flow_heads.deleted_at` is set; the name "Fill timesheet" is free; its confirmation, schedule and remembered rows are gone; the rule is `revoked` with `revokedBy: "flow_deleted"`; the question is `closed` with `closedReason: "flow_deleted"`; the `queued` and `needs_login` runs are `stopped` with `stoppedBy: "flow_deleted"` and the pending decision is `expired`; the `done` run is unchanged and still in `runs.list` with its `flowName`; `flows.get` gives `not_found: flow_deleted`; the audit has `flow_deleted` and `schedule_changed` with `by: "target_deleted"`; topics `flows, rules, runs, approvals, chats, activity, skills` are marked.
 - Traces: FS-j21.P6, FS-j25.A9, SR-2
-- Build step: B-03
+- Build step: B-05
 - Fails first because: `flows.delete` does not exist.
 
 ### TC-STO-35 Deleting a chat leaves no text behind
@@ -991,7 +995,7 @@ All paths are inside the test's temporary folder; there is no secret and no real
 - When: `chats.delete {chatId}` runs, then the WAL is checkpointed (`PRAGMA wal_checkpoint(TRUNCATE)`).
 - Then: the output is `{deleted: true}`; messages, draft and question are gone; the run is still `running`; the usage row stays; the question's pending start never runs (audit `question_closed` with `chat_deleted`); the audit record `chat_deleted` holds `chatId` and a message count and does not contain the marker; the raw bytes of the database file and of the WAL do not contain "zq-marker-8841-invoice".
 - Traces: FS-j22.E8, NF-18, AD-05
-- Build step: B-03
+- Build step: B-07
 - Fails first because: `chats.delete` and `secure_delete` do not exist.
 
 ### TC-STO-36 flows.list and flows.get build the read model
@@ -1004,15 +1008,15 @@ All paths are inside the test's temporary folder; there is no secret and no real
 - Build step: B-18
 - Fails first because: the handlers return the version 1 read model.
 
-### TC-STO-37 flows.import and flows.duplicate
+### TC-STO-37 flows.import (and there is no flows.duplicate)
 - Layer: L3
 - File: packages/runner/src/service/flows-handlers.test.ts (new)
-- Given: a folder with a valid 1.2 flow `example.job-review` and a changed copy of a confirmed flow `example.build-apk`; and a confirmed flow `example.fill-timesheet` with a schedule, a rule and remembered answers.
-- When: `flows.import {path}` is called for each folder; `flows.duplicate {flowId: "example.fill-timesheet"}` is called twice.
-- Then: the new id arrives `new`; the changed copy of the confirmed flow becomes `changed` (a new version, the schedule kept); a folder with an error gives `issues` and no flow; the duplicates are named "Fill timesheet (copy)" and "Fill timesheet (copy 2)", state `new`, with no schedule, no rule and no remembered answers; the original's hash, rules and schedule are unchanged; the audit has `flow_imported` and `flow_duplicated`.
+- Given: a folder with a valid 1.2 flow `example.job-review` and a changed copy of a confirmed flow `example.build-apk`; a folder with an error; a confirmed flow `example.fill-timesheet` with a schedule, a rule and remembered answers.
+- When: `flows.import {path}` is called for each folder; then `flows.duplicate {flowId: "example.fill-timesheet"}` is called through the dispatcher.
+- Then: the new id arrives `new`; the changed copy of the confirmed flow becomes `changed` (a new version, the schedule kept); a folder with an error gives `issues` and no flow; the audit has `flow_imported`; the original's hash, rules and schedule are unchanged; `flows.duplicate` is not an operation (the dispatcher answers an unknown method, -32601, and writes nothing; V1 has no Duplicate on the flow page).
 - Traces: FS-j21.A17, F-07
 - Build step: B-18
-- Fails first because: `flows.duplicate` does not exist and `flows.import` has the version 1 output.
+- Fails first because: `flows.import` has the version 1 output.
 
 ### TC-STO-38 Store writes mark the topics of the table
 - Layer: L3
@@ -1093,9 +1097,9 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - File: packages/runner/src/engine-stop.test.ts (new)
 - Given: a run of `example.build-apk` on the fake claude with a step scripted `pause` (a long step), an injected kill seam recording `killGroup(pid, signal)` and the clock.
 - When: `runs.stop {runId}` is called while the step runs.
-- Then: the output is `{run, changed: true}`; the run and its running step are `stopped`; `cause` is `{code: "stopped"}` and `stoppedBy` is "person"; the kill seam saw SIGTERM for the group at once and SIGKILL after 1,000 ms if the group still lived (second test: a script with `ignore_sigterm`); the fake child's process group is gone within 2 seconds; the audit has `run_stopped`; no dialog or confirmation call exists in the handler.
+- Then: the output is `{run, changed: true}`; the run and its running step are `stopped`; `cause` is `{code: "stopped"}` and `stoppedBy` is "person"; the kill seam saw SIGTERM for the group at once and SIGKILL at most 1,500 ms later if the group still lived (second test: a script with `ignore_sigterm`); the fake child's process group is gone within 2 seconds; the audit has `run_stopped`; no dialog or confirmation call exists in the handler.
 - Traces: SR-8, NF-07, F-04
-- Build step: B-10
+- Build step: B-05
 - Fails first because: `runs.stop` does not exist and `stopped` is not a state.
 
 ### TC-ENG-08 Stop works in every active state and clears the decisions
@@ -1105,7 +1109,7 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - When: `runs.stop` is called on each.
 - Then: each becomes `stopped`; the pending decision is `expired` with `resolvedVia: "stop"` and the audit has `decision_expired` with `why: "stop"`; one `notice_clear` frame with id `approval:ap-000000000001` is sent; the held call never runs; topics `runs, approvals, chats, activity` are marked.
 - Traces: SR-8, F-14, F-16.R3
-- Build step: B-10
+- Build step: B-05
 - Fails first because: there is no stop.
 
 ### TC-ENG-09 Stop on an ended run is not an error
@@ -1115,7 +1119,7 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - When: `runs.stop` is called on each, and on "run-999999999999".
 - Then: the first three return `changed: false` with their state unchanged (`done` stays `done`); the unknown id gives `not_found`; no audit record `run_stopped` is written for the unchanged calls.
 - Traces: SR-8, runner-api section 15
-- Build step: B-10
+- Build step: B-05
 - Fails first because: there is no stop.
 
 ### TC-ENG-10 Stop lets the next queued run of the flow go
@@ -1125,7 +1129,7 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - When: A is stopped.
 - Then: B moves to `checking` and then `running`; B's waiting reason is cleared; the daily counter is not reduced.
 - Traces: FS-j20.P7, F-04
-- Build step: B-10
+- Build step: B-05
 - Fails first because: the per-flow chain does not release on stop.
 
 ### TC-ENG-11 Stop in a chain says what did not start
@@ -1415,9 +1419,9 @@ Shared setup: harness H with the fake brain. `createFakeBrain(script)` takes ent
 ### TC-AST-14 With the permission off nothing is stored
 - Layer: L3
 - File: packages/runner/src/service/chats-handlers.test.ts (new)
-- Given: `agentPermission: "off"` and `composerText` "Run Fill timesheet" saved by `chats.setComposer`.
+- Given: `agentPermission: "off"` (and, in a second test, `"unset"`) and `composerText` "Run Fill timesheet" saved by `chats.setComposer`.
 - When: `chats.send {chatId, text: "Run Fill timesheet"}` is called.
-- Then: it throws `not_allowed` with reason `permission_off`; the chat has 0 messages; `composerText` is still "Run Fill timesheet"; `brain.calls` is empty.
+- Then: it throws `not_allowed` with reason `permission_off`; the chat has 0 messages; `composerText` is still "Run Fill timesheet"; `brain.calls` is empty; no `starts` row and no run exist. The renderer draws `chat.permissionOff` ("FlowDriven may not run your AI agents.") with the one button "Turn on permission" (TC-j12-13 is the owner of this rule at the journey level).
 - Traces: FS-j20.E2, SR-2, F-15
 - Build step: B-08
 - Fails first because: there is no send.
@@ -1425,9 +1429,9 @@ Shared setup: harness H with the fake brain. `createFakeBrain(script)` takes ent
 ### TC-AST-15 An agent that is not ready posts a card and runs no turn
 - Layer: L3
 - File: packages/runner/src/service/chats-handlers.test.ts (new)
-- Given: three chats whose agent is `claude-code` in state `needs_login`, `not_installed`, and `ready` with `agentPermission: "unset"`.
+- Given: `agentPermission: "on"` and two chats whose agent is `claude-code` in state `needs_login` and `not_installed`; a third chat on a `ready` agent with `agentPermission: "unset"`.
 - When: a message is sent to each.
-- Then: each returns `turn: "not_ready"` and stores the message; the posted card is `agent_needed` with `need` equal to `sign_in`, `set_up` and `permission`; `brain.calls` is empty; the message `turn` is absent.
+- Then: the first two return `turn: "not_ready"` and store the message; the posted card is `agent_needed` with `need` equal to `sign_in` and `set_up`; `brain.calls` is empty; the message `turn` is absent; the third gives `not_allowed: permission_off` and stores nothing (see TC-AST-14).
 - Traces: FS-j20.E1, FS-j01
 - Build step: B-08
 - Fails first because: no card exists for these states.
@@ -1459,7 +1463,7 @@ Shared setup: harness H with the fake brain. `createFakeBrain(script)` takes ent
 - When: the person types "tolong jalankan Build APK", then a starter chip is sent with `chats.send {chatId, starter: 0}` and the brain answers `id` again after a reset to `en`, then a typed message gets `language: "xx"`.
 - Then: after the typed text the chat has `language: "id"` and `languageSource: "typed"` and FlowDriven's next posted line is stored as a `Line` with `language: "id"` on the message; the chip message leaves the language unchanged; "xx" (unregistered) is ignored; no message already stored changes its `language`.
 - Traces: FS-j30.P2, F-20, AD-14
-- Build step: B-06
+- Build step: B-08
 - Fails first because: the chat language is not stored or updated.
 
 ### TC-AST-19 status and stop intents build cards from real state
@@ -1635,7 +1639,7 @@ Shared setup: harness H with the fake brain. `createFakeBrain(script)` takes ent
 ### TC-AST-36 The runner posts only Line values with listed keys
 - Layer: L3
 - File: packages/runner/src/service/line-keys.test.ts (new)
-- Given: a scripted session on harness H: a chat with a run, a rejection, a stop, a failed turn, an agent change, a scheduled question, a missed slot and a skill draft, in app language "id".
+- Given: a scripted session on harness H: a chat with a run, a rejection, a stop, a failed turn, an agent change, a scheduled question, a missed slot (a `starts` row only) and a skill draft, in app language "id".
 - When: every `Line` stored in `messages`, `decisionLines` of runs, `notice` frames and `starts` rows is collected; and the non-test source of `packages/runner/src` is scanned for `key: "<string>"` literals.
 - Then: every collected `Line.key` is in `LINE_KEYS`; every `key:` literal found in the source is in `LINE_KEYS`; every key of `LINE_KEYS` exists in `apps/desktop/src/i18n/en.ts` (TC-I18N-32); no stored `Line` params hold a sentence of FlowDriven (only ids, names, times as `IsoDateTime`, numbers and the person's own text); no runner source file imports anything from `apps/desktop`.
 - Traces: AD-14, F-20, NF-17
@@ -1644,7 +1648,7 @@ Shared setup: harness H with the fake brain. `createFakeBrain(script)` takes ent
 
 ## INP Inputs
 
-Shared setup: `parseValue(decl, raw, ctx)` in `packages/runner/src/inputs/parse.ts` (new) returns `{ok: true, value: TypedValue}` or `{ok: false, problem: InputProblem, params?: {min?: number, max?: number}}`. `ctx` is `{now: Date, zone: string, slot?: Date}`. Unless a case says otherwise `now` is 2026-11-20T01:00:00Z (Friday 2026-11-20 08:00 in `Asia/Jakarta`) and `zone` is "Asia/Jakarta". `fillInputs(decls, {given, remembered, last, ctx})` is in `inputs/fill.ts` (new). Declarations come from `example.fill-timesheet`. The agent returns raw text; FlowDriven parses it (FS-j27.A4).
+Shared setup: `parseValue(decl, raw, ctx)` in `packages/runner/src/inputs/parse.ts` (new) returns `{ok: true, value: TypedValue}` or `{ok: false, problem: InputProblem, params?: {min?: number, max?: number}}`. `ctx` is `{now: Date, zone: string, slot?: Date}`. Unless a case says otherwise `now` is 2026-11-20T01:00:00Z (Friday 2026-11-20 08:00 in `Asia/Bangkok`) and `zone` is "Asia/Bangkok". `fillInputs(decls, {given, remembered, last, ctx})` is in `inputs/fill.ts` (new). Declarations come from `example.fill-timesheet`. The agent returns raw text; FlowDriven parses it (FS-j27.A4).
 
 ### TC-INP-01 Dates in English and Indonesian
 - Layer: L1
@@ -1669,9 +1673,9 @@ Shared setup: `parseValue(decl, raw, ctx)` in `packages/runner/src/inputs/parse.
 ### TC-INP-03 Today is resolved in the person's zone, near midnight
 - Layer: L1
 - File: packages/runner/src/inputs/parse-zones.test.ts (new)
-- Given: `now` 2026-11-19T17:30:00Z, which is 00:30 on 2026-11-20 in `Asia/Jakarta` and 17:30 on 2026-11-19 in `UTC`; the suite runs with `TZ=UTC`.
-- When: "today" and "yesterday" are parsed with zone "Asia/Jakarta", then with zone "UTC"; then with `now` 2026-11-19T16:59:00Z and zone "Asia/Jakarta".
-- Then: with Jakarta: "2026-11-20" and "2026-11-19"; with UTC: "2026-11-19" and "2026-11-18"; at 16:59Z in Jakarta: today "2026-11-19".
+- Given: `now` 2026-11-19T17:30:00Z, which is 00:30 on 2026-11-20 in `Asia/Bangkok` and 17:30 on 2026-11-19 in `UTC`; the zone is an argument and the process `TZ` is never read (the test also runs once inside `withTimeZone("America/Chicago", ...)` and gets the same results).
+- When: "today" and "yesterday" are parsed with zone "Asia/Bangkok", then with zone "UTC"; then with `now` 2026-11-19T16:59:00Z and zone "Asia/Bangkok".
+- Then: with Bangkok: "2026-11-20" and "2026-11-19"; with UTC: "2026-11-19" and "2026-11-18"; at 16:59Z in Bangkok: today "2026-11-19".
 - Traces: FS-j27.A5, FS-j28.A6
 - Build step: B-09
 - Fails first because: no zone-aware parser exists.
@@ -1871,7 +1875,7 @@ Shared setup: `parseValue(decl, raw, ctx)` in `packages/runner/src/inputs/parse.
 - File: packages/runner/src/inputs/remember.test.ts (new)
 - Given: `example.fill-timesheet` started with values `customer` "Example Corp", `project` "Project Example", `activity` "feature_work", `duration` 480, `did` "Feature work", `date` "2026-11-20", and a run that then ends `failed`.
 - When: the run starts, and later ends.
-- Then: right after the start (before the run ends) `remembered` has `kind: "remember"` rows for `customer`, `project`, `activity` only; and `kind: "last"` rows for `customer, project, activity, duration, did` (none for `date` or `start`); the rows have `runId` of the run; the failed end changes nothing.
+- Then: right after the start (before the run ends) `remembered` has `kind: "remember"` rows for `customer`, `project`, `activity` only; and `kind: "last"` rows for `customer, project, activity, duration, did` (none for `date` or `start`), each with `outside: false` (the person typed every value); the rows have `runId` of the run; the failed end changes nothing.
 - Traces: FS-j27.A10, FS-j27.E5
 - Build step: B-09
 - Fails first because: no `remembered` writes exist.
@@ -1893,13 +1897,13 @@ Shared setup: `parseValue(decl, raw, ctx)` in `packages/runner/src/inputs/parse.
 - When: `flows.start {flowId, source: "again", fromRunId}` is called.
 - Then: the new run's inputs hold `customer` "Example Corp" and `date` "2026-11-19" (the earlier run's values, not remembered, not today); its `flowHash` is the flow's current confirmed hash; `start.source` is `again` with `fromRunId`.
 - Traces: FS-j25.P2, FS-j27
-- Build step: B-09
+- Build step: B-12
 - Fails first because: `again` is not defined.
 
 ### TC-INP-26 For a scheduled question today and now mean the slot
 - Layer: L1
 - File: packages/runner/src/inputs/fill.test.ts (new)
-- Given: `ctx.slot` 2026-11-19T10:00:00Z (17:00 on 2026-11-19 in Jakarta) and `ctx.now` 2026-11-20T01:15:00Z (08:15 on 2026-11-20).
+- Given: `ctx.slot` 2026-11-19T10:00:00Z (17:00 on 2026-11-19 in Bangkok) and `ctx.now` 2026-11-20T01:15:00Z (08:15 on 2026-11-20).
 - When: `fillInputs` runs with `date` default `today`, `start` default `now`, and the raw values "today" and "now".
 - Then: `date` is "2026-11-19" and `start` is "17:00" for both the defaults and the raw words; with no `slot`, `date` is "2026-11-20" and `start` "08:15".
 - Traces: FS-j27.E8, FS-j27.A19, FS-j28.A6
@@ -1926,6 +1930,16 @@ Shared setup: `parseValue(decl, raw, ctx)` in `packages/runner/src/inputs/parse.
 - Build step: B-09
 - Fails first because: the outside rule is not applied to values.
 
+### TC-INP-29 "Use my last answers" is not offered for a value that came from outside text
+- Layer: L3
+- File: packages/runner/src/inputs/remember.test.ts (new)
+- Given: `example.fill-timesheet` with `last` rows where `duration` and `customer` were typed by the person (`RememberedAnswer.outside: false`) and `did` was filled from a pasted email on the last run (`outside: true`); a flow scheduled `whenItsTime: "last"`.
+- When: (a) `flows.get` and `inputs_ask` are built; (b) `flows.setSchedule {whenItsTime: "last"}` is called; (c) the scheduled slot of the flow that already has `last` becomes due; (d) `chats.act {action: "use_last_answers"}` is called on an old card; (e) the person submits the form with the same `did` text typed or confirmed by them, and the question is built again on the next run.
+- Then: (a) `ScheduleView.canUseLast` is false and the `inputs_ask` card has `canUseLast: false` (no "Use my last answers" chip); (b) `invalid_input: last_answers_incomplete` and nothing saved; (c) the slot asks (`outcome: "asked"`), it does not start with the outside value; (d) refused as an action the card does not offer (`invalid_input: unknown_action`) and no run starts; (e) after the person's own submit the stored row has `outside: false` and the next time `canUseLast` is true and the chip is offered; `date` and `time` are never remembered in any case (TC-INP-14).
+- Traces: FS-j27.A11, FS-j28.P2, SR-5, AD-11, T-03
+- Build step: B-12
+- Fails first because: `RememberedAnswer` has no `outside` field and `canUseLast` ignores where a value came from.
+
 ## RES Results
 
 Shared setup: `pickAnswerLines(result, language)` in `packages/runner/src/results/answer.ts` (new) picks the answer lines of the run's language, and the renderer's `fillAnswerLines` fills them. `decisionLines(run)` is in `results/report-lines.ts` (new). The sample flow `example.fill-timesheet` has `result: {kind: "chat", answer: ["Logged {duration} for {customer}, {project}.", "{date}, {start}.", "Note: {did}"]}`. Date format is a short weekday, day and short month ("Thu 19 Nov" in English, "Kam 19 Nov" in Indonesian); times are 24-hour `HH:MM`; durations read "2h" or "1h 30m".
@@ -1934,7 +1948,7 @@ Shared setup: `pickAnswerLines(result, language)` in `packages/runner/src/result
 - Layer: L1
 - File: apps/desktop/src/screens/chat/answer-lines.test.ts (new)
 - Given: `fillAnswerLines(lines, values, {language, zone})` in the renderer (new), the lines `["Logged {duration} for {customer}, {project}.", "{date}, {start}.", "Note: {did}"]` and values `duration` 120, `customer` "Example Corp", `project` "Project Example", `date` "2026-11-19", `start` "09:00", `did` "built the login page".
-- When: it runs for language "en" and for "id" in zone `Asia/Jakarta`.
+- When: it runs for language "en" and for "id" in zone `Asia/Bangkok`.
 - Then: for "en" the lines are `["Logged 2h for Example Corp, Project Example.", "Thu 19 Nov, 09:00.", "Note: built the login page"]`; for "id" the second line starts with "Kam 19 Nov"; the time stays "09:00" in both; a duration of 90 reads "1h 30m".
 - Traces: AD-12, FS-j27.A14, F-06
 - Build step: B-11
@@ -2023,7 +2037,7 @@ Shared setup: `pickAnswerLines(result, language)` in `packages/runner/src/result
 ### TC-RES-10 runs.export returns structured parts in the run's language
 - Layer: L3
 - File: packages/runner/src/service/runs-handlers.test.ts (new)
-- Given: a run of `example.fill-timesheet` started 2026-11-19T02:00:00Z (09:00 in `Asia/Jakarta`), ended `done` at 2026-11-19T02:12:00Z, language "en", with one rejected decision titled "Send reply to Sam Example?" and summary lines from the run.
+- Given: a run of `example.fill-timesheet` started 2026-11-19T02:00:00Z (09:00 in `Asia/Bangkok`), ended `done` at 2026-11-19T02:12:00Z, language "en", with one rejected decision titled "Send reply to Sam Example?" and summary lines from the run.
 - When: `runs.export {runId}` is called.
 - Then: the output has exactly the keys `language, flowName, startedAt, endedAt, state, cause?, summary, steps, decisionLines` and `answer?` for a `chat` result; `language` is "en"; `flowName` is "Fill timesheet"; moments are `IsoDateTime` strings; `state` is "done"; `summary` is a list of `{text, outside}` parts; `decisionLines` is `[{key: "report.youSaidNo", params: {title: "Send reply to Sam Example?"}}]`; the output holds no Markdown, no run id (`run-` followed by 12 hex digits), no token count, no cost and no sentence written by FlowDriven; nothing is stored (a second call after the data changes gives the new data).
 - Traces: FS-j25.A12, F-14, NF-21, AD-14
@@ -2033,9 +2047,9 @@ Shared setup: `pickAnswerLines(result, language)` in `packages/runner/src/result
 ### TC-RES-11 The runner masks secrets in every text part
 - Layer: L1
 - File: packages/runner/src/results/export.test.ts (new)
-- Given: parts built at test time holding `"sk-" + "a".repeat(24)`, `"ghp_" + "b".repeat(24)`, `"Bearer " + "c".repeat(24)`, the value of a `secret_ref` input (`"fake-secret-" + "d".repeat(10)`), "sk-short" and the ordinary word "ask", and a decision title with a fake key inside.
+- Given: the V1 pattern list (values that start with `sk-` and `ghp_`, `Bearer` values, and the values of `secret_ref` inputs) and parts built at test time holding `"sk-" + "a".repeat(24)`, `"ghp_" + "b".repeat(24)`, `"Bearer " + "c".repeat(24)`, the value of a `secret_ref` input (`"fake-secret-" + "d".repeat(10)`), "sk-short" and the ordinary word "ask", and a decision title with a fake key inside.
 - When: `maskParts(parts, {secretValues})` runs.
-- Then: the first four are replaced by "[hidden]" in every part and in the decision lines' params; "sk-short" (fewer than 20 letters or digits after the prefix) and "ask" stay; the output contains none of the four fake values.
+- Then: the first four are replaced by "[hidden]" in every part and in the decision lines' params; "sk-short" (fewer than 20 letters or digits after the prefix) and "ask" stay; the output contains none of the four fake values; the case asserts only these patterns (a password written in a sentence is not promised masked in V1).
 - Traces: FS-j25.E11, SR-6
 - Build step: B-19
 - Fails first because: no masking exists.
@@ -2063,7 +2077,7 @@ Shared setup: `pickAnswerLines(result, language)` in `packages/runner/src/result
 ### TC-RES-14 The renderer builds the Copy report Markdown
 - Layer: L1
 - File: apps/desktop/src/screens/activity/export-markdown.test.ts (new)
-- Given: `buildExportMarkdown(parts, {zone})` in the renderer (new) and the output of TC-RES-10 for zone `Asia/Jakarta`, in "en" and in "id".
+- Given: `buildExportMarkdown(parts, {zone})` in the renderer (new) and the output of TC-RES-10 for zone `Asia/Bangkok`, in "en" and in "id".
 - When: it runs.
 - Then: the English text starts with `# Fill timesheet, Thu 19 Nov 09:00`, has the lines `Result: Finished` and `Ended: 09:12` and the heading `## Summary`, and holds "You said no: Send reply to Sam Example? It was not done."; the Indonesian text starts with `# Fill timesheet, Kam 19 Nov 09:00`; neither holds a run id or a token number; text parts from outside carry the tag "(from outside)"; the words come from the language files, not from the runner.
 - Traces: FS-j25.A12, F-14, AD-14
@@ -2082,7 +2096,7 @@ Shared setup: `pickAnswerLines(result, language)` in `packages/runner/src/result
 
 ## STR Start rule and schedules
 
-Shared setup: harness H with the trigger service on the injected clock (30-second ticks). `starts.request(flowId, source, context)` is in `packages/runner/src/starts/start-rule.ts` (new). Schedules map in `starts/schedules.ts` (new). Proactive questions are in `starts/proactive.ts` (new). Flow `example.fill-timesheet` has required inputs `duration` and `did` with no remembered values unless a case says so; `example.weekly-supplier-report` has no required input and `limits.max_runs_per_day: 2`. Times: Thu 2026-11-19 17:00 in `Asia/Jakarta` is 10:00Z; the main agent is `claude-code` with default model `sonnet-5.5`.
+Shared setup: harness H with the trigger service on the injected clock (30-second ticks). `starts.request(flowId, source, context)` is in `packages/runner/src/starts/start-rule.ts` (new). Schedules map in `starts/schedules.ts` (new). Proactive questions are in `starts/proactive.ts` (new). Flow `example.fill-timesheet` has required inputs `duration` and `did` with no remembered values unless a case says so; `example.weekly-supplier-report` has no required input and `limits.max_runs_per_day: 2`. Times: Thu 2026-11-19 17:00 in `Asia/Bangkok` is 10:00Z; the main agent is `claude-code` with default model `sonnet-5.5`.
 
 ### TC-STR-01 Rule 1: a new or changed flow does not start
 - Layer: L3
@@ -2119,7 +2133,7 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 - File: packages/runner/src/starts/start-rule.test.ts (new)
 - Given: a `changed` `example.fill-timesheet` with missing inputs.
 - When: a request is made, the person confirms with `chats.act confirm_flow`, and then answers the question.
-- Then: the first outcome is `needs_confirmation` (not `asked`); after the confirm no run starts and the card line says "Confirmed. Run it now?" (a `run_offer` card, because the start was outside the chat); after `run_now` the next outcome is `asked`; after the answer the run starts with the values kept.
+- Then: the first outcome is `needs_confirmation` (not `asked`); after the confirm no run starts and the card posts a line (English drawing: "Confirmed. Run it now?") with a `run_offer` card, because the start was outside the chat; after `run_now` the next outcome is `asked`; after the answer the run starts with the values kept.
 - Traces: START, FS-j28.A11, FS-j27.A18
 - Build step: B-12
 - Fails first because: no start rule exists.
@@ -2139,7 +2153,7 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 - File: packages/runner/src/starts/start-rule.test.ts (new)
 - Given: `example.weekly-supplier-report` with `max_runs_per_day: 2` and two runs already started today from any source (one from the chat, one from `flows`).
 - When: a third start is requested with source `flows`, and a slot becomes due.
-- Then: the window start gets `refused` with reason `daily_limit`; the slot is `missed` with reason `daily_limit` (the renderer words it "reached its limit of 2 runs today"); a flow with no limit uses 24 as the default; after the next local day starts, a start is allowed.
+- Then: the window start gets `refused` with reason `daily_limit`; the slot is recorded as a `starts` row `missed` with reason `daily_limit` (Activity shows no row for it in V1; the refused window start is worded by the renderer as "reached its limit of 2 runs today", PU-09); a flow with no limit uses 24 as the default; after the next local day starts, a start is allowed.
 - Traces: FS-j28.E4, FS-j20.E4
 - Build step: B-12
 - Fails first because: the counter applies only to non-manual runs.
@@ -2187,7 +2201,7 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 ### TC-STR-11 Schedules fire at the right slots
 - Layer: L3
 - File: packages/runner/src/starts/schedules.test.ts (new)
-- Given: `flows.setSchedule` of `example.build-apk` (a confirmed flow with a `done` run) as `{type: "weekdays", time: "17:00"}`, `example.weekly-supplier-report` as `{type: "weekly", day: "mon", time: "08:00"}`, and a third flow as `{type: "daily", time: "09:30"}`; zone `Asia/Jakarta`; ticks every 30 seconds.
+- Given: `flows.setSchedule` of `example.build-apk` (a confirmed flow with a `done` run) as `{type: "weekdays", time: "17:00"}`, `example.weekly-supplier-report` as `{type: "weekly", day: "mon", time: "08:00"}`, and a third flow as `{type: "daily", time: "09:30"}`; zone `Asia/Bangkok`; ticks every 30 seconds.
 - When: the clock runs from Thu 2026-11-19 16:59:00 to 17:01:00 local, from Sat 2026-11-21 16:59 to 17:01, from Mon 2026-11-23 07:59 to 08:01 and Sat 09:29 to 09:31.
 - Then: the weekdays flow fires once on Thursday at the 17:00:00 tick and not at 17:00:30; it does not fire on Saturday; the weekly flow fires only on Monday at 08:00; the daily flow fires on Saturday 09:30; each fire is one `starts` row with `source: "schedule"` and key `slot:<slot time in UTC>`.
 - Traces: FS-j28.P1, AD-13, NF-08
@@ -2214,32 +2228,32 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 - Build step: B-12
 - Fails first because: `flows.setSchedule` does not exist.
 
-### TC-STR-14 Turning on a time schedule for a never-run flow runs it once now
+### TC-STR-14 Turning on a schedule starts nothing
 - Layer: L3
 - File: packages/runner/src/service/flows-handlers.test.ts (new)
 - Given: confirmed `example.build-apk` with no run; confirmed `example.weekly-supplier-report` with a `done` run; `example.fill-timesheet` with only a `failed` run.
 - When: `flows.setSchedule` sets `{type: "daily", time: "17:00"}` on each; then `{type: "after", afterFlowId: "example.build-apk"}` on a flow with no run.
-- Then: the first returns `firstRun.outcome` "started" (a run with `start.source: "try_next"`, `firstScheduledRun: true`); the second has no `firstRun`; the third has a `firstRun` (a `failed` run does not count as finished) with outcome `asked`; the `after` schedule never has a `firstRun`; `ScheduleView.firstRunNote` is true before the first call and false after.
+- Then: every call returns `{schedule: ScheduleView}` only (the input has no `firstRun` key; the output has no `firstRun` and no `firstRunNote`); no run exists and no `starts` row is written by any of the calls; no chat, no question and no notice are made; the audit has `schedule_changed` only; the first start of each flow is its next slot (TC-STR-11) or a start the person makes; the "Run it now?" offer that follows Save flow (a `run_offer` card, TC-START-12) is the only offer.
 - Traces: FS-j28.P11, FS-j21.P10, F-09
 - Build step: B-12
-- Fails first because: no first-run rule exists.
+- Fails first because: `flows.setSchedule` does not exist.
 
-### TC-STR-15 A blocked first run turns the schedule off; a failed one does not
+### TC-STR-15 A schedule stays on after a blocked or failed run
 - Layer: L3
 - File: packages/runner/src/starts/schedules.test.ts (new)
-- Given: two flows scheduled for the first time; the first run of the first ends `blocked`, the first run of the second ends `failed`.
-- When: both runs end.
-- Then: the first flow's `schedules` row is deleted and the audit has `schedule_changed` with `by: "first_run_blocked"`; the second flow's schedule stays on.
+- Given: two scheduled flows; the first scheduled run of the first ends `blocked`, the first scheduled run of the second ends `failed`.
+- When: both runs end and the next slots become due.
+- Then: both `schedules` rows are still there and unchanged; the audit has no `schedule_changed` (V1 has no `first_run_blocked` and no rule that turns a schedule off after a run); the next slot of each flow goes through the start rule as usual.
 - Traces: FS-j28.P11, FS-j28.E5
 - Build step: B-12
-- Fails first because: no such rule exists.
+- Fails first because: `schedules.ts` does not exist.
 
 ### TC-STR-16 Catch up at wake: only the latest slot, within 2 hours
 - Layer: L3
 - File: packages/runner/src/starts/schedules.test.ts (new)
-- Given: `example.fill-timesheet` on weekdays at 17:00, `Asia/Jakarta`, last tick Mon 2026-11-16 16:00 local; the computer wakes (the next tick) on Tue 2026-11-17 18:30 local; a second case wakes Tue 19:10.
+- Given: `example.fill-timesheet` on weekdays at 17:00, `Asia/Bangkok`, last tick Mon 2026-11-16 16:00 local; the computer wakes (the next tick) on Tue 2026-11-17 18:30 local; a second case wakes Tue 19:10.
 - When: the first tick after wake runs.
-- Then: first case: Monday's slot is recorded `missed` with reason `too_old`; Tuesday's slot (1 h 30 min old) is handled once now: a question with the lead `{key: "chat.dueAt", params: {time: "17:00", flow: "Fill timesheet"}}` ("This was due at 17:00. Time for Fill timesheet."); second case: Tuesday's slot (2 h 10 min old) is `missed` with reason `too_old` and no chat; a later tick handles nothing twice.
+- Then: first case: Monday's slot is recorded as a `starts` row `missed` with reason `too_old` (no Activity row); Tuesday's slot (1 h 30 min old) is handled once now: a question with the lead `{key: "chat.dueAt", params: {time: "17:00", flow: "Fill timesheet"}}` ("This was due at 17:00. Time for Fill timesheet."); second case: Tuesday's slot (2 h 10 min old) is a `starts` row `missed` with reason `too_old` and no chat; a later tick handles nothing twice.
 - Traces: FS-j28.P7, FS-j28.A13, F-09
 - Build step: B-12
 - Fails first because: the catch-up window is 120 seconds (`GRACE_MS`).
@@ -2259,27 +2273,27 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 - File: packages/runner/src/starts/schedules.test.ts (new)
 - Given: `example.weekly-supplier-report` with a run `running`; and `example.fill-timesheet` with an open question asked at Thu 17:00.
 - When: the next slots become due (Fri 17:00 for the timesheet; the report's slot while running).
-- Then: each leaves a `starts` row with `outcome: "skipped"`: the report with reason `still_running`, the timesheet with reason `question_open` and `questionAskedAt` Thu 17:00; no second run, no second question, no notice; `activity.summary` earlier rows show the two `skipped` rows.
+- Then: each leaves a `starts` row with `outcome: "skipped"`: the report with reason `still_running`, the timesheet with reason `question_open` and `questionAskedAt` Thu 17:00; no second run, no second question, no notice; `activity.summary` has no row for the two `skipped` slots (V1 shows run rows only).
 - Traces: FS-j28.A21, FS-j28.P5, FS-j28.E9
 - Build step: B-12
 - Fails first because: no `skipped` outcome exists.
 
-### TC-STR-19 After a missed slot the permission coming back runs nothing
+### TC-STR-19 After a slot missed with the permission off, turning it on runs nothing
 - Layer: L3
 - File: packages/runner/src/starts/schedules.test.ts (new)
-- Given: the permission `off` at Thu 17:00, a `missed` row with reason `permission_off`.
-- When: the permission is turned `on` at 17:10 and ticks pass until 17:30.
-- Then: no run, no question and no chat appear; `activity.summary` has the `missed` row with `canRunNow: true`; `flows.tryNextRun {flowId, missedStartId}` then asks the question with the slot's date and the row gets `ranLate`.
+- Given: the permission `off` at Thu 17:00, a `starts` row `missed` with reason `permission_off`.
+- When: the permission is turned `on` at 17:10 and ticks pass until 17:30; then the person calls `flows.tryNextRun {flowId}`.
+- Then: no run, no question and no chat appear by themselves; `activity.summary` has no row for the slot (V1 shows run rows only: no Missed row, no "Run it now" button, no `canRunNow`); `tryNextRun` takes the flow id only and asks the question with today's date as for any `try_next` start; the `starts` row stays `missed` (no `ranLate`).
 - Traces: FS-j12.P2, FS-j28.A14, FS-j28.P9
 - Build step: B-12
-- Fails first because: the missed row does not exist.
+- Fails first because: the `missed` outcome of a slot is not written.
 
 ### TC-STR-20 A scheduled question is a FlowDriven chat and a Needs-you item
 - Layer: L3
 - File: packages/runner/src/starts/proactive.test.ts (new)
 - Given: weekdays 17:00 `ask` for `example.fill-timesheet`, app language "en", Thu 17:00 slot.
 - When: the slot is handled.
-- Then: a chat with `from: "flowdriven"`, title "Fill timesheet", `agent: "claude-code"`, `model: "sonnet-5.5"`, `language: "en"` is at the top of `chats.list`; its messages are the lead `chat.itsTime` and the `inputs_ask` card; `activity.summary.needsYou` starts with `{kind: "question", questionKind: "inputs", flowName: "Fill timesheet"}` and `needsYouCount` is 1; one notice `question_waiting` with `title: {key: "notice.questionTitle", params: {flow: "Fill timesheet"}}`, `body: {key: "notice.questionBody"}` and `language: "en"` holds no input value; no run exists.
+- Then: a chat with `from: "flowdriven"`, title "Fill timesheet", `agent: "claude-code"`, `model: "sonnet-5.5"`, `language: "en"` is at the top of `chats.list`; its messages are the lead `chat.itsTime` and the `inputs_ask` card; `activity.summary.needsYou` starts with `{kind: "question", questionKind: "inputs", flowName: "Fill timesheet"}` and `needsYouCount` is 1; one notice `question_waiting` with `title: {key: "notice.questionTitle"}`, `body: {key: "notice.questionBody"}` (both with no params: no flow name, no input value) and `language: "en"`; no run exists.
 - Traces: FS-j28.A4, FS-j28.A5, F-16
 - Build step: B-12
 - Fails first because: no proactive question exists.
@@ -2317,29 +2331,29 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 ### TC-STR-24 tryNextRun
 - Layer: L3
 - File: packages/runner/src/service/flows-handlers.test.ts (new)
-- Given: a scheduled `example.fill-timesheet` (`daily 17:00`), a manual `example.build-apk`, and a `missed` row at Thu 17:00.
-- When: `flows.tryNextRun` is called on the scheduled flow; on the manual flow with no `missedStartId`; with `missedStartId` twice.
-- Then: the first starts the start rule with `source: "try_next"` and `slotAt` now (outcome `asked`); the manual flow gives `not_allowed: no_schedule`; with the missed row "today" resolves to 2026-11-19 (Jakarta) and the row gets `ranLate`; the second call gives `conflict: already_ran_late`.
+- Given: a scheduled `example.fill-timesheet` (`daily 17:00`), a manual `example.build-apk`, and a `starts` row `missed` at Thu 17:00.
+- When: `flows.tryNextRun {flowId}` is called on the scheduled flow; on the manual flow; on the scheduled flow with the extra key `missedStartId`.
+- Then: the first starts the start rule with `source: "try_next"` and `slotAt` now (outcome `asked`, with today's date as the day); the manual flow gives `not_allowed: no_schedule`; the call with `missedStartId` fails the input schema (`invalid_input`); there is no `already_ran_late` reason and the `missed` row is not changed.
 - Traces: FS-j28.P9, FS-j28.A24, FS-j21.P10
 - Build step: B-12
 - Fails first because: `flows.tryNextRun` does not exist.
 
-### TC-STR-25 starts.next
-- Layer: L3
-- File: packages/runner/src/service/flows-handlers.test.ts (new)
-- Given: confirmed `example.fill-timesheet` scheduled `weekdays 17:00`; confirmed `example.weekly-supplier-report` scheduled `weekly mon 08:00`; a `new` flow scheduled `daily 15:00`; the clock Thu 14:00 local.
-- When: `starts.next {withinHours: 24}` and `{withinHours: 1}` are called.
-- Then: the first returns `{next: {flowId: "example.fill-timesheet", flowName: "Fill timesheet", at: <Thu 17:00 as UTC>}}` (the `new` flow is left out); the second returns `{}`; `withinHours: 49` is refused by the schema.
-- Traces: FS-j28.P10, F-22
-- Build step: B-23
-- Fails first because: `starts.next` does not exist.
+### TC-STR-25 The next slot of a schedule is computed in the person's zone
+- Layer: L1
+- File: packages/runner/src/starts/schedules.test.ts (new)
+- Given: now 2026-11-19T09:00:00Z (Thu 16:00 in `Asia/Bangkok`); the schedules `{type: "weekdays", time: "17:00"}`, `{type: "weekly", day: "fri", time: "17:00"}`, `{type: "daily", time: "00:30"}`, `{type: "after", afterFlowId: "example.build-apk"}` and `{type: "manual"}`; a second now 2026-11-20T10:30:00Z (Fri 17:30 Bangkok).
+- When: `nextSlot(schedule, now, "Asia/Bangkok")` runs for each schedule at both instants, and the same weekdays schedule runs with the zone `UTC`.
+- Then: at the first instant: weekdays gives 2026-11-19T10:00:00Z, weekly gives 2026-11-20T10:00:00Z, daily gives 2026-11-19T17:30:00Z (Fri 00:30 Bangkok), `after` and `manual` give none; at the second instant: weekdays gives 2026-11-23T10:00:00Z (Monday, the weekend skipped) and weekly gives 2026-11-27T10:00:00Z; with `UTC` weekdays at the first instant gives 2026-11-19T17:00:00Z; `ScheduleView.nextAt` of `flows.get` equals `nextSlot` for the flow's schedule; the function never reads the process time zone.
+- Traces: FS-j21.P8, FS-j21.A11, AD-13
+- Build step: B-12
+- Fails first because: `starts/schedules.ts` and `nextSlot` do not exist.
 
 ### TC-STR-26 activity.summary: order, filters and paging
 - Layer: L3
 - File: packages/runner/src/service/activity-handlers.test.ts (new)
-- Given: two open questions (proactive, asked at Thu 17:00 and Fri 17:00), one question typed in a person's own chat (`proactive: false`), two pending decisions, runs `running`, `needs_login`, `done`, `failed`, a `missed` row and a `skipped` row.
+- Given: two open questions (proactive, asked at Thu 17:00 and Fri 17:00), one question typed in a person's own chat (`proactive: false`), two pending decisions, runs `running`, `needs_login`, `done`, `failed`, and a `missed` and a `skipped` slot (`starts` rows only).
 - When: `activity.summary` is called with no input, with `{filter: "finished"}`, with `{filter: "problems"}`, and with `limit: 2`.
-- Then: `needsYou` lists the Thursday question, the Friday question, then the decisions newest first; the typed-chat question is not listed; `needsYouCount` is 4; `running` holds the `running` run only; `earlier` (all) has the `needs_login`, `done`, `failed` runs and the `missed` and `skipped` rows; `finished` keeps only `done`; `problems` keeps `failed`, `blocked`, `interrupted`, `needs_login` and no `missed` or `skipped` rows; `limit: 2` gives two rows and `nextBefore`; an empty store gives three empty lists and `needsYouCount: 0`.
+- Then: `needsYou` lists the Thursday question, the Friday question, then the decisions newest first; the typed-chat question is not listed; `needsYouCount` is 4; `running` holds the `running` run only; `earlier` (all) has the `needs_login`, `done`, `failed` runs and no `missed` or `skipped` row (those slots are `starts` rows, not Activity rows); `finished` keeps only `done`; `problems` keeps `failed`, `blocked`, `interrupted` and `needs_login` runs; `limit: 2` gives two rows and `nextBefore`; an empty store gives three empty lists and `needsYouCount: 0`.
 - Traces: FS-j25.P1, FS-j25.A1, F-14
 - Build step: B-19
 - Fails first because: `activity.summary` does not exist.
@@ -2349,7 +2363,7 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 - File: packages/runner/src/starts/proactive.test.ts (new)
 - Given: the notice sink.
 - When: a question is created by a slot; the same flow's question is reused by `tryNextRun`; a slot starts a run with nothing missing; the question is answered; another question is cancelled with `cancel_question`.
-- Then: one `question_waiting` notice for the new question (id `question:<id>`); none for the reuse; none for the plain start; `notice_clear` frames for the answered and the cancelled question; no notice carries an input value; `parseNotice` accepts each.
+- Then: one `question_waiting` notice for the new question (id `question:<id>`); none for the reuse; none for the plain start; `notice_clear` frames for the answered and the cancelled question; every notice has fixed `Line` values with no params (no flow name, no input value); `parseNotice` accepts each.
 - Traces: F-16, FS-j28.A12
 - Build step: B-12
 - Fails first because: the notice kind does not exist.
@@ -2386,7 +2400,7 @@ Shared setup: harness H with the trigger service on the injected clock (30-secon
 
 ## RUL Decisions and standing rules
 
-Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effect `send`, no fixed place: the address comes from what the run read). Flow `example.fill-timesheet` holds touch `log-hours` (effect `change`, fixed place `{kind: "account", value: "timesheet-account", label: "Timesheet account"}`). The held call of `log-hours` has the title "Log 8 hours to Project Example?" and input `{day: "2026-11-20", hours: 8, activity: "Feature work", project: "Project Example"}`. Decision ids are `ap-000000000001` and so on. Digest means sha256 of `tool` + newline + the canonical JSON of the input, as `exec/held.ts` computes it.
+Shared setup: harness H. In V1 a standing rule and Always allow exist only for a `change` at a fixed place (and declared `local_write` and `run_command` work); a send, post, pay, delete or merge always asks. Flow `example.email-triage` holds a `reply` touch (effect `send`, no fixed place: the address comes from what the run read). Flow `example.fill-timesheet` holds touch `log-hours` (effect `change`, fixed place `{kind: "account", value: "timesheet-account", label: "Timesheet account"}`). The held call of `log-hours` has the title "Log 8 hours to Project Example?" and input `{day: "2026-11-20", hours: 8, activity: "Feature work", project: "Project Example"}`. Decision ids are `ap-000000000001` and so on. Digest means sha256 of `tool` + newline + the canonical JSON of the input, as `exec/held.ts` computes it.
 
 ### TC-RUL-01 Approve writes one grant for the exact call
 - Layer: L3
@@ -2463,17 +2477,17 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 - File: packages/runner/src/service/decisions-handlers.test.ts (new)
 - Given: the pending `log-hours` decision with `fixedPlace: true`, `canAlwaysAllow: true`, `touchId: "log-hours"`, `effect: "change"`.
 - When: `approvals.resolve {decision: "always_allow"}` is called.
-- Then: the output has `decision.state: "allowed_always"` and `ruleId`; `standing_rules` has one row `{flowId: "example.fill-timesheet", touchId: "log-hours", effect: "change", place: {kind: "account", value: "timesheet-account"}, state: "active", createdBy: "always_allow", approvalId}`; a one-time grant for this call exists too; the line is `report.youApproved`; the audit has `rule_created`; a second Always allow for the same touch returns the same rule id and the table still has one active rule.
+- Then: the output has `decision.state: "allowed_always"` and `ruleId`; `standing_rules` has one row `{flowId: "example.fill-timesheet", touchId: "log-hours", effect: "change", place: {kind: "account", value: "timesheet-account"}, state: "active", createdBy: "always_allow", approvalId}`; a one-time grant for this call exists too; the line is `report.youApproved`; the audit has `rule_created` (rule id and place kind, not the place value); a second Always allow for the same touch returns the same rule id and the table still has one active rule.
 - Traces: AD-07, SR-1, FS-j24.A12
 - Build step: B-05
 - Fails first because: there are no standing rules.
 
-### TC-RUL-09 Always allow is refused for a place that came from the run
+### TC-RUL-09 Always allow is refused for a risky kind and for a place that came from the run
 - Layer: L3
 - File: packages/runner/src/service/decisions-handlers.test.ts (new)
-- Given: a pending `reply` decision of `example.email-triage` whose recipient came from the mail the run read (`fixedPlace: false`, `canAlwaysAllow: false`).
-- When: `approvals.resolve {decision: "always_allow"}` is called.
-- Then: it throws `not_allowed` with reason `place_not_fixed`; the decision is still `pending`; no rule and no grant exist; `approvals.list` shows `canAlwaysAllow: false` for it.
+- Given: (a) a pending `reply` decision of `example.email-triage` (a send) whose recipient came from the mail the run read (`fixedPlace: false`, `canAlwaysAllow: false`); (b) a pending `change` decision of a flow whose place came from outside text (`fixedPlace: false`, `canAlwaysAllow: false`).
+- When: `approvals.resolve {decision: "always_allow"}` is called for each.
+- Then: (a) throws `not_allowed` with reason `always_asks`; (b) throws `not_allowed` with reason `place_not_fixed`; both decisions are still `pending`; no rule and no grant exist; `approvals.list` shows `canAlwaysAllow: false` for both (see TC-SR1-45 for the five risky kinds with a fixed place).
 - Traces: SR-1, FS-j24.A13, SR-5
 - Build step: B-05
 - Fails first because: the rule offer does not exist.
@@ -2492,7 +2506,7 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 - Layer: L1
 - File: packages/runner/src/rules/standing.test.ts (new)
 - Given: an active rule `{flowId: "example.fill-timesheet", touchId: "log-hours", effect: "change", place: {kind: "account", value: "timesheet-account"}}` and `matchRule(rules, call, runVersion)`.
-- When: calls are checked: the exact one; another flow; another touch id; effect `send`; place value "other-account"; place `{kind: "site", value: "timesheet-account"}`; a different `label` only; a revoked rule; a run version with no `log-hours` touch; a run version where `log-hours` has another effect.
+- When: calls are checked: the exact one; another flow; another touch id; effect `send`; place value "other-account"; place `{kind: "site", value: "timesheet-account"}`; a different `label` only; a revoked rule; a run version with no `log-hours` touch; a run version where `log-hours` has another effect; a rule row planted by hand for a `send` touch and a matching send call (V1 never matches it, TC-SR1-47).
 - Then: the exact call and the different-label call match; every other check returns no match (the call is held).
 - Traces: SR-1, AD-06, AD-07
 - Build step: B-04
@@ -2503,7 +2517,7 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 - File: packages/runner/src/rules/standing.test.ts (new)
 - Given: the rule of TC-RUL-11 and a new run of `example.fill-timesheet` that makes the `log-hours` call.
 - When: the hook channel decides the call.
-- Then: the call runs with no decision row; the step has `ruleUses: [{ruleId, tool, at}]`; the rule's `uses` is 1 and `lastUsedAt` is set; the audit has `rule_used` with `ruleId`, `flowId`, `touchId`, `effect`, place kind and value, `runId`, `stepId`; `decisionLines` holds `report.doneByRule`.
+- Then: the call runs with no decision row; the step has `ruleUses: [{ruleId, tool, at}]`; the rule's `uses` is 1 and `lastUsedAt` is set; the audit has `rule_used` with `ruleId`, `flowId`, `touchId`, `effect`, the place kind (never the place value), `runId`, `stepId`; `decisionLines` holds `report.doneByRule`.
 - Traces: SR-1, SR-7, AD-07
 - Build step: B-04
 - Fails first because: no rule use exists.
@@ -2528,12 +2542,12 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 - Build step: B-05
 - Fails first because: `rules.list` does not exist.
 
-### TC-RUL-15 Confirm creates a rule for each non-read touch left under Does on its own
+### TC-RUL-15 Confirm creates a rule for each `change` touch left under Does on its own
 - Layer: L3
 - File: packages/runner/src/service/flows-handlers.test.ts (new)
 - Given: a draft-saved flow with touches `read-calendar` (read), `write-notes` (local_write, declared folder), `log-hours` (change, fixed place), `mail-summary` (send, fixed place: the person's address).
-- When: `flows.confirm {flowId, hash, onItsOwn: ["read-calendar", "write-notes", "log-hours"]}` is called.
-- Then: the output `rules.created` holds two ids (for `write-notes` and `log-hours`; a read touch makes no rule); `mail-summary` is not in the rules; `confirmations` has `by: "confirm_dialog"`, `onItsOwn` as given; the flow state is `confirmed`; audit `flow_confirmed` and two `rule_created`; the open confirm-kind question of the flow is `closed`.
+- When: `flows.confirm {flowId, hash, onItsOwn: ["read-calendar", "write-notes", "log-hours"]}` is called; then, on a second copy of the flow, with `onItsOwn: ["read-calendar", "mail-summary"]`.
+- Then: the first output `rules.created` holds two ids (for `write-notes` and `log-hours`; a read touch makes no rule); `mail-summary` is not in the rules; `confirmations` has `by: "confirm_dialog"`, `onItsOwn` as given; the flow state is `confirmed`; audit `flow_confirmed` and two `rule_created`; the open confirm-kind question of the flow is `closed`; the second call throws `not_allowed: always_asks` and writes nothing (a send never goes under "Does on its own").
 - Traces: AD-07, SR-1, F-10
 - Build step: B-05
 - Fails first because: `flows.confirm` does not exist.
@@ -2541,9 +2555,9 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 ### TC-RUL-16 Confirm refusals write nothing
 - Layer: L3
 - File: packages/runner/src/service/flows-handlers.test.ts (new)
-- Given: a flow with head `H3`, touches `log-hours` (fixed place), `reply` (send, no place), `delete-all` (rule `not_allowed`), and a folder requirement that needs a pin.
-- When: confirm is called with: hash `H2`; `onItsOwn: ["nothing"]`; `onItsOwn: ["reply"]`; `onItsOwn: ["delete-all"]`; no pin for the folder; a pin `"relative/path"`.
-- Then: the errors are `conflict: hash_mismatch`, `invalid_input: touch_unknown`, `not_allowed: place_not_fixed`, `not_allowed: never_does`, `invalid_input: pins_missing`, `invalid_input: pin_invalid`; after each, `confirmations`, `standing_rules` and the audit are unchanged.
+- Given: a flow with head `H3`, touches `log-hours` (fixed place), `update-sheet` (change, no fixed place), `reply` (send, no place), `delete-all` (rule `not_allowed`), and a folder requirement that needs a pin.
+- When: confirm is called with: hash `H2`; `onItsOwn: ["nothing"]`; `onItsOwn: ["update-sheet"]`; `onItsOwn: ["reply"]`; `onItsOwn: ["delete-all"]`; no pin for the folder; a pin `"relative/path"`.
+- Then: the errors are `conflict: hash_mismatch`, `invalid_input: touch_unknown`, `not_allowed: place_not_fixed`, `not_allowed: always_asks`, `not_allowed: never_does`, `invalid_input: pins_missing`, `invalid_input: pin_invalid`; after each, `confirmations`, `standing_rules` and the audit are unchanged.
 - Traces: SR-1, SR-3, FS-j22
 - Build step: B-05
 - Fails first because: no such checks exist.
@@ -2553,7 +2567,7 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 - File: packages/runner/src/rules/placement.test.ts (new)
 - Given: `placeTouches(touches, {origin})` in `rules/standing.ts` returning `{onItsOwn, asksFirst, never}`; one touch of each effect `read, local_write, run_command, change, send, post, pay, delete, merge`; each with the author's claim `runs_alone`; `change` with and without a fixed place; one touch with rule `not_allowed`.
 - When: it runs with origin `chat` (a draft or a change) and with origin `market` (an installed flow).
-- Then: with `chat`: `read`, `local_write`, `run_command` and `change` with a fixed place are `onItsOwn`; `change` without a place, `send`, `post`, `pay`, `delete`, `merge` are `asksFirst`; the `not_allowed` touch is `never`; with `market` only `read` is `onItsOwn`; the author's claim changes nothing in either.
+- Then: with `chat`: `read`, `local_write`, `run_command` and `change` with a fixed place are `onItsOwn`; `change` without a place, `send`, `post`, `pay`, `delete`, `merge` are `asksFirst`; the `not_allowed` touch is `never`; with `market` only `read` is `onItsOwn`; the author's claim changes nothing in either; the five risky kinds are never movable to `onItsOwn` by a draft (TC-SR1-46).
 - Traces: SR-1, AD-06, FS-j22.A3
 - Build step: B-04
 - Fails first because: `placeTouches` does not exist.
@@ -2573,7 +2587,7 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 - File: packages/runner/src/service/decisions-handlers.test.ts (new)
 - Given: three pending `send` decisions of `example.email-triage` (replies to three different mails) with `similarGroup: "send:example.email-triage:reply"`, ids `ap-000000000001..3`.
 - When: `approvals.resolveSimilar {runId, group, approvalIds: [1,2,3]}` is called (ids in another order in a second test).
-- Then: three decisions are `approved`; three grants with three different digests exist; the audit has one `decisions_batch` and three `decision_made`; the run continues; the same ids in another order give the same result; a call with two ids (a subset) gives `conflict: list_changed` with the current ids and approves nothing.
+- Then: three decisions are `approved`; three grants with three different digests exist; every item of the group holds its whole payload (every recipient, the subject and the whole text) in `approvals.list` before the call, so the dialog can list them in full (PU-18); the audit has one `decisions_batch` and three `decision_made`; the run continues; the same ids in another order give the same result; a call with two ids (a subset) gives `conflict: list_changed` with the current ids and approves nothing.
 - Traces: FS-j24.P3, FS-j24.A3, AD-07
 - Build step: B-05
 - Fails first because: `approvals.resolveSimilar` does not exist.
@@ -2601,9 +2615,9 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 ### TC-RUL-22 approvals.list sweeps first and shows what can be offered
 - Layer: L3
 - File: packages/runner/src/service/decisions-handlers.test.ts (new)
-- Given: a decision 25 hours old, a pending decision with a fixed place, a pending one with a place from outside text, a weekly-limit question and a spending pause.
+- Given: a decision 25 hours old, a pending `change` decision (`log-hours`) with a fixed place, a pending send with a fixed own address, a pending `change` with a place from outside text, a weekly-limit question and a spending pause.
 - When: `approvals.list {}` is called, then with `{state: "pending"}`, `{runId}`, `{flowId}`.
-- Then: the old decision reads `expired`; `canAlwaysAllow` is true only for the fixed-place decision; the outside one has `outside: true` and `canAlwaysAllow: false`; the synthetic `weekly_limit` and `budget_raise` decisions are listed; the filters narrow the list; `similarWaiting` counts the other pending decisions of the group.
+- Then: the old decision reads `expired`; `canAlwaysAllow` is true only for the fixed-place `change` decision (false for the send even with a fixed place); the outside one has `outside: true` and `canAlwaysAllow: false`; the synthetic `weekly_limit` and `budget_raise` decisions are listed; the filters narrow the list; `similarWaiting` counts the other pending decisions of the group.
 - Traces: FS-j24.P3, FS-j24.A12, SR-9
 - Build step: B-05
 - Fails first because: the new fields do not exist.
@@ -2650,7 +2664,7 @@ Shared setup: harness H. Flow `example.email-triage` holds a `reply` touch (effe
 
 ## AGT Agents and models
 
-Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) lists `claude-code` and `codex`. The fake claude is `packages/runner/src/test-helpers/fake-claude.ts`; the fake codex is `packages/runner/src/test-helpers/fake-codex.ts` with `fake-codex-script.ts` (new), a Node script that logs every call (arguments, environment names, prompt, files read) to a calls file, answers its version, help, sign-in status and model list commands, and plays scripted events. The event names of the fake codex script are fixed by the fakes until the B-22 research step records the real CLI; if the recording changes a flag name or an event name, the cases below change in the same task. Sample models: Claude Code `opus-5.5` ("Opus 5.5", `mostCapable`), `sonnet-5.5` ("Sonnet 5.5", `fastCapable`, default), `haiku-5.5` ("Haiku 5.5", `fastest`); Codex `gpt-6.1-sol` ("GPT-6.1 Sol", `allRound`, default), `gpt-6.1-terra` ("GPT-6.1 Terra", `carefulCoding`), `gpt-6-luna` ("GPT-6 Luna", `fastest`) (brief 25.1). Install and sign-in polling use the injected clock; the poll is every 2 seconds.
+Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) lists `claude-code` and `codex`. The fake claude is `packages/runner/src/test-helpers/fake-claude.ts`; the fake codex is `packages/runner/src/test-helpers/fake-codex.ts` with `fake-codex-script.ts` (new), a Node script that logs every call (arguments, environment names, prompt, files read) to a calls file, answers its version, help, sign-in status and model list commands, and plays scripted events. The event names and flags of the fake codex script come from an injected agent profile until the Codex research step (a Chair step with network access that reads Codex's public help and documentation; nothing is recorded); if the research changes a name, the cases change in the same task. The same holds for the agents' install and sign-in details: until that step the catalog entries these cases use come from the injected profile, a case asserts the exact value the profile gives, and B-21 and B-22 pin the literal install commands and flags. The fake scripts are written by hand and every fixture is synthetic (TC-REPO-11). Sample models: Claude Code `opus-5.5` ("Opus 5.5", `mostCapable`), `sonnet-5.5` ("Sonnet 5.5", `fastCapable`, default), `haiku-5.5` ("Haiku 5.5", `fastest`); Codex `gpt-6.1-sol` ("GPT-6.1 Sol", `allRound`, default), `gpt-6.1-terra` ("GPT-6.1 Terra", `carefulCoding`), `gpt-6-luna` ("GPT-6 Luna", `fastest`) (the prototype brief, 'Data' under 'Choosing the AI agent and model in the chat'). Install and sign-in polling use the injected clock; the poll is every 2 seconds.
 
 ### TC-AGT-01 The agent catalog
 - Layer: L1
@@ -2697,9 +2711,9 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - File: packages/runner/src/agents/setup.test.ts (new)
 - Given: `agentPermission: "unset"`; the fake agent `claude-code` `not_installed`; the install command is the catalog entry; the fake sign-in status turns signed in after the third poll; an injected spawner records every spawn.
 - When: `agents.setUp {agentId: "claude-code"}` is called, then the clock advances by 2 seconds four times.
-- Then: the call returns at once with the agent in state `installing`; `settings.get` shows `agentPermission: "on"` before the install process starts (audit `permission_changed` with `source: "window"` comes before `agent_setup` phase `installing`); the spawned install command equals the catalog's program and args exactly, with no shell and no flag that bypasses permissions; the state goes `installing`, `waiting_login`, then `ready` after the third poll; the audit phases are `installing`, `installed`, `waiting_login`, `ready`; after `ready` no further status call is made; topics `agents` and `settings` are marked.
+- Then: nothing is spawned before this call, which comes from the person's click on Set up in the window (the one network action FlowDriven starts is the agent's official installer, and only after that click); the call returns at once with the agent in state `installing`; `settings.get` shows `agentPermission: "on"` before the install process starts (audit `permission_changed` with `source: "window"` comes before `agent_setup` phase `installing`); the spawned install command equals the catalog's program and args exactly, with no shell and no flag that bypasses permissions; the state goes `installing`, `waiting_login`, then `ready` after the third poll; the audit phases are `installing`, `installed`, `waiting_login`, `ready`; after `ready` no further status call is made; topics `agents` and `settings` are marked.
 - Traces: FS-j01.S2, FS-j01.A3, SR-2, SR-4
-- Build step: B-21
+- Build step: B-07
 - Fails first because: `agents.setUp` does not exist.
 
 ### TC-AGT-06 A failed install
@@ -2709,7 +2723,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - When: Set up runs.
 - Then: the state is `not_installed` with `problem: {code: "install_failed", detail}` where `detail` is the first stderr line, at most 120 characters, control characters removed; the permission stays `on`; the audit has phase `install_failed`; no sign-in polling starts.
 - Traces: FS-j01.E3
-- Build step: B-21
+- Build step: B-07
 - Fails first because: no setup flow exists.
 
 ### TC-AGT-07 The sign-in wait ends after 10 minutes
@@ -2719,7 +2733,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - When: the clock advances to 9 minutes 59 seconds, then to 10 minutes, then by 1 more minute.
 - Then: at 9:59 the state is `waiting_login`; at 10:00 it is `needs_login` with `problem.code: "sign_in_timeout"`; no status call is made after the timeout; the audit has `sign_in_timeout`.
 - Traces: FS-j01.E4, AD-08
-- Build step: B-21
+- Build step: B-07
 - Fails first because: no polling exists.
 
 ### TC-AGT-08 Set up for a ready or signed-out agent skips the install
@@ -2729,7 +2743,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - When: `agents.setUp` is called for each.
 - Then: for the ready agent only the permission changes to `on` (no spawn at all) and the state stays `ready`; for the signed-out agent no install runs, the sign-in starts and the state is `waiting_login`; both audit `permission_changed` once.
 - Traces: FS-j01.P3, FS-j01.S2
-- Build step: B-21
+- Build step: B-07
 - Fails first because: no setup exists.
 
 ### TC-AGT-09 Set up errors
@@ -2739,7 +2753,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - When: `agents.setUp` is called in each case.
 - Then: the errors are `conflict: setup_running`, `not_found: agent_unknown` and `unavailable: install_unavailable`; each leaves the state, the permission and the audit unchanged.
 - Traces: FS-j01.S2, runner-api section 6.2
-- Build step: B-21
+- Build step: B-07
 - Fails first because: no such errors exist.
 
 ### TC-AGT-10 Sign in needs no permission
@@ -2749,7 +2763,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - When: `agents.signIn {agentId: "claude-code"}` is called; later the fake becomes signed in.
 - Then: the first returns the agent in `waiting_login`; the state goes to `ready` after the next poll; the permission is still `unset`; the audit has `agent_sign_in`; FlowDriven never reads the fake's sign-in file; the second call gives `conflict: setup_running`; for a not installed agent `not_allowed: agent_not_installed`.
 - Traces: FS-j01.S3, SR-6
-- Build step: B-21
+- Build step: B-07
 - Fails first because: `agents.signIn` does not exist.
 
 ### TC-AGT-11 Scan again
@@ -2759,7 +2773,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - When: `agents.rescan` is called; the fake codex is installed; it is called again; then once more.
 - Then: the outputs have `found: []`, then `found: ["codex"]`, then `found: []`; each marks `agents`; an agent that was `unknown` and is now installed is also in `found`.
 - Traces: FS-j01.P2, F-01
-- Build step: B-21
+- Build step: B-07
 - Fails first because: `agents.rescan` does not exist.
 
 ### TC-AGT-12 After a restart the state comes from detection
@@ -2769,7 +2783,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - When: the service starts again and `agents.list` runs.
 - Then: the state comes from detection (`not_installed` if the binary is absent); no install process is spawned by itself (spawn count 0); the stale `setUp` is cleared.
 - Traces: FS-j01.E7, AD-08
-- Build step: B-21
+- Build step: B-07
 - Fails first because: the row keeps the old state.
 
 ### TC-AGT-13 Each agent reports its own models
@@ -2837,7 +2851,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - File: packages/runner/src/codex/args.test.ts (new)
 - Given: `buildCodexArgs({model, sandbox, resume})` in `codex/args.ts` (new).
 - When: it is called with `{model: "gpt-6.1-terra", sandbox: "workspace-write"}`, with `sandbox: "read-only"`, with `resume: true`, and with `{model: "gpt-6.1-terra"}` and no sandbox.
-- Then: the first contains the adjacent pair `-s`, `workspace-write` and the pair `-m`, `gpt-6.1-terra`; the second contains `-s`, `read-only`; with `resume: true` the sandbox is passed as `-c`, `sandbox_mode=workspace-write` and the array begins with `exec`, `resume`; the call without a sandbox throws `sandbox_required` (no default is relied on); the prompt text is in none of the arrays.
+- Then: with the injected Codex profile, the first contains the profile's sandbox flag and its `workspace-write` value (the profile's placeholder is the pair `-s`, `workspace-write`) and the profile's model flag with `gpt-6.1-terra` (placeholder `-m`); the second contains the profile's `read-only` value; with `resume: true` the sandbox is passed in the profile's resume form (placeholder `-c`, `sandbox_mode=workspace-write`) and the array begins with the profile's resume words; the sandbox value is always set explicitly and never a bypass or full-access value; the call without a sandbox throws `sandbox_required` (no default is relied on); the prompt text is in none of the arrays.
 - Traces: SR-4, AD-09, AGENTS.md
 - Build step: B-22
 - Fails first because: `codex/args.ts` does not exist.
@@ -2887,7 +2901,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - File: packages/runner/src/codex/adapter.test.ts (new)
 - Given: the fake codex with `canAnswerApprovals: false`, then `true`; flows `example.build-apk` (reads and writes its folder, one declared command) and `example.email-triage` (the Gmail account tool).
 - When: `adapter.capabilities()` and the start rule run for each.
-- Then: with `false` the capabilities are `{tier: "folder_limited", accountTools: false}`; `example.build-apk` starts on Codex; `example.email-triage` is refused with `agent_cannot_be_limited` and a chat start posts an `other_agent` card offering Claude Code; with `true` the tier is `enforced` and the same `decide` function answers Codex's approval requests (a call without a grant is held).
+- Then: with `false` the capabilities are `{tier: "folder_limited", accountTools: false}`; `example.build-apk` starts on Codex; `example.email-triage` is refused with `agent_cannot_be_limited`, and a start from a chat posts the line `{key: "chat.agentCannotRunFlow", params: {agent: "Codex"}}` (PU-26), starts nothing and posts no card (there is no `other_agent` card and no way to run once on another agent); with `true` the tier is `enforced` and the same `decide` function answers Codex's approval requests (a call without a grant is held). A Codex that has no tool-free mode is not offered for chats.
 - Traces: AD-09, SR-1, SR-4
 - Build step: B-22
 - Fails first because: no tier exists.
@@ -2905,7 +2919,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 ### TC-AGT-26 What the spending limit counts
 - Layer: L3
 - File: packages/runner/src/service/settings-handlers.test.ts (new)
-- Given: `usage_events` in November 2026 (zone `Asia/Jakarta`): `per_use` 3.25, unknown 0.75, `plan` 12.00; one `per_use` 2.00 row at 2026-10-31T16:59:00Z (31 Oct local) and one at 2026-11-30T17:30:00Z (1 Dec local); the clock 2026-11-20.
+- Given: `usage_events` in November 2026 (zone `Asia/Bangkok`): `per_use` 3.25, unknown 0.75, `plan` 12.00; one `per_use` 2.00 row at 2026-10-31T16:59:00Z (31 Oct local) and one at 2026-11-30T17:30:00Z (1 Dec local); the clock 2026-11-20.
 - When: `settings.get` is called; then with every ready agent on `plan`; then with spent 8.00 and 10.00 against a limit of 10.
 - Then: `spending` is `{month: "2026-11", spentUsd: 4, limitUsd: 10, state: "ok", allOnPlans: false}` (plan rows, last month's row and next month's row are left out); with all agents on plans `allOnPlans` is true; at 8.00 the state is `warning` and at 10.00 `reached`; chat turns (`kind: "brain"`) with cost count when per use.
 - Traces: Q-03, SR-9, F-23
@@ -2997,7 +3011,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - File: packages/runner/src/agents/conformance.test.ts (new)
 - Given: the two adapters and, per adapter, two models from its own list (`sonnet-5.5` and `opus-5.5`; `gpt-6.1-terra` and `gpt-6.1-sol`).
 - When: the same step and the same chat turn run once per model.
-- Then: per adapter the two argument lists differ only in the value after the model flag (`--model` for Claude Code, `-m` for Codex); the prompt, the environment names and the sandbox are identical.
+- Then: per adapter the two argument lists differ only in the value after the model flag (`--model` for Claude Code, the profile's model flag for Codex); the prompt, the environment names and the sandbox are identical.
 - Traces: SR-4, FS-j31.A8, AD-08
 - Build step: B-22
 - Fails first because: the Codex adapter does not exist.
@@ -3017,7 +3031,7 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - File: packages/runner/src/agents/conformance.test.ts (new)
 - Given: each fake scripted with a long step that also starts a grandchild process in the same group, and one that ignores SIGTERM.
 - When: `adapter.stop` is called mid-step (through `runs.stop`).
-- Then: the child and the grandchild are gone within 2 seconds for both fakes (checked with the injected kill seam and a `process.kill(pid, 0)` probe); for the SIGTERM-ignoring script SIGKILL follows after the 1,000 ms grace; no zombie remains.
+- Then: the child and the grandchild are gone within 2 seconds for both fakes (checked with the injected kill seam and a `process.kill(pid, 0)` probe); for the SIGTERM-ignoring script SIGKILL follows at most 1,500 ms after the call; no zombie remains.
 - Traces: SR-8, NF-07
 - Build step: B-22
 - Fails first because: the shared suite does not exist.
@@ -3160,7 +3174,7 @@ Shared setup: `searchQuery(store, text)` in `packages/runner/src/search/query.ts
 
 ### Operation coverage
 
-Every active operation has a schema case (L1, contracts) and a handler case (L3, through the dispatcher). Every operation is also covered by TC-CON-02 (the table), TC-CON-09 (unknown key) and TC-CON-08 (errors and reasons).
+Every active operation (45 in contract version 2) has a schema case (L1, contracts) and a handler case (L3, through the dispatcher). `flows.duplicate` and `starts.next` are not operations; TC-STO-37 and TC-STR-25 show that the dispatcher does not know them. Every operation is also covered by TC-CON-02 (the table), TC-CON-09 (unknown key) and TC-CON-08 (errors and reasons).
 
 | Operation | Schema case | Handler case |
 |---|---|---|
@@ -3174,13 +3188,12 @@ Every active operation has a schema case (L1, contracts) and a handler case (L3,
 | `chats.send` | CON-17 | AST-13 to AST-16 |
 | `chats.act` | CON-18, CON-19 | AST-23, AST-29, INP-22, RUL-15 |
 | `flows.list`, `flows.get` | CON-23 | STO-36 |
-| `flows.import`, `flows.duplicate` | CON-37 | STO-37 |
+| `flows.import` | CON-37 | STO-37 |
 | `flows.start` | CON-15 | STR-28, STR-02, STR-03 |
 | `flows.confirm` | CON-16 | RUL-15, RUL-16, RUL-18 |
 | `flows.setSchedule` | CON-14 | STR-13, STR-14 |
 | `flows.tryNextRun` | CON-37 | STR-24 |
 | `flows.delete` | CON-37 | STO-34 |
-| `starts.next` | CON-36 | STR-25 |
 | `runs.list` | CON-36 | ENG-22 |
 | `runs.status`, `runs.report` | CON-26 | RES-08, RES-09 |
 | `runs.export` | CON-40 | RES-10, RES-13 |
@@ -3195,28 +3208,29 @@ Every active operation has a schema case (L1, contracts) and a handler case (L3,
 
 ### Calls
 
-- Count: 307 cases, above the 150 to 250 aim, because every operation needs a schema case and a handler case and the migration, the Codex adapter and the conformance suite each need several. The build tasks can take them in groups by build step.
-- Chair decision of 2026-11-21 applied: the runner emits codes and `Line` values only (`LINE_KEYS`, TC-CON-38, TC-AST-36); a chat result stores template lines and typed values and the renderer fills them (TC-RES-01, TC-RES-02, TC-RES-04); `runs.export` returns structured parts and the renderer builds the Markdown (TC-RES-10 to TC-RES-15); a notice carries `title` and `body` as `Line` values plus `language` (TC-CON-27, TC-STR-20); retired operations stay in the table with `retired: true` and answer `unavailable` with reason `retired` (TC-CON-02, TC-CON-03, TC-ENG-25); `v1/` copies are read-only (TC-CON-39); the runner takes `--languages=en,id` (TC-AGT-30, TC-AGT-40). No case adds a dependency or touches CI.
-- Message keys and part names are mine where `runner-api.md` gives none: `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `chat.tellMe`, `chat.whatToChange`, `notice.questionTitle`, `notice.questionBody`; `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer`, `report.doneByRule` (only `report.youSaidNo` is named in `runner-api.md`). Reason: tests need exact keys; the build may rename them if the cases change in the same task.
+- Count: see the group table at the top, above the 150 to 250 aim, because every operation needs a schema case and a handler case and the migration, the Codex adapter and the conformance suite each need several. The build tasks can take them in groups by build step.
+- Owner decision of 2026-11-21 applied: the runner emits codes and `Line` values only (`LINE_KEYS`, TC-CON-38, TC-AST-36); a chat result stores template lines and typed values and the renderer fills them (TC-RES-01, TC-RES-02, TC-RES-04); `runs.export` returns structured parts and the renderer builds the Markdown (TC-RES-10 to TC-RES-15); a notice carries `title` and `body` as `Line` values plus `language` (TC-CON-27, TC-STR-20); retired operations stay in the table with `retired: true` and answer `unavailable` with reason `retired` (TC-CON-02, TC-CON-03, TC-ENG-25); `v1/` copies are read-only (TC-CON-39); the runner takes `--languages=en,id` (TC-AGT-30, TC-AGT-40). No case adds a dependency or touches CI.
+- Message keys and part names are mine where `runner-api.md` gives none: `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `chat.tellMe`, `chat.whatToChange`, `chat.permissionOff`, `chat.agentCannotRunFlow`, `chat.nothingWaiting`, `flows.empty`, `notice.decisionTitle`, `notice.decisionBody`, `notice.questionTitle`, `notice.questionBody`, `notice.problemTitle`, `notice.problemBody`, `notice.limitTitle`, `notice.limitBody`; `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer`, `report.doneByRule` (only `report.youSaidNo` is named in `runner-api.md`). Reason: tests need exact keys; the build may rename them if the cases change in the same task.
 - A hidden character in an export part is marked `[U+200B]` by the runner (a code, not words); the renderer adds the words around it. This differs from the journey cases, which show `[U+200B hidden character]` in the finished Markdown; TC-RES-14 and the journey case then agree only after the renderer builds the text.
 - Parser choices the specs leave open: a bare number is not a duration; a relative or `..` path is not a `file` value; only `http` and `https` urls without credentials pass; an invalid optional input is dropped, never asked (TC-INP-15); `remember: true` on a `date` or `time` input is a format error `remember_date_time` (TC-SDK-05).
 - Format 1.2 choices: 1.2-only keys in a 1.1 file are errors `needs_format_1_2`; `answer` on a `report` result is `answer_on_report`; placeholders are `{inputId}` and `{outputs.<id>}`; a touch place must name a declared requirement (`touch_place_undeclared`); a risky effect with `runs_alone` is a warning `risky_claims_runs_alone` and never a grant. The input question text is the input's `label` plus `example`; the SDK has no separate `question` key (the data model lists none).
 - The version 6 fixture has a deliberate name clash: `example.job-review` also carries the manifest name "Fill timesheet", so the migration's rename to "Fill timesheet 2" is tested without a real project name.
 - Run states: a signed-out agent makes the run `needs_login` with the step `failed`; `needs_login` ends as `blocked` after exactly 12 hours; an unreadable or too old agent is state `unknown` with a `problem` code.
-- Daily limit: counts every start source; a flow with no limit uses 24 (as `j28`); the window start is `refused`, a slot is `missed`.
-- Not covered here, because the specs leave it open or it belongs to another component: the `clock_changed` missed reason (no rule says which slot it marks); the Electron window API, tray and login item (ELE); the preload and IPC hops (IPC); renderer screens other than the three helper files named above (UI); the real Codex flag and event names (B-22 research recording replaces the fake codex script, and TC-AGT-19 to TC-AGT-24 change with it); Memory, Phone & bots and Marketplace (V2 and V3).
+- Daily limit: counts every start source; a flow with no limit uses 24 (as `j28`); the window start is `refused`, a slot is recorded `missed` in `starts` (no Activity row in V1).
+- Always allow and rules in V1 (owner decision, 2026-11-21, revisable): only a `change` at a fixed place can be allowed always, and the rule cases (TC-STO-22, TC-RUL-08, -09, -11, -12, -15, -16, -17, -18, -22, -25) use `log-hours` or one cloud folder upload; the risky kinds are covered in `safety.md` (TC-SR1-44 to 47).
+- Not covered here, because the specs leave it open or it belongs to another component: the `clock_changed` missed reason (no rule says which slot it marks); the Electron window API (ELE, four calls); the preload and IPC hops (IPC); renderer screens other than the three helper files named above (UI); the real Codex flag and event names (the Codex research step replaces the injected profile, and TC-AGT-19 to TC-AGT-24 change with it in the same task); Memory, Phone & bots and Marketplace (V2 and V3).
 - TC-AGT-15 follows the owner decision on the chat's agent: a chat FlowDriven starts gets the main agent and the model saved with it in Settings; the model an agent marks `isDefault` is only the pre-selection when the person picks an agent.
 - Timing: TC-SRCH-10 is the only case that reads a real clock, because it measures the system; it uses the median of 20 calls so one slow call does not fail it.
 
 ## I18N Words and languages (`apps/desktop/src/i18n`)
 
-Decided for V1 (chair, 2026-11-21): there is no `packages/i18n`. The words live in `apps/desktop/src/i18n/` (`en.ts`, `id.ts`, `languages.ts`, `t.ts`, `plural.ts`, `when.ts`); no package under `packages/` holds a word. The runner emits codes and `Line` values (`{key, params}`) only; `packages/contracts/src/line-keys.ts` (new) lists every key the runner may emit (`LINE_KEYS`). Electron main draws system notifications and the menu bar menu with the same words. Main passes the registered language codes to the runner at spawn (`--languages=en,id`).
+Decided for V1 (owner, 2026-11-21): there is no `packages/i18n`. The words live in `apps/desktop/src/i18n/` (`en.ts`, `id.ts`, `languages.ts`, `t.ts`, `plural.ts`, `when.ts`); no package under `packages/` holds a word. The runner emits codes and `Line` values (`{key, params}`) only; `packages/contracts/src/line-keys.ts` (new) lists every key the runner may emit (`LINE_KEYS`). Electron main draws system notifications with the same words (V1 has no menu bar menu). Main passes the registered language codes to the runner at spawn (`--languages=en,id`).
 
 Shared fixtures for this group (built in `apps/desktop/src/i18n/test-helpers/tree.ts` (new), `makeLanguageTree(files)`, which writes a temporary folder and returns its path):
 
 - BASE tree: `lang/en.ts` with `{code: "en", name: "English", words: {a: {one: "One {n}", two: {one: "{n} item", other: "{n} items"}, used: "Used"}}}`; `lang/id.ts` with the same keys: `a.one` "Satu {n}", `a.two` {other: "{n} butir"}, `a.used` "Dipakai"; `lang/languages.ts` listing `en` and `id`; `src/app.ts` calling `t("a.one")`, `t("a.two")` and `t("a.used")`.
 - The check is `checkLanguages({root, languageDir: "lang", sourceDirs: ["src"], lineKeys: []})` in `apps/desktop/src/i18n/check.ts` (new). It returns `{findings, untranslated}`. A finding is `{kind, file, key?, line?, column?, fix}`; `formatFinding(finding)` returns one line: `<file>[:<line>] <key>: <problem>. Fix: <fix>.` The real tree uses the defaults: language folder `apps/desktop/src/i18n`, sources `apps/desktop/src` and `apps/desktop/electron`, and `LINE_KEYS` from `@flowdriven/contracts`.
-- The check runs as the Vitest test `apps/desktop/src/i18n/i18n.test.ts` (project `ui`), so `pnpm test` and `pnpm check` run it (brief 24.11). Nothing goes into `tools/checks/`.
+- The check runs as the Vitest test `apps/desktop/src/i18n/i18n.test.ts` (project `ui`), so `pnpm test` and `pnpm check` run it (the prototype brief, 'Fixes after the re-check' under 'English and Bahasa Indonesia'). Nothing goes into `tools/checks/`.
 
 ### TC-I18N-01 Keys are typed against English
 - Layer: L1
@@ -3311,9 +3325,9 @@ Shared fixtures for this group (built in `apps/desktop/src/i18n/test-helpers/tre
 ### TC-I18N-10 Dates use the zone given, not the machine's zone
 - Layer: L1
 - File: apps/desktop/src/i18n/when.test.ts (new)
-- Given: the instant 2026-11-19T17:30:00Z; the suite runs once with `TZ=UTC` and once with `TZ=Asia/Jakarta` (a second Vitest invocation named in the test's header comment)
-- When: `shortDate(at, "en", "Asia/Jakarta")`, `shortDate(at, "en", "UTC")`, `clockTime(at, "Asia/Jakarta")` and `clockTime(at, "UTC")` run
-- Then: the results are "Fri 20 Nov", "Thu 19 Nov", "00:30" and "17:30" under both machine zones; calling a helper without a zone argument is a type error (`// @ts-expect-error`).
+- Given: the instant 2026-11-19T17:30:00Z; the helpers take the IANA zone as an argument and never read the process `TZ`; the case runs its calls plainly, then inside `withTimeZone("UTC", ...)` and `withTimeZone("America/Chicago", ...)` of `test-plan.md` section 3
+- When: `shortDate(at, "en", "Asia/Bangkok")`, `shortDate(at, "en", "UTC")`, `clockTime(at, "Asia/Bangkok")` and `clockTime(at, "UTC")` run
+- Then: the results are "Fri 20 Nov", "Thu 19 Nov", "00:30" and "17:30" under every process zone; calling a helper without a zone argument is a type error (`// @ts-expect-error`).
 - Traces: FS-j30.A8, NF-37, F-20
 - Build step: B-06
 - Fails first because: `when.ts` does not exist.
@@ -3331,7 +3345,7 @@ Shared fixtures for this group (built in `apps/desktop/src/i18n/test-helpers/tre
 ### TC-I18N-12 Words use Intl names for months and weekdays
 - Layer: L1
 - File: apps/desktop/src/i18n/when.test.ts (new)
-- Given: `shortDate(at, language, "Asia/Jakarta")`
+- Given: `shortDate(at, language, "Asia/Bangkok")`
 - When: it runs for the instants 2026-03-02T05:00:00Z, 2026-06-01T05:00:00Z, 2026-09-15T05:00:00Z and 2026-12-31T05:00:00Z in `id`
 - Then: the results are "Sen 2 Mar", "Sen 1 Jun", "Sel 15 Sep" and "Kam 31 Des".
 - Traces: FS-j30.A8, FS-j30.A14, F-20
@@ -3552,11 +3566,21 @@ Shared fixtures for this group (built in `apps/desktop/src/i18n/test-helpers/tre
 - Layer: L3
 - File: packages/runner/src/service/language.test.ts (new)
 - Given: a chat turn that starts a run from the fake brain, a scheduled proactive question for Fill timesheet, and a decision for "Send reply to Sam Example?"
-- When: the chat messages, the notices and `starts.next` are read from the store and the operations
-- Then: every FlowDriven line is stored as `{key, params}` with the language it was posted in (for example key `chat.starting` params {flow: "Fill timesheet"}, language "en"); no stored line holds an English sentence as text; each notice carries `title` and `body` as `Line` values plus `language`; `starts.next` returns `{language, next}` with `next` holding the flow name and the time as data.
+- When: the chat messages and the notices are read from the store and the operations
+- Then: every FlowDriven line is stored as `{key, params}` with the language it was posted in (for example key `chat.starting` params {flow: "Fill timesheet"}, language "en"); no stored line holds an English sentence as text; each notice carries `title` and `body` as `Line` values with no params, plus `language` (fixed `notice.*` keys, no decision title and no flow name); there is no `starts.next` operation.
 - Traces: AD-14, FS-j30.P3, FS-j30.P9, FS-j30.A16
 - Build step: B-06
 - Fails first because: the runner still posts English text.
+
+### TC-I18N-35 Plain words are checked in both languages (NF-54)
+- Layer: L1
+- File: apps/desktop/src/i18n/i18n.test.ts (new)
+- Given: every value of the real `en.ts` and `id.ts` (every string and every plural form); the list of forbidden words of the plain-words principle, written in the test (it holds, for example, "harness", "prompt", "token", "sandbox", "MCP", "JSON", "payload", "hash", "digest", "schema", "stdio", "runner", "IPC", with the Indonesian spelling next to each word where it differs); the pattern of a run id (`run-` followed by six or more hex digits, or `<prefix>-` followed by twelve digits) and the pattern of a version number (`\d+\.\d+\.\d+` and `v` followed by digits); and an explicit allowlist in the test, each entry `{key, text, reason}` (for example the model names "Sonnet 5.5" and "Opus 5.5", whose number is part of a name and not a version).
+- When: every value is split into words and matched case-insensitively as whole words against the list and the two patterns; then scratch values holding one forbidden word, a run id and a version number each are checked the same way.
+- Then: no value of either language holds a forbidden word, a run id or a version number except an allowlist entry; an allowlist entry whose key or text no longer exists in the words files fails the test (the fix is to remove it); each scratch value fails with a finding in the form of TC-I18N-29 (file, key, "Fix: ...").
+- Traces: NF-54, F-20, FS-j30.A11
+- Build step: B-06
+- Fails first because: no plain-words check exists.
 
 ## IPC Preload and the IPC layer
 
@@ -3567,7 +3591,7 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 - File: apps/desktop/electron/preload.test.ts
 - Given: the preload run with argv `["--flowdriven-runner=on"]` against the fake `contextBridge` and `ipcRenderer`
 - When: the object passed to `exposeInMainWorld` is read
-- Then: `exposeInMainWorld` was called once with the name `flowdrivenShell`; `Object.keys(api)` is ["kind", "runner", "window"]; `api.kind` is "electron"; `Object.keys(api.runner)` is ["call", "subscribe"]; `Object.keys(api.window)` is ["getPrefs", "setColorMode", "setBackground", "openLink", "quit"]; every value of `runner` and `window` is a function; there is no `fs`, `shell`, `dialog`, `process` or `require` key at any level.
+- Then: `exposeInMainWorld` was called once with the name `flowdrivenShell`; `Object.keys(api)` is ["kind", "runner", "window"]; `api.kind` is "electron"; `Object.keys(api.runner)` is ["call", "subscribe"]; `Object.keys(api.window)` is ["getPrefs", "setColorMode", "openLink", "quit"]; every value of `runner` and `window` is a function; there is no `fs`, `shell`, `dialog`, `process` or `require` key at any level.
 - Traces: NF-24, AD-02, T-14
 - Build step: B-20
 - Fails first because: the preload exposes no `window` object.
@@ -3587,7 +3611,7 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 - File: apps/desktop/electron/preload.test.ts
 - Given: the preload run with argv `[]` (a capture window)
 - When: the exposed object is read
-- Then: `Object.keys(api)` is ["kind", "window"]; `api.runner` is undefined; `api.window` has the five functions.
+- Then: `Object.keys(api)` is ["kind", "window"]; `api.runner` is undefined; `api.window` has the four functions.
 - Traces: NF-24, AD-02
 - Build step: B-20
 - Fails first because: the preload has no `window` object.
@@ -3596,8 +3620,8 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 - Layer: L1
 - File: apps/desktop/electron/preload.test.ts
 - Given: the object of TC-IPC-01 and a fake `ipcRenderer.invoke` that returns `{ok: true, result: {}}`
-- When: the test calls `getPrefs()`, `setColorMode("dark")`, `setBackground({keepRunning: false})`, `openLink("https://example.com/a")` and `quit()`, and `runner.call("flows.list", {})`
-- Then: `invoke` received, in order, ("window:getPrefs"), ("window:setColorMode", "dark"), ("window:setBackground", {keepRunning: false}), ("window:openLink", "https://example.com/a"), ("window:quit") and ("runner:call", "flows.list", {}); no call carries more arguments than listed.
+- When: the test calls `getPrefs()`, `setColorMode("dark")`, `openLink("https://example.com/a")` and `quit()`, and `runner.call("flows.list", {})`
+- Then: `invoke` received, in order, ("window:getPrefs"), ("window:setColorMode", "dark"), ("window:openLink", "https://example.com/a"), ("window:quit") and ("runner:call", "flows.list", {}); no call carries more arguments than listed.
 - Traces: NF-24, AD-15
 - Build step: B-20
 - Fails first because: the window functions do not exist.
@@ -3607,7 +3631,7 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 - File: apps/desktop/electron/preload.test.ts
 - Given: the preload source and a fake `ipcRenderer` that records every channel name it is given
 - When: the test calls every exposed function once, subscribes and unsubscribes
-- Then: the set of channel names used is exactly {"runner:call", "runner:event", "window:getPrefs", "window:setColorMode", "window:setBackground", "window:openLink", "window:quit"}; the preload source contains no other string that matches `/^[a-z]+:[A-Za-z]+$/`.
+- Then: the set of channel names used is exactly {"runner:call", "runner:event", "window:getPrefs", "window:setColorMode", "window:openLink", "window:quit"}; the preload source contains no other string that matches `/^[a-z]+:[A-Za-z]+$/`.
 - Traces: NF-24, runner-api 12.2
 - Build step: B-20
 - Fails first because: the window channels are not used.
@@ -3655,7 +3679,7 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 ### TC-IPC-10 Main refuses a method that is not an operation of contract version 2
 - Layer: L1
 - File: apps/desktop/electron/runner-ipc.test.ts
-- Given: the handler with `operationNames` taken from `@flowdriven/contracts` (the 47 names of runner-api section 5)
+- Given: the handler with `operationNames` taken from `@flowdriven/contracts` (the 45 names of runner-api section 5)
 - When: it runs with "flows.list" (known), "flows.nope" (matches the pattern, unknown), "flows.build", "harnesses.list", "queue.list", "usage.summary" (retired), "Flows.list", "flows", "flows.list.extra", "flows.list " and "../x.y"
 - Then: "flows.list" reaches the link; "flows.nope" and the four retired names get `{ok: false, error: {code: "not_found"}}` with no link call; the last five get `{ok: false, error: {code: "invalid_input"}}` with no link call.
 - Traces: NF-24, runner-api 12.3, runner-api 12.6
@@ -3785,8 +3809,8 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 ### TC-IPC-23 Every window channel checks the sender
 - Layer: L1
 - File: apps/desktop/electron/window-api.test.ts (new)
-- Given: `registerWindowApi({ipc, appearance, background, openLink, quit})` with the fake `ipcMain` and spies for the four services
-- When: each of the five channels is called from the own frame (a valid argument list) and from a child frame, a null frame and `https://example.com/`
+- Given: `registerWindowApi({ipc, appearance, openLink, quit})` with the fake `ipcMain` and spies for the three services
+- When: each of the four channels is called from the own frame (a valid argument list) and from a child frame, a null frame and `https://example.com/`
 - Then: the own frame calls its service once and gets `{ok: true, result: ...}`; every other frame gets `{ok: false, error: {code: "not_allowed"}}` and no service is called.
 - Traces: NF-24, T-14, runner-api 12.3
 - Build step: B-20
@@ -3796,7 +3820,7 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 - Layer: L1
 - File: apps/desktop/electron/window-api.test.ts (new)
 - Given: the setup of TC-IPC-23, own frame
-- When: `window:getPrefs` runs with one argument, `window:quit` with one argument, `window:setColorMode` with zero and with two ("dark", "x"), `window:setBackground` with zero and two, `window:openLink` with zero and two
+- When: `window:getPrefs` runs with one argument, `window:quit` with one argument, `window:setColorMode` with zero and with two ("dark", "x"), `window:openLink` with zero and two
 - Then: every reply is `{ok: false, error: {code: "invalid_input"}}` and no service is called.
 - Traces: NF-24, runner-api 12.3
 - Build step: B-20
@@ -3807,19 +3831,19 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 - File: apps/desktop/electron/window-api.test.ts (new)
 - Given: the setup of TC-IPC-23
 - When: `window:setColorMode` runs with "light", "system", "dark", then "Dark", "auto", "purple", "", undefined, 1, null and {}
-- Then: the first three call `appearance.set` and reply `{ok: true, result: {colorMode, keepRunning, openAtLogin, platform}}`; the other eight reply `{ok: false, error: {code: "invalid_input"}}` and `appearance.set` was called three times in total.
+- Then: the first three call `appearance.set` and reply `{ok: true, result: {colorMode, platform}}`; the other eight reply `{ok: false, error: {code: "invalid_input"}}` and `appearance.set` was called three times in total.
 - Traces: FS-j12.A2, AD-15, T-14
 - Build step: B-20
 - Fails first because: `window-api.ts` does not exist.
 
-### TC-IPC-26 The background patch takes only two booleans
+### TC-IPC-26 There is no setBackground channel
 - Layer: L1
 - File: apps/desktop/electron/window-api.test.ts (new)
-- Given: the setup of TC-IPC-23
-- When: `window:setBackground` runs with {keepRunning: true}, {openAtLogin: false}, {keepRunning: false, openAtLogin: true}, then {}, {keepRunning: "yes"}, {openAtLogin: 1}, {keepRunning: true, extra: 1}, [], null, "x" and an object made by `Object.create({keepRunning: true})`
-- Then: the first three reach `background.apply` with exactly those keys and reply `{ok: true}`; the other eight reply `{ok: false, error: {code: "invalid_input"}}` with no `apply` call.
+- Given: the setup of TC-IPC-23 and the preload of TC-IPC-01
+- When: `registerWindowApi` has run; a call to the channel "window:setBackground" is made from the own frame with {keepRunning: true}; the preload source and `window-api.ts` are searched for `setBackground`, `keepRunning` and `openAtLogin`
+- Then: exactly four window channels are registered (`window:getPrefs`, `window:setColorMode`, `window:openLink`, `window:quit`); the call to "window:setBackground" has no handler and changes nothing; no file under `apps/desktop/electron/` or `packages/contracts/src/` mentions `setBackground`, `keepRunning` or `openAtLogin` (V1 keeps the app alive when its window closes and adds no background setting).
 - Traces: FS-j12.A15, AD-02, T-14
-- Build step: B-23
+- Build step: B-20
 - Fails first because: `window-api.ts` does not exist.
 
 ### TC-IPC-27 openLink accepts only a short https address with no credentials
@@ -3829,14 +3853,14 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 - When: `window:openLink` runs with "https://example.com/a?x=1", then "http://example.com/", "javascript:alert(1)", "file:///etc/hosts", "app://flowdriven/", "data:text/html,x", "https://sam:pw@example.com/", "https://sam@example.com/", "not a url", "", `"https://example.com/" + "a".repeat(2048)`, 5 and null
 - Then: the first reaches the spy with the exact string and replies `{ok: true, result: {opened: true}}`; the other twelve reply `{ok: false, error: {code: "invalid_input"}}` and the spy was called once in total.
 - Traces: AD-16, NF-26, T-14, runner-api 12.3
-- Build step: B-16
+- Build step: B-20
 - Fails first because: `window:openLink` does not exist.
 
 ### TC-IPC-28 The window schemas live in contracts and refuse extra keys
 - Layer: L1
 - File: packages/contracts/src/window.test.ts (new)
 - Given: `WindowPrefs` and `WindowReply` from `packages/contracts/src/window.ts` (new)
-- When: `WindowPrefs.parse` runs with {colorMode: "system", keepRunning: true, openAtLogin: true, platform: "darwin"}, then with colorMode "auto", platform "freebsd", a missing `keepRunning`, `keepRunning: "true"`, and an extra key; `WindowReply(WindowPrefs).parse` runs with {ok: true, result: <prefs>} and with {ok: false, error: {code: "not_found", message: "x"}}
+- When: `WindowPrefs.parse` runs with {colorMode: "system", platform: "darwin"}, then with colorMode "auto", platform "freebsd", a missing `platform`, the extra key `keepRunning: true`, and the extra key `openAtLogin: true`; `WindowReply(WindowPrefs).parse` runs with {ok: true, result: <prefs>} and with {ok: false, error: {code: "not_found", message: "x"}}
 - Then: the first parses; the next five fail; the reply with a valid prefs parses; the error reply fails because "not_found" is not one of "not_allowed", "invalid_input", "unavailable".
 - Traces: NF-24, runner-api 12.1
 - Build step: B-20
@@ -3844,7 +3868,7 @@ Fakes for this group: a fake `ipcMain` (`handle(channel, listener)` records list
 
 ## ELE Electron main
 
-Fakes for this group (in `apps/desktop/electron/test-helpers/fakes.ts` (new)): `fakeApp` (`quit`, `on`, `getPath("userData")` returning a temporary folder, `setLoginItemSettings`, `getLoginItemSettings`), `fakeNativeTheme` (`themeSource`, `shouldUseDarkColors`, `on("updated")`), `fakeFs` (records `writeFile`, `rename`, `readFile`, and can be told to fail), `fakeTray`, `fakeMenu` (`buildFromTemplate` returns the template), `fakeNotification` (records `show`, `close`, click handlers; `isSupported()` settable), `fakeShell` (`openExternal` records), `fakeSession` (records `webRequest.onBeforeRequest`, `setPermissionRequestHandler`, `setPermissionCheckHandler`), `fakeWindow` (`isFocused`, `isDestroyed`, `hide`, `show`, `loadURL`, `webContents`). The injected clock is a plain function argument; the app language comes from the runner (the notice's `language`, the answer of `starts.next`). Function names for the new modules (`createAppearance`, `createTray`, `buildTrayMenu`, `createLoginItem`) are this group's choice; they live in the files named in the module map.
+Fakes for this group (in `apps/desktop/electron/test-helpers/fakes.ts` (new)): `fakeApp` (`quit`, `on`, `getPath("userData")` returning a temporary folder), `fakeNativeTheme` (`themeSource`, `shouldUseDarkColors`, `on("updated")`), `fakeFs` (records `writeFile`, `rename`, `readFile`, and can be told to fail), `fakeNotification` (records `show`, `close`, click handlers; `isSupported()` settable), `fakeShell` (`openExternal` records), `fakeSession` (records `webRequest.onBeforeRequest`, `setPermissionRequestHandler`, `setPermissionCheckHandler`), `fakeWindow` (`isFocused`, `isDestroyed`, `hide`, `show`, `loadURL`, `webContents`). The injected clock is a plain function argument; the app language comes from the runner (the notice's `language`). V1 adds no menu bar icon and no login item, so there is no fake tray, menu or login item. Function names for the new modules (`createAppearance`) are this group's choice; they live in the files named in the module map.
 
 ### TC-ELE-01 The web preferences keep every lockdown flag
 - Layer: L1
@@ -3921,7 +3945,7 @@ Fakes for this group (in `apps/desktop/electron/test-helpers/fakes.ts` (new)): `
 - File: apps/desktop/electron/appearance.test.ts (new)
 - Given: `createAppearance({fs, nativeTheme, userDataDir: "U"})` with the fakes; the file is `U/window.json`
 - When: `set("dark")`, `set("light")` and `set("system")` run in order
-- Then: `nativeTheme.themeSource` becomes "dark", "light", "system" in that order; each save wrote `U/window.json.tmp` first and then renamed it to `U/window.json` (the fake `fs` log shows `writeFile` before `rename`, never a direct write to `window.json`); the last file content parses to {version: 1, colorMode: "system", keepRunning: true}.
+- Then: `nativeTheme.themeSource` becomes "dark", "light", "system" in that order; each save wrote `U/window.json.tmp` first and then renamed it to `U/window.json` (the fake `fs` log shows `writeFile` before `rename`, never a direct write to `window.json`); the last file content parses to {version: 1, colorMode: "system"}.
 - Traces: FS-j12.A2, AD-15, F-15
 - Build step: B-20
 - Fails first because: `appearance.ts` does not exist.
@@ -3929,7 +3953,7 @@ Fakes for this group (in `apps/desktop/electron/test-helpers/fakes.ts` (new)): `
 ### TC-ELE-09 A failed save leaves the old file and reports unavailable
 - Layer: L1
 - File: apps/desktop/electron/appearance.test.ts (new)
-- Given: a file holding {version: 1, colorMode: "dark", keepRunning: true}; `fs.rename` set to throw
+- Given: a file holding {version: 1, colorMode: "dark"}; `fs.rename` set to throw
 - When: `set("light")` runs
 - Then: it rejects with code `unavailable`; the file still holds "dark"; `nativeTheme.themeSource` is still "dark"; no `window.json.tmp` is left behind (the fake `fs` shows it was removed).
 - Traces: FS-j12.A13, AD-15
@@ -3939,9 +3963,9 @@ Fakes for this group (in `apps/desktop/electron/test-helpers/fakes.ts` (new)): `
 ### TC-ELE-10 An unreadable or wrong file gives Auto
 - Layer: L1
 - File: apps/desktop/electron/appearance.test.ts (new)
-- Given: the file content is, in turn: missing, empty, "{", "[]", `{"version": 2, "colorMode": "dark", "keepRunning": true}`, `{"version": 1, "colorMode": "purple", "keepRunning": true}`, `{"version": 1, "colorMode": "dark"}`, `{"version": 1, "colorMode": "dark", "keepRunning": true, "extra": 1}`, and `{"version": 1, "colorMode": "dark", "keepRunning": false}`
+- Given: the file content is, in turn: missing, empty, "{", "[]", `{"version": 2, "colorMode": "dark"}`, `{"version": 1, "colorMode": "purple"}`, `{"version": 1}`, `{"version": 1, "colorMode": "dark", "extra": 1}`, `{"version": 1, "colorMode": "dark", "keepRunning": true}` (an old key is an unknown key), and `{"version": 1, "colorMode": "dark"}`
 - When: `load()` runs for each
-- Then: the first eight give {colorMode: "system", keepRunning: true} (the defaults: Auto, and keeping running on, Q-02); the last gives {colorMode: "dark", keepRunning: false}; `load()` never throws.
+- Then: the first nine give {colorMode: "system"} (the default: Auto); the last gives {colorMode: "dark"}; `window.json` keeps only `{version: 1, colorMode}`; `load()` never throws.
 - Traces: FS-j12.A13, AD-15, data-model 3.19
 - Build step: B-20
 - Fails first because: `appearance.ts` does not exist.
@@ -3966,102 +3990,102 @@ Fakes for this group (in `apps/desktop/electron/test-helpers/fakes.ts` (new)): `
 - Build step: B-20
 - Fails first because: nothing updates the window background after a change.
 
-### TC-ELE-13 getPrefs reports file, login item and platform, never the store
+### TC-ELE-13 getPrefs reports the file and the platform, never the store
 - Layer: L1
 - File: apps/desktop/electron/window-api.test.ts (new)
-- Given: a file {colorMode: "dark", keepRunning: false}; `app.getLoginItemSettings()` returns `{openAtLogin: true}`; platform "darwin"; the runner link is a spy
+- Given: a file {version: 1, colorMode: "dark"}; platform "darwin"; the runner link is a spy
 - When: `window:getPrefs` runs from the own frame
-- Then: the reply is `{ok: true, result: {colorMode: "dark", keepRunning: false, openAtLogin: true, platform: "darwin"}}`; the link spy was not called; a second run with the operating system's login item changed to false gives `openAtLogin: false` (the operating system wins).
+- Then: the reply is `{ok: true, result: {colorMode: "dark", platform: "darwin"}}`; the link spy was not called; with no readable file the reply has `colorMode: "system"`.
 - Traces: FS-j12.A15, runner-api 12.7, data-model 3.19
-- Build step: B-23
+- Build step: B-20
 - Fails first because: `getPrefs` does not exist.
 
-### TC-ELE-14 The login item is set through the operating system and read back
+### TC-ELE-14 No login item is set (source rule)
 - Layer: L1
-- File: apps/desktop/electron/login-item.test.ts (new)
-- Given: `createLoginItem({app})` with `fakeApp`
-- When: `set(true)`, `set(false)`, then `set(true)` with `setLoginItemSettings` made to throw
-- Then: `setLoginItemSettings` got {openAtLogin: true} and then {openAtLogin: false}; `get()` returns what the fake `getLoginItemSettings` returns, not a cached value; the throwing call rejects with code `unavailable` and `get()` is unchanged.
+- File: apps/desktop/electron/source-rules.test.ts (new)
+- Given: every non-test file under `apps/desktop/electron/`
+- When: each is read
+- Then: none contains `setLoginItemSettings`, `getLoginItemSettings` or `openAtLogin`; no file named `login-item.ts` exists (V1 adds no Open at login; it goes into the prototype first, later); a scratch file with `setLoginItemSettings(` makes the test fail with its path.
 - Traces: FS-j12.A15, FS-j28.A22, F-22
-- Build step: B-23
-- Fails first because: `login-item.ts` does not exist.
+- Build step: B-20
+- Fails first because: the test file does not exist.
 
-### TC-ELE-15 setBackground applies both parts and keeps the file in step
+### TC-ELE-15 The window API has no setBackground and holds no background setting
 - Layer: L1
 - File: apps/desktop/electron/window-api.test.ts (new)
-- Given: `window:setBackground` wired to `createTray`, `createLoginItem` and `createAppearance` fakes; the file holds keepRunning true
-- When: it runs with {keepRunning: false}, then {openAtLogin: false}, then {keepRunning: true, openAtLogin: true}
-- Then: the first destroys the tray, writes `keepRunning: false` to `window.json` and leaves the login item alone; the second sets the login item to false and leaves the tray and the file alone; the third creates the tray, writes `keepRunning: true` and sets the login item to true; each reply carries the new `WindowPrefs`.
+- Given: `registerWindowApi` with the fakes and the real `WindowPrefs` schema
+- When: the registered channel names and the preload's `window` keys are read; `WindowPrefs` is parsed with the keys `keepRunning` and `openAtLogin`
+- Then: the channels are exactly the four of TC-IPC-26; the preload has no `setBackground`; `WindowPrefs` refuses both keys as unknown; `settings.get` has no `background` key (TC-CON-20); `window.json` is written only by `createAppearance`.
 - Traces: FS-j12.A15, runner-api 12.7, F-22
-- Build step: B-23
-- Fails first because: `setBackground` does not exist.
+- Build step: B-20
+- Fails first because: `window-api.ts` does not exist.
 
-### TC-ELE-16 One tray icon, created and destroyed with the switch
+### TC-ELE-16 No tray icon is created (source rule)
 - Layer: L1
-- File: apps/desktop/electron/tray.test.ts (new)
-- Given: `createTray({Tray, Menu, link, language, clock})` with the fakes
-- When: `show()` runs twice, then `hide()` twice, then `show()` again
-- Then: the fake `Tray` constructor ran twice in total (once per show after a hide); between the two `show()` calls there was never more than one live tray; a second `hide()` does nothing and does not throw; on `darwin` the icon is a template image.
+- File: apps/desktop/electron/source-rules.test.ts (new)
+- Given: every non-test file under `apps/desktop/electron/`
+- When: each is read
+- Then: none imports `Tray` or `Menu` from `electron`, none constructs a `Tray`, and no file named `tray.ts` exists (V1 adds no menu bar icon, no quit warning and no Background section; they go into the prototype first, later).
 - Traces: FS-j28.A22, F-22
-- Build step: B-23
-- Fails first because: `tray.ts` does not exist.
+- Build step: B-20
+- Fails first because: the test file does not exist.
 
-### TC-ELE-17 The menu bar menu asks the runner for the next start and draws the line itself
+### TC-ELE-17 Main asks the runner for no menu line
 - Layer: L3
-- File: apps/desktop/electron/tray.test.ts (new)
-- Given: a link stub that answers `starts.next` with {language: "en", next: {flowName: "Fill timesheet", at: "2026-11-19T10:00:00Z"}} (Thursday 17:00 in `Asia/Jakarta`), the zone `Asia/Jakarta`
-- When: the tray's menu is built
-- Then: the link received exactly one call, `starts.next` with `{withinHours: 24}`; the template is [disabled "Quitting stops your schedules. Next: Fill timesheet, Thu 19 Nov 17:00.", separator, "Open FlowDriven", "Quit"], drawn by main from the words of `apps/desktop/src/i18n` (the runner sent data only); with `next: null` the template is ["Open FlowDriven", "Quit"]; with the link rejecting (`engine_stopped`) it is the same two items in the last language main saw ("en" when none) and nothing throws.
-- Traces: FS-j28.P10, FS-j28.A22, runner-api 12.7, AD-14
-- Build step: B-23
-- Fails first because: `tray.ts` does not exist and `starts.next` does not return a language.
+- File: apps/desktop/electron/main.test.ts (new)
+- Given: `startMain({...})` with a link stub that records every call and a fake window
+- When: main starts, the window is closed, `activate` creates a new window, and the person quits
+- Then: the only call main makes to the runner of its own accord is `runner.info`; there is no call named `starts.next` (that operation does not exist) and no menu or tray is built; calls relayed from the renderer are passed on unchanged.
+- Traces: FS-j28.P10, FS-j28.A22, runner-api 12.7
+- Build step: B-21
+- Fails first because: `startMain` does not exist as a testable function.
 
-### TC-ELE-18 The menu bar menu follows the app language of the moment
+### TC-ELE-18 Main's notification words come through the words files
 - Layer: L1
-- File: apps/desktop/electron/tray.test.ts (new)
-- Given: `starts.next` answers {language: "en", next: ...} and then {language: "id", next: ...} with the same next start
-- When: the menu is built twice
-- Then: the first template has "Open FlowDriven" and "Quit"; the second has "Buka FlowDriven" and "Keluar" and the warning line with the date "Kam 19 Nov" and the clock "jam 17:00" in the Indonesian words of `time.*`; the first menu object is not changed by the second build; `tray.ts` holds no literal "Open FlowDriven" or "Quit" (the words come through `t`).
-- Traces: FS-j30.A16, FS-j28.P10, AD-14
+- File: apps/desktop/electron/notifier.test.ts
+- Given: the source of `notifier.ts` and the `Line` keys `notice.*` of TC-CON-27
+- When: the source is read and a notice is drawn in "en" and in "id" with a test language file that changes the words of `notice.decisionTitle`
+- Then: the source holds no literal notification sentence (every title and body comes from `t`); the test language's words appear in the notification, so main uses the notice's `language` and not a fixed one; nothing from the runner's params is added (the keys have none).
+- Traces: FS-j30.A16, AD-14
 - Build step: B-06
-- Fails first because: the menu words are not read through `apps/desktop/src/i18n`.
+- Fails first because: the notification words are not read through `apps/desktop/src/i18n`.
 
-### TC-ELE-19 Closing the last window, quitting and reopening
+### TC-ELE-19 Closing the last window keeps the app alive on macOS; quitting and reopening
 - Layer: L1
 - File: apps/desktop/electron/main.test.ts (new)
-- Given: `registerAppLifecycle({app, keepRunning, tray, windows, link})` with the fakes
-- When: `window-all-closed` fires with `keepRunning` true on "darwin", "win32" and "linux", then with false on the same three; then `activate` fires with no window; then a second instance event fires
-- Then: with true no platform calls `app.quit` and the tray exists; with false all three call `app.quit` (macOS too, because the person turned the menu bar part off); `activate` creates one window; the second instance focuses the existing window and creates none.
+- Given: `registerAppLifecycle({app, windows, link})` with the fakes
+- When: `window-all-closed` fires on "darwin", "win32" and "linux"; then `activate` fires with no window; then a second instance event fires
+- Then: on "darwin" `app.quit` is not called (the app stays alive when its window closes, as today in `apps/desktop/electron/main.ts`, so schedules keep running until the person quits; V1 adds no menu bar icon, no login item and no quit warning); on "win32" and "linux" `app.quit` is called, as today; `activate` creates one window; the second instance focuses the existing window and creates none.
 - Traces: FS-j28.A22, F-22, AD-02
 - Build step: B-23
-- Fails first because: today macOS never quits on `window-all-closed`.
+- Fails first because: `registerAppLifecycle` does not exist as a function a test can reach (the behaviour is unchanged from today).
 
 ### TC-ELE-20 Quit stops the runner first
 - Layer: L1
 - File: apps/desktop/electron/main.test.ts (new)
 - Given: the lifecycle of TC-ELE-19 and a link whose `stop` takes one tick
-- When: `window:quit` runs from the own frame (keepRunning true), then `before-quit` fires
+- When: `window:quit` runs from the own frame, then `before-quit` fires
 - Then: the reply is `{ok: true, result: {}}`; `app.quit` was called once; `link.stop` was called before the app finished quitting (the `before-quit` handler called `preventDefault` once, waited for `stop`, then quit again); a call from another frame gets `not_allowed` and does not quit.
 - Traces: SR-8, FS-j01.E8, runner-api 12.1
-- Build step: B-21
+- Build step: B-23
 - Fails first because: `window:quit` does not exist.
 
-### TC-ELE-21 The notice parser knows the v2 targets and kinds, and Line values
+### TC-ELE-21 The notice parser knows the v2 targets and kinds, and fixed Line values
 - Layer: L1
 - File: apps/desktop/electron/notifier.test.ts
-- Given: `parseNotice` from `notifier.ts`; a valid notice shape {id, kind, title: {key: "status.waitingForYou"}, body: {key: "notice.decisionBody", params: {title: "Send reply to Sam Example?"}}, language: "en", target}
-- When: it runs with valid notices for kinds `approval_waiting`, `run_blocked`, `weekly_limit`, `flood_cap`, `trigger_paused` and `question_waiting`, with targets {screen: "run", runId: "r1", approvalId: "a1"}, {screen: "chat", chatId: "c13"}, {screen: "flow", flowId: "example.fill-timesheet"}, {screen: "activity"} and {screen: "settings"}; then with the targets {screen: "inbox"} and {screen: "builder", flowId: "x"}, an unknown kind "progress", an extra key, a `title` that is a plain string, a `title` key "not a key", a param value of 401 characters, a `language` of "xx" (not registered), a missing `language`, and an id of "bad id" for a target
-- Then: all valid combinations parse and keep their fields; the language "xx" parses with `language` "en" (an unregistered code reads as English); the other eight invalid cases give `undefined`; a plain-string title or body (the version 1 shape) is refused.
+- Given: `parseNotice` from `notifier.ts`; a valid notice shape {id, kind, title: {key: "notice.decisionTitle"}, body: {key: "notice.decisionBody"}, language: "en", target}
+- When: it runs with valid notices for kinds `approval_waiting`, `run_blocked`, `weekly_limit`, `flood_cap`, `trigger_paused` and `question_waiting` (each with the fixed keys of its kind, TC-CON-27), with targets {screen: "run", runId: "r1", approvalId: "a1"}, {screen: "chat", chatId: "c13"}, {screen: "flow", flowId: "example.fill-timesheet"}, {screen: "activity"} and {screen: "settings"}; then with the targets {screen: "inbox"} and {screen: "builder", flowId: "x"}, an unknown kind "progress", an extra key, a `title` that is a plain string, a `title` key "not a key", a `title` with a `params` key, a `language` of "xx" (not registered), a missing `language`, and an id of "bad id" for a target
+- Then: all valid combinations parse and keep their fields; the language "xx" parses with `language` "en" (an unregistered code reads as English); the other nine invalid cases give `undefined`; a plain-string title or body (the version 1 shape) is refused.
 - Traces: F-16, runner-api 10, T-14, AD-14
 - Build step: B-12
-- Fails first because: the parser still knows `inbox` and `builder` and plain strings, and not `chat`, `flow`, `activity`, `settings`, `question_waiting`, `Line` values or `language`.
+- Fails first because: the parser still knows `inbox` and `builder` and plain strings, and not `chat`, `flow`, `activity`, `settings`, `question_waiting`, fixed `Line` values or `language`.
 
 ### TC-ELE-22 A notification shows only when no window is focused, drawn in the notice's language
 - Layer: L1
 - File: apps/desktop/electron/notifier.test.ts
-- Given: `electronNoticeHandler` with `fakeNotification` and fake windows; the notice `question_waiting` with title {key: "notice.questionTitle", params: {flow: "Fill timesheet"}}, body {key: "notice.questionBody"} and `language` "en", and the same notice with `language` "id"
-- When: the English notice arrives (a) with one focused window, (b) with windows that are all unfocused, (c) with no window, (d) with `Notification.isSupported()` false, (e) as a notice that fails `parseNotice`; then the Indonesian one arrives with no focused window; then one whose rendered title is 100 characters and body 300 characters
-- Then: (a) shows nothing; (b) and (c) show one notification titled "Fill timesheet needs your answer" with the body "Open the chat to answer."; (d) and (e) show nothing and do not throw; the Indonesian one reads "Fill timesheet butuh jawaban Anda" and "Buka chat untuk menjawab."; the long one is shown with the title cut to 80 characters and the body to 240, each ending in "...".
+- Given: `electronNoticeHandler` with `fakeNotification` and fake windows; the notice `question_waiting` with title {key: "notice.questionTitle"}, body {key: "notice.questionBody"} and `language` "en", and the same notice with `language` "id"
+- When: the English notice arrives (a) with one focused window, (b) with windows that are all unfocused, (c) with no window, (d) with `Notification.isSupported()` false, (e) as a notice that fails `parseNotice`; then the Indonesian one arrives with no focused window; then, with a test language whose words for the two keys are 100 and 300 characters long, the same notice arrives
+- Then: (a) shows nothing; (b) and (c) show one notification titled "FlowDriven has a question for you" with the body "Open the chat to answer."; (d) and (e) show nothing and do not throw; the Indonesian one reads "FlowDriven punya pertanyaan untuk Anda" and "Buka chat untuk menjawab."; the long one is shown with the title cut to 80 characters and the body to 240, each ending in "..."; no notification holds a flow name, a decision title or an input value (the keys have no params).
 - Traces: F-16, runner-api 10, FS-j30.A16, AD-14
 - Build step: B-12
 - Fails first because: main shows plain strings and knows no words.
@@ -4297,7 +4321,7 @@ Shared parts are rendered with Testing Library `render` inside `RunnerProvider` 
 - File: apps/desktop/src/ui/confirm-rules.test.tsx (new)
 - Given: `renderApp("#/activity", {scenario: "story-v2"})` with a waiting decision and a running run; `renderApp("#/flows/example.fill-timesheet", {scenario: "story-v2"})` with a standing rule; `renderApp("#/flows", {scenario: "story-v2"})`
 - When: the test clicks "Reject", "Stop", "Ask me again", and "Delete" (the flow menu), then "Approve all similar (3)" and the permission switch to off in `#/settings`
-- Then: "Reject" calls `approvals.resolve` with `decision: "reject"`, "Stop" calls `runs.stop` and "Ask me again" calls `rules.revoke`, each at once with no dialog (`queryByRole("dialog")` is null before the call); "Delete", "Approve all similar (3)" and the permission switch each open a `dialog` and make no call until its confirm button is clicked.
+- Then: "Reject" calls `approvals.resolve` with `decision: "reject"`, "Stop" calls `runs.stop` and "Ask me again" calls `rules.revoke`, each at once with no dialog (`queryByRole("dialog")` is null before the call); "Delete", "Approve all similar (3)" and the permission switch each open a `dialog` and make no call until its confirm button is clicked; the "Approve all similar (3)" dialog lists every item in full (each recipient, the subject and the whole text) before its confirm button can be used (PU-18).
 - Traces: NF-31, FS-j24.P2, SR-8, F-13, F-15
 - Build step: B-19
 - Fails first because: the screens do not exist; the case ties the dialog rule to every one of them.
@@ -4415,7 +4439,7 @@ Shared parts are rendered with Testing Library `render` inside `RunnerProvider` 
 ### TC-UI-29 Below 400 px the menu shows icons with names
 - Layer: L2
 - File: apps/desktop/src/shell/Drawer.test.tsx (new)
-- Given: `window.matchMedia` stubbed so `(max-width: 399px)` matches, drawer open
+- Given: `window.matchMedia` stubbed so `(max-width: 399px)` matches, drawer open (a width from 320 to 479 px occurs only in the browser preview and in layout tests; the desktop window's minimum is 480 by 600)
 - When: the menu renders
 - Then: every item still has its accessible name ("New chat", "Search", "Flows", ...) and an `svg` icon; the visible label text is hidden by the compact mode (`data-compact="true"` on the navigation); no item loses its name.
 - Traces: F-02.R7, NF-35, NF-34
@@ -4988,12 +5012,12 @@ Release V2, contract version 3. Code in `packages/runner/src/phone/` (new): `sec
 - Build step: B-26
 - Fails first because: `decisions.ts` does not exist.
 
-### TC-PHN-12 A decision message holds the title and nothing sensitive
+### TC-PHN-12 A phone message holds fixed text only
 - Layer: L1
 - File: packages/runner/src/phone/decisions.test.ts (new)
 - Given: a decision "Send reply to Sam Example?" in the flow "Email triage" with the email body "Thanks, I will send the invoice on Monday." and a payload marked sensitive
 - When: `buildPhoneMessage(decision)` runs, and its lines are drawn with `renderLine` in `en` and in `id`
-- Then: the result is {lines: [{key: "phone.decisionLead", params: {title: "Send reply to Sam Example?"}}], buttons: [approve, reject]} and renders to "FlowDriven: Send reply to Sam Example?" (and the Indonesian words for the lead); the body, the recipient address and any input value are absent from `lines` and `buttons`; a decision with a sensitive payload gives {key: "phone.needsYou"} ("Needs you in FlowDriven.") with no buttons.
+- Then: the result is {lines: [{key: "phone.needsYou"}]} with no params and renders to "Needs you in FlowDriven." (and the Indonesian words); the decision title, the flow name, the body, the recipient address and any input value are absent from `lines` and `buttons`; whether a phone can still approve when it shows only fixed text is a V2 prototype decision, so this case asserts only the fixed text and the absence of every other value, and the buttons are as that decision says.
 - Traces: FS-j26.A10, F-16.R6, SR-6, T-17, AD-14
 - Build step: B-26
 - Fails first because: `buildPhoneMessage` does not exist.
@@ -5003,7 +5027,7 @@ Release V2, contract version 3. Code in `packages/runner/src/phone/` (new): `sec
 - File: packages/runner/src/phone/intake.test.ts (new)
 - Given: `u1` paired; flows Fill timesheet (`confirmed`) and Weekly supplier report (`new`); the permission on, then off
 - When: `/run Fill timesheet`, `/run Weekly supplier report`, `/run Nope`, `/run fill` (a prefix) and, with the permission off, `/run Fill timesheet` are processed
-- Then: the first calls `flows.start` with `source: "phone"` and answers "Starting Fill timesheet."; the second starts nothing and answers "Confirm it in FlowDriven first." with a "Needs you" item created; the third and fourth answer with the list of exact matches and start nothing (no fuzzy start); the last answers "FlowDriven may not run your AI agents. Turn this on in Settings." and starts nothing.
+- Then: the first calls `flows.start` with `source: "phone"` and answers the fixed line `phone.started` ("Started."); the second starts nothing and answers `phone.confirmInApp` ("Confirm it in FlowDriven first.") with a "Needs you" item created; the third and fourth answer `phone.noExactMatch` ("No flow has exactly that name. Open FlowDriven.") and start nothing (no fuzzy start, no flow name in the reply); the last answers `phone.permissionOff` ("FlowDriven may not run your AI agents. Turn this on in Settings.") and starts nothing.
 - Traces: FS-j26.P5, FS-j26.A12, START, SR-8
 - Build step: B-26
 - Fails first because: `intake.ts` does not exist.
@@ -5053,7 +5077,7 @@ Release V2, contract version 3. Code in `packages/runner/src/phone/` (new): `sec
 - File: packages/runner/src/phone/tool-server.test.ts (new)
 - Given: the server on, a fake MCP client, the contract version 3 table
 - When: the client lists tools; then calls `flows.list`, `flows.start`, `approvals.list`, `approvals.resolve`, `settings.update`, `rules.revoke`
-- Then: the tools are exactly the operations with `mcp` "yes" or "restricted": `flows.list`, `flows.get`, `flows.start`, `runs.status`, `approvals.list`; the other calls fail with -32601; `approvals.list` returns decision titles only (no payload text); `flows.start` runs with `source: "tool"` and, for a `new` flow, gives `needs_confirmation` and runs nothing; a decision never resolves through the tool.
+- Then: the tools are exactly the operations with `mcp` "yes" or "restricted": `flows.list`, `flows.get`, `flows.start`, `runs.status`, `approvals.list`; the other calls fail with -32601; `approvals.list` returns the flow id, the step id and the state only (no title, no payload text, no flow name); `flows.start` runs with `source: "tool"` and, for a `new` flow, gives `needs_confirmation` and runs nothing; a decision never resolves through the tool.
 - Traces: FS-j26.A14, SR-2, SR-1, T-16
 - Build step: B-26
 - Fails first because: `tool-server.ts` does not exist.
@@ -5069,7 +5093,7 @@ Release V2, contract version 3. Code in `packages/runner/src/phone/` (new): `sec
 - Fails first because: the phone module does not exist.
 ## DOC Contributor guides (B-31)
 
-The guides are `README.md`, `CONTRIBUTING.md` and `docs/translating.md` (see `contributing-plan.md`). Decided for V1 (chair, 2026-11-21): the docs checks are one Vitest test, `apps/desktop/src/docs.test.ts` (new, project `ui`), run by `pnpm test`; nothing goes into `tools/checks/`. The test uses `checkDocs(root)` in `apps/desktop/src/test/docs-check.ts` (new), which returns findings `{file, line, problem}`, over temporary folders made with `fs.mkdtemp`; the same test file also runs `checkDocs` on the real tree. Case inputs that would look like a private path or an address are joined at test time ("/" + "Users").
+The guides are `README.md`, `CONTRIBUTING.md` and `docs/translating.md` (see `contributing-plan.md`). Decided for V1 (owner, 2026-11-21): the docs checks are one Vitest test, `apps/desktop/src/docs.test.ts` (new, project `ui`), run by `pnpm test`; nothing goes into `tools/checks/`. The test uses `checkDocs(root)` in `apps/desktop/src/test/docs-check.ts` (new), which returns findings `{file, line, problem}`, over temporary folders made with `fs.mkdtemp`; the same test file also runs `checkDocs` on the real tree. Case inputs that would look like a private path or an address are joined at test time ("/" + "Users").
 
 ### TC-DOC-01 Every pnpm script named in a guide exists in package.json
 - Layer: L1
@@ -5116,7 +5140,7 @@ The guides are `README.md`, `CONTRIBUTING.md` and `docs/translating.md` (see `co
 - File: apps/desktop/src/docs.test.ts (new)
 - Given: the real tree
 - When: the three guides are read
-- Then: `README.md` has the headings "Requirements", "Quickstart", "The gate", "Where to go next" and "Licences", and names `pnpm install --frozen-lockfile`, `pnpm dev:web`, `pnpm start`, `pnpm format` and `pnpm check`; `CONTRIBUTING.md` has nine numbered sections titled "How work flows", "Picking work", "The test-first loop", "Rules that matter most", "Safety-critical areas", "Commits and pull requests", "Using an AI agent", "Contribution terms" and "Reporting a security problem"; `docs/translating.md` exists; `README.md` links to `CONTRIBUTING.md`, `AGENTS.md`, `docs/design/README.md` and `docs/translating.md`.
+- Then: `README.md` has the headings "Requirements", "Quickstart", "The gate", "Where to go next" and "Licences", and names `pnpm install --frozen-lockfile`, `pnpm dev:web`, `pnpm start`, `pnpm format` and `pnpm check`; `CONTRIBUTING.md` has nine numbered sections titled "How work flows", "Picking work", "The test-first loop", "Rules that matter most", "Safety-critical areas", "Commits and pull requests", "Using an AI agent", "Contribution terms" and "Reporting a security problem"; `docs/translating.md` exists; the sections "Rules that matter most" and "Using an AI agent" each hold one line for the AI-agent rules that matter most (no bypass flags; Codex always with its sandbox flag set explicitly; outside text is data; the rule of two; never sign off for a person) with a link to `AGENTS.md`; `README.md` links to `CONTRIBUTING.md`, `AGENTS.md`, `docs/design/README.md` and `docs/translating.md`.
 - Traces: B-31, contributing-plan
 - Build step: B-31
 - Fails first because: none of the three guides exists.
@@ -5193,7 +5217,7 @@ The guides are `README.md`, `CONTRIBUTING.md` and `docs/translating.md` (see `co
 
 ## Repository checks
 
-Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). Decided for V1 (chair): `tools/checks/` stays unchanged, so these are Vitest tests in `apps/desktop/src/repo-checks.test.ts` (new, project `ui`) that import the existing scripts as black boxes (`checkManifests` from `tools/checks/dependency-gate.mjs`, `scanText` from `tools/checks/hidden-chars.mjs`, `makeRepo` from `tools/checks/test/helpers/temp-repo.mjs`) or run them with `spawnSync`; the rule helpers `findBypassFlags` and `findUnsafeCodexCommands` live in `apps/desktop/src/test/repo-rules.ts` (new). The source-rule cases are in `packages/runner/src/source-rules.test.ts`.
+Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). Decided for V1 (owner): `tools/checks/` stays unchanged, so these are Vitest tests in `apps/desktop/src/repo-checks.test.ts` (new, project `ui`) that import the existing scripts as black boxes (`checkManifests` from `tools/checks/dependency-gate.mjs`, `scanText` from `tools/checks/hidden-chars.mjs`, `makeRepo` from `tools/checks/test/helpers/temp-repo.mjs`) or run them with `spawnSync`; the rule helpers `findBypassFlags` and `findUnsafeCodexCommands` live in `apps/desktop/src/test/repo-rules.ts` (new). The source-rule cases are in `packages/runner/src/source-rules.test.ts`.
 
 ### TC-REPO-01 The dependency gate refuses a new package
 - Layer: L1
@@ -5291,25 +5315,55 @@ Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). De
 - Given: the tracked files (`git ls-files`) and every `.css` file under `apps/desktop/src`
 - When: they are searched
 - Then: no tracked file ends in `.woff`, `.woff2`, `.ttf` or `.otf`; no CSS holds `@font-face` or `url(` with a font extension; `--font-ui` in `styles/tokens.css` is a system font stack (it holds `system-ui` and no remote name); `apps/desktop/electron/csp.json` keeps `font-src 'self'`.
-- Traces: NF-23, T-30, chair decision (no font files in V1)
+- Traces: NF-23, T-30, owner decision (no font files in V1)
 - Build step: B-16
 - Fails first because: the test file does not exist; it pins the decision while the shell is rebuilt.
 
+### TC-REPO-11 Fixtures and test helpers hold no local path, no private address and no long token
+- Layer: L1
+- File: apps/desktop/src/repo-checks.test.ts (new)
+- Given: every tracked file under `packages/fixtures/`, `packages/runner/src/test-helpers/` (the fake CLI scripts included), `apps/desktop/src/test/`, `apps/desktop/electron/test-helpers/` and `tools/checks/test/helpers/`, read through `git ls-files`; `findPrivateTraces(text)` from `apps/desktop/src/test/repo-rules.ts` (new); the allowed forms are addresses on `example.test` or `example.com`, package scopes such as `@flowdriven/contracts` and `@types/node`, `sha256:` values and import specifiers.
+- When: it runs on each file, and on scratch strings built at test time: "/" + "Users" + "/sam/x", "/" + "home" + "/sam", "/" + "Volumes" + "/disk/x", "C:" + "\\" + "Users" + "\\sam", "~" + "/notes" (as a path), "sam" + "@" + "example.org", "sam" + "@" + "example.test", a token of 40 letters and digits, and `sha256:` followed by 64 hex digits.
+- Then: the real files give no finding; the scratch strings give a finding for each of the first five (local path), for the `example.org` address (address) and for the 40-character token (long token), and none for the `example.test` address or the `sha256:` value; every fake CLI script under `test-helpers/` starts with the comment line `// synthetic: written by hand from public documentation` (a recording of a real session is never committed); a scratch script without that line makes the test fail with its path.
+- Traces: T-20, T-29, NF-21, SR-6, test-plan section 8
+- Build step: B-00
+- Fails first because: `findPrivateTraces` and the test do not exist.
+
+### TC-REPO-12 Every NF id has a line in the NF coverage table
+- Layer: L1
+- File: apps/desktop/src/design-set.test.ts (new)
+- Given: `docs/design/prd.md` and the "NF coverage" table of `docs/design/test-plan.md` section 8.
+- When: the test collects every `NF-` id that prd.md defines and every id that has a row in the table.
+- Then: every `NF-` id of prd.md has a row; a missing id fails the test and the finding names it; a row for an id that prd.md does not define fails too ("unknown NF id"); a scratch copy of prd.md with one extra `NF-` id makes the test fail naming that id.
+- Traces: test-plan section 8, NF list of prd.md
+- Build step: B-00
+- Fails first because: `apps/desktop/src/design-set.test.ts` does not exist.
+
+### TC-REPO-13 No Given names a case of a later build step
+- Layer: L1
+- File: apps/desktop/src/design-set.test.ts (new)
+- Given: the three case files in `docs/design/test-cases/` and the order table of `docs/design/build-order.md` section 3 (each build step has an Order).
+- When: the test reads every case with its build step, finds the case ids (`TC-...`) named in its Given, and compares the Order of the step of each named case with the Order of the case's own step.
+- Then: no Given names a case whose step has a later Order; a Given that names a case of the same step or an earlier one passes; a scratch copy where a case of B-04 names a case of B-05 in its Given fails naming both ids and both steps.
+- Traces: test-plan section 8, build-order section 3
+- Build step: B-00
+- Fails first because: `apps/desktop/src/design-set.test.ts` does not exist.
+
 ## Writer's calls, shell and later components
 
-- Words location (chair, 2026-11-21). All I18N cases use `apps/desktop/src/i18n/` and the Vitest file `i18n.test.ts`; the journey cases use the same paths, and TC-j30-26 tests that main draws the notice and the menu from `Line` values and the language (as TC-ELE-17, TC-ELE-18 and TC-ELE-22 here).
-- Runner emits codes only. `packages/contracts/src/line-keys.ts` exports `LINE_KEYS`; the check counts those keys as used (TC-I18N-16) and TC-I18N-32 checks English and Indonesian have each. Key names this group chose: `notice.questionTitle`, `notice.questionBody`, `notice.decisionBody` (value "{title}"), `status.waitingForYou`, `phone.decisionLead` ("FlowDriven: {title}"), `phone.needsYou`, `chat.starting`, `text.outsideTag`, `text.linkNotOpened`; their English text is in the cases.
-- Contract shapes this group assumes: a notice is `{id, kind, title: Line, body: Line, language, target}`; `starts.next` returns `{language, next: {flowName, at} | null}`; the runner started with `--languages=en,id` refuses `settings.update {patch: {language}}` for another code with `language_unknown`. `runner-api.md` sections 6.6 and 10 carry these.
-- Main renders a notice into at most 80 characters of title and 240 of body, cutting with "..." (ASCII). The V2 bot module draws its lines through an injected `renderLine`, because no package holds words.
+- Words location (owner, 2026-11-21). All I18N cases use `apps/desktop/src/i18n/` and the Vitest file `i18n.test.ts`; the journey cases use the same paths, and TC-j30-26 tests that main draws the notice from `Line` values and the language (as TC-ELE-18 and TC-ELE-22 here); V1 has no menu bar menu.
+- Runner emits codes only. `packages/contracts/src/line-keys.ts` exports `LINE_KEYS`; the check counts those keys as used (TC-I18N-16) and TC-I18N-32 checks English and Indonesian have each. Key names this group chose: the fixed `notice.*` keys of TC-CON-27 (no params), `phone.needsYou`, `phone.started`, `phone.confirmInApp`, `phone.noExactMatch`, `phone.permissionOff`, `chat.starting`, `text.outsideTag`, `text.linkNotOpened`; their English text is in the cases.
+- Contract shapes this group assumes: a notice is `{id, kind, title: Line, body: Line, language, target}` with `title` and `body` fixed keys and no params; the runner started with `--languages=en,id` refuses `settings.update {patch: {language}}` for another code with `language_unknown`. `runner-api.md` sections 6.6 and 10 carry these.
+- Main renders a notice into at most 80 characters of title and 240 of body, cutting with "..." (ASCII). The V2 bot module draws its lines through an injected `renderLine`, because no package holds words; phone messages and the tool server show fixed text only (owner decision, 2026-11-21).
 - Electron main imports the words from `apps/desktop/src/i18n`; `tsconfig.electron.json` must include that folder.
-- Check result shape: `checkLanguages` returns `{findings, untranslated}`; the journey cases read `.findings`. Finding kinds added beyond the journeys: `missing_other_form`, `unknown_plural_form`, `invalid_code`, `duplicate_code`, `file_name_code_mismatch`, `markup_in_value`, `web_address_in_value`, `unknown_placeholder`, `bad_placeholder`, `glued_sentence`, `unused_line_key`. Reason: brief 24.11 lists each rule and the failing line must name file, key and fix.
+- Check result shape: `checkLanguages` returns `{findings, untranslated}`; the journey cases read `.findings`. Finding kinds added beyond the journeys: `missing_other_form`, `unknown_plural_form`, `invalid_code`, `duplicate_code`, `file_name_code_mismatch`, `markup_in_value`, `web_address_in_value`, `unknown_placeholder`, `bad_placeholder`, `glued_sentence`, `unused_line_key`. Reason: the prototype brief ('Fixes after the re-check' under 'English and Bahasa Indonesia') lists each rule and the failing line must name file, key and fix.
 - A key family built at run time (for example `status.<code>`) is listed once in `apps/desktop/src/i18n/dynamic-keys.ts` (new) and counts as used. Reason: the scan reads only `t("literal")` calls.
 - Glued sentences are found by a source scan for `t(...)` joined with `+`, a template string or `.join` in one expression. Siblings in JSX are allowed.
 - Web address rule: only schemes (`http:`, `https:`, `ftp:`, `mailto:`) and `www.` are refused in words; bare domains are not, to avoid false hits. Markup rule: HTML tags, comments and entities; a lone `<` or `>` in a comparison is allowed.
 - Plural forms are checked against `new Intl.PluralRules(code).resolvedOptions().pluralCategories`; Indonesian therefore uses only `other`.
 - `SafeText` has two link modes. Default "text" shows an address as plain text (decision cards, reports, memory, listings). "clickable" (chat messages) shows only `https:` addresses as a button with role `link`, no `href`, opening through `window.openLink` on a click. No Markdown in V1.
 - Main's link check: `https:` only, no user name or password, no `localhost`, no IP literal, a host with a dot, at most 2,048 characters; refused addresses give `opened: false`, not an error.
-- Method refusal in main: a name that does not match the pattern is `invalid_input`; a matching name that is not one of the 47 operations is `not_found`. Wrong sender or argument count stays `not_allowed` for `runner:call`; the window channels use `invalid_input` for a wrong argument count.
+- Method refusal in main: a name that does not match the pattern is `invalid_input`; a matching name that is not one of the 45 operations is `not_found`. Wrong sender or argument count stays `not_allowed` for `runner:call`; the window channels use `invalid_input` for a wrong argument count.
 - The preload refuses a non-string method and a non-plain-object input itself (`invalid_input`, no `invoke`), although runner-api 12.3 says it "holds no logic"; main checks again.
 - Exit code 6 maps to `migration_failed`; `backup_failed` arrives the same way only if the runner reports it (not tested). Three restarts in 60 seconds are allowed; the fourth call gets `engine_restart_limit`.
 - Rail in V1 lists "New chat", "Search", "Flows", "Activity", "Skills" and "Settings"; Memory, Marketplace and "Phone & bots" appear when their release ships (F-02.R9).
@@ -5317,4 +5371,4 @@ Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). De
 - Phone: the two-tap token lasts 60 seconds and is bound to the decision and the account; commands are `/flows`, `/run <flow name>`, `/needs` and `/stop`; `/run` needs an exact name. Reason: FS-j26 gives the rules but no grammar.
 - Marketplace crypto: Ed25519 over canonical JSON (keys sorted, UTF-8, no spaces) with the base64 signature; keys are made with `node:crypto` at test time and never stored. The tool server binds `127.0.0.1`. Reason: spec 9.6 names Ed25519 and a pinned key.
 - DOC and repository checks are Vitest tests (`apps/desktop/src/docs.test.ts`, `apps/desktop/src/repo-checks.test.ts`) that import the unchanged `tools/checks` scripts; they use layer L1 because L4 is `node:test` inside `tools/checks/test/`, which V1 does not touch. The agent-rules helpers scan `AGENTS.md`, `CLAUDE.md`, `README.md`, `CONTRIBUTING.md` and `docs/translating.md`, not the design documents (which name the refused flags on purpose in the safety tests).
-- No case tests pixel layout (focus ring, contrast, ellipsis, reduced motion, 360 px width); those are CSS and belong to the L5 capture walk.
+- No case tests pixel layout (focus ring, contrast, ellipsis, reduced motion, narrow widths); those are CSS and belong to the L5 capture walk.

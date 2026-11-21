@@ -4,7 +4,7 @@ This folder is the design for building FlowDriven's real app after the clickable
 
 Status: complete design for the V1 build, 2026-11-21. It follows version 9 of the clickable prototype: version 8 plus the language setting, one file per language and the AI agent and model picker. Decisions the owner did not make are recorded as "Decided for V1 (revisable)". The V1 behaviours the owner has not seen in the prototype are listed once, in the PRD's register (`prd.md` section 9.1).
 
-Size: 25 features with 226 requirements (2 of them removed from V1 and kept as ids), 54 quality targets and 13 success measures; 14 flow specs; 1,232 test cases (552 journey, 169 safety, 511 component); 31 build steps in 179 tasks (V1: 25 steps, 152 tasks).
+Size: 25 features with 226 requirements (2 of them removed from V1 and kept as ids), 54 quality targets and 13 success measures; 14 flow specs; 1,261 test cases (572 journey, 173 safety, 516 component); 32 build steps in 191 tasks (V1: 26 steps, 164 tasks); 29 V1 behaviours not yet in the prototype (PU-01 to PU-29).
 
 ## What is where
 

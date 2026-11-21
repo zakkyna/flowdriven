@@ -254,7 +254,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 - Context. No Codex code exists; its behavior is unrecorded.
 - Decision. A research step comes first (B-22; Chair step: network). It reads Codex's public help and documentation and writes a synthetic agent profile; nothing is recorded from a real agent, and a real run, if the owner watches one, stays in `.workflow/scratch/` and is never committed. The fake codex's scripts are written by hand from the documented shapes; a Vitest test scans fixtures and test helpers for local paths, `@` addresses and long tokens. Until the research is done, cases use an injected agent profile and assert the exact value the profile gives. Always `-s workspace-write` or `-s read-only` explicitly, the model flag, JSON events, the prompt on stdin, its own sign-in status command. If FlowDriven can answer Codex's approval requests, the same `decide` applies (`enforced`); if not, Codex runs only steps that read and write the flow's folders and run declared commands in its sandbox (`folder_limited`), and account tools reach it only through the gateway (V3). A flow needing a tool Codex cannot be limited for starts nothing: the chat says "Codex cannot run this flow safely yet. Choose Claude Code in the picker to run it." (`chat.agentCannotRunFlow`, PU-26). No card offers a one-time switch of agent. Codex is offered as a chat agent only if it has a tool-free mode.
 - Alternatives. Assuming a protocol before the research; leaving Codex out of V1; committing a real recording (it could carry a home path, account ids or an address). The Codex sandbox is a safety-core change: one independent security review.
-- Consequences. V1 Codex runs local steps unless the research shows per-call approvals (section 8.3; one fix in section 17). Codex's read scope is part of the research and spike 2; until then the declared-folders read limit is claimed for Claude Code only.
+- Consequences. V1 Codex runs local steps unless the research shows per-call approvals (section 8.3; one fix in section 17). Codex's read scope is part of the research and of section 16, item 2; until then the declared-folders read limit is claimed for Claude Code only.
 - Code. New `codex/adapter.ts`, `codex/args.ts`, `codex/stream.ts`, `codex/fixtures/` (hand-written), `test-helpers/fake-codex.ts`.
 
 ### AD-10 The assistant: the agent understands, FlowDriven decides
@@ -886,6 +886,8 @@ None in V1: the translations come from the owner's request, the approval and san
 
 The task-by-task plan, with the tests that fail first for each task, is [build-order.md](build-order.md). Decided for V1 (revisable, Q-01): V1 is B-00 to B-24 plus B-31; V2 is B-25 to B-27; V3 is B-28 and B-29; B-30 comes before any public download. B-00 is the first V1 step: no other step starts before it. Every step's dependencies come first and no case's Given relies on a case of a later step. A step builds a PU behaviour only after the owner approved it in the prototype.
 
+The Needs column gives the main dependencies; the full lists, per task, and the build order table are in `build-order.md` section 3.
+
 | Step | What | Needs |
 |---|---|---|
 | B-00 | Shared test harness (Harness H, `test-plan.md` section 4): temporary data folder and store opener, injected clock with an IANA zone, counting ids, fake notice sink, call-recording seam, fake brain, injected agent profiles, fixture scan | - |
@@ -895,7 +897,7 @@ The task-by-task plan, with the tests that fail first for each task, is [build-o
 | B-04 | Safety core: the one decision, places, Reject skips | B-02, B-03 |
 | B-05 | Decisions and standing rules service | B-04 |
 | B-06 | Words files in `apps/desktop/src/i18n/`, `line-keys.ts`, the language check | B-01 |
-| B-07 | Agent registry, models, the model flag | B-01, B-03 |
+| B-07 | Agent registry, models, the model flag | B-01, B-03, B-21.T4 (the install and sign-in research, before Set up and sign-in) |
 | B-08 | Assistant core: chat turns, intents, cards | B-06, B-07 |
 | B-09 | Inputs | B-02, B-08 |
 | B-10 | Runs from the chat (`starts.request` for source `chat`) | B-05, B-09 |
@@ -909,7 +911,7 @@ The task-by-task plan, with the tests that fail first for each task, is [build-o
 | B-18 | Flows screen and flow page | B-12, B-16 |
 | B-19 | Activity and run page; old screens unrouted | B-05, B-11, B-16 |
 | B-20 | Settings, color mode | B-06, B-07, B-16 |
-| B-21 | First launch and Set up (a research step first: the agents' public help and documentation) | B-07, B-20 |
+| B-21 | First launch and the pinned agent catalog; its research task B-21.T4 (Chair step: network; the agents' public help and documentation, nothing recorded) is done before B-07 | B-07, B-20 |
 | B-22 | Codex adapter (a research step first, Chair step: network; it reads public documentation and writes a synthetic agent profile; nothing is recorded from a real agent) | B-07 |
 | B-23 | Keep the app alive when the window closes (as today), missed starts at wake | B-12 |
 | B-24 | Spending limit and busy fallback | B-07, B-12 |
@@ -973,7 +975,7 @@ Each is settled by a spike before the step that needs it; a spike with a real ag
 3. `node:sqlite` in Electron 45's Node (B-03): a backup call, JSON functions, full-text search, `secure_delete`, rollback of `user_version` on a failed migration.
 4. The runner bundle (B-30): one JavaScript file built with allowlisted tools, how `runnerEntry` finds it, the `runAsNode` fuse or a shipped Node.
 5. Removed from V1 with Open at login and the menu bar (owner decision, 2026-11-21); it returns with them, prototype first.
-6. The catalogs' install and sign-in commands and package names (B-21, B-22), read first from the agents' public documentation, and whether sign-in needs a Terminal window.
+6. The catalogs' install and sign-in commands and package names (the research task B-21.T4 for both agents; B-22.T1 for the rest of Codex), read first from the agents' public documentation, and whether sign-in needs a Terminal window.
 7. The model id prefix each Claude Code alias reports in `system/init`.
 
 ## 17. Drafter's calls
