@@ -21,7 +21,7 @@ export * from "./settings.ts";
 export * from "./skills.ts";
 export * from "./starts.ts";
 export * from "./trigger.ts";
-export { CONTRACT_VERSION } from "./version.ts";
+export * from "./version.ts";
 
 export * from "./window.ts";
 export * from "./wire.ts";
