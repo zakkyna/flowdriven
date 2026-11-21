@@ -1,4 +1,4 @@
-import { RunnerTopic } from "@flowdriven/contracts/v1";
+import { RunnerTopic } from "@flowdriven/contracts";
 import type { Store } from "../storage.ts";
 
 export function createChangeEmitter(
@@ -21,20 +21,38 @@ export function createChangeEmitter(
 }
 export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Store {
   const topics: Partial<Record<keyof Store, RunnerTopic[]>> = {
-    addUsage: ["runs"],
+    addUsage: ["runs", "settings"],
     putSetting: ["settings"],
     deleteSetting: ["settings"],
-    putHarnessState: ["harnesses", "settings"],
-    putFlow: ["flows"],
+    putHarnessState: ["agents", "settings"],
+    putFlow: ["flows", "skills"],
+    putFlowHead: ["flows", "skills"],
+    addVersion: ["flows", "skills"],
+    putConfirmation: ["flows", "activity"],
+    confirmFlow: ["flows", "activity", "rules"],
+    makeRule: ["rules", "flows"],
+    revokeRule: ["rules", "flows"],
+    putSchedule: ["flows"],
+    deleteSchedule: ["flows"],
+    putRemembered: ["flows"],
+    deleteRemembered: ["flows"],
+    deleteFlowData: ["flows"],
+    claimStart: ["activity"],
+    putChat: ["chats"],
+    deleteChat: ["chats"],
+    putMessage: ["chats"],
+    putDraft: ["chats"],
+    saveFlow: ["flows", "skills", "activity", "rules", "chats"],
+    putQuestion: ["chats", "activity", "flows"],
     putCapabilityConsent: ["flows", "readiness"],
     deleteCapabilityConsent: ["flows", "readiness"],
     putTrigger: ["flows"],
-    createRun: ["runs"],
-    updateRun: ["runs"],
-    upsertStep: ["runs"],
-    upsertItem: ["runs"],
-    createApproval: ["approvals", "runs"],
-    updateApproval: ["approvals", "runs"],
+    createRun: ["runs", "activity"],
+    updateRun: ["runs", "activity"],
+    upsertStep: ["runs", "activity"],
+    upsertItem: ["runs", "activity"],
+    createApproval: ["approvals", "runs", "activity", "chats"],
+    updateApproval: ["approvals", "runs", "activity", "chats"],
   };
   return new Proxy(store, {
     get(target, key, receiver) {
@@ -46,9 +64,11 @@ export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Sto
         if (
           (key === "putSetting" || key === "deleteSetting") &&
           typeof args[0] === "string" &&
-          args[0].startsWith("weekly:")
-        )
+          (args[0].startsWith("weekly:") || args[0] === "spending-pause")
+        ) {
           mark("approvals");
+          mark("activity");
+        }
         return result;
       };
     },

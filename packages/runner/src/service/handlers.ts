@@ -32,7 +32,7 @@ import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
 import { type LocalChecks, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
 import { toQueueView } from "./map-queue.ts";
-import { runTrigger, toAuditRecord, toRunDetail, toRunSummary } from "./map-run.ts";
+import { runTrigger, toRunDetail, toRunSummary } from "./map-run.ts";
 import { toTriggerStatus } from "./map-trigger.ts";
 import { readSettings } from "./settings.ts";
 import { liveWindow, summarizeUsage } from "./usage-summary.ts";
@@ -118,7 +118,7 @@ export function createHandlers({
   webCheck,
   connectors,
   local,
-}: HandlerContext): Omit<Handlers, "runner.info" | "settings.get" | "settings.update"> {
+}: HandlerContext): Omit<Handlers, "runner.info" | "settings.get" | "settings.update" | "audit.list"> {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
     if (!row) throw new RunnerError("not_found", `There is no flow ${id}.`);
@@ -373,10 +373,6 @@ export function createHandlers({
           throw new RunnerError("not_found", "There is no folder at that path.");
         throw error;
       }
-    },
-    "audit.list": ({ runId }) => {
-      if (runId) run(runId);
-      return store.listAudit(runId).map(toAuditRecord);
     },
     "harnesses.list": () => harnesses?.list().map(withQuota) ?? [],
     "harnesses.rescan": () =>

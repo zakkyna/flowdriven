@@ -2,6 +2,57 @@ import type { Requirement, Value } from "@flowdriven/sdk";
 import type { Routed } from "./router/types.ts";
 import type { ApprovalState, CheckVerdict, ExitClass, RiskyAction, RunState, StepState } from "./states.ts";
 
+type Line = { key: string; params?: Record<string, string | number> };
+type StartSource =
+  | "chat"
+  | "flows"
+  | "again"
+  | "schedule"
+  | "after"
+  | "try_next"
+  | "proactive"
+  | "phone"
+  | "tool";
+type TypedValue = {
+  type:
+    | "text"
+    | "longtext"
+    | "number"
+    | "bool"
+    | "date"
+    | "time"
+    | "duration"
+    | "choice"
+    | "url"
+    | "file"
+    | "folder"
+    | "secret_ref"
+    | "list<text>";
+  value: string | number | boolean | string[];
+};
+type Cause = {
+  code:
+    | "agent_signed_out"
+    | "site_sign_in"
+    | "permission_off"
+    | "agent_not_set_up"
+    | "usage_limit"
+    | "spending_limit"
+    | "checks_failing"
+    | "requirement_missing"
+    | "flow_not_confirmed"
+    | "limits_not_applied"
+    | "crash"
+    | "step_failed"
+    | "stopped"
+    | "flow_deleted"
+    | "agent_cannot_be_limited"
+    | "daily_limit"
+    | "cost_not_reported"
+    | "internal_error";
+  params?: Record<string, string>;
+};
+
 export type Attempt = {
   number: number;
   replan: boolean;
@@ -24,6 +75,9 @@ export type FlowRow = {
   manifest: unknown;
   files: Record<string, string>;
   registeredAt: string;
+  format?: "flowdriven-flow/1.1" | "flowdriven-flow/1.2";
+  savedBy?: { kind: "save_flow" | "save_change" | "import" | "market" | "demo"; draftId?: string };
+  parentHash?: string;
 };
 export type RunRow = {
   id: string;
@@ -40,6 +94,26 @@ export type RunRow = {
   startedAt: string;
   endedAt?: string;
   blockedReason?: string;
+  agent?: { agent: string; model?: string; choice: "main" | "chat" | "busy_fallback" };
+  language?: string;
+  flowName?: string;
+  start?: {
+    source: StartSource;
+    startId?: string;
+    chatId?: string;
+    messageId?: string;
+    chainId?: string;
+    chainIndex?: number;
+    afterRunId?: string;
+    fromRunId?: string;
+    questionId?: string;
+    slotAt?: string;
+  };
+  cause?: Cause;
+  needsLoginSince?: string;
+  decisionLines?: Line[];
+  result?: { kind: "chat" | "report"; chatId?: string; messageId?: string };
+  stoppedBy?: "person" | "permission_off" | "flow_deleted" | "phone";
 };
 export type StepRow = {
   runId: string;
@@ -85,6 +159,170 @@ export type ApprovalRow = {
   ownText?: { output: string; hash: string };
 };
 export type AuditEntry = { at: string; kind: string; runId?: string; detail: Value };
+export type AuditRecord = AuditEntry & { id: number };
+export type StartRow = {
+  id: string;
+  flowId: string;
+  at: string;
+  source: StartSource;
+  outcome: "started" | "asked" | "needs_confirmation" | "refused" | "missed" | "skipped";
+  key?: string;
+  reason?: string;
+  runId?: string;
+  chatId?: string;
+  messageId?: string;
+  questionId?: string;
+  slotAt?: string;
+  request: {
+    chatId?: string;
+    messageId?: string;
+    chainId?: string;
+    chainIndex?: number;
+    afterRunId?: string;
+    fromRunId?: string;
+  };
+  agent?: { agent: string; model: string; choice: "chat" | "main" | "busy_fallback" };
+  flowHash?: string;
+};
+export type RuleInput = {
+  flowId: string;
+  touchId: string;
+  effect: string;
+  place: { kind: string; value: string; label?: string };
+  sentence?: string;
+  createdAt?: string;
+  createdBy?: "confirm" | "always_allow";
+  approvalId?: string;
+  confirmationHash?: string;
+};
+export type RuleRow = RuleInput & {
+  id: string;
+  state: "active" | "revoked";
+  createdAt: string;
+  createdBy: "confirm" | "always_allow";
+  sentence: string;
+  uses: number;
+  revokedAt?: string;
+  revokedBy?: string;
+  lastUsedAt?: string;
+};
+export type CallGrant = {
+  runId: string;
+  stepId: string;
+  itemKey: string;
+  tool: string;
+  digest: string;
+  kind: "approve" | "edit" | "similar" | "pick" | "migrated";
+  createdAt: string;
+  approvalId?: string;
+  usedAt?: string;
+};
+export type WaitingQuestion = {
+  id: string;
+  flowId: string;
+  chatId: string;
+  messageId: string;
+  kind: "inputs" | "confirm";
+  state: "open" | "answered" | "cancelled" | "closed";
+  createdAt: string;
+  updatedAt: string;
+  source: StartSource;
+  proactive: boolean;
+  flowHash: string;
+  given: Record<string, Value>;
+  missing: string[];
+  pendingStart: { startId: string; source: StartSource; request: Record<string, Value> };
+  answeredAt?: string;
+  runId?: string;
+  closedReason?: "flow_deleted" | "chat_deleted";
+};
+export type RememberedAnswer = {
+  flowId: string;
+  inputId: string;
+  kind: "remember" | "last";
+  value: TypedValue;
+  outside: boolean;
+  savedAt: string;
+  runId: string;
+};
+export type ChatRow = {
+  id: string;
+  title: string;
+  titleSource: "default" | "first_message" | "flowdriven";
+  createdAt: string;
+  updatedAt: string;
+  from: "person" | "flowdriven";
+  language: string;
+  languageSource: "app" | "typed";
+  agent: string;
+  model: string;
+  agentSource: "main_default" | "person" | "model_gone";
+  composerText?: string;
+  subject?: Value;
+};
+export type MessageRow = {
+  id: string;
+  chatId: string;
+  seq: number;
+  at: string;
+  role: "person" | "agent" | "flowdriven";
+  kind: "text" | "reply" | "line" | "note" | "result" | "card";
+  outside: boolean;
+  text?: string;
+  line?: Line;
+  card?: {
+    type: string;
+    state: "open" | "answered" | "replaced" | "cancelled";
+    answer?: { action: string; at: string };
+  };
+  result?: Value;
+  chips?: Value[];
+  language?: string;
+  fromChip?: boolean;
+  pasted?: boolean;
+  byButton?: boolean;
+  turn?: Value;
+};
+export type DraftRow = {
+  id: string;
+  chatId: string;
+  messageId: string;
+  kind: "new_flow" | "change";
+  state: "drafted" | "replaced" | "saved" | "cancelled";
+  createdAt: string;
+  updatedAt: string;
+  files: Record<string, string>;
+  hash: string;
+  name: string;
+  nameAdjusted: boolean;
+  lists: { onItsOwn: string[]; asksFirst: string[]; never: string[] };
+  schedule?: {
+    type: "daily" | "weekdays" | "weekly" | "after";
+    time?: string;
+    day?: string;
+    afterFlowId?: string;
+    whenItsTime: "ask" | "last";
+  };
+  outside: boolean;
+  assumptions: string[];
+  flowId?: string;
+  baseHash?: string;
+  saved?: { flowId: string; hash: string; at: string };
+};
+export type ScheduleRow = {
+  flowId: string;
+  type: "daily" | "weekdays" | "weekly" | "after";
+  time?: string;
+  day?: string;
+  afterFlowId?: string;
+  whenItsTime: "ask" | "last";
+  setAt: string;
+  setBy: "window" | "chat_card" | "save_flow";
+  confirmedHash: string;
+  cursorAt?: string;
+  pausedAt?: string;
+  pausedWhy?: "blocked_runs" | "challenge";
+};
 export type HarnessStateRow = {
   id: string;
   consent: "not_given" | "given" | "revoked";
@@ -152,21 +390,64 @@ export type FlowHead = {
   headHash: string;
   createdAt: string;
   updatedAt: string;
-  origin: { kind: "demo" | "import" };
+  origin:
+    | { kind: "demo" | "import" }
+    | { kind: "chat"; chatId: string; draftId: string }
+    | { kind: "skill"; chatId: string; draftId: string; skillId: string }
+    | { kind: "market"; listingId: string };
+  deletedAt?: string;
 };
 export type Confirmation = {
   flowId: string;
   hash: string;
   at: string;
-  by: "migration";
+  by: "save_flow" | "save_change" | "confirm_dialog" | "chat_card" | "migration";
   onItsOwn: string[];
   pins: ConsentPins;
-  legacy: true;
+  legacy?: true;
+  chatId?: string;
+  draftId?: string;
 };
 export interface Store {
-  skippedRows(): { approvals: number };
+  claimStart(row: StartRow): { created: boolean; row: StartRow };
+  listStarts(): StartRow[];
+  makeRule(input: RuleInput): RuleRow;
+  listRules(): RuleRow[];
+  revokeRule(id: string, by: string): void;
+  putCallGrant(row: CallGrant): void;
+  findGrant(key: CallGrant): CallGrant | undefined;
+  findPickGrant(key: CallGrant): CallGrant | undefined;
+  useGrant(key: CallGrant, at: string): void;
+  skippedRows(): { approvals?: number; waiting_questions?: number };
+  listQuestions(): WaitingQuestion[];
+  putQuestion(row: WaitingQuestion): void;
+  putRemembered(row: RememberedAnswer): void;
+  listRemembered(flowId: string): RememberedAnswer[];
+  deleteRemembered(flowId: string, kind: RememberedAnswer["kind"], inputId: string): void;
+  deleteFlowData(flowId: string): void;
   getFlowHead(id: string): FlowHead | undefined;
+  listFlowHeads(): FlowHead[];
+  putFlowHead(row: FlowHead): void;
+  hasFlowId(id: string): boolean;
+  deleteChat(id: string): void;
+  putChat(row: ChatRow): void;
+  getChat(id: string): ChatRow | undefined;
+  listChats(): ChatRow[];
+  setComposer(chatId: string, text: string): void;
+  putMessage(row: MessageRow): void;
+  getMessage(id: string): MessageRow | undefined;
+  listMessages(chatId: string): MessageRow[];
+  putDraft(row: DraftRow): void;
+  getDraft(id: string): DraftRow | undefined;
+  listDrafts(chatId: string): DraftRow[];
+  putSchedule(row: ScheduleRow): void;
+  getSchedule(flowId: string): ScheduleRow | undefined;
+  listSchedules(): ScheduleRow[];
+  deleteSchedule(flowId: string): void;
+  saveFlow(draftId: string): { flowId: string; hash: string; at: string };
   getConfirmation(id: string): Confirmation | undefined;
+  putConfirmation(row: Confirmation): void;
+  confirmFlow(input: { confirmation: Confirmation; rules: RuleInput[] }): void;
   schemaVersion(): number;
   getCapabilityConsent(flowId: string): CapabilityConsentRow | undefined;
   putCapabilityConsent(row: CapabilityConsentRow): void;
@@ -186,6 +467,11 @@ export interface Store {
   putHarnessState(row: HarnessStateRow): void;
   transaction<T>(fn: () => T): T; // BEGIN and COMMIT, ROLLBACK on a throw; nested calls use savepoints
   putFlow(row: FlowRow): void;
+  addVersion(
+    id: string,
+    files: Record<string, string>,
+    options: { savedBy: NonNullable<FlowRow["savedBy"]> },
+  ): FlowRow;
   getFlow(id: string, hash?: string): FlowRow | undefined; // no hash: the newest registered (highest rowid, not time); the same id and hash replaces
   listFlows(): FlowRow[];
   createRun(row: RunRow): void;
@@ -210,5 +496,6 @@ export interface Store {
   counter(name: string, day: string): number;
   appendAudit(entry: AuditEntry): void;
   listAudit(runId?: string): AuditEntry[];
+  listAuditRecords(filter: { runId?: string; afterId?: number; limit?: number }): AuditRecord[];
   close(): void;
 }

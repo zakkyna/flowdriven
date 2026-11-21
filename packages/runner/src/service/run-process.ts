@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { Notice } from "@flowdriven/contracts/v1";
+import { type Notice, RunnerTopic } from "@flowdriven/contracts/v1";
 import { EngineError } from "../errors.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
@@ -75,7 +75,13 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
   try {
     let server: RpcServer | undefined;
     const sink = createNoticeSink();
-    const emitter = createChangeEmitter((event) => server?.notify(event));
+    const emitter = createChangeEmitter((event) => {
+      const topics = event.topics.flatMap((topic) => {
+        const result = RunnerTopic.safeParse(topic);
+        return result.success ? [result.data] : [];
+      });
+      if (topics.length) server?.notify({ type: "changed", topics });
+    });
     service = createRunnerService({
       ...{ notify: sink.send },
       store: wrapStore(store, emitter.mark),

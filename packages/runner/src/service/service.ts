@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdtempSync, readFileSync, rmdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { CONTRACT_VERSION, operations } from "@flowdriven/contracts";
-import type { Notice, RunnerTopic } from "@flowdriven/contracts/v1";
+import { CONTRACT_VERSION, operations, type RunnerTopic } from "@flowdriven/contracts";
+import type { Notice } from "@flowdriven/contracts/v1";
 import { STOP } from "../claude/browser-post.ts";
 import { visible } from "../claude/text.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
@@ -17,6 +17,7 @@ import { bundledSkill, readSkillFolder, skillSource } from "../skills/skill-fold
 import type { Store } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
 import type { TriggerDeps, TriggerService } from "../triggers/service.ts";
+import { createAuditHandler } from "./audit.ts";
 import { createCapabilities } from "./capabilities.ts";
 import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
@@ -230,6 +231,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     engine,
     call: createDispatcher({
       v2: {
+        "audit.list": createAuditHandler(store),
         "settings.get": settings.get,
         "settings.update": settings.update,
         "runner.info": () => ({

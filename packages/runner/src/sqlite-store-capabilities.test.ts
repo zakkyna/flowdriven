@@ -140,11 +140,18 @@ test("routes on a run and outside on a step round-trip, and a run stored without
   };
   store.createRun(run);
   store.upsertStep(step);
-  expect(store.getRun("r")).toEqual(run);
+  const defaults = {
+    agent: { agent: "claude-code", choice: "main" },
+    language: "en",
+    flowName: "f",
+    start: { source: "flows" },
+    decisionLines: [],
+  };
+  expect(store.getRun("r")).toEqual({ ...run, ...defaults });
   expect(store.getStep("r", "s")).toEqual(step);
   const { routes: _routes, ...withoutRoutes } = run;
   store.createRun({ ...withoutRoutes, id: "old" });
-  expect(store.getRun("old")).toEqual({ ...withoutRoutes, id: "old" });
+  expect(store.getRun("old")).toEqual({ ...withoutRoutes, ...defaults, id: "old" });
   expect(store.getRun("old")).not.toHaveProperty("routes");
 });
 

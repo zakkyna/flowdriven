@@ -54,6 +54,13 @@ const run: RunRow = {
   requirements: [],
   startedAt: "2026-11-11",
 };
+const runDefaults = {
+  agent: { agent: "claude-code", choice: "main" },
+  language: "en",
+  flowName: "f",
+  start: { source: "flows" },
+  decisionLines: [],
+};
 const step: StepRow = {
   runId: "r1",
   stepId: "a",
@@ -78,7 +85,9 @@ test("round-trips a flow, a run and its steps", async () => {
   expect(store.getFlow("f", "h1")).toEqual(flow);
   store.createRun(run);
   store.updateRun("r1", { state: "blocked", blockedReason: "x" });
-  expect(store.listRuns({ state: "blocked" })).toEqual([{ ...run, state: "blocked", blockedReason: "x" }]);
+  expect(store.listRuns({ state: "blocked" })).toEqual([
+    { ...run, ...runDefaults, state: "blocked", blockedReason: "x", cause: { code: "step_failed" } },
+  ]);
   store.upsertStep(step);
   store.upsertStep({ ...step, state: "passed" });
   store.upsertStep({ ...step, itemKey: "k1" });
@@ -99,7 +108,7 @@ test("keeps data across reopening a file database", async () => {
   store.close();
   stores.pop();
   const again = await open(path);
-  expect(again.getRun("r1")).toEqual(run);
+  expect(again.getRun("r1")).toEqual({ ...run, ...runDefaults });
   expect(again.isSeen("f", "l", "k")).toBe(true);
 });
 test("the seen store is per flow and per loop and purges by age", async () => {

@@ -293,15 +293,22 @@ test("TC-STO-02 version 6 rows remain readable and unreadable approvals are coun
     for (const [i, row] of (before.rows[table] ?? []).entries())
       expect(after.rows[table]?.[i]).toMatchObject(row);
   }
-  expect(store.getRun("running")).toEqual(
-    JSON.parse(String(before.rows.runs?.find((r) => r.id === "running")?.data)),
-  );
-  expect(store.getFlow("example.fill-timesheet")).toEqual(JSON.parse(String(before.rows.flows?.[1]?.data)));
-  expect(store.listApprovals()).toEqual(
-    (before.rows.approvals ?? [])
-      .filter((row) => row.id !== "bad")
-      .map((row) => JSON.parse(String(row.data))),
-  );
+  // Version 2 defaults are checked separately by TC-ENG-19; every version 6 key must survive.
+  const expectV6Keys = (actual: object | undefined, data: unknown) => {
+    const original = JSON.parse(String(data)) as Record<string, unknown>;
+    expect(actual).toBeDefined();
+    expect(
+      Object.fromEntries(Object.keys(original).map((key) => [key, Reflect.get(actual ?? {}, key)])),
+    ).toEqual(original);
+  };
+  expectV6Keys(store.getRun("running"), before.rows.runs?.find((r) => r.id === "running")?.data);
+  expectV6Keys(store.getFlow("example.fill-timesheet"), before.rows.flows?.[1]?.data);
+  const oldApprovals = (before.rows.approvals ?? []).filter((row) => row.id !== "bad");
+  const approvals = store.listApprovals();
+  expect(approvals).toHaveLength(oldApprovals.length);
+  oldApprovals.forEach((row, index) => {
+    expectV6Keys(approvals[index], row.data);
+  });
   expect(store.skippedRows()).toEqual({ approvals: 1 });
   db.close();
   store.close();
