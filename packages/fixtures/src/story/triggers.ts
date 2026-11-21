@@ -1,4 +1,4 @@
-import type { TriggerStatus } from "@flowdriven/contracts";
+import type { TriggerStatus } from "@flowdriven/contracts/v1";
 import type { FlowRecord } from "../state";
 
 export function triggerStatuses(

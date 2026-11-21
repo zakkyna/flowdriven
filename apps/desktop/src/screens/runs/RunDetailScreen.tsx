@@ -1,4 +1,4 @@
-import { firstUnpassedStep, isJudgedOnly, isResumable } from "@flowdriven/contracts";
+import { firstUnpassedStep, isJudgedOnly, isResumable } from "@flowdriven/contracts/v1";
 import { type ReactElement, useRef, useState } from "react";
 import { AppLink } from "../../nav/AppLink";
 import { NotFoundPage } from "../../nav/NotFoundPage";

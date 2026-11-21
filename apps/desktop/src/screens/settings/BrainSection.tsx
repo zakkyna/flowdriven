@@ -1,4 +1,4 @@
-import { type BrainBackend, budgetStatus, type Settings, sortByRisk } from "@flowdriven/contracts";
+import { type BrainBackend, budgetStatus, type Settings, sortByRisk } from "@flowdriven/contracts/v1";
 import { type ReactElement, useId, useState } from "react";
 import { useRunnerAction } from "../../runner/runner-context";
 import { RiskBadge } from "../../ui/RiskBadge";

@@ -1,4 +1,4 @@
-import type { FlowSummary } from "@flowdriven/contracts";
+import type { FlowSummary } from "@flowdriven/contracts/v1";
 import { type StatusPresentation, statusOf } from "./status";
 
 export function flowState(flow: Pick<FlowSummary, "lastRun">): StatusPresentation {

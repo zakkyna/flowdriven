@@ -1,4 +1,4 @@
-import type { StepRun } from "@flowdriven/contracts";
+import type { StepRun } from "@flowdriven/contracts/v1";
 import { type ReactElement, useId } from "react";
 import { CheckList } from "../../ui/CheckList";
 import { Icon } from "../../ui/icons";

@@ -4,7 +4,7 @@ import {
   type OperationOutput,
   type ReadinessItem,
   type RunnerError,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import { type ReactElement, useEffect, useState } from "react";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";

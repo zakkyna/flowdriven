@@ -1,4 +1,4 @@
-import { FlowCapabilities, type FlowManifest, ReadinessReport, RunDetail } from "@flowdriven/contracts";
+import { FlowCapabilities, type FlowManifest, ReadinessReport, RunDetail } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
 import { createFixtureRunnerClient } from "./client";
 import { buildLooped } from "./state";

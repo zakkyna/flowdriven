@@ -1,4 +1,4 @@
-import type { CheckType, FlowManifest, Requirement, Step } from "@flowdriven/contracts";
+import type { CheckType, FlowManifest, Requirement, Step } from "@flowdriven/contracts/v1";
 import type { FlowRecord } from "../state";
 
 const work: Record<string, Record<string, { instructions: string; uses: string[]; checks: string[] }>> = {

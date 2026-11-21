@@ -1,4 +1,4 @@
-import type { QueueView, UsageSummary } from "@flowdriven/contracts";
+import type { QueueView, UsageSummary } from "@flowdriven/contracts/v1";
 
 export function queue(): QueueView {
   return {

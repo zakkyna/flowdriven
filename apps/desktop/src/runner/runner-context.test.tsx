@@ -1,4 +1,4 @@
-import { createFixtureRunnerClient } from "@flowdriven/fixtures";
+import { createFixtureRunnerClient } from "@flowdriven/fixtures/v1";
 import { act, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { RunnerProvider, useRunnerQuery } from "./runner-context";

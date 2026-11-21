@@ -1,4 +1,4 @@
-import { Approval, isRunnerError } from "@flowdriven/contracts";
+import { Approval, isRunnerError } from "@flowdriven/contracts/v1";
 import { describe, expect, test, vi } from "vitest";
 import { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "./index";
 

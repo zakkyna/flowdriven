@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@flowdriven/contracts";
+import type { ChatMessage } from "@flowdriven/contracts/v1";
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import { formatDateTime } from "../../ui/format";
 import { Icon } from "../../ui/icons";

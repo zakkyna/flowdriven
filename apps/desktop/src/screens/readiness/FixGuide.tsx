@@ -1,4 +1,4 @@
-import type { FixGuide as Guide } from "@flowdriven/contracts";
+import type { FixGuide as Guide } from "@flowdriven/contracts/v1";
 import { type ReactElement, useId, useState } from "react";
 import { Button } from "../../ui/Button";
 import { Badge } from "../../ui/StatusBadge";

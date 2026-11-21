@@ -1,4 +1,4 @@
-import type { Playback as PlaybackData } from "@flowdriven/contracts";
+import type { Playback as PlaybackData } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { Badge } from "../../ui/StatusBadge";
 import styles from "./Builder.module.css";

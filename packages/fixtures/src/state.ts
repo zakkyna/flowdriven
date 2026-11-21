@@ -11,7 +11,7 @@ import type {
   RunDetail,
   Settings,
   UsageSummary,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import { approvals } from "./story/approvals";
 import { flows } from "./story/flows";
 import { harnesses } from "./story/harnesses";

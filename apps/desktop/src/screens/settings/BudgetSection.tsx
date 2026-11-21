@@ -1,4 +1,4 @@
-import { type Budget, budgetStatus } from "@flowdriven/contracts";
+import { type Budget, budgetStatus } from "@flowdriven/contracts/v1";
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import { useRunnerAction } from "../../runner/runner-context";
 import { Button } from "../../ui/Button";

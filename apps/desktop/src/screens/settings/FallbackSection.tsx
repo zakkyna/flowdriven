@@ -1,4 +1,4 @@
-import type { Settings } from "@flowdriven/contracts";
+import type { Settings } from "@flowdriven/contracts/v1";
 import { type ReactElement, useState } from "react";
 import { useRunnerAction } from "../../runner/runner-context";
 import { Button } from "../../ui/Button";

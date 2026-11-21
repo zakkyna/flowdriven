@@ -1,4 +1,4 @@
-import type { FlowEdit, HarnessCard, LeafStep, Step, StepRun, StepRunState } from "@flowdriven/contracts";
+import type { FlowEdit, HarnessCard, LeafStep, Step, StepRun, StepRunState } from "@flowdriven/contracts/v1";
 import { type ReactElement, useState } from "react";
 import { Button } from "../../ui/Button";
 import { CheckList } from "../../ui/CheckList";

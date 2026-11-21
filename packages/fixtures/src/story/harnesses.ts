@@ -1,4 +1,4 @@
-import type { HarnessCard, InventoryItem } from "@flowdriven/contracts";
+import type { HarnessCard, InventoryItem } from "@flowdriven/contracts/v1";
 export function harnesses(): HarnessCard[] {
   function card(
     id: string,

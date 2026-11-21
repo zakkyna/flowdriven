@@ -1,4 +1,4 @@
-import type { ChatMessage, FlowEdit, Step } from "@flowdriven/contracts";
+import type { ChatMessage, FlowEdit, Step } from "@flowdriven/contracts/v1";
 import { type ReactElement, useLayoutEffect, useRef, useState } from "react";
 import { AppLink } from "../../nav/AppLink";
 import { NotFoundPage } from "../../nav/NotFoundPage";

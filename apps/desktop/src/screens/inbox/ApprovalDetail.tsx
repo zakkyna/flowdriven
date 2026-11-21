@@ -1,4 +1,4 @@
-import type { Approval, ApprovalDecision } from "@flowdriven/contracts";
+import type { Approval, ApprovalDecision } from "@flowdriven/contracts/v1";
 import { type ReactElement, useState } from "react";
 import { AppLink } from "../../nav/AppLink";
 import { Button } from "../../ui/Button";

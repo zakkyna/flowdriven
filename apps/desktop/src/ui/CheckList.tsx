@@ -1,4 +1,4 @@
-import { type Check, type CheckResult, isJudgedOnly } from "@flowdriven/contracts";
+import { type Check, type CheckResult, isJudgedOnly } from "@flowdriven/contracts/v1";
 import { type ReactElement, useState } from "react";
 import { Button } from "./Button";
 import styles from "./CheckList.module.css";

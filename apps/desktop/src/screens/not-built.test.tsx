@@ -1,4 +1,4 @@
-import { RunnerError } from "@flowdriven/contracts";
+import { RunnerError } from "@flowdriven/contracts/v1";
 import { fireEvent, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { renderApp } from "../test/render";

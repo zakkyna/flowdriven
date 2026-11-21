@@ -1,4 +1,4 @@
-import type { FlowDetail, FlowEdit, HarnessCard, RunDetail, Step } from "@flowdriven/contracts";
+import type { FlowDetail, FlowEdit, HarnessCard, RunDetail, Step } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import styles from "./Builder.module.css";
 import { StepRow } from "./StepRow";

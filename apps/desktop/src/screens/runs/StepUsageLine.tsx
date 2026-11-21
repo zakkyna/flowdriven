@@ -1,4 +1,4 @@
-import type { StepUsage } from "@flowdriven/contracts";
+import type { StepUsage } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import styles from "./Runs.module.css";
 

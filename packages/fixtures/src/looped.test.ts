@@ -1,4 +1,4 @@
-import { Approval, FlowManifest, RunDetail } from "@flowdriven/contracts";
+import { Approval, FlowManifest, RunDetail } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
 import { createFixtureRunnerClient } from "./client";
 import { buildLooped, buildStory } from "./state";

@@ -1,4 +1,4 @@
-import type { Payload } from "@flowdriven/contracts";
+import type { Payload } from "@flowdriven/contracts/v1";
 import { type ReactElement, useState } from "react";
 import { formatUsd } from "../../ui/format";
 import { Icon } from "../../ui/icons";

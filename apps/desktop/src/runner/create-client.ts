@@ -1,5 +1,5 @@
-import type { RunnerClient } from "@flowdriven/contracts";
-import { createFixtureRunnerClient, type Scenario } from "@flowdriven/fixtures";
+import type { RunnerClient } from "@flowdriven/contracts/v1";
+import { createFixtureRunnerClient, type Scenario } from "@flowdriven/fixtures/v1";
 import { runnerBridge } from "../shell";
 import { IpcRunnerClient } from "./ipc-client";
 export function scenarioFromSearch(search: string): Scenario {

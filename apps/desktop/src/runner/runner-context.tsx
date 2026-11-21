@@ -6,7 +6,7 @@ import {
   operations,
   type RunnerClient,
   RunnerError,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import {
   createContext,
   type ReactElement,

@@ -1,4 +1,4 @@
-import type { HarnessCard, InventoryItem } from "@flowdriven/contracts";
+import type { HarnessCard, InventoryItem } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { Button } from "../../ui/Button";
 import { formatTime } from "../../ui/format";

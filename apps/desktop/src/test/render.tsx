@@ -1,4 +1,4 @@
-import { createFixtureRunnerClient, type FixtureRunnerClient, type Scenario } from "@flowdriven/fixtures";
+import { createFixtureRunnerClient, type FixtureRunnerClient, type Scenario } from "@flowdriven/fixtures/v1";
 import { type RenderResult, render } from "@testing-library/react";
 import { App } from "../App";
 import { RunnerProvider } from "../runner/runner-context";

@@ -1,5 +1,5 @@
 // Belongs in: apps/desktop/src/screens/harnesses/review-03-a5.test.tsx
-import type { HarnessCard } from "@flowdriven/contracts";
+import type { HarnessCard } from "@flowdriven/contracts/v1";
 import { render } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { HarnessCardView } from "./HarnessCardView";

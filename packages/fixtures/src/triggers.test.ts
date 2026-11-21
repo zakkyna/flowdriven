@@ -1,4 +1,4 @@
-import { RunDetail, TriggerStatus } from "@flowdriven/contracts";
+import { RunDetail, TriggerStatus } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
 import { createFixtureRunnerClient } from "./client";
 

@@ -1,4 +1,4 @@
-import type { ApprovalDecision } from "@flowdriven/contracts";
+import type { ApprovalDecision } from "@flowdriven/contracts/v1";
 import { type ReactElement, useLayoutEffect, useRef, useState } from "react";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";

@@ -1,4 +1,4 @@
-import type { TriggerStatus } from "@flowdriven/contracts";
+import type { TriggerStatus } from "@flowdriven/contracts/v1";
 import { type ReactElement, useRef, useState } from "react";
 import { AppLink } from "../../nav/AppLink";
 import { useRunnerAction } from "../../runner/runner-context";

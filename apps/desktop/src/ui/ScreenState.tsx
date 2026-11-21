@@ -1,4 +1,4 @@
-import type { RunnerError } from "@flowdriven/contracts";
+import type { RunnerError } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { Button } from "./Button";
 import { Page } from "./Page";

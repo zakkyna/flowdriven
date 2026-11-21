@@ -1,4 +1,4 @@
-import type { RunSummary } from "@flowdriven/contracts";
+import type { RunSummary } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { AppLink } from "../../nav/AppLink";
 import { formatDateTime } from "../../ui/format";

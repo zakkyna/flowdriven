@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { MAX_FRAME_BYTES as CONTRACT_MAX } from "@flowdriven/contracts";
+import { MAX_FRAME_BYTES as CONTRACT_MAX } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   ALL_TOPICS_EVENT,

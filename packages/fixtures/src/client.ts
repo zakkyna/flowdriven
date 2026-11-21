@@ -2,7 +2,7 @@ import {
   approvalExpiresAt,
   attentionCount,
   type ChatMessage,
-  CONTRACT_VERSION,
+  CONTRACT_VERSION_V1 as CONTRACT_VERSION,
   type FlowDetail,
   type FlowEdit,
   type FlowSummary,
@@ -19,7 +19,7 @@ import {
   type RunnerEvent,
   Settings,
   Step,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import {
   buildEmpty,
   buildLong,

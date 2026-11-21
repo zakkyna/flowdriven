@@ -8,7 +8,7 @@ import {
   RunnerError,
   type RunnerErrorCode,
   RunnerEvent,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import type { RunnerBridge } from "../shell";
 
 export class IpcRunnerClient implements RunnerClient {

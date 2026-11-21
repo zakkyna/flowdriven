@@ -1,4 +1,4 @@
-import type { CapabilityRow, FlowCapabilities } from "@flowdriven/contracts";
+import type { CapabilityRow, FlowCapabilities } from "@flowdriven/contracts/v1";
 import { type ReactElement, useRef, useState } from "react";
 import { useRunnerAction } from "../../runner/runner-context";
 import { Button } from "../../ui/Button";

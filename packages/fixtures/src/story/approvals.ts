@@ -1,4 +1,4 @@
-import { type Approval, approvalExpiresAt } from "@flowdriven/contracts";
+import { type Approval, approvalExpiresAt } from "@flowdriven/contracts/v1";
 
 const emailFlow = "dev.example.email-triage";
 export function approvals(): Approval[] {
