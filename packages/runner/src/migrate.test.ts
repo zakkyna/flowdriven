@@ -7,10 +7,10 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { runProcess } from "./service/run-process.ts";
 import { openSqliteStore } from "./sqlite-store.ts";
-import { makeStoreV6, readStoreV6 } from "./test-helpers/store-v6.ts";
+import { makeOlderStore, makeStoreV6, readStoreV6 } from "./test-helpers/store-v6.ts";
 
 const dirs: string[] = [];
 const clock = () => new Date("2026-11-21T03:00:00Z");
@@ -219,7 +219,9 @@ test("TC-STO-07 subsequent opens do not back up again", async () => {
   (await openSqliteStore(path, { now: clock })).close();
   const after = readStoreV6(path);
   for (const table of before.tables) {
-    expect(after.rows[table]).toHaveLength(before.rows[table]?.length ?? 0);
+    expect(after.rows[table]).toHaveLength(
+      (before.rows[table]?.length ?? 0) + (table === "audit_log" ? 1 : 0),
+    );
     for (const [index, row] of (before.rows[table] ?? []).entries()) {
       expect(after.rows[table]?.[index]).toMatchObject(row);
     }
@@ -229,6 +231,7 @@ test("TC-STO-07 subsequent opens do not back up again", async () => {
   expect(readStoreV6(path)).toEqual(after);
   expect(after.version).toBe(7);
   expect(readdirSync(join(dir, "backups"))).toHaveLength(1);
+  expect(after.rows.audit_log?.filter((row) => row.kind === "store_migrated")).toHaveLength(1);
 });
 test("TC-STO-14 killed migration rolls back and retries", { timeout: 20000 }, async () => {
   const dir = folder();
@@ -265,4 +268,197 @@ test("TC-STO-16 lock precedes migration", { timeout: 20000 }, async () => {
     child.stdin.end();
     await once(child, "exit");
   }
+});
+
+async function migrated() {
+  const dir = folder();
+  const path = makeStoreV6(dir);
+  const before = readStoreV6(path);
+  const store = await openSqliteStore(path, { now: clock });
+  return { dir, path, before, store, db: new DatabaseSync(path) };
+}
+function dataRows(db: DatabaseSync, table: string) {
+  return db
+    .prepare(`SELECT data FROM ${table} ORDER BY rowid`)
+    .all()
+    .map((r) => JSON.parse(String(r.data)));
+}
+test("TC-STO-02 version 6 rows remain readable and unreadable approvals are counted", async () => {
+  const { path, before, store, db } = await migrated();
+  const after = readStoreV6(path);
+  for (const table of before.tables) {
+    expect(after.rows[table]).toHaveLength(
+      (before.rows[table]?.length ?? 0) + (table === "audit_log" ? 1 : 0),
+    );
+    for (const [i, row] of (before.rows[table] ?? []).entries())
+      expect(after.rows[table]?.[i]).toMatchObject(row);
+  }
+  expect(store.getRun("running")).toEqual(
+    JSON.parse(String(before.rows.runs?.find((r) => r.id === "running")?.data)),
+  );
+  expect(store.getFlow("example.fill-timesheet")).toEqual(JSON.parse(String(before.rows.flows?.[1]?.data)));
+  expect(store.listApprovals()).toEqual(
+    (before.rows.approvals ?? [])
+      .filter((row) => row.id !== "bad")
+      .map((row) => JSON.parse(String(row.data))),
+  );
+  expect(store.skippedRows()).toEqual({ approvals: 1 });
+  db.close();
+  store.close();
+});
+test("TC-STO-08 flow heads select newest versions and resolve duplicate names", async () => {
+  const { store, db } = await migrated();
+  const heads = dataRows(db, "flow_heads");
+  expect(heads).toHaveLength(3);
+  expect(heads[0]).toMatchObject({
+    id: "example.fill-timesheet",
+    headHash: "H2",
+    createdAt: "2026-11-21T02:59:00.000Z",
+    origin: { kind: "import" },
+  });
+  expect(heads[1]).toMatchObject({ origin: { kind: "demo" } });
+  expect(heads[2]).toMatchObject({ name: "Fill timesheet 2", origin: { kind: "import" } });
+  expect(store.getFlow("example.job-review")?.manifest).toMatchObject({ name: "Fill timesheet" });
+  expect(store.listAudit().at(-1)?.detail).toMatchObject({
+    renames: [{ flowId: "example.job-review", from: "Fill timesheet", to: "Fill timesheet 2" }],
+  });
+  db.close();
+  store.close();
+});
+test("TC-SR3-12 and TC-STO-09 confirmations retain hashes and pins", async () => {
+  const { store, db, dir } = await migrated();
+  const confirmations = dataRows(db, "confirmations");
+  expect(confirmations).toHaveLength(2);
+  expect(confirmations[0]).toEqual({
+    flowId: "example.fill-timesheet",
+    hash: "H2",
+    at: "2026",
+    by: "migration",
+    onItsOwn: [],
+    legacy: true,
+    pins: {
+      skills: { skill: "sha256:skill" },
+      folders: { project: { path: join(dir, "project"), access: "read_write" } },
+    },
+  });
+  expect(confirmations[1]).toMatchObject({
+    flowId: "example.build-apk",
+    hash: "H0",
+    by: "migration",
+    onItsOwn: [],
+    legacy: true,
+    pins: { skills: {}, folders: {} },
+  });
+  const { flowState } = await import("./flow-state.ts");
+  expect(
+    ["example.fill-timesheet", "example.build-apk", "example.job-review"].map((id) => flowState(store, id)),
+  ).toEqual(["confirmed", "changed", "new"]);
+  expect(db.prepare("SELECT * FROM standing_rules").all()).toHaveLength(0);
+  db.close();
+  store.close();
+});
+test("TC-STO-10 open run grants retain tool and decision step", async () => {
+  const { store, db, before } = await migrated();
+  expect(dataRows(db, "call_grants")).toEqual([
+    expect.objectContaining({
+      runId: "waiting_approval",
+      stepId: "step",
+      tool: "mcp__x__send",
+      digest: "digest",
+      kind: "migrated",
+    }),
+    expect.objectContaining({
+      runId: "waiting_approval",
+      stepId: "*",
+      tool: "pick",
+      digest: "*",
+      kind: "migrated",
+    }),
+  ]);
+  expect(db.prepare("SELECT * FROM grants").all()).toEqual(before.rows.grants);
+  db.close();
+  store.close();
+});
+test("TC-SR2-12 and TC-STO-11 consent does not grant agent permission or create schedules", async () => {
+  const { store, db, before, dir } = await migrated();
+  const { createRunnerService } = await import("./service/service.ts");
+  const { scriptedHarness } = await import("./scripted-harness.ts");
+  const service = createRunnerService({
+    store,
+    dataDir: dir,
+    mode: "live",
+    now: clock,
+    harness: scriptedHarness({ steps: {} }),
+    keeper: { every: () => () => {} },
+    triggers: { every: () => () => {} },
+  });
+  expect(await service.call("settings.get", {})).toMatchObject({
+    agentPermission: "unset",
+    mainAgent: null,
+    language: "en",
+  });
+  expect(db.prepare("SELECT * FROM settings").all()).toEqual(before.rows.settings);
+  expect(db.prepare("SELECT * FROM schedules").all()).toHaveLength(0);
+  expect(db.prepare("SELECT * FROM standing_rules").all()).toHaveLength(0);
+  expect(dataRows(db, "confirmations")).toHaveLength(2);
+  const { createTriggerService } = await import("./triggers/service.ts");
+  const begin = vi.fn(() => {
+    throw new Error("Unexpected start");
+  });
+  const triggers = createTriggerService({
+    store,
+    now: () => new Date("2026-11-21T04:00:00Z"),
+    dayOf: () => "2026-11-21",
+    projectDir: dir,
+    begin,
+    every: () => () => {},
+    watch: () => undefined,
+    summaryOf: () => "schedule",
+  });
+  triggers.start();
+  await triggers.tick();
+  expect(begin).not.toHaveBeenCalled();
+  expect(store.getTrigger("example.fill-timesheet", 0)?.lastFire).toMatchObject({
+    outcome: "refused",
+    detail: "permission_off",
+  });
+  expect(db.prepare("SELECT * FROM starts WHERE outcome = 'started'").all()).toHaveLength(0);
+  triggers.stop();
+  service.stop();
+  db.close();
+  store.close();
+});
+test("TC-STO-12 migration audit is append-only and records counts", async () => {
+  const prepare = vi.spyOn(DatabaseSync.prototype, "prepare");
+  const { store, db } = await migrated();
+  const storeDb = prepare.mock.instances.at(-1) as DatabaseSync | undefined;
+  if (!storeDb) throw new Error("Store database was not observed");
+  expect(() => db.exec("UPDATE audit_log SET kind = 'x'")).toThrow("audit_log is append-only");
+  expect(() => db.exec("DELETE FROM audit_log")).toThrow("audit_log is append-only");
+  expect(store.listAudit().at(-1)).toMatchObject({
+    kind: "store_migrated",
+    detail: {
+      from: 6,
+      to: 7,
+      backup: "flowdriven-v6-20261121T030000Z.sqlite",
+      flows: 3,
+      confirmations: 2,
+      grants: 2,
+      skipped: 1,
+      renames: [{ flowId: "example.job-review", from: "Fill timesheet", to: "Fill timesheet 2" }],
+    },
+  });
+  expect(storeDb.prepare("PRAGMA secure_delete").get()?.secure_delete).toBe(1);
+  prepare.mockRestore();
+  db.close();
+  store.close();
+});
+test.each([1, 2, 3, 4, 5])("TC-STO-13 version %s migrates in one open", async (version) => {
+  const dir = folder();
+  const path = makeOlderStore(dir, version);
+  const store = await openSqliteStore(path, { now: clock });
+  expect(store.schemaVersion()).toBe(7);
+  expect(existsSync(join(dir, "backups", `flowdriven-v${version}-20261121T030000Z.sqlite`))).toBe(true);
+  expect(store.listAudit().at(-1)?.detail).toMatchObject({ from: version, to: 7 });
+  store.close();
 });

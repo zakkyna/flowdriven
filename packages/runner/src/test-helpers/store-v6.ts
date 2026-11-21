@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { triggerFlow } from "./trigger-rig.ts";
 
 const SCHEMA = `
 CREATE TABLE flows (id TEXT NOT NULL, hash TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (id, hash));
@@ -54,7 +55,7 @@ export function makeStoreV6(folder: string, options?: { clock?: () => Date }): s
         id,
         hash,
         version: "1",
-        manifest: { name, summary: `${name} flow`, triggers: [{ kind: "schedule", every: "1h" }] },
+        manifest: { ...triggerFlow(id, [{ kind: "schedule", every: "1h" }]), name, summary: `${name} flow` },
         files: {},
         registeredAt:
           id === "example.fill-timesheet" && hash === "H1"
@@ -63,8 +64,16 @@ export function makeStoreV6(folder: string, options?: { clock?: () => Date }): s
       }),
     );
   }
-  db.exec(`INSERT INTO capability_consents VALUES ('example.fill-timesheet','H2','2026'), ('example.build-apk','H0','2026');
-`);
+  db.prepare("INSERT INTO capability_consents VALUES (?, ?, ?)").run(
+    "example.fill-timesheet",
+    JSON.stringify("H2"),
+    JSON.stringify("2026"),
+  );
+  db.prepare("INSERT INTO capability_consents VALUES (?, ?, ?)").run(
+    "example.build-apk",
+    JSON.stringify("H0"),
+    JSON.stringify("2026"),
+  );
   const run = db.prepare("INSERT INTO runs VALUES (?, ?, ?, ?)");
   for (const state of [
     "queued",
@@ -118,7 +127,9 @@ export function makeStoreV6(folder: string, options?: { clock?: () => Date }): s
       index: 0,
       enabled: true,
       hash: "H2",
-      spec: JSON.stringify({ kind: "schedule", every: "1h" }),
+      spec: JSON.stringify(
+        triggerFlow("example.fill-timesheet", [{ kind: "schedule", every: "1h" }]).triggers[0],
+      ),
       enabledAt: at,
     }),
   );
@@ -170,4 +181,17 @@ export function readStoreV6(path: string) {
   } finally {
     db.close();
   }
+}
+
+export function makeOlderStore(folder: string, version: number): string {
+  const path = join(folder, "flowdriven.sqlite");
+  const db = new DatabaseSync(path);
+  db.exec(SCHEMA);
+  if (version >= 2) db.exec(HARNESS_STATE_SCHEMA);
+  if (version >= 3) db.exec(USAGE_SCHEMA);
+  if (version >= 4) db.exec(TRIGGER_SCHEMA);
+  if (version >= 5) db.exec(CAPABILITY_SCHEMA);
+  db.exec(`PRAGMA user_version = ${version}`);
+  db.close();
+  return path;
 }

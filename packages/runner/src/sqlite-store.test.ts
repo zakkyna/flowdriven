@@ -156,7 +156,23 @@ test("a database made by the present code at version 1 opens, keeps every row an
   const path = migrationPath();
   makeVersionOne(path);
   const store = await open(path);
-  expect(store.listAudit()).toEqual([{ at: "2026", kind: "test", runId: "r1", detail: { value: 1 } }]);
+  expect(store.listAudit()).toEqual([
+    { at: "2026", kind: "test", runId: "r1", detail: { value: 1 } },
+    {
+      at: expect.any(String),
+      kind: "store_migrated",
+      detail: {
+        from: 1,
+        to: 7,
+        backup: expect.stringMatching(/^flowdriven-v1-\d{8}T\d{6}Z\.sqlite$/),
+        flows: 0,
+        confirmations: 0,
+        grants: 0,
+        skipped: 0,
+        renames: [],
+      },
+    },
+  ]);
   expect(version(path)).toBe(7);
   expect(store.getHarnessState("claude-code")).toBeUndefined();
 });
@@ -164,7 +180,23 @@ test("an exclusive open migrates a version 1 file too", async () => {
   const path = migrationPath();
   makeVersionOne(path);
   const store = await openSqliteStore(path, { exclusive: true });
-  expect(store.listAudit()).toEqual([{ at: "2026", kind: "test", runId: "r1", detail: { value: 1 } }]);
+  expect(store.listAudit()).toEqual([
+    { at: "2026", kind: "test", runId: "r1", detail: { value: 1 } },
+    {
+      at: expect.any(String),
+      kind: "store_migrated",
+      detail: {
+        from: 1,
+        to: 7,
+        backup: expect.stringMatching(/^flowdriven-v1-\d{8}T\d{6}Z\.sqlite$/),
+        flows: 0,
+        confirmations: 0,
+        grants: 0,
+        skipped: 0,
+        renames: [],
+      },
+    },
+  ]);
   expect(store.getHarnessState("claude-code")).toBeUndefined();
   store.close();
   expect(version(path)).toBe(7);

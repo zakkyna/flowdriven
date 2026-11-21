@@ -145,7 +145,28 @@ export type ConsentPins = {
   folders: Record<string, { path: string; access: "read" | "read_write" }>;
 };
 export type CapabilityConsentRow = { flowId: string; hash: string; at: string; pins?: ConsentPins };
+export type FlowHead = {
+  id: string;
+  name: string;
+  summary: string;
+  headHash: string;
+  createdAt: string;
+  updatedAt: string;
+  origin: { kind: "demo" | "import" };
+};
+export type Confirmation = {
+  flowId: string;
+  hash: string;
+  at: string;
+  by: "migration";
+  onItsOwn: string[];
+  pins: ConsentPins;
+  legacy: true;
+};
 export interface Store {
+  skippedRows(): { approvals: number };
+  getFlowHead(id: string): FlowHead | undefined;
+  getConfirmation(id: string): Confirmation | undefined;
   schemaVersion(): number;
   getCapabilityConsent(flowId: string): CapabilityConsentRow | undefined;
   putCapabilityConsent(row: CapabilityConsentRow): void;

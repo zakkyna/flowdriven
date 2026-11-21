@@ -4,7 +4,9 @@ import { type MigrationOptions, migrate } from "./migrate.ts";
 import type {
   ApprovalRow,
   AuditEntry,
+  Confirmation,
   ConsentPins,
+  FlowHead,
   FlowRow,
   HarnessStateRow,
   ItemRow,
@@ -123,6 +125,19 @@ export async function openSqliteStore(
   };
   let depth = 0;
   const store: Store = {
+    skippedRows: () => ({
+      approvals: all("SELECT data FROM approvals").filter((row) => {
+        try {
+          JSON.parse(String(row.data));
+          return false;
+        } catch {
+          return true;
+        }
+      }).length,
+    }),
+    getFlowHead: (id) => decode<FlowHead>(get("SELECT data FROM flow_heads WHERE id = ?", id)),
+    getConfirmation: (id) =>
+      decode<Confirmation>(get("SELECT data FROM confirmations WHERE flow_id = ?", id)),
     schemaVersion: () => Number(db.prepare("PRAGMA user_version").get()?.user_version),
     getCapabilityConsent(flowId) {
       const row = get("SELECT flow_id, hash, at FROM capability_consents WHERE flow_id = ?", flowId);
@@ -419,18 +434,26 @@ export async function openSqliteStore(
       execute("INSERT INTO approvals VALUES (?, ?, ?, ?)", row.id, row.runId, row.state, json(row));
     },
     getApproval(id) {
-      return decode<ApprovalRow>(get("SELECT data FROM approvals WHERE id = ?", id));
+      try {
+        return decode<ApprovalRow>(get("SELECT data FROM approvals WHERE id = ?", id));
+      } catch {
+        return undefined;
+      }
     },
     listApprovals(filter) {
-      return decodeAll<ApprovalRow>(
-        all(
-          "SELECT data FROM approvals WHERE (? IS NULL OR state = ?) AND (? IS NULL OR run_id = ?) ORDER BY rowid",
-          filter?.state ?? null,
-          filter?.state ?? null,
-          filter?.runId ?? null,
-          filter?.runId ?? null,
-        ),
-      );
+      return all(
+        "SELECT data FROM approvals WHERE (? IS NULL OR state = ?) AND (? IS NULL OR run_id = ?) ORDER BY rowid",
+        filter?.state ?? null,
+        filter?.state ?? null,
+        filter?.runId ?? null,
+        filter?.runId ?? null,
+      ).flatMap((row) => {
+        try {
+          return [JSON.parse(String(row.data)) as ApprovalRow];
+        } catch {
+          return [];
+        }
+      });
     },
     updateApproval(id, patch) {
       const row = store.getApproval(id);
