@@ -2,6 +2,8 @@ import "../config.ts";
 import { z } from "zod";
 import { valueId } from "./steps.ts";
 
+export const LONGTEXT_MAX = 4000;
+
 export const InputDeclV12 = z
   .strictObject({
     id: valueId,
@@ -21,13 +23,13 @@ export const InputDeclV12 = z
       "longtext",
       "choice",
     ]),
-    label: z.string(),
+    label: z.string().min(1).max(200),
     required: z.boolean().default(false),
     default: z.unknown().optional(),
     example: z.string().max(200).optional(),
     remember: z.boolean().default(false),
     choices: z
-      .array(z.strictObject({ key: valueId, label: z.string() }))
+      .array(z.strictObject({ key: valueId, label: z.string().min(1).max(200) }))
       .min(1)
       .max(50)
       .optional(),
@@ -39,6 +41,8 @@ export const InputDeclV12 = z
       ctx.addIssue({ code: "custom", path: [path], message, ...(code ? { params: { code } } : {}) });
     if (input.remember && (input.type === "date" || input.type === "time"))
       error("remember", "Dates and times cannot be remembered", "remember_date_time");
+    if (input.remember && input.type === "secret_ref")
+      error("remember", "Secrets cannot be remembered", "remember_secret");
     if (input.type === "choice" || input.type === "enum") {
       if (!input.choices || new Set(input.choices.map((choice) => choice.key)).size !== input.choices.length)
         error("choices", "Choices must have unique keys");
@@ -75,10 +79,12 @@ export const InputDeclV12 = z
         valid = input.choices?.some((choice) => choice.key === value) ?? false;
         break;
       case "list<text>":
-        valid = Array.isArray(value) && value.every((item: unknown) => typeof item === "string");
+        valid =
+          Array.isArray(value) &&
+          value.every((item: unknown) => typeof item === "string" && item.length <= LONGTEXT_MAX);
         break;
       default:
-        valid = typeof value === "string";
+        valid = typeof value === "string" && value.length <= LONGTEXT_MAX;
     }
     if (!valid) error("default", "Default does not match input type");
   })

@@ -61,3 +61,37 @@ test("TC-SDK-06 typed defaults", async () => {
   expect(InputDeclV12.safeParse(input("choice", { choices, default: "coding" })).success).toBe(false);
   expect(InputDeclV12.safeParse(input("number", { min: 1, max: 10, default: 11 })).success).toBe(false);
 });
+
+test.each(["label", "choice label"])("TC-SDK-04 %s display limits", async (field) => {
+  const { InputDeclV12 } = await import("./inputs.ts");
+  const make = (label: string) =>
+    field === "label" ? input("text", { label }) : input("choice", { choices: [{ key: "x", label }] });
+  expect(InputDeclV12.safeParse(make("x".repeat(200))).success).toBe(true);
+  expect(InputDeclV12.safeParse(make("x".repeat(201))).success).toBe(false);
+  expect(InputDeclV12.safeParse(make("")).success).toBe(false);
+});
+test("TC-SDK-06 default length limits", async () => {
+  const { InputDeclV12 } = await import("./inputs.ts");
+  expect(InputDeclV12.safeParse(input("longtext", { default: "x".repeat(4000) })).success).toBe(true);
+  for (const [type, value] of [
+    ["longtext", "x".repeat(4001)],
+    ["list<text>", ["x".repeat(4001)]],
+  ] as const) {
+    const result = InputDeclV12.safeParse(input(type, { default: value }));
+    expect(result.success).toBe(false);
+    if (!result.success)
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({ message: "Default does not match input type", path: ["default"] }),
+      );
+  }
+});
+test("TC-SDK-05 secret reference cannot be remembered", async () => {
+  const { InputDeclV12 } = await import("./inputs.ts");
+  const result = InputDeclV12.safeParse(input("secret_ref", { remember: true }));
+  expect(result.success).toBe(false);
+  if (!result.success)
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({ path: ["remember"], params: { code: "remember_secret" } }),
+    );
+  expect(InputDeclV12.safeParse(input("secret_ref", { default: "example-api-key" })).success).toBe(true);
+});

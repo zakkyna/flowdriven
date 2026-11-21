@@ -131,3 +131,37 @@ test("TC-SDK-03 and TC-SDK-16 accept 1.2 fields and reject touch permissions", (
   for (const extra of [{ allowed: true }, { rule: "allowed_always" }])
     expect(parse([{ ...touch, ...extra }]).ok).toBe(false);
 });
+
+test.each([
+  ["id", 64],
+  ["place.value", 600],
+  ["place.label", 200],
+  ["covers", 600],
+])("TC-SDK-09 %s length limits", (field, max) => {
+  const make = (value: string) =>
+    field === "id"
+      ? { ...touch, id: value }
+      : field === "covers"
+        ? { ...touch, covers: [value] }
+        : { ...touch, place: { ...touch.place, [field.split(".")[1] ?? ""]: value } };
+  expect(parse([make("x".repeat(max))]).ok).toBe(true);
+  expect(parse([make("x".repeat(max + 1))]).ok).toBe(false);
+  expect(parse([make("")]).ok).toBe(false);
+});
+test("TC-SDK-09 covers count limits", () => {
+  expect(parse([{ ...touch, covers: Array(100).fill("x") }]).ok).toBe(true);
+  expect(parse([{ ...touch, covers: Array(101).fill("x") }]).ok).toBe(false);
+});
+test.each(["sentence", "place.value", "place.label"])("TC-SDK-09 %s is single line", (field) => {
+  for (const character of ["\n", "\t"]) {
+    const value = `x${character}y`;
+    const entry =
+      field === "sentence"
+        ? { ...touch, sentence: value }
+        : { ...touch, place: { ...touch.place, [field.split(".")[1] ?? ""]: value } };
+    const result = parse([entry]);
+    expect(result.ok ? [] : result.issues).toContainEqual(
+      expect.objectContaining({ code: "single_line", path: `touches.0.${field}` }),
+    );
+  }
+});

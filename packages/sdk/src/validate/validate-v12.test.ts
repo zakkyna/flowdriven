@@ -25,7 +25,7 @@ test("TC-SDK-19 existing validation remains unchanged", () => {
   }
 });
 test("TC-SDK-17 hidden person-facing text", () => {
-  for (const mark of [0x200b, 0x202e]) {
+  for (const mark of [0x200b, 0x202e, 0xfff9, 0x13430]) {
     const bad = `Text${String.fromCodePoint(mark)}`;
     for (const [field, path] of [
       [{ name: bad }, "name"],
@@ -55,5 +55,77 @@ test("TC-SDK-17 hidden person-facing text", () => {
           expect.objectContaining({ code: "hidden_text", path }),
         );
     }
+  }
+});
+
+test.each([0xfff9, 0x13430])("TC-SDK-17 format character %i in defaults and place", (code) => {
+  const bad = `x${String.fromCodePoint(code)}`;
+  for (const [field, path] of [
+    [
+      {
+        touches: [
+          {
+            id: "x",
+            sentence: "Read",
+            effect: "read",
+            rule: "asks_first",
+            place: { kind: "address", label: "X", value: bad },
+          },
+        ],
+      },
+      "touches.0.place.value",
+    ],
+    ...["longtext", "secret_ref"].map(
+      (type) => [{ inputs: [{ id: "x", type, label: "X", default: bad }] }, "inputs.0.default"] as const,
+    ),
+    [
+      { inputs: [{ id: "x", type: "list<text>", label: "X", default: ["clean", bad] }] },
+      "inputs.0.default.1",
+    ],
+  ] as const) {
+    const parsed = parseManifest(flowV12(field));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok)
+      expect(validateManifest(parsed.manifest)).toContainEqual(
+        expect.objectContaining({ code: "hidden_text", path }),
+      );
+  }
+  const clean = parseManifest(
+    flowV12({
+      inputs: [
+        { id: "x", type: "longtext", label: "X", default: "a\nb\tc" },
+        { id: "y", type: "list<text>", label: "Y", default: ["clean"] },
+        { id: "z", type: "secret_ref", label: "Z", default: "example-api-key" },
+      ],
+      touches: [
+        {
+          id: "x",
+          sentence: "Read",
+          effect: "read",
+          rule: "asks_first",
+          place: { kind: "address", label: "X", value: "address" },
+        },
+      ],
+    }),
+  );
+  expect(clean.ok).toBe(true);
+  if (clean.ok)
+    expect(validateManifest(clean.manifest).filter((issue) => issue.code === "hidden_text")).toEqual([]);
+});
+
+test("TC-SDK-17 existing hidden characters in defaults", () => {
+  for (const type of ["longtext", "secret_ref", "list<text>"]) {
+    const bad = `x${String.fromCodePoint(0x200b)}`;
+    const parsed = parseManifest(
+      flowV12({ inputs: [{ id: "x", type, label: "X", default: type === "list<text>" ? [bad] : bad }] }),
+    );
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok)
+      expect(validateManifest(parsed.manifest)).toContainEqual(
+        expect.objectContaining({
+          code: "hidden_text",
+          path: type === "list<text>" ? "inputs.0.default.0" : "inputs.0.default",
+        }),
+      );
   }
 });

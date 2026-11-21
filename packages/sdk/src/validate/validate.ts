@@ -55,6 +55,11 @@ export function validateManifest(
     manifest.inputs.forEach((input, i) => {
       hidden(input.label, `inputs.${i}.label`);
       hidden(input.example, `inputs.${i}.example`);
+      if (typeof input.default === "string") hidden(input.default, `inputs.${i}.default`);
+      if (Array.isArray(input.default))
+        input.default.forEach((value: unknown, k: number) => {
+          if (typeof value === "string") hidden(value, `inputs.${i}.default.${k}`);
+        });
       input.choices?.forEach((choice, j) => {
         hidden(choice.key, `inputs.${i}.choices.${j}.key`);
         hidden(choice.label, `inputs.${i}.choices.${j}.label`);

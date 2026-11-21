@@ -71,3 +71,21 @@ test("1.2 input sample round trips and custom issues survive parsing", () => {
   const legacy = parseManifest({ ...flow(), inputs: [{ id: "item", label: "Item", type: "enum" }] });
   expect(legacy.ok && legacy.manifest.inputs[0]?.type).toBe("enum");
 });
+
+test("TC-SDK-05 secret remember issue survives manifest parsing", () => {
+  const result = parseManifest(
+    flowV12({ inputs: [{ id: "x", label: "X", type: "secret_ref", remember: true }] }),
+  );
+  expect(result.ok ? [] : result.issues).toContainEqual(
+    expect.objectContaining({ code: "remember_secret", path: "inputs.0.remember" }),
+  );
+});
+test("TC-SDK-02 legacy input rules stay unchanged", () => {
+  const result = parseManifest({
+    ...flow(),
+    inputs: [
+      { id: "x", label: "x".repeat(300), type: "secret_ref", remember: true, default: "example-api-key" },
+    ],
+  });
+  expect(result.ok).toBe(true);
+});

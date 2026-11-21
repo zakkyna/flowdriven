@@ -433,8 +433,8 @@ type RememberedAnswer = {              // remembered row (new); key (flow_id, ki
 
 Rules:
 - Written when a run starts, not when it ends (FS-j27.A10).
-- `remember` rows exist only for inputs that declare `remember`, and never for `date` or `time` inputs (AD-11).
-- `last` rows hold the run's value of every input except `date` and `time`, which return to their defaults; they serve "Use my last answers" (FS-j27.P2, FS-j28.P2).
+- `remember` rows exist only for inputs that declare `remember`, and never for `date`, `time` or `secret_ref` inputs (AD-11, TC-SR6-05).
+- `last` rows hold the run's value of every input except `date`, `time` and `secret_ref`, which return to their defaults (TC-SR6-05 for `secret_ref`); they serve "Use my last answers" (FS-j27.P2, FS-j28.P2).
 - `outside` is set when the value of an input came from outside text (an email, a web page, a file read by an agent). A person who types or confirms the value clears the mark.
 - "Use my last answers" and `whenItsTime: "last"` are not offered when a needed value is a row with `outside: true`; the person is asked for that value instead (SR-5; decided for V1, revisable).
 - "Run again" does not read these rows; it reads the earlier run's own inputs (FS-j25.P2).
