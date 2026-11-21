@@ -4,11 +4,13 @@ This folder is the design for building FlowDriven's real app after the clickable
 
 Status: complete design for the V1 build, 2026-11-21. It follows version 9 of the clickable prototype: version 8 plus the final brief sections 24.9 to 24.11 (the language setting, one file per language, and the fixes after two reviews) and 25 (the AI agent and model picker). Decisions the owner did not make are recorded as "Decided for V1 (revisable)".
 
+Size: 24 features with 206 requirements, 53 quality targets and 13 success measures; 14 flow specs; 1,232 test cases (552 journey, 169 safety, 511 component); 31 build steps in 179 tasks (V1: 25 steps, 152 tasks).
+
 ## What is where
 
 | Document | What it answers | Ids it owns |
 |---|---|---|
-| [prd.md](prd.md) | What the app does for whom, every feature, the safety promises, quality targets, success measures, the V1 scope and the decisions for V1 | `F-01`..`F-24`, `NF-*`, `M-*`, `Q-01`..`Q-03` |
+| [prd.md](prd.md) | What the app does for whom, every feature, the safety promises, quality targets, success measures, the V1 scope and the decisions for V1 | `F-01`..`F-24`, `NF-*`, `M-*`, `Q-01`..`Q-04` |
 | [flows/README.md](flows/README.md) and 14 flow specs | How each journey of the prototype's Guide works: entry points, steps, states, decisions, errors, acceptance criteria | `FS-j01`..`FS-j31` |
 | [architecture.md](architecture.md) | The safety rules, the architecture decisions, processes, modules, the safety core, agents, starts and schedules, words and languages, migration from today's code | `SR-1`..`SR-9`, `START`, `AD-*` |
 | [data-model.md](data-model.md) | Entities, store tables, the migration from store version 6, retention | - |
@@ -36,7 +38,7 @@ AGENTS.md still names the original spec as the design. Pointing it here is an As
 
 ## How this set is used
 
-- Prototype first: a journey is built only after the owner approves it in the prototype's Guide. On 2026-11-21 no journey was marked approved there yet.
+- Prototype first: a journey is built only after the owner approves it in the prototype's Guide.
 - Each build plan in `docs/plans/` names its build step (`B-*`), the flow specs it implements and the test case ids that must fail first. Plans stay about one page and contain no code.
 - A change to the product goes into the prototype first, then into the flow spec and its test cases, then into code.
 - Parts marked "Not in the prototype yet" go into the prototype before they are built.
