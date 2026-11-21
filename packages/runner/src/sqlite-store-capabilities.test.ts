@@ -51,7 +51,7 @@ test("a row that is not JSON or has the wrong field types reads as absent", asyn
   }
 });
 
-test("a version 4 database migrates to 6 and keeps its rows", async () => {
+test("a version 4 database migrates to 7 and keeps its rows", async () => {
   const path = tempPath();
   const db = new DatabaseSync(path);
   db.exec(`${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} ${TRIGGER_SCHEMA} PRAGMA user_version = 4;`);
@@ -62,7 +62,7 @@ test("a version 4 database migrates to 6 and keeps its rows", async () => {
   store.putCapabilityConsent(consent);
   expect(store.getCapabilityConsent("f")).toEqual(consent);
   const check = new DatabaseSync(path);
-  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(6);
+  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(7);
   check.close();
 });
 
@@ -73,7 +73,7 @@ test("a version 1 database reaches 6 with every table, including capability_cons
   db.close();
   await open(path);
   const check = new DatabaseSync(path);
-  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(6);
+  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(7);
   const tables = check
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
     .all()
@@ -159,7 +159,7 @@ test("a consent keeps its skill and folder pins", async () => {
   expect(store.getCapabilityConsent("f")).toEqual({ ...consent, pins });
 });
 
-test("a version 5 database migrates to 6, keeps its consents, and they read with no pins", async () => {
+test("a version 5 database migrates to 7, keeps its consents, and they read with no pins", async () => {
   const path = tempPath();
   const db = new DatabaseSync(path);
   db.exec(
@@ -174,7 +174,7 @@ test("a version 5 database migrates to 6, keeps its consents, and they read with
   const store = await open(path);
   expect(store.getCapabilityConsent("f")).toEqual(consent);
   const check = new DatabaseSync(path);
-  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(6);
+  expect(check.prepare("PRAGMA user_version").get()?.user_version).toBe(7);
   check.close();
 });
 

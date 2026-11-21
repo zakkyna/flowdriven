@@ -134,12 +134,13 @@ test("grants are per run, tool and item", async () => {
   expect(store.hasGrant("r1", "host.publish", "j2")).toBe(false);
   expect(store.hasGrant("r2", "host.publish", "j1")).toBe(false);
 });
-test("the audit log is append-only", async () => {
+test("TC-SR7-02 the audit log is append-only", async () => {
   const path = tempPath();
   const store = await open(path);
   const entries = [
     { at: "a", kind: "one", detail: {} },
     { at: "b", kind: "two", runId: "r1", detail: "x" },
+    { at: "c", kind: "three", detail: {} },
   ];
   for (const entry of entries) store.appendAudit(entry);
   expect(store.listAudit()).toEqual(entries);
@@ -151,12 +152,12 @@ test("the audit log is append-only", async () => {
     db.close();
   }
 });
-test("a database made by the present code at version 1 opens, keeps every row and becomes version 6", async () => {
+test("a database made by the present code at version 1 opens, keeps every row and becomes version 7", async () => {
   const path = migrationPath();
   makeVersionOne(path);
   const store = await open(path);
   expect(store.listAudit()).toEqual([{ at: "2026", kind: "test", runId: "r1", detail: { value: 1 } }]);
-  expect(version(path)).toBe(6);
+  expect(version(path)).toBe(7);
   expect(store.getHarnessState("claude-code")).toBeUndefined();
 });
 test("an exclusive open migrates a version 1 file too", async () => {
@@ -166,18 +167,18 @@ test("an exclusive open migrates a version 1 file too", async () => {
   expect(store.listAudit()).toEqual([{ at: "2026", kind: "test", runId: "r1", detail: { value: 1 } }]);
   expect(store.getHarnessState("claude-code")).toBeUndefined();
   store.close();
-  expect(version(path)).toBe(6);
+  expect(version(path)).toBe(7);
 });
-test("a new database is created at version 6 with the tables", async () => {
+test("a new database is created at version 7 with the tables", async () => {
   const path = migrationPath();
   const store = await open(path);
-  expect(version(path)).toBe(6);
+  expect(version(path)).toBe(7);
   expect(store.getHarnessState("claude-code")).toBeUndefined();
 });
-test("a database from version 7 is refused", async () => {
+test("a database from version 8 is refused", async () => {
   const path = migrationPath();
   const db = new DatabaseSync(path);
-  db.exec("PRAGMA user_version = 7");
+  db.exec("PRAGMA user_version = 8");
   db.close();
   await expect(openSqliteStore(path)).rejects.toMatchObject({
     code: "unavailable",

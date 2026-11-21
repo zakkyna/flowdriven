@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Approval, FlowDetail, RunDetail, RunSummary } from "@flowdriven/contracts/v1";
 import { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
+import { createFixtureRunnerClient } from "../../../fixtures/src/client.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
@@ -430,4 +431,23 @@ test("TC-SR2-02 retired operations refuse tool and phone but reach window handle
     });
   }
   expect(reached).toHaveBeenCalledTimes(3);
+});
+
+test("TC-AGT-32 runner.info reports live, demo and sample modes", async () => {
+  for (const mode of ["live", "demo"] as const) {
+    const { service } = await setup(mode);
+    const info = await service.call("runner.info", {});
+    expect(info).toEqual({
+      contractVersion: 2,
+      appVersion: expect.stringMatching(/^\d+\.\d+\.\d+/),
+      storeVersion: 7,
+      mode,
+    });
+  }
+  await expect(createFixtureRunnerClient().call("runner.info", {})).resolves.toEqual({
+    contractVersion: 2,
+    appVersion: "0.1.0",
+    storeVersion: 7,
+    mode: "sample",
+  });
 });

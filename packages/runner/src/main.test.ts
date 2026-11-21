@@ -59,7 +59,7 @@ test("the real process answers runner.info over its pipes, prints nothing else o
     appVersion: (
       JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }
     ).version,
-    storeVersion: 6,
+    storeVersion: 7,
     mode: "demo",
   });
   p.child.stdin.end();

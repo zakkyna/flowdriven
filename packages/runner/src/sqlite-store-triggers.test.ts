@@ -93,7 +93,7 @@ test("purgeKeys removes keys older than the cut and keeps the rest, and returns 
   expect(store.claimKey("f", 0, "new", "2026-11-12")).toBe(false);
 });
 
-test("a version 3 database migrates to 6 and keeps its rows; version 7 is refused", async () => {
+test("a version 3 database migrates to 7 and keeps its rows; version 8 is refused", async () => {
   const path = tempPath();
   const db = new DatabaseSync(path);
   db.exec(`${SCHEMA} ${HARNESS_STATE_SCHEMA} ${USAGE_SCHEMA} PRAGMA user_version = 3;`);
@@ -104,12 +104,12 @@ test("a version 3 database migrates to 6 and keeps its rows; version 7 is refuse
   store.putTrigger(row);
   expect(store.getTrigger("f", 0)).toEqual(row);
   const migrated = new DatabaseSync(path);
-  expect(migrated.prepare("PRAGMA user_version").get()?.user_version).toBe(6);
+  expect(migrated.prepare("PRAGMA user_version").get()?.user_version).toBe(7);
   migrated.close();
   store.close();
   stores.pop();
   const newer = new DatabaseSync(path);
-  newer.exec("PRAGMA user_version = 7");
+  newer.exec("PRAGMA user_version = 8");
   newer.close();
   await expect(openSqliteStore(path)).rejects.toMatchObject({
     code: "unavailable",

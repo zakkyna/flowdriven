@@ -83,7 +83,7 @@ test("serves runner.info and the demo flow and returns 0 when its input ends, wi
     appVersion: (
       JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
     ).version,
-    storeVersion: 6,
+    storeVersion: 7,
     mode: "demo",
   });
   expect(await p.client.call("flows.list", {})).toEqual(

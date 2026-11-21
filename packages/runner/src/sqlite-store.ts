@@ -5,6 +5,7 @@ import {
   HARNESS_STATE_SCHEMA,
   PINS_SCHEMA,
   SCHEMA,
+  SCHEMA_V7,
   TRIGGER_SCHEMA,
   USAGE_SCHEMA,
 } from "./schema.ts";
@@ -55,9 +56,9 @@ export async function openSqliteStore(
         );
       }
     }
-    db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+    db.exec("PRAGMA foreign_keys = ON; PRAGMA secure_delete = ON; PRAGMA busy_timeout = 5000;");
     const version = db.prepare("PRAGMA user_version").get()?.user_version;
-    if (typeof version !== "number" || version > 6 || version < 0)
+    if (typeof version !== "number" || version > 7 || version < 0)
       throw new EngineError("unavailable", "Unsupported database version.");
     if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
     if (version === 0)
@@ -78,6 +79,8 @@ export async function openSqliteStore(
       );
     if (version === 4) db.exec(`BEGIN; ${CAPABILITY_SCHEMA} ${PINS_SCHEMA} PRAGMA user_version = 6; COMMIT;`);
     if (version === 5) db.exec(`BEGIN; ${PINS_SCHEMA} PRAGMA user_version = 6; COMMIT;`);
+    if (version < 7) db.exec(`BEGIN; ${SCHEMA_V7} PRAGMA user_version = 7; COMMIT;`);
+    db.exec("PRAGMA optimize;");
   } catch (error) {
     db.close();
     throw error;
