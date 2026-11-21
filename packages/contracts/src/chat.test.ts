@@ -145,3 +145,18 @@ test("TC-CON-37 agent and skill inputs", async () => {
   expect(SkillIdInput.safeParse({ skillId: "skill" }).success).toBe(true);
   expect(SkillIdInput.safeParse({ skillId: "skill", extra: true }).success).toBe(false);
 });
+
+test("TC-CON-37 flow operation inputs", () => {
+  for (const length of [0, 1, 1024, 1025])
+    expect(c.operations["flows.import"].input.safeParse({ path: "x".repeat(length) }).success).toBe(
+      length > 0 && length <= 1024,
+    );
+  for (const name of ["flows.delete", "flows.tryNextRun"] as const) {
+    expect(c.operations[name].input.safeParse({ flowId: "example.flow" }).success).toBe(true);
+    expect(c.operations[name].input.safeParse({ flowId: "example.flow", extra: 1 }).success).toBe(false);
+  }
+  expect(
+    c.operations["flows.tryNextRun"].input.safeParse({ flowId: "example.flow", missedStartId: "x" }).success,
+  ).toBe(false);
+  expect(Object.keys(c.operations)).not.toContain("flows.duplicate");
+});

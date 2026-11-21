@@ -66,6 +66,45 @@ describe("wire", () => {
       not_found: -32001,
       not_allowed: -32002,
       unavailable: -32003,
+      conflict: -32004,
     });
   });
+});
+
+test("TC-CON-29 conflict reason and params", async () => {
+  const { rpcFailure, RpcFailure } = await import("./wire.ts");
+  const frame = rpcFailure(1, "conflict", "The card was answered.", {
+    reason: "card_answered",
+    params: { via: "window", ids: ["a", "b"] },
+  });
+  expect(frame.error.code).toBe(-32004);
+  const parsed = RpcFailure.parse(parseFrame(JSON.stringify(frame)));
+  const { RunnerError } = await import("./operations.ts");
+  const restored = new RunnerError(parsed.error.data.code, parsed.error.message, {
+    reason: parsed.error.data.reason,
+    params: parsed.error.data.params,
+  });
+  expect(restored).toMatchObject({
+    code: "conflict",
+    reason: "card_answered",
+    params: { via: "window", ids: ["a", "b"] },
+  });
+  expect(
+    RpcFailure.safeParse({
+      ...frame,
+      error: { ...frame.error, data: { code: "conflict", reason: "made_up" } },
+    }).success,
+  ).toBe(false);
+});
+
+test("TC-CON-30 notice_clear and frame limit", async () => {
+  const { RpcNoticeClearFrame } = await import("./wire.ts");
+  const frame = { jsonrpc: "2.0", method: "notice_clear", params: { id: "approval:ap-000000000001" } };
+  expect(RpcNoticeClearFrame.safeParse(parseFrame(JSON.stringify(frame))).success).toBe(true);
+  for (const params of [{}, { id: "x", extra: 1 }, { id: "x".repeat(101) }])
+    expect(RpcNoticeClearFrame.safeParse({ ...frame, params }).success).toBe(false);
+  expect(() => parseFrame(`{"x":"${"a".repeat(MAX_FRAME_BYTES - 8)}"}`)).not.toThrow();
+  expect(() => parseFrame(`{"x":"${"a".repeat(MAX_FRAME_BYTES - 7)}"}`)).toThrowError(
+    expect.objectContaining({ code: "too_long" }),
+  );
 });

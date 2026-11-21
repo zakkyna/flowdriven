@@ -1,10 +1,9 @@
-export * from "./capability.ts";
-
 import "./config.ts";
 
 export * from "./activity.ts";
 export * from "./agents.ts";
 export * from "./approval.ts";
+export * from "./capability.ts";
 export * from "./card.ts";
 export * from "./chat.ts";
 export * from "./client.ts";

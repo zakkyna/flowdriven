@@ -1,8 +1,14 @@
 import { z } from "zod";
 import "./config.ts";
 import { RunnerEvent } from "./client.ts";
-import { Notice } from "./notice.ts";
-import { RUNNER_ERROR_CODES, type RunnerErrorCode } from "./operations.ts";
+import { Notice, NoticeId } from "./notice.ts";
+import {
+  type ErrorParams,
+  type ErrorReason,
+  REASON_CODE,
+  RUNNER_ERROR_CODES,
+  type RunnerErrorCode,
+} from "./operations.ts";
 
 export const MAX_FRAME_BYTES = 1_048_576;
 export const RpcId = z.union([z.string().min(1), z.number().int()]);
@@ -16,7 +22,11 @@ export type RpcRequest = z.infer<typeof RpcRequest>;
 export const RpcErrorBody = z.object({
   code: z.number().int(),
   message: z.string(),
-  data: z.object({ code: z.enum(RUNNER_ERROR_CODES) }),
+  data: z.strictObject({
+    code: z.enum(RUNNER_ERROR_CODES),
+    reason: z.enum(Object.keys(REASON_CODE) as [ErrorReason, ...ErrorReason[]]).optional(),
+    params: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string())])).optional(),
+  }),
 });
 export const RpcResult = z
   .object({ jsonrpc: z.literal("2.0"), id: RpcId, result: z.unknown() })
@@ -36,6 +46,12 @@ export const RpcNoticeFrame = z.object({
   params: Notice,
 });
 export type RpcNoticeFrame = z.infer<typeof RpcNoticeFrame>;
+export const RpcNoticeClearFrame = z.strictObject({
+  jsonrpc: z.literal("2.0"),
+  method: z.literal("notice_clear"),
+  params: z.strictObject({ id: NoticeId }),
+});
+export type RpcNoticeClearFrame = z.infer<typeof RpcNoticeClearFrame>;
 export const RPC_INVALID_REQUEST = -32600;
 export const RPC_METHOD_NOT_FOUND = -32601;
 export const RPC_ERROR_NUMBERS: Record<RunnerErrorCode, number> = {
@@ -43,6 +59,7 @@ export const RPC_ERROR_NUMBERS: Record<RunnerErrorCode, number> = {
   not_found: -32001,
   not_allowed: -32002,
   unavailable: -32003,
+  conflict: -32004,
 };
 export function rpcResult(id: string | number, result: unknown) {
   return { jsonrpc: "2.0" as const, id, result };
@@ -51,9 +68,21 @@ export function rpcFailure(
   id: string | number | null,
   code: RunnerErrorCode,
   message: string,
-  number = RPC_ERROR_NUMBERS[code],
+  opts?: { reason?: ErrorReason; params?: ErrorParams; number?: number },
 ) {
-  return { jsonrpc: "2.0" as const, id, error: { code: number, message, data: { code } } };
+  return {
+    jsonrpc: "2.0" as const,
+    id,
+    error: {
+      code: opts?.number ?? RPC_ERROR_NUMBERS[code],
+      message,
+      data: {
+        code,
+        ...(opts?.reason === undefined ? {} : { reason: opts.reason }),
+        ...(opts?.params === undefined ? {} : { params: opts.params }),
+      },
+    },
+  };
 }
 export class FrameError extends Error {
   code: "too_long" | "bad_json" | "not_object";
@@ -78,6 +107,7 @@ export function encodeFrame(value: unknown, maxBytes = MAX_FRAME_BYTES): string 
   return `${text}\n`;
 }
 export function parseFrame(line: string): Record<string, unknown> {
+  if (utf8Length(line) > MAX_FRAME_BYTES) throw new FrameError("too_long", "Frame is too long.");
   let value: unknown;
   try {
     value = JSON.parse(line);

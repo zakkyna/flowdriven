@@ -55,3 +55,16 @@ test("TC-CON-21 agent and one default model", async () => {
   ])
     expect(AgentModels.safeParse(value).success).toBe(false);
 });
+
+test("TC-j01-10 agent operations and strict agent id", async () => {
+  const { operations } = await import("./operations.ts");
+  for (const name of ["agents.setUp", "agents.signIn"] as const) {
+    expect(operations[name].input.safeParse({ agentId: "codex" }).success).toBe(true);
+    for (const input of [{}, { agentId: "has space" }, { agentId: "codex", password: "x" }])
+      expect(operations[name].input.safeParse(input).success).toBe(false);
+    expect(operations[name].mcp).toBe("no");
+  }
+  expect(operations["agents.rescan"].mcp).toBe("no");
+  expect(operations["agents.list"].reads).toContain("agents");
+  expect(operations["agents.setUp"].writes).toEqual(["agents", "settings"]);
+});
