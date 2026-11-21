@@ -10,7 +10,7 @@ import {
   Settings,
 } from "@flowdriven/contracts/v1";
 import { describe, expect, test } from "vitest";
-import { buildEmpty, buildLong, buildStory } from "./index";
+import { buildEmpty, buildLong, buildStory } from "./v1/index";
 
 const story = buildStory();
 

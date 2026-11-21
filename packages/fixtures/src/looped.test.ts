@@ -1,7 +1,7 @@
 import { Approval, FlowManifest, RunDetail } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
-import { createFixtureRunnerClient } from "./client";
-import { buildLooped, buildStory } from "./state";
+import { createFixtureRunnerClient } from "./v1/client";
+import { buildLooped, buildStory } from "./v1/state";
 
 test("the looped scenario adds one flow, one waiting run and one pending choice and leaves the story alone", () => {
   const state = buildLooped();

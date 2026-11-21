@@ -1,6 +1,6 @@
 import { RunDetail, TriggerStatus } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
-import { createFixtureRunnerClient } from "./client";
+import { createFixtureRunnerClient } from "./v1/client";
 
 const flowId = "dev.example.job-review";
 const setup = () => {

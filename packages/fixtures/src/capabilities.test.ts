@@ -1,8 +1,8 @@
 import { FlowCapabilities, type FlowManifest, ReadinessReport, RunDetail } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
-import { createFixtureRunnerClient } from "./client";
-import { buildLooped } from "./state";
-import { capabilitiesOf } from "./story/capabilities";
+import { createFixtureRunnerClient } from "./v1/client";
+import { buildLooped } from "./v1/state";
+import { capabilitiesOf } from "./v1/story/capabilities";
 
 const FLOW = "dev.example.job-review";
 const UNOFFICIAL = "This uses your personal browser. Every site you are logged into is reachable from it.";
