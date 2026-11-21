@@ -19,6 +19,7 @@ import type {
   ItemRow,
   MessageRow,
   RememberedAnswer,
+  RetentionRow,
   RuleRow,
   RunRow,
   ScheduleRow,
@@ -755,6 +756,51 @@ export async function openSqliteStore(
         q.harness,
         q.runs,
       ).map((row) => Number(row.peak));
+    },
+    retentionCandidates(before90, before30) {
+      const queries: [RetentionRow["table"], string, string[]][] = [
+        [
+          "runs",
+          `SELECT r.rowid FROM runs r WHERE r.rowid NOT IN (SELECT rowid FROM (SELECT rowid, ROW_NUMBER() OVER (PARTITION BY flow_id ORDER BY COALESCE(json_extract(data, '$.endedAt'), json_extract(data, '$.startedAt')) DESC, rowid DESC) AS n FROM runs) WHERE n <= 50) AND r.state IN ('done','failed','stopped','cancelled') AND json_extract(r.data, '$.endedAt') < ? AND NOT EXISTS (SELECT 1 FROM approvals a WHERE a.run_id = r.id AND a.state = 'pending') AND NOT EXISTS (SELECT 1 FROM waiting_questions q WHERE q.state = 'open' AND (json_extract(q.data, '$.runId') = r.id OR json_extract(q.data, '$.pendingStart.request.fromRunId') = r.id OR json_extract(q.data, '$.pendingStart.request.afterRunId') = r.id))`,
+          [before90],
+        ],
+        [
+          "starts",
+          `SELECT s.rowid FROM starts s WHERE s.at < ? AND s.rowid NOT IN (SELECT rowid FROM (SELECT rowid, ROW_NUMBER() OVER (PARTITION BY flow_id ORDER BY at DESC, rowid DESC) AS n FROM starts) WHERE n <= 50) AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.id = json_extract(s.data, '$.runId'))`,
+          [before90],
+        ],
+        [
+          "standing_rules",
+          "SELECT rowid FROM standing_rules WHERE state = 'revoked' AND json_extract(data, '$.revokedAt') < ?",
+          [before90],
+        ],
+        [
+          "waiting_questions",
+          "SELECT rowid FROM waiting_questions WHERE state IN ('answered','cancelled','closed') AND json_extract(data, '$.updatedAt') < ?",
+          [before30],
+        ],
+        ["seen", "SELECT rowid FROM seen WHERE at < ?", [before30]],
+        ["fire_keys", "SELECT rowid FROM fire_keys WHERE at < ?", [before30]],
+        [
+          "flows",
+          "SELECT f.rowid FROM flows f JOIN flow_heads h ON h.id = f.id WHERE h.deleted_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.flow_id = f.id AND json_extract(r.data, '$.flowHash') = f.hash)",
+          [],
+        ],
+      ];
+      return queries.flatMap(([table, sql, args]) =>
+        all(sql, ...args).map((row) => ({ table, rowid: Number(row.rowid) })),
+      );
+    },
+    deleteRetentionRows(rows) {
+      for (const row of rows) {
+        if (row.table === "runs") {
+          const run = get("SELECT id FROM runs WHERE rowid = ?", row.rowid);
+          if (!run) continue;
+          for (const table of ["steps", "items", "approvals", "grants", "call_grants", "usage_events"])
+            execute(`DELETE FROM ${table} WHERE run_id = ?`, String(run.id));
+        }
+        execute(`DELETE FROM ${row.table} WHERE rowid = ?`, row.rowid);
+      }
     },
     getSetting(name) {
       return decode(get("SELECT data FROM settings WHERE name = ?", name));

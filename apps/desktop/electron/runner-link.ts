@@ -56,6 +56,7 @@ export class RunnerLink {
   private child: ChildLike | undefined;
   private starts: number[] = [];
   private mismatch = false;
+  private fatal: LinkError | undefined;
   private ready: Promise<void> | undefined;
   private stopping = false;
   private nextId = 1;
@@ -65,7 +66,7 @@ export class RunnerLink {
     this.options = options;
   }
   start(): void {
-    if (this.child || this.stopping || this.mismatch) return;
+    if (this.child || this.stopping || this.mismatch || this.fatal) return;
     const now = (this.options.now ?? Date.now)();
     this.starts = this.starts.filter((time) => now - time <= 60_000);
     if (this.starts.length >= 3) {
@@ -99,11 +100,22 @@ export class RunnerLink {
         } catch {}
       }
       if (this.child === child) this.child = undefined;
-      for (const pending of this.pending.values()) pending.reject(stopped());
+      for (const pending of this.pending.values()) pending.reject(this.fatal ?? stopped());
       this.pending.clear();
       if (!this.stopping) this.options.onEvent(ALL_TOPICS_EVENT);
     };
-    child.on("exit", () => fail(false));
+    child.on("exit", (code) => {
+      const reason =
+        code === 3
+          ? "data_folder_locked"
+          : code === 5
+            ? "store_newer"
+            : code === 6
+              ? "migration_failed"
+              : undefined;
+      if (reason) this.fatal = new LinkError("unavailable", "The engine could not start.", reason);
+      fail(false);
+    });
     child.on("error", () => fail(true));
     for (const stream of [child.stdin, child.stdout, child.stderr]) stream.on("error", () => fail(true));
     let buffer = Buffer.alloc(0);
@@ -209,6 +221,7 @@ export class RunnerLink {
     } catch {
       return Promise.reject(new LinkError("invalid_input", "The request cannot be sent."));
     }
+    if (this.fatal) return Promise.reject(this.fatal);
     if (this.mismatch)
       return Promise.reject(
         new LinkError("unavailable", "The engine version does not match.", "contract_mismatch"),

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { afterEach, expect, test } from "vitest";
+import { retentionSweep } from "./retention.ts";
 import { SCHEMA } from "./schema.ts";
 import { openSqliteStore } from "./sqlite-store.ts";
 import type { RunRow, StepRow, Store } from "./storage.ts";
@@ -152,6 +153,28 @@ test("TC-SR7-02 the audit log is append-only", async () => {
     { at: "c", kind: "three", detail: {} },
   ];
   for (const entry of entries) store.appendAudit(entry);
+  expect(store.listAudit()).toEqual(entries);
+  for (let i = 0; i < 51; i++)
+    store.createRun({ ...run, id: `old-${i}`, state: "done", endedAt: "2026-01-01" });
+  store.upsertStep({ ...step, runId: "old-0" });
+  store.createApproval({
+    id: "old-decision",
+    kind: "ask",
+    runId: "old-0",
+    stepId: "a",
+    itemKey: "",
+    summary: "old",
+    payload: {},
+    approves: [],
+    onExpiry: "end",
+    createdAt: "2026-01-01",
+    expiresAt: "2026-01-02",
+    state: "approved",
+  });
+  retentionSweep(store, () => new Date("2026-11-21T03:00:00Z"));
+  expect(store.listRuns()).toHaveLength(50);
+  expect(store.listSteps("old-0")).toHaveLength(0);
+  expect(store.listApprovals({ runId: "old-0" })).toHaveLength(0);
   expect(store.listAudit()).toEqual(entries);
   const db = new DatabaseSync(path);
   try {

@@ -408,7 +408,13 @@ export type Confirmation = {
   chatId?: string;
   draftId?: string;
 };
+export type RetentionRow = {
+  table: "runs" | "starts" | "standing_rules" | "waiting_questions" | "seen" | "fire_keys" | "flows";
+  rowid: number;
+};
 export interface Store {
+  retentionCandidates(before90: string, before30: string): RetentionRow[];
+  deleteRetentionRows(rows: RetentionRow[]): void;
   claimStart(row: StartRow): { created: boolean; row: StartRow };
   listStarts(): StartRow[];
   makeRule(input: RuleInput): RuleRow;

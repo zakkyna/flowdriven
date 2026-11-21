@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { type Notice, RunnerTopic } from "@flowdriven/contracts/v1";
 import { EngineError } from "../errors.ts";
+import { retentionDue, retentionSweep } from "../retention.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
 import { prepareDataDir } from "./data-dir.ts";
@@ -93,6 +94,7 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
       env: options.env,
       claudePath: options.claudePath,
     });
+    retentionSweep(store, options.now);
     service.start();
     await new Promise<void>((resolve) => setImmediate(resolve));
     server = serveRpc({
@@ -104,6 +106,11 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
     sink.attach(server);
     const engine = service.engine;
     timer = setInterval(() => {
+      try {
+        if (retentionDue(store, options.now)) retentionSweep(store, options.now);
+      } catch (error) {
+        options.errors(`The retention sweep failed: ${message(error)}`);
+      }
       void engine
         .sweepExpired()
         .catch((error: unknown) => options.errors(`The sweep failed: ${message(error)}`));

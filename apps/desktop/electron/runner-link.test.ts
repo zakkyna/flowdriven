@@ -296,3 +296,23 @@ test("runner error data keeps reason and params through the link", async () => {
   });
   child.emit("exit", 0, null);
 });
+
+test("TC-IPC-17 fatal exit codes retain their reason and never restart", async () => {
+  for (const [code, reason] of [
+    [3, "data_folder_locked"],
+    [5, "store_newer"],
+    [6, "migration_failed"],
+  ] as const) {
+    let now = 0;
+    const child = new FakeChild();
+    const spawnFn = vi.fn(() => child);
+    const link = make({ spawn: spawnFn, now: () => now });
+    const first = link.call("flows.list", {});
+    const rejected = expect(first).rejects.toMatchObject({ code: "unavailable", reason });
+    child.emit("exit", code, null);
+    await rejected;
+    now += 1000;
+    await expect(link.call("flows.list", {})).rejects.toMatchObject({ code: "unavailable", reason });
+    expect(spawnFn).toHaveBeenCalledOnce();
+  }
+});
