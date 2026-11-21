@@ -201,3 +201,12 @@ test("TC-CON-35 approval operation inputs", async () => {
   expect(c.ApprovalsListInput.safeParse({ state: "pending" }).success).toBe(true);
   expect(c.ApprovalsListInput.safeParse({ state: "open" }).success).toBe(false);
 });
+
+test("TC-CON-35 rule operation inputs", async () => {
+  const { RulesListInput, RulesRevokeInput } = await import("./index");
+  expect(RulesListInput.safeParse({}).success).toBe(true);
+  expect(RulesListInput.safeParse({ flowId: "example.build-apk" }).success).toBe(true);
+  expect(RulesListInput.safeParse({ extra: true }).success).toBe(false);
+  expect(RulesRevokeInput.safeParse({ ruleId: "rule-1" }).success).toBe(true);
+  expect(RulesRevokeInput.safeParse({ ruleId: "bad id" }).success).toBe(false);
+});
