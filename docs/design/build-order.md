@@ -49,6 +49,7 @@ All are Decided for V1 (revisable), 2026-11-21, and apply to every step below.
 39. One search limit, the one that `runner-api.md` section 6.11 and TC-SRCH-10 give.
 40. B-13 and B-14 "Owner can try" is a Chair walk on the fake brain; the in-app try is in B-17.T7 and B-17.T8.
 41. Shared builders live in `packages/runner/src/test-helpers/builders.ts` and each is added by the task that builds the state it makes: `pendingDecision()` B-05.T11, `approvedDecision()` B-05.T2, `standingRule()` B-05.T5, `flowWithRules()` B-05.T9, `scheduleSet()` B-12.T5, `scheduleCard()` B-12.T11, `savedSkillFlow()` B-15.T3; the store fault seam is B-13.T2; the fake notification is `apps/desktop/electron/test-helpers/fakes.ts`, added in B-06.T7.
+42. In the re-point tasks B-01.T12 to B-01.T17, a file that uses `CONTRACT_VERSION` imports `CONTRACT_VERSION_V1 as CONTRACT_VERSION` from `@flowdriven/contracts/v1`. This alias is the only binding change allowed there, so the code and tests stay as they are and keep reporting version 1: those files serve or test the version 1 surface, and B-01.T6 and B-01.T10 give version 2 its own constant and `runner.info` answer (Chair decision, 2026-11-21, after B-01.T12 stopped on it).
 
 With these, no V1 step has an Ask-first item. Section 6 settles the points these decisions do not name.
 
