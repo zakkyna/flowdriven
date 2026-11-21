@@ -85,8 +85,9 @@ test("the harness card shows usage and stored windows, and stays unchanged witho
     inventory: { supported: true, skills: [], plugins: [], mcpServers: [] },
   };
   const harnesses = { list: () => [card], rescan: async () => [card], setConsent: () => card };
-  const call = createDispatcher(
-    createHandlers({
+  const call = createDispatcher({
+    v2: {},
+    legacy: createHandlers({
       engine: service.engine,
       store,
       mode: "demo",
@@ -95,8 +96,8 @@ test("the harness card shows usage and stored windows, and stays unchanged witho
       harnessIdOf: (id) => id,
       harnesses,
     }),
-    () => {},
-  );
+    audit: () => {},
+  });
   expect(await call("harnesses.list", {})).toEqual([card]);
   store.addUsage(row("2026-11-11T01:00:00.000Z", [model]));
   store.addUsage(

@@ -1,9 +1,10 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONTRACT_VERSION_V1 as CONTRACT_VERSION, parseFrame } from "@flowdriven/contracts/v1";
+import { CONTRACT_VERSION } from "@flowdriven/contracts";
+import { parseFrame } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { connectRpcClient } from "./test-helpers/rpc-client.ts";
 
@@ -53,7 +54,14 @@ test("the real process answers runner.info over its pipes, prints nothing else o
   timeout: 20_000,
 }, async () => {
   const p = launch(temp());
-  expect(await p.client.call("runner.info", {})).toEqual({ contractVersion: CONTRACT_VERSION, mode: "demo" });
+  expect(await p.client.call("runner.info", {})).toEqual({
+    contractVersion: CONTRACT_VERSION,
+    appVersion: (
+      JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }
+    ).version,
+    storeVersion: 6,
+    mode: "demo",
+  });
   p.child.stdin.end();
   expect(await p.exit).toBe(0);
   const lines = p.stdout().trim().split("\n");

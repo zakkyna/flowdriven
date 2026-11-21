@@ -1,15 +1,20 @@
 import { isAbsolute } from "node:path";
 import {
-  CONTRACT_VERSION_V1 as CONTRACT_VERSION,
+  operations,
+  RunnerError,
+  type RunnerErrorCode,
+  type OperationInput as V2Input,
+  type OperationName as V2Name,
+  type OperationOutput as V2Output,
+} from "@flowdriven/contracts";
+import {
   type HarnessCard,
   KeeperSettings,
+  operations as legacyOperations,
   type OperationInput,
   type OperationName,
   type OperationOutput,
-  operations,
   RUNNER_ERROR_CODES,
-  RunnerError,
-  type RunnerErrorCode,
 } from "@flowdriven/contracts/v1";
 import { FlowManifest, hasErrors, type Value } from "@flowdriven/sdk";
 import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
@@ -56,14 +61,39 @@ export type HandlerContext = {
 export type Handlers = {
   [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> | Promise<OperationOutput<N>>;
 };
-export function createDispatcher(
-  handlers: Handlers,
-  audit: (kind: string, detail: Value) => void,
-): (name: string, input: unknown) => Promise<unknown> {
-  return async (name, input) => {
+export type Caller = "window" | "tool" | "phone";
+export type V2Handlers = { [N in V2Name]: (input: V2Input<N>) => V2Output<N> | Promise<V2Output<N>> };
+export function createDispatcher({
+  v2,
+  legacy,
+  audit,
+}: {
+  v2: Partial<V2Handlers>;
+  legacy: Partial<Handlers>;
+  audit: (kind: string, detail: Value) => void;
+}): (name: string, input: unknown, caller?: Caller) => Promise<unknown> {
+  return async (name, input, caller = "window") => {
     if (!Object.hasOwn(operations, name))
       throw new RunnerError("not_found", `There is no operation ${name}.`);
-    if (name === "settings.update" && typeof input === "object" && input !== null && "patch" in input) {
+    const rootKey = name as V2Name;
+    if (caller !== "window" && operations[rootKey].personOnly) {
+      audit("caller_refused", { operation: name, caller });
+      throw new RunnerError("not_allowed", "Caller is not allowed.", { reason: "caller_not_allowed" });
+    }
+    if (name === "flows.build" || name === "flows.update")
+      throw new RunnerError("unavailable", "Operation retired.", { reason: "retired" });
+    const v2Handler = v2[rootKey] as ((input: unknown) => unknown) | undefined;
+    const legacyKey = name as OperationName;
+    const legacyHandler = legacy[legacyKey] as ((input: unknown) => unknown) | undefined;
+    const handler = v2Handler ?? legacyHandler;
+    if (!handler) throw new RunnerError("unavailable", "Operation unavailable.");
+    if (
+      !v2Handler &&
+      name === "settings.update" &&
+      typeof input === "object" &&
+      input !== null &&
+      "patch" in input
+    ) {
       const patch = input.patch;
       if (typeof patch === "object" && patch !== null && !Array.isArray(patch)) {
         if (Object.keys(patch).some((key) => key !== "keeper"))
@@ -90,14 +120,14 @@ export function createDispatcher(
         }
       }
     }
-    const key = name as OperationName;
-    const parsed = operations[key].input.safeParse(input);
+    const schema = v2Handler ? operations[rootKey] : legacyOperations[legacyKey];
+    const parsed = schema.input.safeParse(input);
     if (!parsed.success)
       throw new RunnerError("invalid_input", parsed.error.issues.at(0)?.message ?? "Invalid input.");
     try {
-      const handler = handlers[key] as (input: unknown) => unknown;
-      return operations[key].output.parse(await handler(parsed.data));
+      return schema.output.parse(await handler(parsed.data));
     } catch (error) {
+      if (error instanceof RunnerError) throw error;
       if (error instanceof Error && "code" in error && RUNNER_ERROR_CODES.some((code) => code === error.code))
         throw new RunnerError(error.code as RunnerErrorCode, error.message);
       try {
@@ -106,7 +136,7 @@ export function createDispatcher(
           message: error instanceof Error ? error.message : String(error),
         });
       } catch {}
-      throw new RunnerError("unavailable", "Internal error");
+      throw new RunnerError("unavailable", "Internal error", { reason: "internal_error" });
     }
   };
 }
@@ -125,7 +155,7 @@ export function createHandlers({
   webCheck,
   connectors,
   local,
-}: HandlerContext): Handlers {
+}: HandlerContext): Omit<Handlers, "runner.info"> {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
     if (!row) throw new RunnerError("not_found", `There is no flow ${id}.`);
@@ -388,7 +418,6 @@ export function createHandlers({
       if (runId) run(runId);
       return store.listAudit(runId).map(toAuditRecord);
     },
-    "runner.info": () => ({ contractVersion: CONTRACT_VERSION, mode }),
     "harnesses.list": () => harnesses?.list().map(withQuota) ?? [],
     "harnesses.rescan": () =>
       harnesses

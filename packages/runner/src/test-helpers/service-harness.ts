@@ -27,7 +27,7 @@ export async function createServiceHarness(
         service,
         clock,
         newId,
-        call: service.call,
+        call: (name: string, input: unknown) => service.call(name, input, options.caller),
         async close() {
           service.stop();
           store.close();

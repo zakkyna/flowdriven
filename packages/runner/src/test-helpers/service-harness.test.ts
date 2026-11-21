@@ -19,3 +19,20 @@ test("opens a store in the test folder, dispatches calls and cleans up", async (
     rmSync(parent, { recursive: true, force: true });
   }
 });
+
+test("forwards the configured caller to the dispatcher", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "flowdriven-test-"));
+  try {
+    const harness = await createServiceHarness(parent, { caller: "phone" });
+    try {
+      await expect(harness.call("flows.confirm", {})).rejects.toMatchObject({
+        code: "not_allowed",
+        reason: "caller_not_allowed",
+      });
+    } finally {
+      await harness.close();
+    }
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});

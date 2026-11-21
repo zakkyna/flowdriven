@@ -1,8 +1,9 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { CONTRACT_VERSION_V1 as CONTRACT_VERSION, type RunnerEvent } from "@flowdriven/contracts/v1";
+import { CONTRACT_VERSION } from "@flowdriven/contracts";
+import type { RunnerEvent } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
@@ -77,7 +78,14 @@ test("serves runner.info and the demo flow and returns 0 when its input ends, wi
 }, async () => {
   const dir = temp();
   const p = start(dir);
-  expect(await p.client.call("runner.info", {})).toEqual({ contractVersion: CONTRACT_VERSION, mode: "demo" });
+  expect(await p.client.call("runner.info", {})).toEqual({
+    contractVersion: CONTRACT_VERSION,
+    appVersion: (
+      JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
+    ).version,
+    storeVersion: 6,
+    mode: "demo",
+  });
   expect(await p.client.call("flows.list", {})).toEqual(
     expect.arrayContaining([expect.objectContaining({ id: "local.sample-job-review" })]),
   );

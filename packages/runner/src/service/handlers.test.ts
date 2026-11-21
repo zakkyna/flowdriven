@@ -25,7 +25,7 @@ afterEach(() => {
   }
   for (const p of dirs.splice(0)) rmSync(p, { recursive: true, force: true });
 });
-async function setup(mode: "demo" | "live" = "demo") {
+async function setup(mode: "demo" | "live" = "demo", notify = vi.fn()) {
   const dataDir = dir();
   const store = await openSqliteStore(":memory:");
   let n = 0;
@@ -33,6 +33,7 @@ async function setup(mode: "demo" | "live" = "demo") {
     store,
     dataDir,
     mode,
+    notify,
     claudePath: join(dataDir, "no-claude"),
     now: fixed,
     newId: (prefix) => `${prefix}-${++n}`,
@@ -173,12 +174,8 @@ test("live mode blocks a run when Claude Code is not found, and resume checks ag
 test("the six not-built operations answer unavailable with their sentences", async () => {
   const { service: s } = await setup();
   const cases = [
-    ["flows.build", { message: "x" }, "Building a flow from chat arrives with the agent."],
-    [
-      "flows.update",
-      { flowId: "x", edit: { kind: "undo" } },
-      "Editing a flow in the app arrives with the agent.",
-    ],
+    ["flows.build", { message: "x" }, "Operation retired."],
+    ["flows.update", { flowId: "x", edit: { kind: "undo" } }, "Operation retired."],
     [
       "readiness.install",
       { flowId: "x", requirementId: "x" },
@@ -227,7 +224,11 @@ test("an output that does not parse becomes Internal error and an audit entry", 
       throw new Error("boom");
     },
   ]) {
-    const dispatch = createDispatcher({ "runner.info": fn } as unknown as Handlers, audit);
+    const dispatch = createDispatcher({
+      v2: {},
+      legacy: { "runner.info": fn } as unknown as Handlers,
+      audit,
+    });
     await expect(dispatch("runner.info", {})).rejects.toMatchObject({
       code: "unavailable",
       message: "Internal error",
@@ -278,4 +279,120 @@ test("queue.move refuses a run that is running", async () => {
     message: "This run is not waiting.",
   });
   await expect(service.call("queue.move", { runId: "missing" })).rejects.toMatchObject({ code: "not_found" });
+});
+
+test("TC-SR2-02 refuses person-only calls before parsing and audits each caller", async () => {
+  const notify = vi.fn();
+  const { service, store } = await setup("demo", notify);
+  notify.mockClear();
+  const call = service.call as (name: string, input: unknown, caller: string) => Promise<unknown>;
+  const rows: [string, unknown][] = [
+    ["approvals.resolve", { approvalId: "ap-1", decision: "approve" }],
+    ["approvals.answer", {}],
+    ["approvals.resolveSimilar", {}],
+    ["rules.revoke", { ruleId: "rule-1" }],
+    ["settings.update", { patch: { agentPermission: "off" } }],
+    ["settings.update", { patch: { spendingLimit: 500 } }],
+    ["flows.confirm", {}],
+    ["flows.setSchedule", { schedule: { type: "daily", time: "17:00" } }],
+    ["flows.delete", {}],
+    ["chats.act", {}],
+    ["agents.setUp", {}],
+    ["triggers.setEnabled", {}],
+  ];
+  const before = {
+    runs: store.listRuns({}),
+    flows: store.listFlows(),
+    approvals: store.listApprovals(),
+    settings: store.getSetting("keeper"),
+  };
+  for (const caller of ["tool", "phone"])
+    for (const [name, input] of rows) {
+      await expect(call(name, input, caller)).rejects.toMatchObject({
+        code: "not_allowed",
+        reason: "caller_not_allowed",
+      });
+    }
+  expect({
+    runs: store.listRuns({}),
+    flows: store.listFlows(),
+    approvals: store.listApprovals(),
+    settings: store.getSetting("keeper"),
+  }).toEqual(before);
+  expect(
+    store
+      .listAudit()
+      .filter((r) => r.kind === "caller_refused")
+      .map((r) => r.detail),
+  ).toEqual(["tool", "phone"].flatMap((caller) => rows.map(([operation]) => ({ operation, caller }))));
+  expect(notify).not.toHaveBeenCalled();
+  await expect(call("runner.info", {}, "tool")).resolves.toHaveProperty("contractVersion");
+});
+
+test("TC-SR7-10 audits handler failures and rolls back handler transactions", async () => {
+  const { store } = await setup();
+  const audit = vi.fn();
+  const make = createDispatcher as unknown as (
+    opts: unknown,
+  ) => (name: string, input: unknown) => Promise<unknown>;
+  for (const handler of [
+    () =>
+      store.transaction(() => {
+        store.putSetting("rollback", "value");
+        throw new Error("disk");
+      }),
+    () => ({ mode: "wrong" }),
+  ]) {
+    const dispatch = make({ v2: { "runner.info": handler }, legacy: {}, audit });
+    await expect(dispatch("runner.info", {})).rejects.toMatchObject({
+      code: "unavailable",
+      reason: "internal_error",
+      message: "Internal error",
+    });
+  }
+  expect(store.getSetting("rollback")).toBeUndefined();
+  expect(audit).toHaveBeenCalledTimes(2);
+  expect(audit).toHaveBeenCalledWith("internal_error", expect.objectContaining({ method: "runner.info" }));
+});
+
+test("TC-ENG-25 retires build and update and preserves structured handler errors", async () => {
+  const { RunnerError } = await import("@flowdriven/contracts");
+  const audit = vi.fn();
+  const handler = vi.fn(() => {
+    throw new RunnerError("conflict", "x", { reason: "card_answered", params: { id: "a" } });
+  });
+  const make = createDispatcher as unknown as (
+    opts: unknown,
+  ) => (name: string, input: unknown) => Promise<unknown>;
+  const dispatch = make({
+    v2: { "runner.info": handler },
+    legacy: { "flows.build": handler, "flows.update": handler },
+    audit,
+  });
+  for (const name of ["flows.build", "flows.update"])
+    await expect(dispatch(name, {})).rejects.toMatchObject({ code: "unavailable", reason: "retired" });
+  expect(handler).not.toHaveBeenCalled();
+  await expect(dispatch("flows.nothing", {})).rejects.toMatchObject({ code: "not_found" });
+  await expect(dispatch("runner.info", {})).rejects.toMatchObject({
+    code: "conflict",
+    reason: "card_answered",
+    params: { id: "a" },
+  });
+});
+
+test("TC-ENG-25 selects version 2 before legacy and validates each map with its own schemas", async () => {
+  const legacy = vi.fn(() => ({ contractVersion: 1, mode: "demo" as const }));
+  const v2 = vi.fn(() => ({
+    contractVersion: 2,
+    appVersion: "1.0.0",
+    storeVersion: 6,
+    mode: "demo" as const,
+  }));
+  const audit = vi.fn();
+  const both = createDispatcher({ v2: { "runner.info": v2 }, legacy: { "runner.info": legacy }, audit });
+  await expect(both("runner.info", {})).resolves.toMatchObject({ contractVersion: 2 });
+  expect(legacy).not.toHaveBeenCalled();
+  const old = createDispatcher({ v2: {}, legacy: { "runner.info": legacy }, audit });
+  await expect(old("runner.info", {})).resolves.toEqual({ contractVersion: 1, mode: "demo" });
+  await expect(old("agents.list", {})).rejects.toMatchObject({ code: "unavailable" });
 });

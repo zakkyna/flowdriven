@@ -146,6 +146,7 @@ export type ConsentPins = {
 };
 export type CapabilityConsentRow = { flowId: string; hash: string; at: string; pins?: ConsentPins };
 export interface Store {
+  schemaVersion(): number;
   getCapabilityConsent(flowId: string): CapabilityConsentRow | undefined;
   putCapabilityConsent(row: CapabilityConsentRow): void;
   deleteCapabilityConsent(flowId: string): void;

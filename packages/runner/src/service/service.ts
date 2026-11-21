@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdtempSync, rmdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, rmdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type Notice, operations, type RunnerTopic } from "@flowdriven/contracts/v1";
+import { CONTRACT_VERSION, operations } from "@flowdriven/contracts";
+import type { Notice, RunnerTopic } from "@flowdriven/contracts/v1";
 import { STOP } from "../claude/browser-post.ts";
 import { visible } from "../claude/text.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
@@ -20,7 +21,7 @@ import { createCapabilities } from "./capabilities.ts";
 import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
-import { createDispatcher, createHandlers } from "./handlers.ts";
+import { type Caller, createDispatcher, createHandlers } from "./handlers.ts";
 import { createKeepAwake } from "./keep-awake.ts";
 import { type Every, wireKeeper } from "./keeper-wiring.ts";
 import { createNotifier, observeStore } from "./notify-wiring.ts";
@@ -50,7 +51,7 @@ export type ServiceOptions = {
 };
 export type RunnerService = {
   engine: Engine;
-  call(name: string, input: unknown): Promise<unknown>;
+  call(name: string, input: unknown, caller?: Caller): Promise<unknown>;
   knows(name: string): boolean;
   start(): { settled: Promise<unknown> };
   stop(): void;
@@ -221,12 +222,26 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     harnessIdOf: (name) =>
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   });
+  const appVersion = (
+    JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
+  ).version;
   return {
     engine,
-    call: createDispatcher(handlers, (kind, detail) => {
-      try {
-        store.appendAudit({ at: now().toISOString(), kind, detail });
-      } catch {}
+    call: createDispatcher({
+      v2: {
+        "runner.info": () => ({
+          contractVersion: CONTRACT_VERSION,
+          appVersion,
+          storeVersion: store.schemaVersion(),
+          mode,
+        }),
+      },
+      legacy: handlers,
+      audit: (kind, detail) => {
+        try {
+          store.appendAudit({ at: now().toISOString(), kind, detail });
+        } catch {}
+      },
     }),
     knows: (name) => Object.hasOwn(operations, name),
     start() {

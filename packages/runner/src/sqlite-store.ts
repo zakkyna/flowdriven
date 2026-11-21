@@ -150,6 +150,7 @@ export async function openSqliteStore(
   };
   let depth = 0;
   const store: Store = {
+    schemaVersion: () => Number(db.prepare("PRAGMA user_version").get()?.user_version),
     getCapabilityConsent(flowId) {
       const row = get("SELECT flow_id, hash, at FROM capability_consents WHERE flow_id = ?", flowId);
       if (
