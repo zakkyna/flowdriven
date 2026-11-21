@@ -20,8 +20,6 @@ A person changes a flow they already made by telling the chat what to change. Fl
 
 ## Preconditions
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 - The flow exists and is not deleted.
 - The permission for AI agents is on and the chat's AI agent is ready (a new chat uses the main agent; from version 9 the chat chooses its own agent and model, see `j31-agent-and-model.md`).
 

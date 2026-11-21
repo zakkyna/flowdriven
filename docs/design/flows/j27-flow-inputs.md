@@ -6,7 +6,7 @@
 | PRD features | F-05, F-03, F-06 |
 | Safety rules | SR-1, SR-5, SR-7; START (rule 2, missing inputs) |
 | Prototype source | Brief sections 16.5, 23 (intro), 23.1, 23.2, 23.4, 23.7-23.10; `js/screens/chat.js` (`parseInputs`, `collectInputs`, form card), `js/actions.js` (`inputsFor`, `startRun`, `resolvedInputs`), `js/guide.js` (j27) |
-| Status | In the prototype (version 8); the chat language rules are Pending prototype version 9; the agent reading the sentences, the typed parsers in the runner, the form draft and the hidden-character check are Not in the prototype yet |
+| Status | In the prototype (version 8); the chat language rules are in the prototype (version 9); the agent reading the sentences, the typed parsers in the runner, the form draft and the hidden-character check are Not in the prototype yet |
 
 ## Goal
 
@@ -24,8 +24,6 @@ When a flow needs details (the timesheet: date, start time, duration, customer, 
 - Permission is `on` and the chat's agent is `ready`, because reading a sentence is a chat turn (FS-j20).
 
 ## Main path
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 Language details in S2 (the chat answers in the language the person writes) depend on version 9.
 
@@ -54,8 +52,6 @@ Language details in S2 (the chat answers in the language the person writes) depe
 
 ## Other paths
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 P7 depends on version 9; the others do not.
 
 - **FS-j27.P1 Answer a question in words.** The person answers "2 hours, release build" in a normal message. The turn returns `fill_inputs`; FlowDriven fills only what is still missing and asks again only for what is still missing or invalid. The card of the question is marked answered.
@@ -64,7 +60,7 @@ P7 depends on version 9; the others do not.
 - **FS-j27.P4 A file or folder input.** The form opens at once ("Choose the file and fill in the details.") because a file cannot be typed.
 - **FS-j27.P5 Cancel.** In an open question or form, cancel words or the form's "Cancel" give "Okay, I won't start it." and the waiting question closes. No run starts.
 - **FS-j27.P6 Another request while a question is open.** A status request, "make a flow ..." or another flow plus a run word is handled; the question stays open unless the message carries values for it. A message that is not an answer and not a request ("why?", "?") gets "I need these details to start the flow."
-- **FS-j27.P7 The question follows the chat's language.** The question, the line "Starting ..." and the chips "Use a form" come from FlowDriven's language file in the chat's language (pending version 9). The example text is the flow's own `example`, kept as the flow author wrote it.
+- **FS-j27.P7 The question follows the chat's language.** The question, the line "Starting ..." and the chips "Use a form" come from FlowDriven's language file in the chat's language (version 9). The example text is the flow's own `example`, kept as the flow author wrote it.
 - **FS-j27.P8 Text read from outside.** A value that the agent found in text from outside (a pasted email the person sent, a page) may fill a typed input, is shown to the person in the line "Starting ...", and still passes the same parsers. A turn whose context holds outside text never starts the run by itself: it shows a card "Run <flow> now?" that the person clicks (SR-5). Outside text is never taken as the person's own words, and it can never add a tool, a place or a permission.
 - **FS-j27.P9 Typing while the form is open.** The reply is "Please fill in the form above, then choose Start." and nothing else happens.
 
@@ -122,8 +118,6 @@ P7 depends on version 9; the others do not.
 
 ## Acceptance criteria
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 A13 depends on version 9; the others do not.
 
 - **FS-j27.A1** Inputs are filled in this order: values from the message, remembered answers, defaults; remembered answers are never used for date or time inputs.
@@ -138,7 +132,7 @@ A13 depends on version 9; the others do not.
 - **FS-j27.A10** Remembered answers are saved when the run starts, only for inputs that declare `remember`, and "What you did", dates and times are not saved as remembered answers.
 - **FS-j27.A11** "Use my last answers" applies the last values except date and time; it is refused with a question for the rest when they do not cover the required inputs.
 - **FS-j27.A12** For several flows, one message groups the missing inputs by flow name; a file input opens the form at once.
-- **FS-j27.A13** (pending version 9) The question and the "Starting ..." line follow the chat's language; the agent answers in the language the person writes; chips and buttons never change the chat's language.
+- **FS-j27.A13** (version 9) The question and the "Starting ..." line follow the chat's language; the agent answers in the language the person writes; chips and buttons never change the chat's language.
 - **FS-j27.A14** The answer lines of a `chat` result are filled from the run's inputs and outputs, lines with an unfilled placeholder are dropped, and dates follow the run's language.
 - **FS-j27.A15** A value that came from outside text may fill an input but the turn never starts the run by itself (SR-5).
 - **FS-j27.A16** Text with hidden or format characters is refused in typed inputs and forms.

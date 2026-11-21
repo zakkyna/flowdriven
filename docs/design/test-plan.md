@@ -69,11 +69,9 @@ Coverage rules:
 - Every safety rule has tests at each of its enforcement points (for SR-1: the decision table, the Claude Code hook channel, the Codex tier, and later the gateway).
 - Every threat in `threat-model.md` that a safety rule mitigates is covered by that rule's tests; the threat model names them.
 - Every runner API operation has a schema test (L1, contracts) and a handler test (L3).
-- Every word key used in code exists in English, and every other language has the same placeholders (pending prototype version 9).
+- Every word key used in code exists in English, and every other language has the same placeholders.
 
 ## 6. Safety-critical testing
-
-> Pending prototype version 9: the model picker and language parts of this section follow brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 - The decision function of SR-1 is tested as a table: one row per effect class, per declared or undeclared tool, per standing rule match or near miss (wrong place, wrong flow, revoked), per one-time grant match or near miss (other input, used once already), and per risky kind that a draft tries to pre-select. Every row has an expected result: run, hold or refuse.
 - Negative tests are first-class: outside text never creates or widens a standing rule; a chat turn with outside text in its context never starts a run; an approval answers only the exact action it showed (input digest); the agent's own output can never call a permission operation; the picker never adds a flag other than the model flag.
@@ -88,7 +86,7 @@ Coverage rules:
 - Status is always icon plus words: tests check the words, not a color.
 - Keyboard paths are tested: Enter sends and Shift+Enter adds a line in the composer; Cmd or Ctrl+K opens Search; the agent and model menu moves with the arrow keys, chooses with Enter and returns focus to its button on Escape.
 - Confirmations are tested both ways: the actions that must confirm (Delete, installs other than Set up, Approve all similar, turning the permission off, raising the spending limit) open a dialog; the actions that must not (Reject, Stop, Ask me again) act at once.
-- Both languages: each screen test that checks words runs in English and in Bahasa Indonesia (pending prototype version 9).
+- Both languages: each screen test that checks words runs in English and in Bahasa Indonesia.
 - Long words: tests render Indonesian at the narrow width and check that no button text is cut (layout rules come from CSS; the L5 screenshots confirm them).
 
 ## 8. Chair walks (L5)

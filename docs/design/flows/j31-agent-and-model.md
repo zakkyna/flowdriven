@@ -1,44 +1,34 @@
 # FS-j31: Choose the AI agent and model
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 | Field | Value |
 |---|---|
 | Journey | j31: "Memilih agen AI dan model" / Choosing the AI agent and model / Choose the AI agent and model |
 | PRD features | F-21 (also uses F-03, F-15, F-04) |
 | Safety rules | SR-4, SR-9, SR-2, SR-7; START |
-| Prototype source | Brief section 25 (25.1 data, 25.2 picker, 25.3 journey, 25.4 checks, 25.5 real app) on the `lang-files` branch of the clickable prototype. The prototype code has no picker yet. |
-| Status | Pending prototype version 9 (brief section 25 only; no code, no guide card) |
+| Prototype source | Brief section 25 (25.1 data, 25.2 picker, 25.3 journey, 25.4 checks, 25.5 real app) of the clickable prototype's version 9. |
+| Status | In the prototype (version 9: brief section 25, final on 2026-11-21) |
 
 ## Goal
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 Each chat has one choice: which AI agent answers and with which model. Flows started from that chat run on the choice. Runs record the agent and model they used. Starts outside a chat use the main agent's default model. The picker changes the model flag only.
 
 ## Entry points and trigger
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
-- The button in the composer, where "Claude Code ready" is in the prototype today. It shows the agent's status dot, name and model: "Claude Code · Sonnet 5.5". On a phone-width window it shows the dot and the model; its accessible name always says both.
+- The button in the composer, where "Claude Code ready" was in version 8. It shows the agent's name and the model: "Claude Code · Sonnet 5.5". Status is always icon plus words, so when the agent is not ready the button also shows its status in words ("Needs sign-in"); a ready agent's dot is decoration only. On a phone-width window it shows the model only. Its accessible name always says the agent, the model and the status (brief 25.2.1).
 - Settings "Main AI agent" (see `j12-settings.md`) sets what a new chat starts with. It carries the line "New chats start with this agent and its default model."
 - Trigger: the person's own click or key press only. The assistant has no intent that changes the agent or model, and text in a chat, flow, skill or email cannot change it.
 
 ## Preconditions
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 - At least one AI agent is installed (the button also shows a not-ready agent, with its status words, so the person can fix it).
 - Each agent reports its own models (`agents.models`): Claude Code's model names, Codex's list, or a catalog for that CLI version when the agent cannot list them.
 
 ## Main path
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 - **FS-j31.S1** A new chat shows the default.
   - Person: chooses "New chat".
   - FlowDriven: `chats.create` stores the chat with the main agent and that agent's default model (`isDefault`).
-  - Sees: the composer button "Claude Code · Sonnet 5.5" with a status dot.
+  - Sees: the composer button "Claude Code · Sonnet 5.5" (a ready agent: the dot is decoration only, no status words).
 - **FS-j31.S2** Open the picker.
   - Person: clicks the button.
   - FlowDriven: `agents.list` and `agents.models` fill the menu, which opens above the composer.
@@ -58,8 +48,6 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 
 ## Other paths
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 - **FS-j31.P1** Keyboard. Arrow keys move through the items, Enter chooses, Escape closes the menu and returns focus to the button. Models are menu items with radio state, grouped under their agent's name.
 - **FS-j31.P2** Other agent states in the menu. `not_installed`: "Set up Codex". `needs_login`: "Sign in to Codex". `installing` and `waiting_login`: the status with a spinner and no button. `unknown`: "Check again" (`agents.rescan`). All of them: no models, cannot be chosen.
 - **FS-j31.P3** Choose another agent. Choosing a model of another ready agent switches the chat to that agent and model, adds "Now using Codex · GPT-6.1 Sol", and the next turn and the next runs from this chat use it. FlowDriven keeps the chat's own history, so the new agent gets the same compact context (AD-10); no agent session is carried over.
@@ -73,8 +61,6 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 
 ## States
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 | Entity | From -> to | Cause |
 |---|---|---|
 | Chat choice | main agent and default model -> person's choice | `chats.setAgent` (the person's click) |
@@ -85,17 +71,13 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 
 ## Decisions and confirmations
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 - What asks: nothing. Choosing a model is the person's click; no dialog.
 - What confirms: the click. It confirms only the model and agent for this chat.
 - What deliberately does not: the picker never changes the sandbox, the approvals, the permission or a flow's confirmation (SR-4, SR-2). The agent permission stays one switch for all agents (owner decision, 2026-11-18). "Run with Claude Code this time" is a click for one run.
 
 ## Errors and edge cases
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
-- **FS-j31.E1** Agent not set up or signed out. Cause: the chat's agent is not `ready`. Sees: the button shows the dot and status words; sending a message stores it and shows "Codex is not ready." with the same next-step button as the menu. Flows from this chat show the same card instead of starting. Next: nothing is sent to an agent that is not ready. The prototype checks only Claude Code for every run; the real app checks the agent the run uses.
+- **FS-j31.E1** Agent not set up or signed out. Cause: the chat's agent is not `ready`. Sees: the button shows its status in words ("Needs sign-in"); sending a message stores it and shows "Codex is not ready." with the same next-step button as the menu. Flows from this chat show the same card instead of starting. Next: nothing is sent to an agent that is not ready. The prototype checks only Claude Code for every run; the real app checks the agent the run uses.
 - **FS-j31.E2** Permission off. Cause: "FlowDriven may run your AI agents" is off. Sees: the menu still lists agents; sending shows "FlowDriven may not run your AI agents. Turn this on in Settings." with "Open Settings".
 - **FS-j31.E3** Limits reached. Cause: the chosen agent reports no usage left, or the spending limit is reached. Sees: "<Agent> has no usage left right now. It will be available again at <time>." with the chip "Choose another AI agent" (opens the picker). Next: FlowDriven never switches a chat's agent by itself (SR-9); the person chooses. The busy fallback applies only outside chats.
 - **FS-j31.E4** Stopped or failed run. The run keeps the agent and model it recorded; "Run again" from the run page starts a new run on the current rules for that start source (a start from the page is `again`: main agent default model).
@@ -109,22 +91,16 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 
 ## Data read and written
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 - Read: agents with status and models (`agents.list`, `agents.models`), the chat's `agent` and `model`, settings `mainAgent {agent, model}` and `busyFallback`.
 - Written: the chat's `agent` and `model`; a chat note message; each run's `agent` and `model`; the audit log (SR-7: "Chat <title> now uses <agent> <model>", every run's agent and model).
 
 ## Runner API used
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 `chats.create`, `chats.get`, `chats.setAgent {chatId, agent, model}`, `chats.send`, `agents.list`, `agents.models {agentId}`, `agents.setUp {agentId}`, `agents.signIn {agentId}`, `agents.rescan`, `settings.get`, `settings.update` (`mainAgent`, `busyFallback`), `flows.start`, `runs.status`. Topics: `chats`, `agents`, `settings`, `runs`.
 
 ## Acceptance criteria
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
-- **FS-j31.A1** A new chat shows the main agent and its default model on the composer button, with a status dot.
+- **FS-j31.A1** A new chat shows the main agent and its default model on the composer button; when that agent is not ready the button also shows its status in words ("Needs sign-in"); its accessible name says the agent, the model and the status.
 - **FS-j31.A2** The menu lists one group per agent with its status in icon plus words; a ready agent lists its models with notes, the default tagged "Default" and the chosen one marked; the last item is "Manage AI agents".
 - **FS-j31.A3** Choosing a model stores `agent` and `model` for this chat only, closes the menu, updates the button and adds the note "Now using <agent> · <model>"; other chats and the Settings default are unchanged.
 - **FS-j31.A4** A new chat after a change starts with the main agent's default model.
@@ -148,14 +124,10 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 
 ## Not in the prototype yet
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 - The whole journey: models, picker, note, run card line, Settings line, guide card.
 - "Run with Claude Code this time", the fallback for a vanished model, "Check again", the chain rule and the limit message (this design adds them).
 
 ## Drafter's calls
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 - A chain keeps the agent and model chosen at "Start"; reason: one request, one choice.
 - "Run with Claude Code this time" applies to one run and does not change the chat; reason: the person did not ask to switch the chat.

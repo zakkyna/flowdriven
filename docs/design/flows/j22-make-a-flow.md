@@ -20,8 +20,6 @@ A person describes repeated work in plain words. FlowDriven shows the flow it wo
 
 ## Preconditions
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 - The permission for AI agents is on and the chat's AI agent is ready. A new chat uses the main agent; from version 9 the chat can choose its own agent and model (see `j31-agent-and-model.md`).
 - Nothing else. The person needs no flow, skill or account.
 

@@ -6,7 +6,7 @@
 | PRD features | F-15, F-23 (also F-20 and F-21 for the Language section and the main agent line; F-22 for the Background section) |
 | Safety rules | SR-2, SR-4, SR-7, SR-8, SR-9 |
 | Prototype source | Brief sections 13, 16.8, 18.1.5, 22, 22.5, 24.1.2, 25.2.5; `js/screens/preferences.js`, `js/actions.js` (`setAgentConsent`, `setMainAgent`, `raiseCap`, `signInAgent`), `js/guide.js` (j12) |
-| Status | In the prototype (version 8); the Language section and the main agent line are Pending prototype version 9; spending and usage enforcement, the effect of the main agent and the Background section are Not in the prototype yet |
+| Status | In the prototype (version 8); the Language section and the main agent line are in the prototype (version 9); spending and usage enforcement, the effect of the main agent and the Background section are Not in the prototype yet |
 
 ## Goal
 
@@ -24,8 +24,6 @@ The person sets the look, the AI agents FlowDriven may use, the permission to ru
 
 ## Main path
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 The sections are in this order: Appearance, Language (version 9), AI agents, Permission, Main AI agent, Spending limit, Notifications, Background (Not in the prototype yet). Step S5 and the line in S4 depend on version 9 only where marked.
 
 1. **FS-j12.S1 Open Settings.**
@@ -42,8 +40,8 @@ The sections are in this order: Appearance, Language (version 9), AI agents, Per
    - Sees: the row shows "Waiting for you to sign in..." and no button; when signed in the badge reads "Ready". Rows show a "Set up" button for `not_installed` (it also gives permission, as in FS-j01) and "Sign in" for `needs_login`; the button is hidden while `installing` or `waiting_login`.
 4. **FS-j12.S4 Main AI agent.**
    - Person: chooses Codex under "Main AI agent".
-   - FlowDriven: `settings.update {mainAgent: {agent: "codex", model: <its default>}}`. A radio is disabled unless the agent is `ready` ("Set up or sign in first"). From now on new chats start with Codex and its default model (pending version 9), and every start outside a chat (schedule, Run on the Flows list, "after another flow") uses Codex with its default model. Chats already open and runs already going keep what they use.
-   - Sees: a toast "Main AI agent: Codex"; the line "New chats start with this agent and its default model." (pending version 9); the toggle "If Claude Code is busy, use Codex" (the words name the main agent and the other ready agent; they are shown only when two agents are ready).
+   - FlowDriven: `settings.update {mainAgent: {agent: "codex", model: <its default>}}`. A radio is disabled unless the agent is `ready` ("Set up or sign in first"). From now on new chats start with Codex and its default model (version 9), and every start outside a chat (schedule, Run on the Flows list, "after another flow") uses Codex with its default model. Chats already open and runs already going keep what they use.
+   - Sees: a toast "Main AI agent: Codex"; the line "New chats start with this agent and its default model." (version 9); the toggle "If Claude Code is busy, use Codex" (the words name the main agent and the other ready agent; they are shown only when two agents are ready).
 5. **FS-j12.S5 Raise the spending limit.**
    - Person: clicks "Raise limit".
    - FlowDriven: opens a dialog with the field "Monthly limit ($)" (minimum 1, default 25). The title line updates as the person types: "Raise the limit to $25?". "Raise" calls `settings.update {spendingLimit: 25}`; "Cancel" closes. FlowDriven resolves every waiting limit decision ("Needs you" for budget) and lets those runs continue.
@@ -51,14 +49,12 @@ The sections are in this order: Appearance, Language (version 9), AI agents, Per
 
 ## Other paths
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 P4 depends on version 9; the other paths do not.
 
 - **FS-j12.P1 Turn the permission on.** The switch "FlowDriven may run your AI agents" (off -> on) opens a dialog "Before you start": "FlowDriven runs your flows on the AI agents on this Mac: Claude Code, Codex and any you add later. Give permission once for all of them. FlowDriven only does what each flow is allowed to do, and asks you before anything risky." Buttons "Give permission" and "Cancel". Giving it sets `agentPermission` to `on` and writes an audit record.
 - **FS-j12.P2 Turn the permission off.** The switch (on -> off) opens "Stop FlowDriven from running AI agents?" with "Flows stop until you turn this on again." and buttons "Turn off" (danger) and "Keep on". "Turn off" sets `agentPermission` to `off`, stops every active run (`runs.stop` for each; state `stopped`), expires their waiting decisions, and stops every automatic start (SR-8). Starts that come due while it is off are recorded as "Missed" and are not run later. No new chat turn is sent to an agent.
 - **FS-j12.P3 Busy fallback.** The toggle "If Claude Code is busy, use Codex" applies only to starts outside a chat. "Busy" means the main agent reported its usage limit or has no free slot for this run. A start moves to the other agent only if that agent is `ready` and can run the flow with the limits FlowDriven needs; otherwise it waits on the main agent.
-- **FS-j12.P4 Language.** Two radios, "English" and "Bahasa Indonesia", each in its own language, and the line "Chats and flows keep the words they were written in. FlowDriven answers in the language you write in." Details in FS-j30 (pending version 9).
+- **FS-j12.P4 Language.** Two radios, "English" and "Bahasa Indonesia", each in its own language, and the line "Chats and flows keep the words they were written in. FlowDriven answers in the language you write in." Details in FS-j30 (version 9).
 - **FS-j12.P5 Background.** Two switches: "Keep FlowDriven running in the menu bar when the window closes" and "Open at login", both on by default (Decided for V1, revisable: FlowDriven keeps running in the menu bar and "Open at login" is on by default). Needed so a schedule still fires with the window closed (FS-j28). Not in the prototype yet.
 - **FS-j12.P6 Notifications.** A fixed sentence: "FlowDriven only notifies you when it needs a decision or something went wrong. It never notifies you about progress or success." It also asks for no other notification (proactive questions are a decision to answer, FS-j28).
 
@@ -107,8 +103,6 @@ P4 depends on version 9; the other paths do not.
 
 ## Acceptance criteria
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 A9 and A10 depend on version 9; the others do not.
 
 - **FS-j12.A1** Settings shows the sections in the order of the Main path, and each control saves with one click or one dialog.
@@ -119,8 +113,8 @@ A9 and A10 depend on version 9; the others do not.
 - **FS-j12.A6** The main agent radio is disabled for an agent that is not `ready`; choosing a ready agent saves `mainAgent` with its default model.
 - **FS-j12.A7** Starts outside a chat use the main agent's default model; the busy fallback applies only to those starts and only to a ready agent that can run the flow.
 - **FS-j12.A8** The limit dialog rejects an amount not above the current limit with "Enter an amount above $<limit>." and saves nothing; a valid amount saves, resolves waiting limit decisions, and shows "Limit raised to $<amount>."
-- **FS-j12.A9** (pending version 9) A new chat starts with the main agent and its default model; an open chat is not changed by the main agent setting.
-- **FS-j12.A10** (pending version 9) The Language section lists every registered language by its own name and applies a choice at once (FS-j30).
+- **FS-j12.A9** (version 9) A new chat starts with the main agent and its default model; an open chat is not changed by the main agent setting.
+- **FS-j12.A10** (version 9) The Language section lists every registered language by its own name and applies a choice at once (FS-j30).
 - **FS-j12.A11** When the spent amount reaches the limit, runs pause with a "Needs you" item and none continues until the person raises the limit (SR-9).
 - **FS-j12.A12** No operation other than the person's click in the window can change `agentPermission`, `mainAgent`, `busyFallback` or `spendingLimit`: the assistant cannot call `settings.update`, and the operation is not exposed over MCP (SR-2).
 - **FS-j12.A13** Settings and the color mode survive a restart; an unreadable color mode file gives Auto.

@@ -6,7 +6,7 @@
 | PRD features | F-01 (also F-20 for the language options on the welcome screen) |
 | Safety rules | SR-2, SR-4, SR-6, SR-7, SR-8 |
 | Prototype source | Brief sections 13, 14, 15.5, 16.8, 17.5, 24.1.3; `js/screens/agents.js`, `js/actions.js` (`setUpAgent`, `signInAgent`, `setAgentConsent`), `js/guide.js` (j01) |
-| Status | In the prototype (version 8); the language options are Pending prototype version 9; failure paths, a real scan and a real sign-in are Not in the prototype yet |
+| Status | In the prototype (version 8); the language options are in the prototype (version 9); failure paths, a real scan and a real sign-in are Not in the prototype yet |
 
 ## Goal
 
@@ -25,14 +25,12 @@ A person who opens FlowDriven for the first time gets from the welcome screen to
 
 ## Main path
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 Steps S1 (language options) and S4 (the agent and model pill) depend on version 9.
 
 1. **FS-j01.S1 Welcome.**
    - Person: opens FlowDriven.
    - FlowDriven: calls `runner.info`, `settings.get` and `agents.list`. `agents.list` detects every agent in FlowDriven's catalog without installing anything. It shows the welcome screen.
-   - Sees: small language options above the heading ("English", "Bahasa Indonesia", pending version 9); "Welcome to FlowDriven"; "FlowDriven runs your repeated work on an AI agent you already have." plus " We did not find one on this Mac yet." when no agent is `ready`; a card "Get started" ("FlowDriven runs your flows on the AI agents on this Mac. Choose one to set up. This also gives FlowDriven permission to run your AI agents, now and later. You can change that in Settings.") and a note about subscription terms; one card per agent with name, maker, account line ("Sign in with your Claude account" or "Sign in with your ChatGPT account"), a risk badge ("Check the terms" or "Supported") and its note, a primary button "Set up Claude Code" or "Set up Codex", a link "Install it yourself", and a ghost button "Already installed one? Scan again".
+   - Sees: small language options above the heading ("English", "Bahasa Indonesia", version 9); "Welcome to FlowDriven"; "FlowDriven runs your repeated work on an AI agent you already have." plus " We did not find one on this Mac yet." when no agent is `ready`; a card "Get started" ("FlowDriven runs your flows on the AI agents on this Mac. Choose one to set up. This also gives FlowDriven permission to run your AI agents, now and later. You can change that in Settings.") and a note about subscription terms; one card per agent with name, maker, account line ("Sign in with your Claude account" or "Sign in with your ChatGPT account"), a risk badge ("Check the terms" or "Supported") and its note, a primary button "Set up Claude Code" or "Set up Codex", a link "Install it yourself", and a ghost button "Already installed one? Scan again".
 2. **FS-j01.S2 Set up.**
    - Person: clicks "Set up Claude Code".
    - FlowDriven: calls `agents.setUp {agentId}`. In order: (a) sets `agentPermission` to `on` (the click is the permission; no dialog) and writes an audit record `permission_changed` with source `window`; (b) if the agent is `not_installed`, sets state `installing` and runs the install command from FlowDriven's own agent catalog, without a shell; (c) sets state `waiting_login`, starts the agent's own sign-in, and polls the agent's sign-in status command until it reports signed in. An agent that is already installed but `needs_login` skips (b).
@@ -44,7 +42,7 @@ Steps S1 (language options) and S4 (the agent and model pill) depend on version 
 4. **FS-j01.S4 Start chatting.**
    - Person: clicks "Start chatting".
    - FlowDriven: if `mainAgent` is not set, sets it to this agent with its default model (`settings.update`). Calls `chats.create`. Opens `#/chat/<chatId>`.
-   - Sees: the empty chat: "What should I do?", "I can run your flows, make a new flow, or improve one.", the composer, and the agent pill (version 9: "Claude Code - Sonnet 5.5" with a status dot; version 8: "Claude Code ready"). FlowDriven opens this welcome screen only until this click.
+   - Sees: the empty chat: "What should I do?", "I can run your flows, make a new flow, or improve one.", the composer, and the agent pill (version 9: "Claude Code · Sonnet 5.5" with a status dot; version 8: "Claude Code ready"). FlowDriven opens this welcome screen only until this click.
 
 ## Other paths
 
@@ -102,8 +100,6 @@ Steps S1 (language options) and S4 (the agent and model pill) depend on version 
 
 ## Acceptance criteria
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 Criteria A1-A12 do not depend on version 9; A13 and A14 do.
 
 - **FS-j01.A1** When `agentPermission` is `unset`, the app opens `#/welcome` and not the chat.
@@ -118,8 +114,8 @@ Criteria A1-A12 do not depend on version 9; A13 and A14 do.
 - **FS-j01.A10** No sign-in within 10 minutes sets the agent `needs_login` and stops polling.
 - **FS-j01.A11** After a restart during set up, agent states come from detection, and no install restarts by itself.
 - **FS-j01.A12** The permission change is in the audit log with source `window`. After "Start chatting" the app never opens the welcome screen at launch again; a `contractVersion` mismatch blocks the app before the welcome screen.
-- **FS-j01.A13** (pending version 9) The welcome screen shows every registered language by its own name, and choosing one switches the words at once.
-- **FS-j01.A14** (pending version 9) The agent pill in the new chat shows the main agent and its default model.
+- **FS-j01.A13** (version 9) The welcome screen shows every registered language by its own name, and choosing one switches the words at once.
+- **FS-j01.A14** (version 9) The agent pill in the new chat shows the main agent and its default model.
 
 ## Not in the prototype yet
 
@@ -132,4 +128,4 @@ Criteria A1-A12 do not depend on version 9; A13 and A14 do.
 - Sign-in polling stops after 10 minutes. Reason: a poll must end; the prototype only had a 2-second timer.
 - A ready agent shows "Use <name>" instead of "Set up <name>". Reason: the click then only gives permission.
 - Each catalog entry carries its install command and sign-in command; the exact commands are confirmed in a Chair research step (Claude Code during B-21, Codex during B-22).
-- UI strings use ASCII "..." and " - " in this document; the real strings come from the language files.
+- UI strings use ASCII "..." in this document; the real strings come from the language files.

@@ -10,7 +10,7 @@ One flow spec describes one journey of the clickable prototype's Guide as the re
 - It lists the runner operations it uses (names from `../runner-api.md`) and the data it reads and writes (names from `../data-model.md`).
 - It ends with testable acceptance criteria. Every criterion has at least one test case.
 - Where the prototype has a gap, the spec says what the real app does instead. Where the real app adds behavior the owner has not tried, the spec marks it "Not in the prototype yet", so it goes into the prototype before it is built.
-- V1 means Release 1 (build steps B-01 to B-24). Memory, Phone & bots and skill updates are V2. Marketplace and the gateway are V3.
+- V1 means V1 (build steps B-01 to B-24). Memory, Phone & bots and skill updates are V2. Marketplace and the gateway are V3.
 
 ## Template
 
@@ -75,8 +75,6 @@ Numbers never change once used. A removed item leaves its number unused. The jou
 
 ## Index of flow specs
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 | Id | File | Title | Features | Status |
 |---|---|---|---|---|
 | j01 | `j01-first-launch.md` | First launch and agent set up | F-01 | In the prototype (version 8) |
@@ -91,7 +89,7 @@ Numbers never change once used. A removed item leaves its number unused. The jou
 | j27 | `j27-flow-inputs.md` | A flow that needs details from you | F-03, F-05, F-06 | In the prototype (version 8) |
 | j28 | `j28-proactive-schedule.md` | A schedule that asks first | F-08, F-09, F-16, F-22 | In the prototype (version 8); parts Not in the prototype yet |
 | j29 | `j29-flow-from-skill.md` | Make a flow from a skill | F-12 | In the prototype (version 8); parts Not in the prototype yet |
-| j30 | `j30-app-language.md` | App language | F-20 | Pending prototype version 9 |
-| j31 | `j31-agent-and-model.md` | Choose the AI agent and model | F-21 | Pending prototype version 9 |
+| j30 | `j30-app-language.md` | App language | F-20 | In the prototype (version 9) |
+| j31 | `j31-agent-and-model.md` | Choose the AI agent and model | F-21 | In the prototype (version 9) |
 
 Each spec's own status line is the source for its journey.

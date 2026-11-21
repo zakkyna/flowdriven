@@ -21,8 +21,6 @@ A skill the person's AI agent already has becomes a flow in a few clicks. FlowDr
 
 ## Preconditions
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 - The skill exists in an agent's skill folder (for example a skill folder named `timesheet-skill`) or in FlowDriven's library, and its `SKILL.md` can be read.
 - The permission for AI agents is on and the chat's AI agent is ready (a new chat uses the main agent; from version 9 the chat can choose its own agent and model, see `j31-agent-and-model.md`).
 

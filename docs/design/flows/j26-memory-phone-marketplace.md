@@ -6,7 +6,7 @@
 | PRD features | F-17, F-18, F-19, F-24 (also F-12 for the Skills screen; F-13 for phone decisions) |
 | Safety rules | SR-1, SR-2, SR-3, SR-4, SR-5, SR-6, SR-7, SR-8; START |
 | Prototype source | Brief sections 7.10, 10.1 A2.9, 10.2 B4, 17.5, 18.3, 23.1.4, 23.10; `js/screens/later.js` (memory, phone, marketplace), `js/screens/skills.js`, `js/actions.js` (`memoryKeep`, `memoryDrop`, `botSetup`, `setMcpMode`, `installListing`, `skillApproveUpdate`, `skillRollBack`). Original spec sections S21 (memory and skills), S14 (marketplace), S22 (phone and bots) |
-| Status | In the prototype (version 8) as demos with canned data. Every behavior below that does real work is Not in the prototype yet. Release plan: Memory, Phone & bots and skill updates in Release 2 (B-25, B-26, B-27); Marketplace in Release 3 (B-28) |
+| Status | In the prototype (version 8) as demos with canned data. Every behavior below that does real work is Not in the prototype yet. Release plan: Memory, Phone & bots and skill updates in V2 (B-25, B-26, B-27); Marketplace in V3 (B-28) |
 
 ## Goal
 
@@ -26,7 +26,7 @@ Four screens that the person can open from the left menu: Memory (what the agent
 
 ## Main path
 
-Memory (Release 2).
+Memory (V2).
 
 - **FS-j26.S1** Open Memory.
   - Person: chooses "Memory".
@@ -41,7 +41,7 @@ Memory (Release 2).
   - FlowDriven: "Edit" opens a text box (500 characters at most); "Pin" puts it under "Kept"; "Delete" opens "Delete this memory?" ("The agent forgets it.") with "Delete" and "Cancel".
   - Sees: the list updates; search shows "Nothing matches." when empty; with no proposals "No proposed memories."
 
-Phone & bots (Release 2).
+Phone & bots (V2).
 
 - **FS-j26.S4** Open Phone & bots.
   - Person: chooses "Phone & bots".
@@ -64,7 +64,7 @@ Phone & bots (Release 2).
   - FlowDriven: `phone.setToolAccess {on}` starts a local-only server that lists and starts flows.
   - Sees: the switch on, with the line "They still ask you before anything is sent."
 
-Marketplace (Release 3).
+Marketplace (V3).
 
 - **FS-j26.S9** Browse.
   - Person: chooses "Marketplace", types in the search box.
@@ -83,17 +83,17 @@ Marketplace (Release 3).
   - FlowDriven: the dialog lists "What it does", "Does on its own", "Asks you first", "Never does", each place in full. Only `read` touches are under "Does on its own" until the person moves one; sends and posts are under "Asks you first". "Confirm" records the hash and creates standing rules only for what the person left under "Does on its own" (non-read).
   - Sees: the flow without a badge. A "Run" click on a `new` flow, in the chat or anywhere else, shows "Confirm <flow> first?" instead of running (`START`).
 
-Skills screen basics (list and updates, Release 1 list, Release 2 updates).
+Skills screen basics (list and updates, V1 list, V2 updates).
 
 - **FS-j26.S13** Open Skills.
   - Person: chooses "Skills".
   - FlowDriven: `skills.list` returns the skills of the agents on this Mac and the library.
   - Sees: rows with name, one-line "about", origin ("Claude Code", "Comes with FlowDriven" or "More skills"), "Used by: ...", "Last used: ...", the tag "Update available" when there is one, "Make a flow" (see `j29-flow-from-skill.md`) and Expand/Collapse.
-- **FS-j26.S14** Review an update (Release 2).
+- **FS-j26.S14** Review an update (V2).
   - Person: expands a row with "Update available".
   - FlowDriven: shows "Update changes:" with added lines marked "+" and removed lines marked "-", then "Approve update" and "Keep current version".
   - Sees: the diff in plain text. "Approve update" makes the new text the active version; flows that use the skill show "Changed: confirm again" until the person confirms them (their confirmation pinned the old text). "Keep current version" dismisses the update.
-- **FS-j26.S15** Roll back (Release 2).
+- **FS-j26.S15** Roll back (V2).
   - Person: on an older version, chooses "Roll back".
   - FlowDriven: "Roll back <name> to an earlier version?" ("Flows that use it switch to that version.") with "Roll back" and "Cancel". The restored text becomes active; a flow whose confirmed pin equals the restored text is `confirmed` again; any other flow shows "Changed: confirm again".
   - Sees: newer versions marked "Newer". A skill unused for 90 days shows "Not used for 97 days. Archive it?" with "Archive"; a skill that a flow uses is never archived.
@@ -160,7 +160,7 @@ Skills screen basics (list and updates, Release 1 list, Release 2 updates).
 
 ## Runner API used
 
-Release 2: `memory.list`, `memory.keep`, `memory.drop`, `memory.edit`, `memory.pin`, `memory.delete`, `memory.export`, `phone.list`, `phone.setSecret`, `phone.startPairing`, `phone.checkPairing`, `phone.unpair`, `phone.setToolAccess`, `skills.list`, `skills.approveUpdate`, `skills.rollBack`, `skills.archive`, `approvals.resolve`, `approvals.answer`, `flows.start`. Release 3: `market.search`, `market.get`, `market.install`, `market.report`, `market.publish`, `market.revocations`, `flows.confirm`. Topics: `memory`, `phone`, `market`, `skills`, `flows`, `approvals`. MCP exposure: `flows.list`, `flows.get`, `flows.start`, `runs.status` and `approvals.list` only; never `approvals.resolve`, `rules.*`, `settings.*`.
+V2: `memory.list`, `memory.keep`, `memory.drop`, `memory.edit`, `memory.pin`, `memory.delete`, `memory.export`, `phone.list`, `phone.setSecret`, `phone.startPairing`, `phone.checkPairing`, `phone.unpair`, `phone.setToolAccess`, `skills.list`, `skills.approveUpdate`, `skills.rollBack`, `skills.archive`, `approvals.resolve`, `approvals.answer`, `flows.start`. V3: `market.search`, `market.get`, `market.install`, `market.report`, `market.publish`, `market.revocations`, `flows.confirm`. Topics: `memory`, `phone`, `market`, `skills`, `flows`, `approvals`. MCP exposure: `flows.list`, `flows.get`, `flows.start`, `runs.status` and `approvals.list` only; never `approvals.resolve`, `rules.*`, `settings.*`.
 
 ## Acceptance criteria
 
@@ -199,8 +199,8 @@ Release 2: `memory.list`, `memory.keep`, `memory.drop`, `memory.edit`, `memory.p
 ## Drafter's calls
 
 - Installed flows get only `read` touches under "Does on its own"; reason: the places come from outside text (SR-5), and the person's own move is the decision. The prototype pre-placed reads and changes.
-- Release split: Skills list in Release 1 (needed by `j29-flow-from-skill.md`); update diffs and roll back in Release 2; Memory and Phone & bots in Release 2; Marketplace in Release 3 (chair brief section 8).
+- Release split: Skills list in V1 (needed by `j29-flow-from-skill.md`); update diffs and roll back in V2; Memory and Phone & bots in V2; Marketplace in V3 (chair brief section 8).
 - Pairing code valid 10 minutes, single use; reason: it matches the 10-minute command rule.
-- Memory and history commands over the bots are off and not offered in Release 2; reason: the spec makes them a per-channel opt-in, which the prototype never showed.
+- Memory and history commands over the bots are off and not offered in V2; reason: the spec makes them a per-channel opt-in, which the prototype never showed.
 - A revocation list older than 24 hours shows a "Needs you" row but does not block runs; reason: offline use should not break installed flows, and a block would be a new product decision.
 - A skill update makes dependent flows "Changed: confirm again" (the skill text is part of what runs, SR-3); the prototype says flows "switch to that version".

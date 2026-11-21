@@ -63,7 +63,7 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
 | `failed` | Step failed after tries | The recorded reason, for example "The mail service did not answer twice in a row, so the run stopped. Run it again later." | "Run again" |
 | `stopped` | The person pressed Stop | "You stopped this run." | "Run again" |
 
-- **FS-j25.P5** Stopped and failed runs. `stopped` ("Stopped by you") and `failed` have no "Try again" in Release 1; they offer "Run again" and "Copy report" (the contract allows resuming a failed run; the screen does not offer it, see Drafter's calls).
+- **FS-j25.P5** Stopped and failed runs. `stopped` ("Stopped by you") and `failed` have no "Try again" in V1; they offer "Run again" and "Copy report" (the contract allows resuming a failed run; the screen does not offer it, see Drafter's calls).
 - **FS-j25.P6** Stop. A run that is queued, starting, running, trying again or waiting has "Stop" on the run page, in "Running now" and on chat run cards. It ends the agent's process group at once with no confirmation (`runs.stop {runId}`, SR-8), sets the run and its running step `stopped`, expires its waiting decisions and starts the next queued run of the same flow.
 - **FS-j25.P7** The run page parts. "This is waiting for your OK." with the decision cards when `waiting_approval`; "Result" (outputs) when `done`; "Steps" with the track, state badges and evidence; decision lines ("You approved: ...", "Done by your rule: ...", "You said no: ... It was not done."); the cost line ("Included in your plan", or an amount when billed per use, no token numbers); "Run again"; "Copy report". The decisions and the audit lines come from SR-7.
 - **FS-j25.P8** Queue. A second run of a flow that is already open is `queued` ("Waiting to start": "Waiting for the earlier run of this flow"). If the earlier run needs the person, the line "The earlier run needs you first." with "See what it needs" is shown.
@@ -71,8 +71,6 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
 - **FS-j25.P10** After a flow change. A run page keeps the version the run used. A banner "This run used an earlier version of the flow." is shown when the flow has changed since.
 
 ### Version 9 parts
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 - **FS-j25.P11** Agent and model on the run page. The page and the run card show the agent and model the run used ("Claude Code · Sonnet 5.5"), recorded when the run started (see `j31-agent-and-model.md`). Today's prototype names no agent here and hard-codes Claude Code in the usage line.
 

@@ -2,9 +2,7 @@
 
 This folder is the design for building FlowDriven's real app after the clickable prototype: what the app must do, how each journey works, how the app is built, how it stays safe, and how test-driven development drives every build step.
 
-Status: draft for the owner's review, 2026-11-21. It follows prototype version 8 and the version 9 work in progress (the language setting, one file per language, and the AI agent and model picker). Every part that depends on version 9 carries this line under its heading:
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
+Status: complete design for the V1 build, 2026-11-21. It follows version 9 of the clickable prototype: version 8 plus the final brief sections 24.9 and 24.10 (the language setting and one file per language) and 25 (the AI agent and model picker). Decisions the owner did not make are recorded as "Decided for V1 (revisable)".
 
 ## What is where
 

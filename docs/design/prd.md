@@ -6,7 +6,7 @@ How to read the ids: `F-07.R3` is requirement 3 of feature F-07. A requirement i
 
 A feature is marked with one of three flags:
 - "In the prototype (version 8)": the owner has tried it.
-- "Pending prototype version 9": it follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
+- "In the prototype (version 9)": it follows the final brief sections 24.9, 24.10 and 25 of the clickable prototype (the language setting, one file per language, and the AI agent and model picker).
 - "Not in the prototype yet": it must go into the prototype and be approved before it is built (AGENTS.md: prototype first).
 
 ## 1. Purpose
@@ -100,8 +100,6 @@ Every feature has: what it is, what the person experiences, numbered requirement
 
 ### F-01 First launch and agent set up
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 What it is. The welcome screen that gets the person from "installed" to "ready to chat" with one click per agent. The language options on this screen are the version 9 part.
 
 What the person experiences. Heading "Welcome to FlowDriven". A card "Get started": "FlowDriven runs your flows on the AI agents on this Mac. Choose one to set up. This also gives FlowDriven permission to run your AI agents, now and later. You can change that in Settings." One card per agent with name, maker, an account line ("Sign in with your Claude account" or "Sign in with your ChatGPT account"), a badge ("Supported" or "Check the terms") and a button "Set up Claude Code" or "Set up Codex". While it works: "Installing" and "Waiting for you to sign in..." with no button. A ghost link "Install it yourself". A line "Already installed one? Scan again". When ready: "You're ready" and "Start chatting".
@@ -118,7 +116,7 @@ Requirements.
 - F-01.R9. If an install or a sign-in fails, the screen says in one plain sentence what happened and shows one button to try again. No apology text. (Not in the prototype yet: the prototype has no failure path.)
 - F-01.R10. First launch ends only when the permission is on and at least one agent is `ready`. Setting up only Codex ends it; a flow that needs Claude Code then says so in plain words and offers "Set up Claude Code" (see F-04.R9).
 
-Journeys and flow specs: j01, `flows/j01-first-launch.md`. Release: V1 (B-21, with B-07 and B-22). Status: In the prototype (version 8); the language options on this screen are Pending prototype version 9; R9 is Not in the prototype yet.
+Journeys and flow specs: j01, `flows/j01-first-launch.md`. Release: V1 (B-21, with B-07 and B-22). Status: In the prototype (version 8); the language options on this screen are in the prototype (version 9); R9 is Not in the prototype yet.
 
 ### F-02 App shell: sidebar, chat list, Search
 
@@ -141,8 +139,6 @@ Journeys and flow specs: j20 (`flows/j20-run-from-chat.md`) and j12 (`flows/j12-
 
 ### F-03 Chat
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 What it is. The main screen. The person writes; the agent understands; FlowDriven decides and shows cards. The agent answers in the language the person writes in (version 9).
 
 What the person experiences. An empty chat shows "What should I do?" and "I can run your flows, make a new flow, or improve one." with starter chips such as "Make a new flow" and "What needs me?". The composer has a text box, a Send button and (version 9) the agent and model picker. Enter sends; Shift+Enter adds a line. Agent messages have no bubble; the person's messages are on the right. Cards sit inside messages. Suggestion chips sit under the last agent message.
@@ -158,13 +154,11 @@ Requirements.
 - F-03.R8. Opening a chat scrolls to the bottom. A new message keeps the view at the bottom if the person was within 120 px of it.
 - F-03.R9. Agent text and outside text are shown by a safe text renderer: no raw HTML, no remote images; links are shown and open only after the person clicks and the app checks them (SR-5).
 - F-03.R10. A chat turn whose context holds outside text never starts a run by itself. It shows a card the person clicks (SR-5).
-- F-03.R11. The agent answers in the language the person writes in and uses the app language when that is unclear. FlowDriven's own cards and buttons follow the app language. (Pending prototype version 9.)
+- F-03.R11. The agent answers in the language the person writes in and uses the app language when that is unclear. FlowDriven's own cards and buttons follow the app language. (In the prototype (version 9).)
 
-Journeys and flow specs: j20 (`flows/j20-run-from-chat.md`), j27 (`flows/j27-flow-inputs.md`). Release: V1 (B-08, B-17). Status: In the prototype (version 8) with prepared answers; R11 is Pending prototype version 9; reading the person's sentences with the real agent is Not in the prototype yet (the prototype's wording is scripted, brief 23.9).
+Journeys and flow specs: j20 (`flows/j20-run-from-chat.md`), j27 (`flows/j27-flow-inputs.md`). Release: V1 (B-08, B-17). Status: In the prototype (version 8) with prepared answers; R11 is in the prototype (version 9); reading the person's sentences with the real agent is Not in the prototype yet (the prototype's wording is scripted, brief 23.9).
 
 ### F-04 Run flows from the chat
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 What it is. The person writes which flow to run: one, several at the same time, or a chain. They can stop a run and ask what is going on. The chat never starts what was not asked. Run cards name the chat's agent and model (version 9).
 
@@ -181,10 +175,10 @@ Requirements.
 - F-04.R8. A run queued behind a run of the same flow that needs the person says "The earlier run needs you first." with a link to that run.
 - F-04.R9. A run that cannot start because the permission is off or the agent is not ready shows the plain reason and one button (for example "Set up Claude Code"). A flow that needs a tool the chosen agent cannot be limited for shows a plain reason and offers Claude Code.
 - F-04.R10. After a chain finishes, the chat offers "Do this every time?" with "Yes, every time" and "Only this time". "Yes" sets the schedule `after`; "Only this time" changes nothing. Matching these answers uses whole words only (the prototype matched "Hanya" as "ya": a bug not to repeat).
-- F-04.R11. Runs started from a chat run on that chat's agent and model, and the run card and run page name them, for example "Claude Code · Sonnet 5.5". (Pending prototype version 9.)
+- F-04.R11. Runs started from a chat run on that chat's agent and model, and the run card and run page name them, for example "Claude Code · Sonnet 5.5". (In the prototype (version 9).)
 - F-04.R12. A flow runs at most once per request. Two flows set to run after each other stop after one round.
 
-Journeys and flow specs: j20, `flows/j20-run-from-chat.md`. Release: V1 (B-10, with B-08). Status: In the prototype (version 8); R11 is Pending prototype version 9.
+Journeys and flow specs: j20, `flows/j20-run-from-chat.md`. Release: V1 (B-10, with B-08). Status: In the prototype (version 8); R11 is in the prototype (version 9).
 
 ### F-05 Flow inputs
 
@@ -208,8 +202,6 @@ Journeys and flow specs: j27, `flows/j27-flow-inputs.md`. Release: V1 (B-09, wit
 
 ### F-06 Results
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 What it is. Each flow says where its result goes: as an answer in the chat, or as a report only. The report is honest about the person's decisions.
 
 What the person experiences. A chat flow posts its answer lines in the chat ("Logged Thu 19 Nov, 13:00-15:00 (2h): Project Example (Example Corp), Feature work."). A report flow says "Done. The report is in Activity." with a link. Flow cards say "Answer in chat" or "Report".
@@ -219,10 +211,10 @@ Requirements.
 - F-06.R2. For `report`, the report stays with the run in Activity and the chat gets "Done. The report is in Activity."
 - F-06.R3. The runner writes the decision lines: "You approved: <title>.", "Done by your rule: <step title>." and "You said no: <title>. It was not done." Other outcomes add nothing the person did not decide.
 - F-06.R4. A step shows as passed only with evidence from a check the agent does not control. A step the agent judged itself is labelled "Judged, not verified".
-- F-06.R5. FlowDriven's own posted lines follow the chat's language: "Done. The report is in Activity.", "<flow> needs a few details.", "<flow> finished, so <next> is next." (Pending prototype version 9.)
+- F-06.R5. FlowDriven's own posted lines follow the chat's language: "Done. The report is in Activity.", "<flow> needs a few details.", "<flow> finished, so <next> is next." (In the prototype (version 9).)
 - F-06.R6. A report has no token or usage numbers and no run ids. It starts with the flow name and when it started, then "Result".
 
-Journeys and flow specs: j20 and j27, `flows/j20-run-from-chat.md`, `flows/j27-flow-inputs.md`. Release: V1 (B-11). Status: In the prototype (version 8); R5 is Pending prototype version 9.
+Journeys and flow specs: j20 and j27, `flows/j20-run-from-chat.md`, `flows/j27-flow-inputs.md`. Release: V1 (B-11). Status: In the prototype (version 8); R5 is in the prototype (version 9).
 
 ### F-07 Flows list and flow page
 
@@ -261,8 +253,6 @@ Journeys and flow specs: j21 and j28, `flows/j21-run-from-flows.md`, `flows/j28-
 
 ### F-09 Schedules, "after another flow", proactive questions
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 What it is. A flow can run on a schedule or after another flow. When it is time and details are missing, the app asks first in a chat (the 17:00 timesheet question).
 
 What the person experiences. On the flow page, "Schedule": "Only when I start it", "Every day at <time>", "Every weekday at <time>", "Every <day> at <time>", "After <flow> finishes", a line "Next: ...", and "When it's time" with "Ask me in the chat" or "Use my last answers". A small button "Try the next run now". At 17:00 a new chat appears: "It's 17:00. Time for your timesheet. How long did you work today, and on what? Like last time, I'll use Project Example (Example Corp), Feature work."
@@ -279,9 +269,9 @@ Requirements.
 - F-09.R9. "Try the next run now" goes through `START` with source `try_next`.
 - F-09.R10. Schedule time is the person's local time. Missed starts (Mac asleep or app closed) run once at wake inside the grace window, else Activity shows "Missed" (F-22.R3). A schedule never starts the same flow twice at once (overlap skip).
 - F-09.R11. Schedules are checked every 30 seconds while the app runs, and a flow that is set to start "after" another flow starts only when that run ends `done`.
-- F-09.R12. A new FlowDriven chat starts in the app language. (Pending prototype version 9.)
+- F-09.R12. A new FlowDriven chat starts in the app language. (In the prototype (version 9).)
 
-Journeys and flow specs: j28 (`flows/j28-proactive-schedule.md`) and j21 (`flows/j21-run-from-flows.md`). Release: V1 (B-12; B-23 for waking and background). Status: In the prototype (version 8) except R8 and the "Missed" line, which are Not in the prototype yet; R12 is Pending prototype version 9.
+Journeys and flow specs: j28 (`flows/j28-proactive-schedule.md`) and j21 (`flows/j21-run-from-flows.md`). Release: V1 (B-12; B-23 for waking and background). Status: In the prototype (version 8) except R8 and the "Missed" line, which are Not in the prototype yet; R12 is in the prototype (version 9).
 
 ### F-10 Make a new flow in the chat
 
@@ -347,7 +337,7 @@ Requirements.
 - F-13.R3. "Edit" is offered for text payloads only. "Save and approve" gives `approved_edited` and runs the edited text.
 - F-13.R4. "Reject" needs no confirmation. It skips that action, the run goes on, and the report says "You said no: <title>. It was not done." Nothing is sent. (Owner decision, 2026-11-18. This changes today's engine, where a rejection fails the run: Ask first, product decision, security review.)
 - F-13.R5. A decision that nobody answers within 24 hours expires, counts as Reject, and shows "Expired". (Not in the prototype yet: the prototype shows no expiry.)
-- F-13.R6. "Approve all similar (N)" is offered when N is above 1 and the items are of the same group in the same run. It opens a dialog "Approves these N emails in this run only. This is logged." listing every item, with "Approve all N" and "Cancel". It never covers another run.
+- F-13.R6. "Approve all similar (N)" is offered when N is above 1, the items are `send` or `post` decisions of the same group in the same run, and never for pay, delete, merge, choices or sign-offs. It opens a dialog "Approves these N emails in this run only. This is logged." listing every item, with "Approve all N" and "Cancel". It never covers another run.
 - F-13.R7. Choice items accept only picks from the listed options and enforce the maximum ("Pick up to 2.").
 - F-13.R8. "Always allow for this flow" is offered only when the action's place is fixed in the flow (the person's timesheet account, one cloud storage folder, the person's own address). It is never offered for a place that came from what the run read, for example a reply to whoever wrote (SR-1).
 - F-13.R9. "Always allow for this flow" writes a standing rule `{flow, touch, effect, place}` and approves this action (state `allowed_always`, "Always allowed"). The chat says "Okay. From now on <flow name> does this by itself. You can undo it on its page with Ask me again."
@@ -360,8 +350,6 @@ Requirements.
 Journeys and flow specs: j24, `flows/j24-decisions.md`. Release: V1 (B-04, B-05, B-19). Status: In the prototype (version 8); R5 is Not in the prototype yet.
 
 ### F-14 Activity and the run page
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 What it is. The place to see what needs the person, what is running, and everything that ever ran.
 
@@ -377,15 +365,13 @@ Requirements.
 - F-14.R7. "Run again" is shown only while the flow exists. It goes through `START` with source `again` and the same inputs.
 - F-14.R8. "Copy report" opens a dialog with the report as Markdown and a copy button. Nothing is exported without this click.
 - F-14.R9. An unknown run id says "This activity does not exist." with "Go to Activity".
-- F-14.R10. The run page names the agent and model the run used, for example "Claude Code · Sonnet 5.5". (Pending prototype version 9.)
+- F-14.R10. The run page names the agent and model the run used, for example "Claude Code · Sonnet 5.5". (In the prototype (version 9).)
 - F-14.R11. A run that was running when the app crashed shows `interrupted`. A step that may have half happened (not marked idempotent) is never repeated by itself (SR-8).
 - F-14.R12. Retention: runs are kept for 90 days or the last 50 per flow, whichever is larger. The audit log is not trimmed by this.
 
-Journeys and flow specs: j25, `flows/j25-history-and-problems.md`. Release: V1 (B-19). Status: In the prototype (version 8); R10 is Pending prototype version 9; the "Missed" row is in F-22.
+Journeys and flow specs: j25, `flows/j25-history-and-problems.md`. Release: V1 (B-19). Status: In the prototype (version 8); R10 is in the prototype (version 9); the "Missed" row is in F-22.
 
 ### F-15 Settings
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 What it is. One screen for how the app looks, which language, which agents, the one permission, the main agent, a fallback, the spending limit and notifications.
 
@@ -401,7 +387,7 @@ Requirements.
 - F-15.R7. The language change applies at once, with the window's `lang` following it (F-20).
 - F-15.R8. The AI agents rows use the same "Set up" and "Sign in" actions as the welcome screen and the picker (F-01, F-21).
 
-Journeys and flow specs: j12, `flows/j12-settings.md`. Release: V1 (B-20, with B-07, B-06 and B-24). Status: In the prototype (version 8); the Language section and the main agent's default model line are Pending prototype version 9.
+Journeys and flow specs: j12, `flows/j12-settings.md`. Release: V1 (B-20, with B-07, B-06 and B-24). Status: In the prototype (version 8); the Language section and the main agent's default model line are in the prototype (version 9).
 
 ### F-16 Notifications
 
@@ -461,7 +447,7 @@ What the person experiences. Heading "Marketplace" with "Browse" and "Publish". 
 
 Requirements.
 - F-19.R1. An installed flow arrives as a draft with the badge "New: confirm it once". It does nothing until the person confirms it (SR-3).
-- F-19.R2. Reads and changes the listing declares become touches. Sends, posts, payments, deletes and merges are listed under "Asks you first" (SR-1).
+- F-19.R2. The listing's declared touches become the draft's touches. Only reads are placed under "Does on its own"; everything else, and every send, post, payment, delete and merge, is under "Asks you first" until the person moves it (SR-1). A listing whose "Will read / change / send" list does not match the flow's real touches is not installed.
 - F-19.R3. Before install and before each run, FlowDriven checks the flow's signature and the revocation list against a public key pinned in the app. A revoked or unsigned flow does not run (SR-3).
 - F-19.R4. Marketplace text (name, summary, steps) is outside text (SR-5).
 - F-19.R5. "Report" opens a dialog with a text field and "Send report". Sending it is the person's click.
@@ -471,8 +457,6 @@ Requirements.
 Journeys and flow specs: j26, `flows/j26-memory-phone-marketplace.md`. Release: V3 (B-28). Status: In the prototype (version 8) as a demo. The marketplace server is closed source and arrives in a later phase.
 
 ### F-20 Languages
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 What it is. English by default with Bahasa Indonesia as an option, and one file per language so contributors can add more. (Owner decision, 2026-11-21.)
 
@@ -489,11 +473,9 @@ Requirements.
 - F-20.R8. `docs/translating.md` says in about ten lines how to add a language.
 - F-20.R9. Indonesian follows the fixed words of brief 24.6 ("Anda", everyday words, loanwords such as flow, chat, skill, timesheet).
 
-Journeys and flow specs: j30, `flows/j30-app-language.md`. Release: V1 (B-06). Status: Pending prototype version 9.
+Journeys and flow specs: j30, `flows/j30-app-language.md`. Release: V1 (B-06). Status: In the prototype (version 9).
 
 ### F-21 AI agent and model per chat
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 What it is. Each chat chooses which AI agent answers and with which model. (Owner decision, 2026-11-21.)
 
@@ -510,7 +492,7 @@ Requirements.
 - F-21.R8. The change note appears in the app language and is not a bubble.
 - F-21.R9. The chat's agent answers the chat turns too (F-03.R3) with no tools.
 
-Journeys and flow specs: j31, `flows/j31-agent-and-model.md`. Release: V1 (B-07, B-17, B-22 for Codex). Status: Pending prototype version 9.
+Journeys and flow specs: j31, `flows/j31-agent-and-model.md`. Release: V1 (B-07, B-17, B-22 for Codex). Status: In the prototype (version 9).
 
 ### F-22 Background running in the menu bar
 
@@ -576,8 +558,6 @@ Confirmations, decisions, standing rules, schedules, the agent permission and yo
 A flow runs only as the exact version you confirmed. Any change makes it "Changed: confirm again", and nothing outside the chat runs it until you confirm again.
 
 ### SR-4 Agents keep their limits
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 FlowDriven never turns on a permission-bypass or full-access mode of an agent. Codex always runs in its workspace-write sandbox (or read-only), set explicitly. Choosing a model (the version 9 picker) changes only the model. Each run proves the limits took effect, or the step stops.
 
@@ -671,8 +651,6 @@ Numbers marked "target" are the drafter's proposals. Other numbers come from the
 
 ### 7.6 Languages
 
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
-
 | Id | Requirement | Source |
 |---|---|---|
 | NF-36 | English is the default. Bahasa Indonesia is complete. Adding a language is one new file plus one line (F-20). | owner |
@@ -736,8 +714,6 @@ All measures are computed on the person's Mac from the audit log and the run his
 | M-12 | Decisions answered in one place | Decisions with a second, conflicting answer | 0 |
 
 ### 8.2 Language coverage
-
-> Pending prototype version 9: this part follows brief sections 24, 24.9 and 25 on the prototype's lang-files branch and may change.
 
 | Id | Measure | How it is measured | Target |
 |---|---|---|---|
@@ -862,7 +838,7 @@ Other build steps and where they fit: B-01 contract version 2 (all features, com
 - The skill archive hint went into F-24 (V2), not F-12, to keep V1 small.
 - Success measure targets (M-01, M-02, M-04, M-05, M-09, M-10, M-11) and performance numbers marked "target" are my proposals, not sourced.
 - The defaults follow the decisions for V1: Open at login on (Q-02); the spending limit counts per-use charges only (Q-03). The limit's starting amount ($10.00 a month, as in the clickable prototype) is a target.
-- V1 includes F-20, F-21 and F-22 as the chair proposed; all three wait for prototype approval, and F-20 and F-21 still follow version 9, which may change.
+- V1 includes F-20, F-21 and F-22 as the chair proposed; all three wait for prototype approval, and F-20 and F-21 follow the final version 9 sections of the brief.
 - The "Other AI tools" switch is off by default (F-18.R8): a safe default the brief does not state.
 - F-12.R6 (skill pinned by hash) and F-24.R1 come from the original spec rules R9 and R16, which stay binding.
 - A decision answered from two places counts once (F-13.R14) and M-12 measures it: my addition to keep the audit record clean.
