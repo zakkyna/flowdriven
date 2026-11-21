@@ -517,6 +517,8 @@ New kinds:
 | `rule_created`, `rule_revoked`, `rule_used` | a standing rule is made, revoked or used | `ruleId`, `flowId`, `touchId`, `effect`, place kind and value, `by`, `runId`, `stepId` |
 | `question_asked`, `question_closed` | a waiting question opens; it is answered, cancelled or closed | `questionId`, `flowId`, `chatId`, `kind`, `missing`, `state` |
 | `run_blocked` | a run becomes `blocked`, `needs_login` or `failed` | `runId`, `state`, `cause` |
+| `caller_refused` | the dispatcher refuses an operation for its caller (`tool` or `phone`, V2) | `operation`, `caller` |
+| `phone_refused` (V2) | the bot module ignores or refuses a phone command | `reason`, link id |
 
 ### 3.17 Usage and spending (V1, changed)
 

@@ -341,7 +341,7 @@ type Agent = {
   billing: "per_use" | "plan" | "unknown";
   models?: Model[]; defaultModel?: ModelId;      // when ready
   usage?: { status: "ok" | "warning" | "limited" | "unknown"; fiveHour?: number; sevenDay?: number; resetsAt?: IsoDateTime };
-  capability: { tier: "enforced" | "folder_limited"; accountTools: boolean };   // AD-09
+  capability: { tier: "enforced" | "folder_limited" | "label_only"; accountTools: boolean };   // AD-09
   setUp?: { phase: "installing" | "waiting_login"; since: IsoDateTime };
   problem?: { code: "install_failed" | "sign_in_timeout" | "too_old" | "unreadable"; detail?: string };
 };

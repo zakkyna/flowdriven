@@ -1744,12 +1744,12 @@ The spending limit and usage limits belong to the person. Nothing in a flow, a s
 - Build step: B-24
 - Fails first because: turns and the limit do not exist.
 
-### TC-SR9-04 A limit decision that expires never lets the run continue
+### TC-SR9-04 The spending pause has no 24-hour expiry and ends only with a raise or a new month
 - Layer: L3
 - File: packages/runner/src/service/spending.test.ts (new)
-- Given: the pause of TC-SR9-01 with `expiresAt = T0 + 24h`.
-- When: the clock passes the expiry and the sweep runs.
-- Then: the run is `blocked` with `cause.code: "spending_limit"` and the line "Monthly limit reached."; it is never `running`; no agent call was made at any time after the pause; the limit has not changed.
+- Given: the pause of TC-SR9-01, reached at T0 (2026-11-20 in `Asia/Jakarta`); injected clock.
+- When: the clock passes `T0 + 24h` and the sweep runs; then the clock reaches 2026-12-01 00:00 in `Asia/Jakarta`.
+- Then: after 24 hours the run is still `waiting_approval` behind the `budget_raise` decision, which is still pending and never counts as Reject; no agent call was made; at the start of the new month the pause ends (the decision closes with `resolvedVia: "expiry"`), the month's spending is 0, the run's next call starts, and the limit has not changed.
 - Traces: SR-9, FS-j12.E4, T-22
 - Build step: B-24
 - Fails first because: no pause exists.
@@ -1840,7 +1840,7 @@ The spending limit and usage limits belong to the person. Nothing in a flow, a s
 - File: packages/runner/src/service/spending.test.ts (new)
 - Given: FlowDriven running in the menu bar with no window; a scheduled FLOW-REPORT slot at 02:00 with spending at the limit.
 - When: the slot fires.
-- Then: the start is `started` (or `asked`) only if the limit is not reached; at the limit the run waits with the `budget_raise` decision, one notice, and its risky actions would still ask; at 02:00 + 24h the decision expires and the run is `blocked`.
+- Then: the start is `started` (or `asked`) only if the limit is not reached; at the limit the run waits with the `budget_raise` decision, one notice, and its risky actions would still ask; 24 hours later the run is still paused; it continues only after the limit is raised or the next local month begins.
 - Traces: SR-9, F-22, FS-j28.A14, T-22
 - Build step: B-24
 - Fails first because: no pause exists.
@@ -2041,6 +2041,6 @@ Rule coverage: SR-1 TC-SR1-01 to 43; SR-2 TC-SR2-01 to 19; SR-3 TC-SR3-01 to 12;
 - Gmail label special case. TC-SR1-05 keeps the one special case AD-06 names (a label change to Trash or Spam is a delete); the general rule cannot see it. No other special case is tested.
 - Placeholder groups. The gateway cases (TC-SR1-41 to 43), the bot and phone cases (TC-SR2-03, TC-SR2-15, TC-SR6-11) and the marketplace cases (TC-SR2-16, TC-SR3-11) belong to B-29, B-26 and B-28. They are complete cases, but their files are written in those steps and they are not part of the V1 gate; `.todo` is not used.
 - Model picker (version 9, final, brief 25.5). TC-SR4-07 and TC-SR4-08 compare spawn arguments, the compiled policy, the control settings file and the decision results with and without a non-default model, for Claude Code and for Codex; TC-SR4-09 and TC-SR4-10 add the run-start paths and "text cannot choose a model". Model ids are the sample ids `opus-5.5`, `sonnet-5.5`, `haiku-5.5`, `gpt-6.1-sol`, `gpt-6.1-terra` and `gpt-6-luna`.
-- Spending pause. The cases follow `data-model.md` and `runner-api.md` (one `budget_raise` decision resolved only by `settings.update`); the expiry of that decision leaves the run `blocked` with cause `spending_limit` (TC-SR9-04), as the journeys appendix chose.
+- Spending pause. The cases follow `data-model.md` and `runner-api.md`: one `budget_raise` decision, resolved by `settings.update` or ended when the next local month begins; it has no 24-hour expiry and never counts as Reject (TC-SR9-04).
 - Known limits not tested. A helper program that left the agent's process group survives Stop (T-18 residual, spike 12); a same-user process that forges an `allow` gets one call through, recorded (T-15; TC-SR1-35 pins the recording); a plausible bad send can be approved (T-01 residual).
 - Repository checks. TC-SR4-17 and TC-SR4-18 only pin the existing `agent-rules` and `dependency-gate` tests; a new check script under `tools/checks/` is an Ask-first item and is not assumed. TC-SR6-06 is a Vitest test in `packages/fixtures` for that reason.

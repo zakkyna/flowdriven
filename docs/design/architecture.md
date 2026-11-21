@@ -252,7 +252,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 ### AD-09 Codex adapter
 
 - Context. No Codex code exists; its behavior is unrecorded.
-- Decision. A research step records the real CLI once with the owner watching (Chair step); fixtures and a fake codex replace it. Always `-s workspace-write` or `-s read-only` explicitly, the model flag, JSON events, the prompt on stdin, its own sign-in status command. If FlowDriven can answer Codex's approval requests, the same `decide` applies (`every_call`); if not, Codex runs only steps that read and write the flow's folders and run declared commands in its sandbox (`folder_limited`), and account tools reach it only through the gateway (V3). A flow needing a tool Codex cannot be limited for shows a plain reason and offers Claude Code.
+- Decision. A research step records the real CLI once with the owner watching (Chair step); fixtures and a fake codex replace it. Always `-s workspace-write` or `-s read-only` explicitly, the model flag, JSON events, the prompt on stdin, its own sign-in status command. If FlowDriven can answer Codex's approval requests, the same `decide` applies (`enforced`); if not, Codex runs only steps that read and write the flow's folders and run declared commands in its sandbox (`folder_limited`), and account tools reach it only through the gateway (V3). A flow needing a tool Codex cannot be limited for shows a plain reason and offers Claude Code.
 - Alternatives. Assuming a protocol before the research; leaving Codex out of V1. The Codex sandbox is a safety-core change: one independent security review.
 - Consequences. V1 Codex runs local steps unless the research shows per-call approvals (section 8.3; one fix in section 17).
 - Code. New `codex/adapter.ts`, `codex/args.ts`, `codex/stream.ts`, `codex/fixtures/`, `test-helpers/fake-codex.ts`.
@@ -463,7 +463,7 @@ The hook fails closed (no answer in time, NF-13; unreadable request; reused `too
 | Gmail `send_message`, `reply`, `forward` | `send` | The recipients |
 | Gmail trash, delete and spam tools | `delete` | The items |
 | Declared tools of a server the catalog does not know | `change` | Unknown |
-| Codex commands, patches and tool calls (tier `every_call`) | As the rows above, after the research step | As above |
+| Codex commands, patches and tool calls (tier `enforced`) | As the rows above, after the research step | As above |
 
 Canonical places are `Place` values (`runner-api.md` section 3): `folder` (the resolved path), `command` (the declared pattern), `account` (the catalog ref), `address` (the sorted, lower-case recipients in to, cc and bcc), `site` (the address template), `repo` (repository and target branch). A place FlowDriven cannot read from the input, or with no `Place` kind (deleted items, payments in V1), is unknown, and an unknown place is never fixed.
 
@@ -587,7 +587,7 @@ In chats (R15) a message is clean (typed text, clicks, FlowDriven's lines from c
 ### 7.7 A Codex run under each capability tier
 
 At run start the registry compares each step's compiled policy with `capabilities().tier`:
-- `every_call` (only if the research shows FlowDriven can answer Codex's approval requests): every command, file change and tool call goes through `decide`, holds included.
+- `enforced` (only if the research shows FlowDriven can answer Codex's approval requests): every command, file change and tool call goes through `decide`, holds included.
 - `folder_limited`: every step must be local (reads and writes in the flow's folders, declared commands), on its own, and free of outside text. Codex runs `codex exec -s workspace-write` in the flow's folder with network off, the model flag, JSON events and the prompt on stdin; an undeclared command or a write outside the folders in the event stream stops the step, like the tripwire.
 - `label_only`: nothing runs.
 
@@ -624,7 +624,7 @@ A step that does not fit is refused before any agent runs (`refused`, `agent_can
 
 ```ts
 type AgentState = "not_installed" | "installing" | "waiting_login" | "needs_login" | "ready" | "unknown";
-type Tier = "every_call" | "folder_limited" | "label_only";
+type Tier = "enforced" | "folder_limited" | "label_only";
 type ModelInfo = { id: string; name: string; note: string; isDefault: boolean };   // note: a words code
 type SignIn = { state: "signed_in" | "signed_out" | "unknown"; billing: "per_use" | "plan" | "unknown" };
 type AgentCapabilities = { tier: Tier; osSandbox: boolean; connectors: string[]; ownBrowser: boolean;
@@ -665,7 +665,7 @@ Research step (Chair step, owner watching, B-22): on a throwaway folder, record 
 
 | Unknown | Decides | If no |
 |---|---|---|
-| Can FlowDriven answer each command, patch and tool approval before it runs? | Tier `every_call` | Tier `folder_limited` |
+| Can FlowDriven answer each command, patch and tool approval before it runs? | Tier `enforced` | Tier `folder_limited` |
 | Can a chat turn run with no tools? | Codex as a chat agent (AD-10, SR-5) | Codex does not answer chats; the picker says so and offers Claude Code (Not in the prototype yet) |
 | Does `workspace-write` limit reads? | SR-1's read scope | Folder-limited steps take no outside text (section 17) |
 | Is network off and can a run turn it on? | Local steps stay local | `codex/args.ts` refuses every override that turns it on |
