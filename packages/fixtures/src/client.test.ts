@@ -393,3 +393,101 @@ test("TC-CON-43 a start needing inputs posts and reuses its question", async () 
   const chat = await client.call("chats.get", { chatId: first.chatId });
   expect(chat.messages.some((m) => m.id === first.questionId && m.card?.type === "inputs_ask")).toBe(true);
 });
+
+test("TC-CON-42 decisions resume only waiting runs with permission on", async () => {
+  for (const method of ["resolve", "answer"] as const) {
+    for (const [runState, permission, expected] of [
+      ["waiting_approval", "on", "running"],
+      ["waiting_approval", "off", "waiting_approval"],
+      ["needs_login", "on", "needs_login"],
+      ["stopped", "on", "stopped"],
+    ] as const) {
+      const client = createFixtureRunnerClient();
+      const decision = client.state.decisions[0];
+      const run = client.state.runs.find((item) => item.id === decision?.runId);
+      if (!decision || !run) throw new Error("Missing sample decision or run");
+      run.state = runState;
+      client.state.settings.agentPermission = permission;
+      if (method === "answer") {
+        decision.kind = "ask";
+        decision.canAlwaysAllow = false;
+        decision.payload = {
+          kind: "choice",
+          question: "Choose",
+          options: [{ key: "one", label: "One" }],
+          maxPick: 1,
+          approves: [],
+        };
+        await client.call("approvals.answer", { approvalId: decision.id, picks: ["one"] });
+      } else {
+        await client.call("approvals.resolve", { approvalId: decision.id, decision: "approve" });
+      }
+      expect(run.state, `${method} ${runState} ${permission}`).toBe(expected);
+    }
+  }
+});
+
+test("TC-CON-42 permission off stops needs_login runs and expires their decisions", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  const run = client.state.runs.find((item) => item.id === decision?.runId);
+  if (!decision || !run) throw new Error("Missing sample decision or run");
+  run.state = "needs_login";
+  await client.call("settings.update", { patch: { agentPermission: "off" } });
+  expect(run.state).toBe("stopped");
+  expect(decision).toMatchObject({ state: "expired", resolvedVia: "permission_off", canAlwaysAllow: false });
+});
+
+test("TC-CON-42 edited subjects reject bidi and zero-width characters", async () => {
+  for (const code of [0x202e, 0x200b]) {
+    const client = createFixtureRunnerClient();
+    const decision = client.state.decisions[0];
+    if (!decision) throw new Error("Missing sample decision");
+    decision.editable = true;
+    decision.payload = { kind: "text", text: "Original" };
+    await expect(
+      client.call("approvals.resolve", {
+        approvalId: decision.id,
+        decision: "edit",
+        editedText: "Safe",
+        editedSubject: `Subject${String.fromCodePoint(code)}`,
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "hidden_characters" });
+    expect(decision.state).toBe("pending");
+  }
+});
+
+test("TC-CON-42 always allow uses the held touch and its sentence", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  if (!decision) throw new Error("Missing sample decision");
+  decision.stepId = "different-step";
+  decision.stepTitle = "Different title";
+  client.state.rules.length = 0;
+  const result = await client.call("approvals.resolve", {
+    approvalId: decision.id,
+    decision: "always_allow",
+  });
+  expect(client.state.rules.find((rule) => rule.id === result.ruleId)).toMatchObject({
+    touchId: "log-hours",
+    sentence: "Log hours",
+  });
+});
+
+test("TC-CON-42 rule ids never repeat after revocation", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  if (!decision) throw new Error("Missing sample decision");
+  client.state.rules.length = 0;
+  const first = await client.call("approvals.resolve", { approvalId: decision.id, decision: "always_allow" });
+  if (!first.ruleId) throw new Error("Missing rule");
+  await client.call("rules.revoke", { ruleId: first.ruleId });
+  decision.state = "pending";
+  decision.canAlwaysAllow = true;
+  const second = await client.call("approvals.resolve", {
+    approvalId: decision.id,
+    decision: "always_allow",
+  });
+  expect(first.ruleId).toMatch(/^rule-fixture-\d+$/);
+  expect(second.ruleId).not.toBe(first.ruleId);
+});

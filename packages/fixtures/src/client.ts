@@ -745,7 +745,7 @@ export function createFixtureRunnerClient(
         throw new RunnerError("invalid_input", "Unknown language.", { reason: "language_unknown" });
       if (patch.agentPermission === "off") {
         for (const item of state.runs.filter((r) =>
-          ["queued", "checking", "running", "waiting_approval", "retrying"].includes(r.state),
+          ["queued", "checking", "running", "waiting_approval", "retrying", "needs_login"].includes(r.state),
         )) {
           item.state = "stopped";
           item.cause = { code: "permission_off" };
@@ -913,7 +913,11 @@ export function createFixtureRunnerClient(
           throw new RunnerError("invalid_input", "Cannot edit.", { reason: "edit_not_allowed" });
         if (!input.editedText?.trim())
           throw new RunnerError("invalid_input", "Empty text.", { reason: "empty_text" });
-        if (/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/u.test(input.editedText))
+        if (
+          [input.editedText, input.editedSubject ?? ""].some((text) =>
+            /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/u.test(text),
+          )
+        )
           throw new RunnerError("invalid_input", "Hidden characters.", { reason: "hidden_characters" });
         d.editedText = input.editedText;
         if (input.editedSubject) d.editedSubject = input.editedSubject;
@@ -921,17 +925,18 @@ export function createFixtureRunnerClient(
       if (input.decision === "always_allow") {
         if (d.kind !== "risky_action" || d.effect !== "change")
           throw new RunnerError("not_allowed", "Always asks.", { reason: "always_asks" });
+        const heldTouch = state.decisionTouches[d.id];
         if (
+          !heldTouch ||
           !d.fixedPlace ||
           !d.place ||
           !d.flowId ||
-          !d.stepId ||
           d.outside ||
           !["account", "folder"].includes(d.place.kind)
         )
           throw new RunnerError("not_allowed", "Place is not fixed.", { reason: "place_not_fixed" });
         const confirmedFlow = flow(d.flowId);
-        const declared = confirmedFlow.manifest.touches?.find((item) => item.id === d.stepId);
+        const declared = confirmedFlow.manifest.touches?.find((item) => item.id === heldTouch.id);
         if (
           !confirmedFlow.confirmed ||
           !declared ||
@@ -944,16 +949,16 @@ export function createFixtureRunnerClient(
         const existing = state.rules.find(
           (rule) =>
             rule.flowId === d.flowId &&
-            rule.touchId === d.stepId &&
+            rule.touchId === heldTouch.id &&
             rule.effect === "change" &&
             rule.place.kind === d.place?.kind &&
             rule.place.value === d.place.value,
         );
         const rule = existing ?? {
-          id: `rule-${String(state.rules.length + 1).padStart(12, "0")}`,
+          id: `rule-fixture-${++state.counters.start}`,
           flowId: d.flowId,
-          touchId: d.stepId,
-          sentence: d.stepTitle ?? d.summary,
+          touchId: heldTouch.id,
+          sentence: heldTouch.sentence,
           effect: "change" as const,
           place: d.place,
           createdAt: now(),
@@ -962,7 +967,7 @@ export function createFixtureRunnerClient(
         if (!existing) state.rules.push(rule);
         const f = flow(d.flowId);
         if (!f.rules.some((item) => item.id === rule.id)) f.rules.push(rule);
-        const touch = f.touches.find((item) => item.id === d.stepId);
+        const touch = f.touches.find((item) => item.id === heldTouch.id);
         if (touch) {
           touch.byRule = rule.id;
           touch.list = "on_its_own";
@@ -995,7 +1000,12 @@ export function createFixtureRunnerClient(
                 : "report.youApproved",
           params: { title: d.stepTitle ?? d.summary },
         });
-        if (!state.decisions.some((a) => a.runId === r.id && a.state === "pending")) r.state = "running";
+        if (
+          r.state === "waiting_approval" &&
+          state.settings.agentPermission === "on" &&
+          !state.decisions.some((a) => a.runId === r.id && a.state === "pending")
+        )
+          r.state = "running";
       }
       audit("decision_made", { decision: d.state }, d.runId);
       return {
@@ -1032,7 +1042,12 @@ export function createFixtureRunnerClient(
         const r = run(d.runId);
         const step = r.steps.find((s) => s.stepId === d.stepId);
         if (step) step.state = picks.length ? "passed" : "skipped";
-        if (!state.decisions.some((a) => a.runId === r.id && a.state === "pending")) r.state = "running";
+        if (
+          r.state === "waiting_approval" &&
+          state.settings.agentPermission === "on" &&
+          !state.decisions.some((a) => a.runId === r.id && a.state === "pending")
+        )
+          r.state = "running";
       }
       audit("decision_made", { decision: d.state }, d.runId);
       return { decision: d };

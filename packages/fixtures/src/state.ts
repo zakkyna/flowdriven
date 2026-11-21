@@ -18,6 +18,10 @@ export function buildState(scenario: Scenario = "story-v2") {
     decisions: structuredClone(story.decisions),
     rules: structuredClone(story.rules),
     audit: [] as AuditRecord[],
+    decisionTouches: { "decision-1": { id: "log-hours", sentence: "Log hours" } } as Record<
+      string,
+      { id: string; sentence: string }
+    >,
     counters: { chat: 0, message: 0, run: 0, start: 0, question: 0 },
     triggerSwitches: {} as Record<string, { hash: string }>,
     resumeBlockers: Object.fromEntries(
