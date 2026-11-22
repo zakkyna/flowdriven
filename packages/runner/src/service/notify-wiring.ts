@@ -98,9 +98,9 @@ export function createNotifier(o: {
     },
     onRunState(id, state) {
       try {
-        if (state !== "blocked") return;
+        if (state !== "blocked" && state !== "needs_login") return;
         const info = runInfo(id);
-        if (info?.run.state === "blocked")
+        if (info?.run.state === state)
           send({ kind: "run_blocked", runId: id, flowId: info.run.flowId, flowName: info.flowName });
       } catch {}
     },

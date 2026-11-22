@@ -153,6 +153,7 @@ export async function runLeaf(
         text: string;
         outputs: Record<string, Value>;
         workFolder?: string;
+        site?: string;
         block?: string;
         noRetry?: string;
         outside?: boolean;
@@ -276,9 +277,28 @@ export async function runLeaf(
       if (timedOut) failure = "time limit exceeded";
       else if (result.exit === "quota" || result.exit === "auth") {
         Object.assign(attempt, { endedAt: now().toISOString(), exit: result.exit });
-        block(
-          result.exit === "quota" ? "The harness has no quota left." : "The harness needs you to sign in.",
-        );
+        if (result.exit === "auth") {
+          const cause: { code: "site_sign_in" | "agent_signed_out"; params: Record<string, string> } =
+            result.site
+              ? { code: "site_sign_in" as const, params: { site: result.site } }
+              : { code: "agent_signed_out" as const, params: { agent: run.agent?.agent ?? "claude-code" } };
+          const at = now().toISOString();
+          row.state = "failed";
+          row.note = "The harness needs you to sign in.";
+          save();
+          store.updateRun(run.id, {
+            state: "needs_login",
+            blockedReason: row.note,
+            cause,
+            needsLoginSince: at,
+          });
+          store.appendAudit({
+            at,
+            kind: "run_blocked",
+            runId: run.id,
+            detail: { runId: run.id, state: "needs_login", cause },
+          });
+        } else block("The harness has no quota left.");
         return "halt";
       } else if (result.exit === "interrupted") {
         Object.assign(attempt, { endedAt: now().toISOString(), exit: "interrupted" });

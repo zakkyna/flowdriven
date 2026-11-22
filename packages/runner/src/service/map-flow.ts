@@ -22,6 +22,9 @@ import type { FlowRow, RunRow, StepRow } from "../storage.ts";
 import { connectorReadiness } from "./readiness-connector.ts";
 import { WEB_FIX, webReadiness } from "./readiness-web.ts";
 
+export function v1RunState(state: RunRow["state"]): Exclude<RunRow["state"], "needs_login" | "stopped"> {
+  return state === "needs_login" ? "blocked" : state === "stopped" ? "failed" : state;
+}
 export function coreVersion(version: string): string {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:[-+].*)?$/.exec(version);
   if (!match) throw new Error("Invalid version");
@@ -155,7 +158,7 @@ export function toFlowSummary(row: FlowRow, runs: RunRow[]): FlowSummary {
     saved: true,
     signOff: { state: "approved", version: coreVersion(m.version) },
     stepCount: m.steps.length,
-    lastRun: last && { runId: last.id, state: last.state, startedAt: last.startedAt },
+    lastRun: last && { runId: last.id, state: v1RunState(last.state), startedAt: last.startedAt },
   });
 }
 export function toFlowDetail(row: FlowRow, runs: RunRow[], lastRunSteps: StepRow[]): FlowDetail {

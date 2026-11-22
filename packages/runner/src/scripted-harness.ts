@@ -15,6 +15,7 @@ export type Reply = {
   text?: string;
   outputs?: Record<string, Value>;
   hang?: boolean;
+  site?: string;
   block?: string;
   noRetry?: string;
   hold?: HeldCall;
@@ -65,6 +66,7 @@ export function scriptedHarness(script: Script): ScriptedHarness {
         exit: reply.exit ?? "ok",
         text: reply.text ?? "",
         outputs: reply.outputs ?? {},
+        ...(reply.site === undefined ? {} : { site: reply.site }),
         ...(reply.block === undefined ? {} : { block: reply.block }),
         ...(reply.noRetry === undefined ? {} : { noRetry: reply.noRetry }),
         ...(reply.hold === undefined ? {} : { hold: reply.hold }),

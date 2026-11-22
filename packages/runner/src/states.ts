@@ -4,15 +4,22 @@ export { RISKY_ACTIONS } from "@flowdriven/sdk";
 export const RUN_STATES = [
   "queued",
   "checking",
-  "blocked",
   "running",
   "waiting_approval",
+  "needs_login",
   "retrying",
+  "blocked",
   "interrupted",
+  "stopped",
   "done",
   "failed",
 ] as const;
 export type RunState = (typeof RUN_STATES)[number];
+export const isActive = (state: RunState): boolean =>
+  ["queued", "checking", "running", "retrying", "waiting_approval"].includes(state);
+export const isEnded = (state: RunState): boolean => ["done", "failed", "stopped"].includes(state);
+export const canResume = (state: RunState): boolean =>
+  ["blocked", "interrupted", "needs_login", "failed"].includes(state);
 export const STEP_STATES = [
   "pending",
   "running",

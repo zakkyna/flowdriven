@@ -82,7 +82,7 @@ export function createRecovery(ctx: {
         const safe = [...interrupted, ...previouslyInterrupted].every((row) => isIdempotent(row, manifest));
         store.transaction(() => {
           for (const row of interrupted) store.upsertStep({ ...row, state: "interrupted" });
-          store.updateRun(run.id, { state: "interrupted" });
+          store.updateRun(run.id, { state: "interrupted", cause: { code: "crash" } });
           store.appendAudit({ at: now().toISOString(), kind: "run_interrupted", runId: run.id, detail: {} });
         });
         if (safe) resumed.push(beginResume(run.id));

@@ -64,6 +64,7 @@ export type StepResult = {
   text: string;
   outputs: Record<string, Value>;
   workFolder?: string;
+  site?: string;
   block?: string;
   noRetry?: string;
   hold?: HeldCall;

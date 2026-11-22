@@ -197,7 +197,7 @@ test("a present result with block, noRetry, quota, auth or interrupted is handle
     [{ block: "blocked" }, "blocked", "blocked"],
     [{ noRetry: "no retry" }, "blocked", "no retry"],
     [{ exit: "quota" as const }, "blocked", "The harness has no quota left."],
-    [{ exit: "auth" as const }, "blocked", "The harness needs you to sign in."],
+    [{ exit: "auth" as const }, "needs_login", "The harness needs you to sign in."],
     [{ exit: "interrupted" as const }, "interrupted", undefined],
   ] as const) {
     const c = await ready({ steps: { send: reply } });

@@ -139,7 +139,7 @@ test("a harness that throws fails the attempt, never the engine", async () => {
   expect(c.harness.calls.at(1)?.lastFailure).toContain("socket closed");
   expect(run.state).toBe("done");
 });
-test("quota and auth block the run without a retry", async () => {
+test("quota blocks and auth waits for sign-in without a retry", async () => {
   for (const [exit, reason] of [
     ["auth", "The harness needs you to sign in."],
     ["quota", "The harness has no quota left."],
@@ -147,7 +147,7 @@ test("quota and auth block the run without a retry", async () => {
     const c = await ready([worker()], { steps: { a: { exit } } });
     const run = await c.start();
     expect(c.harness.calls.length).toBe(1);
-    expect(run).toMatchObject({ state: "blocked", blockedReason: reason });
+    expect(run).toMatchObject({ state: exit === "auth" ? "needs_login" : "blocked", blockedReason: reason });
   }
 });
 test("max_attempts caps the attempts, re-plan included", async () => {
