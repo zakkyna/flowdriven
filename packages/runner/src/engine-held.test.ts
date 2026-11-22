@@ -1,8 +1,9 @@
 import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
-import { callGrant, digestCall, grantUsedKey } from "./connectors/grants.ts";
+import { callGrant, digestCall } from "./connectors/grants.ts";
 import type { ApprovalRow, Store } from "./storage.ts";
 import { setup } from "./test-helpers/engine.ts";
+import { legacyGrant } from "./test-helpers/policy-fixture.ts";
 
 const stores: Store[] = [];
 afterEach(() => {
@@ -79,8 +80,8 @@ test("approve: the approval is approved, a grant <requirement>.<tool>#<digest> i
     state: "approved",
     resolvedAt: c.clock.now().toISOString(),
   });
-  expect(c.store.hasGrant(c.run.id, grant, "j1")).toBe(true);
-  expect(c.store.hasGrant(c.run.id, grant, "other")).toBe(false);
+  expect(!!c.store.findGrant(legacyGrant(c.run.id, "send", "j1", grant))).toBe(true);
+  expect(!!c.store.findGrant(legacyGrant(c.run.id, "send", "other", grant))).toBe(false);
   expect(c.store.listAudit(c.run.id)).toContainEqual(
     expect.objectContaining({
       kind: "call_approved",
@@ -94,7 +95,8 @@ test("after approve the step is run again by the walk and the run ends done, and
   const c = await ready();
   expect((await c.engine.decide("ap-1", "approve")).state).toBe("done");
   expect(c.harness.calls.map((call) => call.stepId)).toEqual(["send"]);
-  expect(c.store.counter(grantUsedKey(c.run.id, "", grant), "run")).toBe(0);
+  expect(c.store.findGrant(legacyGrant(c.run.id, "send", "", grant))).toBeDefined();
+  expect(c.store.findGrant(legacyGrant(c.run.id, "send", "", grant))?.usedAt).toBeUndefined();
 });
 test("reject: the approval is rejected, the audit has call_rejected, the step is failed with the note You rejected this call., the run is failed, and other pending approvals of the run are expired", async () => {
   const c = await ready();
@@ -177,9 +179,9 @@ test("beginAnswer stores no grant for a pick whose key starts with # or is empty
     payload: { options: items.map((item) => ({ key: item.id, item })) },
   });
   const begun = c.engine.beginAnswer("ap-1", { picks: ["#0", "", "valid"] });
-  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "#0")).toBe(false);
-  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "")).toBe(false);
-  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "valid")).toBe(true);
+  expect(!!c.store.findPickGrant(legacyGrant(c.run.id, "*", "#0", "mail.delete_draft"))).toBe(false);
+  expect(!!c.store.findPickGrant(legacyGrant(c.run.id, "*", "", "mail.delete_draft"))).toBe(false);
+  expect(!!c.store.findPickGrant(legacyGrant(c.run.id, "*", "valid", "mail.delete_draft"))).toBe(true);
   expect(c.store.getStep(c.run.id, "send")).toMatchObject({ state: "passed", outputs: { choice: items } });
   expect(c.store.listAudit(c.run.id)).toContainEqual(
     expect.objectContaining({

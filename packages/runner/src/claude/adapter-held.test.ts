@@ -1,10 +1,11 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { CONNECTORS } from "../connectors/catalog.ts";
-import { callGrant, createGrantBook, digestCall, grantUsedKey, pickGrant } from "../connectors/grants.ts";
+import { callGrant, createGrantBook, digestCall, pickGrant } from "../connectors/grants.ts";
 import type { StepRequest } from "../harness.ts";
 import { routeRequirement } from "../router/route.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
@@ -16,6 +17,7 @@ import {
   readFakeCalls,
   writeFakeScript,
 } from "../test-helpers/fake-claude-script.ts";
+import { legacyGrant } from "../test-helpers/policy-fixture.ts";
 import { createClaudeAdapter } from "./adapter.ts";
 import { CONNECTOR_DENY } from "./connector.ts";
 
@@ -70,7 +72,8 @@ async function setup(actions: FakeAction[], withGrants = true) {
   roots.push(home);
   const project = join(root, "project");
   mkdirSync(project);
-  const store = await openSqliteStore(":memory:");
+  const dbPath = join(root, "grants.sqlite");
+  const store = await openSqliteStore(dbPath);
   stores.push(store);
   const audits: { kind: string; detail: unknown }[] = [];
   const options = {
@@ -104,7 +107,7 @@ async function setup(actions: FakeAction[], withGrants = true) {
   };
   const script = (next: FakeAction[]) =>
     writeFakeScript(home, { connectors, plays: [{ when: "Held test", actions: next }] });
-  return { root, home, store, audits, request, script, adapter: createClaudeAdapter(options) };
+  return { root, home, dbPath, store, audits, request, script, adapter: createClaudeAdapter(options) };
 }
 const timeout = { timeout: 20_000 };
 const expectedHold = (name = "delete_draft", input = { id: "d1" }, action = "delete") => ({
@@ -187,7 +190,7 @@ test(
   timeout,
   async () => {
     const t = await setup([tool("a"), done]);
-    t.store.addGrant("r1", pickGrant("gmail", "delete_draft"), "j1");
+    t.store.putCallGrant(legacyGrant("r1", "s", "j1", pickGrant("gmail", "delete_draft")));
     expect(await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
       exit: "ok",
     });
@@ -205,7 +208,7 @@ test(
 );
 test("a pick grant allows any input and the audit has grant_used with grant pick", timeout, async () => {
   const t = await setup([tool("a", "delete_draft", { id: "different" }), done]);
-  t.store.addGrant("r1", pickGrant("gmail", "delete_draft"), "j1");
+  t.store.putCallGrant(legacyGrant("r1", "s", "j1", pickGrant("gmail", "delete_draft")));
   expect(await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
     exit: "ok",
   });
@@ -222,14 +225,22 @@ test("a pick grant allows any input and the audit has grant_used with grant pick
   });
 });
 test(
-  "a call grant allows the call with the same tool and input once: grant_used says call, the counter grant-used:<run>:<item>:<grant> is 1, and a changed input is held again with a different digest",
+  "a call grant allows the call with the same tool and input once: grant_used says call, the grant is used once, and a changed input is held again with a different digest",
   timeout,
   async () => {
     const t = await setup([tool("a"), done]);
     const grant = callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" }));
-    t.store.addGrant("r1", grant, "j1");
+    t.store.putCallGrant(legacyGrant("r1", "s", "j1", grant));
     expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "ok" });
-    expect(t.store.counter(grantUsedKey("r1", "j1", grant), "run")).toBe(1);
+    const db = new DatabaseSync(t.dbPath);
+    const row = db
+      .prepare("SELECT data FROM call_grants WHERE run_id = ? AND step_id = ? AND item_key = ? AND tool = ?")
+      .get("r1", "s", "j1", "gmail.delete_draft");
+    const used = row ? (JSON.parse(String(row.data)) as { usedAt?: string }).usedAt : undefined;
+    db.close();
+    expect(used).toEqual(expect.any(String));
+    expect(t.store.findGrant(legacyGrant("r1", "s", "j1", grant))).toBeUndefined();
+    expect(() => t.store.useGrant(legacyGrant("r1", "s", "j1", grant), "2026-11-22")).toThrow();
     expect(t.audits).toContainEqual(
       expect.objectContaining({
         kind: "grant_used",
@@ -247,10 +258,13 @@ test(
   timeout,
   async () => {
     const t = await setup([tool("a"), tool("b"), done]);
-    t.store.addGrant(
-      "r1",
-      callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" })),
-      "j1",
+    t.store.putCallGrant(
+      legacyGrant(
+        "r1",
+        "s",
+        "j1",
+        callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" })),
+      ),
     );
     expect(await t.adapter.runStep(t.request)).toMatchObject({ hold: expectedHold() });
     expect(readFakeCalls(t.home)).toEqual(
@@ -263,7 +277,14 @@ test(
 );
 test("a used call grant stays used in a later attempt of the same run, step and item", timeout, async () => {
   const t = await setup([tool("a"), done]);
-  t.store.addGrant("r1", callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" })), "j1");
+  t.store.putCallGrant(
+    legacyGrant(
+      "r1",
+      "s",
+      "j1",
+      callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" })),
+    ),
+  );
   expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "ok" });
   expect(await t.adapter.runStep({ ...t.request, attempt: 2 })).toMatchObject({ hold: expectedHold() });
 });

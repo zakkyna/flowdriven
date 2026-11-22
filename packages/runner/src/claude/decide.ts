@@ -2,10 +2,12 @@ import { isAbsolute } from "node:path";
 import { commandLineAllowed, parseCommandLine, type Value } from "@flowdriven/sdk";
 import { digestCall } from "../connectors/grants.ts";
 import { throwsMailAway } from "../connectors/label-rule.ts";
+import { asciiAddress } from "../exec/held.ts";
 import type { HeldCall } from "../harness.ts";
+import { matchGrant } from "../rules/decisions.ts";
 import { EFFECTS, type Effect, effectOf } from "../rules/effects.ts";
 import { matchRule } from "../rules/standing.ts";
-import type { RuleRow } from "../storage.ts";
+import type { CallGrant, RuleRow, Store } from "../storage.ts";
 import { BROWSER_DENY, type BrowserState, CHROME_PREFIX, decideBrowser } from "./browser.ts";
 import { decideCommand } from "./commands.ts";
 import { type ConnectorAllow, type ConnectorState, decideConnector } from "./connector.ts";
@@ -146,7 +148,8 @@ export type Decision =
       tool: string;
       target?: string;
       effect?: Effect | "page" | "tab" | "connector";
-      by?: "read" | "declared_write" | "declared_command" | "rule";
+      by?: "read" | "declared_write" | "declared_command" | "rule" | "grant";
+      grant?: CallGrant;
       ruleId?: string;
       connector?: ConnectorAllow;
     }
@@ -169,7 +172,7 @@ export type RuleBook = {
     place: NonNullable<import("./policy.ts").CompiledTouch["place"]>,
   ): RuleRow | undefined;
 };
-type Books = { grants?: unknown; rules?: RuleRow[] | RuleBook };
+type Books = { grants?: Pick<Store, "findGrant">; rules?: RuleRow[] | RuleBook };
 
 export function decide(
   policy: Policy,
@@ -228,7 +231,7 @@ export function decide(
     return base.allow ? { ...base, outcome: "run" } : { ...base, outcome: "refuse" };
   let touch = policy.touches.find((item) => item.covers.includes(cover));
   let effect: Effect;
-  let catalogPlace: { kind: "account"; value: string; label: string } | undefined;
+  let catalogPlace: NonNullable<import("./policy.ts").CompiledTouch["place"]> | undefined;
   if (name === "Read" || name === "Glob" || name === "Grep") effect = "read";
   else if (name === "Write" || name === "Edit") effect = "local_write";
   else if (name === "Bash") {
@@ -244,6 +247,22 @@ export function decide(
     effect = entry.effect;
     if (entry.place?.kind === "account")
       catalogPlace = { ...entry.place, label: touch?.place?.label ?? entry.place.value };
+    if (entry.place?.kind === "address") {
+      const addresses = entry.place.fromInput.flatMap((key) => {
+        const value = input[key];
+        return typeof value === "string"
+          ? [value]
+          : Array.isArray(value) && value.every((item) => typeof item === "string")
+            ? (value as string[])
+            : [];
+      });
+      if (addresses.length)
+        catalogPlace = {
+          kind: "address",
+          value: addresses.map(asciiAddress).sort().join(", "),
+          label: touch?.place?.label ?? "Address",
+        };
+    }
     if (connector?.labelTools?.includes(connectorName) && throwsMailAway(input)) effect = "delete";
   }
   if ((effect === "local_write" || effect === "read") && !touch) {
@@ -265,14 +284,25 @@ export function decide(
   if (touch?.list === "never") return refuse(`This step does not declare the tool ${visible(name, 60)}.`);
   if (external && !touch) return refuse(`This step does not declare the tool ${visible(name, 60)}.`);
   const allowed = (
-    by: "read" | "declared_write" | "declared_command" | "rule",
+    by: "read" | "declared_write" | "declared_command" | "rule" | "grant",
     ruleId?: string,
+    grant?: CallGrant,
   ): Decision => ({
     ...(base.allow ? base : { allow: true as const, tool: base.tool }),
     outcome: "run",
     effect,
     by,
     ...(ruleId ? { ruleId } : {}),
+    ...(grant ? { grant } : {}),
+    ...(grant && base.allow && base.connector
+      ? {
+          connector: {
+            requirementId: base.connector.requirementId,
+            tool: base.connector.tool,
+            class: base.connector.class,
+          },
+        }
+      : {}),
     ...(connector && !base.allow
       ? {
           connector: {
@@ -286,12 +316,24 @@ export function decide(
   if (effect === "read") return allowed("read");
   if ((effect === "local_write" || effect === "run_command") && (!touch || touch.list === "on_its_own"))
     return allowed(effect === "local_write" ? "declared_write" : "declared_command");
+  if (books?.grants && policy.runId && policy.stepId) {
+    const grant = matchGrant(books.grants, {
+      runId: policy.runId,
+      stepId: policy.stepId,
+      itemKey: policy.itemKey ?? "",
+      tool: name,
+      digest: digestCall(name, input as Value),
+    });
+    if (grant) return allowed("grant", undefined, grant);
+  }
+  if (base.allow && base.connector?.grant?.kind === "pick") return allowed("grant");
   const place = external ? catalogPlace : touch?.place;
   if (
     touch?.fixedPlace &&
     policy.flowId &&
     !policy.earlierNo &&
     policy.source !== "tool" &&
+    policy.source !== "phone" &&
     ((effect === "change" && (place?.kind === "account" || place?.kind === "folder")) ||
       (effect === "local_write" && place?.kind === "folder") ||
       (effect === "run_command" && place?.kind === "command"))
@@ -324,7 +366,7 @@ export function decide(
     : undefined;
   const held: Held = {
     requirementId: connector?.requirementId ?? cover.split(".")[0] ?? "",
-    tool: connectorName,
+    tool: name,
     input: copy,
     digest: digestCall(name, copy),
     effect,

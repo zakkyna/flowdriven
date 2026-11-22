@@ -8,6 +8,7 @@ import { routeRequirement } from "../router/route.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
 import { FAKE_CLAUDE_PATH, makeFakeHome, readFakeCalls } from "../test-helpers/fake-claude-script.ts";
+import { legacyGrant } from "../test-helpers/policy-fixture.ts";
 import { ALLOW_FIRST, CLAUDE_ID, createHarnessService, gate, type HarnessService } from "./claude-harness.ts";
 
 const entry = CONNECTORS.at(0);
@@ -182,7 +183,7 @@ test("after a rescan on the fake the harness service gives the adapter the scan'
 }, async () => {
   const t = await setup();
   t.store.putCapabilityConsent({ flowId: t.m.id, hash: t.hash, at: t.now().toISOString() });
-  t.store.addGrant("r1", pickGrant("gmail", "delete_draft"), "j1");
+  t.store.putCallGrant(legacyGrant("r1", "*", "j1", pickGrant("gmail", "delete_draft")));
   expect(await t.hs.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
     exit: "ok",
     outside: true,

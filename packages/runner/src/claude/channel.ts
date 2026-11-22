@@ -47,6 +47,7 @@ export function startChannel(options: {
   dir: ControlDir;
   decide: (call: unknown) => Decision;
   onCall?: (record: CallRecord) => void;
+  beforeAllow?: () => void;
   post?: (call: unknown) => { text: string; line: string } | undefined;
   onPost?: (record: { toolUseId: string; text: string }) => void;
   onUnanswered?: (record: { toolUseId?: string; tool?: string }) => void;
@@ -201,6 +202,7 @@ export function startChannel(options: {
             }
           }
         }
+        if (decision.allow) options.beforeAllow?.();
         record(decision, id);
         const answer = decision.allow
           ? "allow\n"

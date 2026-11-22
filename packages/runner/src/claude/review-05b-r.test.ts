@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
-import { callGrant, createGrantBook, digestCall, grantUsedKey, pickGrant } from "../connectors/grants.ts";
+import { callGrant, createGrantBook, digestCall, pickGrant } from "../connectors/grants.ts";
 import { createEngine } from "../engine.ts";
 import { routeAll } from "../router/route.ts";
 import { gate } from "../service/claude-harness.ts";
@@ -19,6 +19,7 @@ import {
   readFakeCalls,
   writeFakeScript,
 } from "../test-helpers/fake-claude-script.ts";
+import { legacyGrant } from "../test-helpers/policy-fixture.ts";
 import { createClaudeAdapter } from "./adapter.ts";
 
 const entry = CONNECTORS.at(0);
@@ -183,7 +184,9 @@ test("R10: a publish for an unpicked job is held", timeout, async () => {
   const after = await c.engine.answerAsk(pending(c.store).id, { picks: ["j1"] });
   expect(after.state).toBe("waiting_approval");
   expect(pending(c.store)).toMatchObject({ kind: "risky_action", stepId: "later", itemKey: "" });
-  expect(c.store.hasGrant(run.id, pickGrant("host", "prototype_publish"), "")).toBe(false);
+  expect(!!c.store.findPickGrant(legacyGrant(run.id, "*", "", pickGrant("host", "prototype_publish")))).toBe(
+    false,
+  );
   expect(c.store.listAudit(run.id)).toContainEqual(
     expect.objectContaining({
       kind: "grant_used",
@@ -203,7 +206,9 @@ test("the item key of a picked item in a loop over the choice equals the pick ke
   const run = await c.engine.startRun(m.id, { project: "/tmp" });
   await c.engine.answerAsk(pending(c.store).id, { picks: ["j1"] });
   expect(c.harness.calls.find((x) => x.stepId === "publish")?.itemKey).toBe("j1");
-  expect(c.store.hasGrant(run.id, pickGrant("gmail", "delete_draft"), "j1")).toBe(true);
+  expect(!!c.store.findPickGrant(legacyGrant(run.id, "*", "j1", pickGrant("gmail", "delete_draft")))).toBe(
+    true,
+  );
 });
 test(
   "without a key on a loop over another list the item key is #<position>, so no grant matches and the call is held",
@@ -221,7 +226,9 @@ test(
     const after = await c.engine.answerAsk(pending(c.store).id, { picks: ["j1"] });
     expect(after.state).toBe("waiting_approval");
     expect(pending(c.store)).toMatchObject({ kind: "risky_action", itemKey: "#0" });
-    expect(c.store.hasGrant(run.id, pickGrant("gmail", "delete_draft"), "#0")).toBe(false);
+    expect(!!c.store.findPickGrant(legacyGrant(run.id, "*", "#0", pickGrant("gmail", "delete_draft")))).toBe(
+      false,
+    );
   },
 );
 test(
@@ -279,7 +286,8 @@ test(
     expect(c.store.listApprovals()).toHaveLength(2);
     expect(pending(c.store).call?.input).toEqual({ id: "d2" });
     const grant = callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" }));
-    expect(c.store.counter(grantUsedKey(run.id, "", grant), "run")).toBe(0);
+    expect(c.store.findGrant(legacyGrant(run.id, "hold", "", grant))).toBeDefined();
+    expect(c.store.findGrant(legacyGrant(run.id, "hold", "", grant))?.usedAt).toBeUndefined();
   },
 );
 test(

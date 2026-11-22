@@ -1,11 +1,12 @@
 import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { visibleLines } from "../claude/text.ts";
-import { callGrant, digestCall, grantUsedKey } from "../connectors/grants.ts";
+import { callGrant, digestCall } from "../connectors/grants.ts";
 import type { HeldCall } from "../harness.ts";
 import type { Script } from "../scripted-harness.ts";
 import type { ApprovalRow, Store } from "../storage.ts";
 import { setup } from "../test-helpers/engine.ts";
+import { legacyGrant } from "../test-helpers/policy-fixture.ts";
 import { approvedCallsOf, labelOf } from "./held.ts";
 
 const stores: Store[] = [];
@@ -165,10 +166,10 @@ test("after an approval the next request carries approvedCalls with tool and inp
   expect(c.harness.calls.at(1)?.approvedCalls).toEqual([{ tool: hold.tool, input }]);
   expect(approvedCallsOf(c.store, run.id, "send", "other")).toEqual([]);
   expect(approvedCallsOf(c.store, "other", "send", "")).toEqual([]);
-  c.store.increment(grantUsedKey(run.id, "", grant), "run");
+  c.store.useGrant(legacyGrant(run.id, "send", "", grant), "2026-11-22T00:00:00.000Z");
   expect(approvedCallsOf(c.store, run.id, "send", "")).toEqual([]);
   c.store.createApproval({ ...a, id: "pick", state: "approved", approves: ["mail.delete_draft"] });
-  c.store.addGrant(run.id, "mail.delete_draft", "");
+  c.store.putCallGrant(legacyGrant(run.id, "send", "", "mail.delete_draft"));
   expect(approvedCallsOf(c.store, run.id, "send", "")).toEqual([]);
 });
 test("the payload shows hidden characters as <U+...>, keeps its line breaks, and is never cut", async () => {
@@ -212,7 +213,7 @@ test("a held call whose input does not fit the card is not offered: no approval 
   const c = await ready({ steps: { send: { hold: { ...hold, input: { body: "x".repeat(5000) } } } } });
   const run = await c.start();
   expect(c.store.listApprovals()).toEqual([]);
-  expect(c.store.hasGrant(run.id, grant, "")).toBe(false);
+  expect(c.store.findGrant(legacyGrant(run.id, "send", "", grant))).toBeUndefined();
   expect(c.store.getStep(run.id, "send")).toMatchObject({
     state: "failed",
     note: "This call is too large to show for your approval.",

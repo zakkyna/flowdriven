@@ -769,7 +769,7 @@ test("TC-SR1-01 sample actions hold with their catalog effects and exact digests
     expect(decide(p, call(tool, input), undefined, { calls: 0, granted: () => false })).toMatchObject({
       outcome: "hold",
       effect,
-      held: { tool: name, input, digest: digestCall(tool, input), action: effect },
+      held: { tool, input, digest: digestCall(tool, input), action: effect },
     });
   }
 });
@@ -827,4 +827,371 @@ test("TC-j24-15 Gmail send stays held even with a matching risky rule", () => {
       granted: () => false,
     }),
   ).toMatchObject({ outcome: "hold", effect: "send", held: { action: "send" } });
+});
+
+test("TC-SR1-07 an exact unused grant runs once", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const name = "test.send";
+  const input = { body: "Thanks" };
+  const grant = {
+    runId: "run-1",
+    stepId: "reply",
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22T00:00:00.000Z",
+  };
+  const p = {
+    ...policy,
+    runId: "run-1",
+    stepId: "reply",
+    itemKey: "",
+    tools: [name],
+    effectCatalog: [{ tool: name, effect: "send" as const, place: undefined }],
+    touches: [
+      {
+        touchId: "reply",
+        effect: "send" as const,
+        matcher: "exact" as const,
+        fixedPlace: false,
+        list: "asks_first" as const,
+        covers: [name],
+      },
+    ],
+  };
+  const grants = {
+    findGrant: (key: typeof grant) =>
+      ["runId", "stepId", "itemKey", "tool", "digest"].every(
+        (k) => key[k as keyof typeof key] === grant[k as keyof typeof grant],
+      )
+        ? grant
+        : undefined,
+  };
+  const invoke = decide as (...args: unknown[]) => unknown;
+  expect(invoke(p, call(name, input), undefined, undefined, { grants })).toMatchObject({
+    outcome: "run",
+    by: "grant",
+  });
+});
+
+function grantCase() {
+  const name = "test.send";
+  const input = { threadId: "thread-sam", body: "Thanks, I will send the invoice on Monday." };
+  const p = {
+    ...policy,
+    runId: "run-1",
+    stepId: "reply",
+    itemKey: "",
+    tools: [name],
+    effectCatalog: [{ tool: name, effect: "send" as const, place: undefined }],
+    touches: [
+      {
+        touchId: "reply",
+        effect: "send" as const,
+        matcher: "exact" as const,
+        fixedPlace: false,
+        list: "asks_first" as const,
+        covers: [name],
+      },
+    ],
+  };
+  return { name, input, p };
+}
+test("TC-j24-05 grant identity and a used grant hold", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const { name, input, p } = grantCase();
+  const grant = {
+    runId: p.runId,
+    stepId: p.stepId,
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  let used = false;
+  const grants = {
+    findGrant: (key: typeof grant) =>
+      !used &&
+      ["runId", "stepId", "itemKey", "tool", "digest"].every(
+        (k) => key[k as keyof typeof key] === grant[k as keyof typeof grant],
+      )
+        ? grant
+        : undefined,
+  };
+  const invoke = (p1: typeof p, value: typeof input) =>
+    decide(p1, call(name, value), undefined, undefined, { grants });
+  expect(invoke(p, input)).toMatchObject({ outcome: "run", by: "grant" });
+  used = true;
+  expect(invoke(p, input)).toMatchObject({
+    outcome: "hold",
+    held: { tool: name, input, digest: grant.digest, action: "send" },
+  });
+});
+test("TC-j24-48 a granted call runs in the decision table", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const { name, input, p } = grantCase();
+  const grant = {
+    runId: p.runId,
+    stepId: p.stepId,
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  expect(
+    decide(p, call(name, input), undefined, undefined, { grants: { findGrant: () => grant } }),
+  ).toMatchObject({ outcome: "run", by: "grant" });
+});
+test("TC-SR1-06 declaration is checked before a grant", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const { name, input, p } = grantCase();
+  const grant = {
+    runId: p.runId,
+    stepId: p.stepId,
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  let lookups = 0;
+  const grants = {
+    findGrant: () => {
+      lookups++;
+      return grant;
+    },
+  };
+  expect(
+    decide({ ...p, tools: [], touches: [] }, call(name, input), undefined, undefined, { grants }),
+  ).toMatchObject({ outcome: "refuse" });
+  expect(lookups).toBe(0);
+  expect(decide(p, call(name, input), undefined, undefined, { grants })).toMatchObject({
+    outcome: "run",
+    by: "grant",
+  });
+});
+test("TC-SR1-08 a canonical exact input matches after near misses", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const { name, input, p } = grantCase();
+  const grant = {
+    runId: p.runId,
+    stepId: p.stepId,
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  const grants = {
+    findGrant: (key: typeof grant) =>
+      ["runId", "stepId", "itemKey", "tool", "digest"].every(
+        (k) => key[k as keyof typeof key] === grant[k as keyof typeof grant],
+      )
+        ? grant
+        : undefined,
+  };
+  for (const changed of [
+    { ...input, body: `${input.body}!` },
+    { ...input, body: `${input.body} ` },
+    { ...input, cc: "x@example.test" },
+    { ...input, body: input.body + String.fromCodePoint(0x202e) },
+  ])
+    expect(decide(p, call(name, changed), undefined, undefined, { grants })).toMatchObject({
+      outcome: "hold",
+    });
+  expect(
+    decide(p, call(name, { body: input.body, threadId: input.threadId }), undefined, undefined, { grants }),
+  ).toMatchObject({ outcome: "run", by: "grant" });
+});
+test("TC-SR1-21 a grant also runs from tool and phone sources", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const { name, input, p } = grantCase();
+  const grant = {
+    runId: p.runId,
+    stepId: p.stepId,
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  for (const source of [
+    "chat",
+    "flows",
+    "again",
+    "schedule",
+    "after",
+    "try_next",
+    "proactive",
+    "tool",
+    "phone",
+  ])
+    expect(
+      decide({ ...p, source }, call(name, input), undefined, undefined, {
+        grants: { findGrant: () => grant },
+      }),
+    ).toMatchObject({ outcome: "run", by: "grant" });
+});
+
+test("TC-SR1-08 and TC-j24-05 near misses retain the exact held call", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const name = "mcp__claude_ai_Gmail__reply";
+  const forward = "mcp__claude_ai_Gmail__forward";
+  const input = { threadId: "thread-sam", body: "Thanks, I will send the invoice on Monday." };
+  const grant = {
+    runId: "run-1",
+    stepId: "reply",
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  const p = {
+    ...policy,
+    runId: "run-1",
+    stepId: "reply",
+    itemKey: "",
+    tools: [name, forward],
+    declaredTools: [
+      { tool: name, cover: "gmail.reply" },
+      { tool: forward, cover: "gmail.forward" },
+    ],
+    touches: [
+      {
+        touchId: "reply",
+        effect: "send" as const,
+        matcher: "exact" as const,
+        fixedPlace: false,
+        list: "asks_first" as const,
+        covers: ["gmail.reply"],
+      },
+      {
+        touchId: "forward",
+        effect: "send" as const,
+        matcher: "exact" as const,
+        fixedPlace: false,
+        list: "asks_first" as const,
+        covers: ["gmail.forward"],
+      },
+    ],
+  };
+  let usedAt: string | undefined;
+  let present = true;
+  const grants = {
+    findGrant: (key: typeof grant) =>
+      present &&
+      !usedAt &&
+      ["runId", "stepId", "itemKey", "tool", "digest"].every(
+        (field) => key[field as keyof typeof key] === grant[field as keyof typeof grant],
+      )
+        ? grant
+        : undefined,
+  };
+  const invoke = (context: typeof p, tool: string, value: Record<string, unknown>) =>
+    decide(context, call(tool, value), undefined, undefined, { grants });
+  expect(invoke(p, name, input)).toMatchObject({ outcome: "run", by: "grant" });
+  usedAt = "2026-11-22T00:00:00.000Z";
+  expect(invoke(p, name, input)).toMatchObject({
+    outcome: "hold",
+    held: { tool: name, input, digest: grant.digest, action: "send" },
+  });
+  usedAt = undefined;
+  for (const [context, tool, value] of [
+    [p, name, { ...input, body: `${input.body}!` }],
+    [p, name, { ...input, body: `${input.body} ` }],
+    [p, name, { ...input, cc: "x@example.test" }],
+    [p, forward, input],
+    [{ ...p, stepId: "other" }, name, input],
+    [{ ...p, runId: "run-2" }, name, input],
+    [p, name, { ...input, body: input.body + String.fromCodePoint(0x202e) }],
+  ] as const) {
+    expect(invoke(context, tool, value)).toMatchObject({
+      outcome: "hold",
+      held: { tool, input: value, digest: digestCall(tool, value), action: "send" },
+    });
+  }
+  present = false;
+  expect(invoke(p, name, input)).toMatchObject({ outcome: "hold" }); // rejected or expired: no grant row
+  present = true;
+  expect(invoke(p, name, { body: input.body, threadId: input.threadId })).toMatchObject({
+    outcome: "run",
+    by: "grant",
+  });
+});
+
+test("TC-SR1-21 rule sources hold while exact grants take precedence", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const name = "timesheet.log_entry";
+  const place = { kind: "account" as const, value: "timesheet-account", label: "Timesheet" };
+  const touch = {
+    touchId: "log-hours",
+    effect: "change" as const,
+    matcher: "exact" as const,
+    place,
+    fixedPlace: true,
+    list: "on_its_own" as const,
+    covers: [name],
+  };
+  const rule = {
+    id: "rule-1",
+    flowId: "flow",
+    touchId: touch.touchId,
+    effect: "change" as const,
+    place,
+    state: "active" as const,
+    createdAt: "2026-11-22",
+    createdBy: "confirm" as const,
+    sentence: "Log hours",
+    uses: 0,
+  };
+  const input = { hours: 3 };
+  const grant = {
+    runId: "run-1",
+    stepId: "reply",
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  const p = {
+    ...policy,
+    tools: [name],
+    runId: "run-1",
+    stepId: "reply",
+    itemKey: "",
+    flowId: "flow",
+    touches: [touch],
+    rules: [rule],
+    effectCatalog: [
+      { tool: name, effect: "change" as const, place: { kind: "account" as const, value: place.value } },
+    ],
+  };
+  const grants = { findGrant: (key: typeof grant) => (key.digest === grant.digest ? grant : undefined) };
+  for (const source of [
+    "chat",
+    "flows",
+    "again",
+    "schedule",
+    "after",
+    "try_next",
+    "proactive",
+    "tool",
+    "phone",
+  ]) {
+    const withSource = { ...p, source };
+    expect(decide(withSource, call(name, { hours: 2 }), undefined, undefined, { grants })).toMatchObject(
+      source === "tool" || source === "phone"
+        ? { outcome: "hold", held: { input: { hours: 2 }, place } }
+        : { outcome: "run", by: "rule", ruleId: "rule-1" },
+    );
+    expect(decide(withSource, call(name, input), undefined, undefined, { grants })).toMatchObject({
+      outcome: "run",
+      by: "grant",
+    });
+  }
 });

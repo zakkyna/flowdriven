@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Value } from "@flowdriven/sdk";
-import type { Store } from "../storage.ts";
+import type { CallGrant, Store } from "../storage.ts";
 
 export function canonicalJson(value: Value): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -35,18 +35,40 @@ export function grantUsedKey(runId: string, itemKey: string, grant: string): str
   return `grant-used:${runId}:${itemKey}:${grant}`;
 }
 export type GrantBook = {
-  has(runId: string, grant: string, itemKey: string): boolean;
-  use(runId: string, grant: string, itemKey: string): boolean;
+  has(runId: string, grant: string, itemKey: string, stepId?: string): boolean;
+  use(runId: string, grant: string, itemKey: string, stepId?: string): boolean;
+  findGrant(key: CallGrant): CallGrant | undefined;
+  useGrant(key: CallGrant, at: string): void;
 };
-export function createGrantBook(store: Pick<Store, "hasGrant" | "counter" | "increment">): GrantBook {
+export function createGrantBook(store: Pick<Store, "findGrant" | "findPickGrant" | "useGrant">): GrantBook {
+  const keyOf = (runId: string, grant: string, itemKey: string, stepId = "*"): CallGrant => {
+    const separator = grant.indexOf("#");
+    return {
+      runId,
+      stepId,
+      itemKey,
+      tool: separator < 0 ? grant : grant.slice(0, separator),
+      digest: separator < 0 ? "*" : grant.slice(separator + 1),
+      kind: "approve",
+      createdAt: "",
+    };
+  };
   return {
-    has: (runId, grant, itemKey) =>
-      (isCallGrant(grant) || pickKeyUsable(itemKey)) &&
-      store.hasGrant(runId, grant, itemKey) &&
-      (!isCallGrant(grant) || store.counter(grantUsedKey(runId, itemKey, grant), "run") === 0),
-    use: (runId, grant, itemKey) =>
-      isCallGrant(grant)
-        ? store.increment(grantUsedKey(runId, itemKey, grant), "run") === 1
-        : pickKeyUsable(itemKey),
+    findGrant: (key) => store.findGrant(key),
+    useGrant: (key, at) => store.useGrant(key, at),
+    has(runId, grant, itemKey, stepId) {
+      const key = keyOf(runId, grant, itemKey, stepId);
+      if (isCallGrant(grant)) return !!store.findGrant(key);
+      if (!pickKeyUsable(itemKey)) return false;
+      const migrated = store.findGrant({ ...key, stepId: "*" });
+      return !!store.findPickGrant(key) || migrated?.kind === "migrated";
+    },
+    use(runId, grant, itemKey, stepId) {
+      if (!isCallGrant(grant)) return pickKeyUsable(itemKey);
+      const key = keyOf(runId, grant, itemKey, stepId);
+      if (!store.findGrant(key)) return false;
+      store.useGrant(key, new Date().toISOString());
+      return true;
+    },
   };
 }

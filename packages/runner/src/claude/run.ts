@@ -75,6 +75,7 @@ export type RunDeps = {
   closeWaitMs?: number;
   maxLineBytes: number;
   maxDeniedEntries?: number;
+  beforeAllow?: () => void;
   register?: (stop: (sentence?: string) => void) => () => void;
 };
 export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome> {
@@ -194,12 +195,18 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           }
           return decide(policy, call, attempt?.state());
         }
-        const decision = decide(policy, call, attempt?.state(), {
-          calls: connectorCalls,
-          granted: (grant) =>
-            (isCallGrant(grant) || (input.pickTools?.includes(grant) ?? false)) &&
-            (deps.grants?.has(input.runId, grant, input.itemKey) ?? false),
-        });
+        const decision = decide(
+          policy,
+          call,
+          attempt?.state(),
+          {
+            calls: connectorCalls,
+            granted: (grant) =>
+              (isCallGrant(grant) || (input.pickTools?.includes(grant) ?? false)) &&
+              (deps.grants?.has(input.runId, grant, input.itemKey, input.stepId) ?? false),
+          },
+          { grants: deps.grants },
+        );
         if (
           !decision.allow &&
           decision.held &&
@@ -228,9 +235,20 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             digest: held.digest,
           });
         }
+        if (decision.allow && decision.by === "grant" && decision.grant) {
+          try {
+            deps.grants?.useGrant(decision.grant, new Date(nowMs()).toISOString());
+            audit("grant_used", { ...detail, tool: decision.grant.tool, grant: "call" });
+          } catch {
+            return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
+          }
+        }
         if (decision.allow && decision.connector) {
           const grant = decision.connector.grant;
-          if (grant?.kind === "call" && !(deps.grants?.use(input.runId, grant.key, input.itemKey) ?? false))
+          if (
+            grant?.kind === "call" &&
+            !(deps.grants?.use(input.runId, grant.key, input.itemKey, input.stepId) ?? false)
+          )
             return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
           if (grant)
             audit("grant_used", {
@@ -407,6 +425,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           });
         } catch {}
       },
+      beforeAllow: deps.beforeAllow,
       pollMs: deps.pollMs,
       onCall: ({ decision }) => {
         if (!decision.allow && deniedEntries < (deps.maxDeniedEntries ?? MAX_DENIED_ENTRIES)) {

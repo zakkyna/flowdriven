@@ -7,7 +7,7 @@ import {
   validateManifest,
 } from "@flowdriven/sdk";
 import type { CommandRunner } from "./checks/command.ts";
-import { pickKeyUsable } from "./connectors/grants.ts";
+import { createGrantBook, pickKeyUsable } from "./connectors/grants.ts";
 import { EngineError } from "./errors.ts";
 import { runAsk } from "./exec/ask.ts";
 import { createChain } from "./exec/chain.ts";
@@ -400,7 +400,18 @@ export function createEngine(input: EngineDeps): Engine {
     store.transaction(() => {
       store.updateApproval(id, { state: "approved", picks: answer.picks, resolvedAt: at });
       for (const tool of a.approves)
-        for (const pick of answer.picks) if (pickKeyUsable(pick)) store.addGrant(run.id, tool, pick);
+        for (const pick of answer.picks)
+          if (pickKeyUsable(pick))
+            store.putCallGrant({
+              runId: run.id,
+              stepId: "*",
+              itemKey: pick,
+              tool,
+              digest: "*",
+              kind: "pick",
+              createdAt: at,
+              approvalId: id,
+            });
       store.upsertStep({
         ...row,
         state: "passed",
@@ -437,7 +448,23 @@ export function createEngine(input: EngineDeps): Engine {
     if (a.kind === "risky_action") {
       store.transaction(() => {
         store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
-        if (decision === "approve") for (const entry of a.approves) store.addGrant(run.id, entry, a.itemKey);
+        if (decision === "approve")
+          for (const entry of a.approves) {
+            const separator = entry.indexOf("#");
+            if (separator < 0) continue;
+            const qualified = entry.slice(0, separator);
+            const full = qualified.indexOf(".mcp__");
+            store.putCallGrant({
+              runId: run.id,
+              stepId: a.stepId,
+              itemKey: a.itemKey,
+              tool: full < 0 ? qualified : qualified.slice(full + 1),
+              digest: entry.slice(separator + 1),
+              kind: "approve",
+              createdAt: at,
+              approvalId: id,
+            });
+          }
         store.appendAudit({
           at,
           kind: decision === "approve" ? "call_approved" : "call_rejected",
@@ -587,7 +614,9 @@ export function createEngine(input: EngineDeps): Engine {
     },
     isApproved(runId, tool, itemKey) {
       const state = store.getRun(runId)?.state;
-      return (state === "running" || state === "retrying") && store.hasGrant(runId, tool, itemKey);
+      return (
+        (state === "running" || state === "retrying") && createGrantBook(store).has(runId, tool, itemKey)
+      );
     },
     waitingOf,
     getRun(id) {

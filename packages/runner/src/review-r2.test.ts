@@ -4,6 +4,7 @@ import type { HarnessAdapter } from "./harness.ts";
 import { scriptedHarness } from "./scripted-harness.ts";
 import { openSqliteStore } from "./sqlite-store.ts";
 import { setup } from "./test-helpers/engine.ts";
+import { legacyGrant } from "./test-helpers/policy-fixture.ts";
 import { makeFlow } from "./test-helpers/review-flow.ts";
 
 const slowHarness = (ms: number): HarnessAdapter => ({
@@ -332,7 +333,7 @@ test("grants are valid only in running and retrying states", async () => {
   const c = await setup(manifest, { steps: { a: { text: "ok" } } });
   try {
     const run = await c.engine.startRun("local.test", { project: "/tmp" });
-    c.store.addGrant(run.id, "host.publish", "j1");
+    c.store.putCallGrant(legacyGrant(run.id, "*", "j1", "host.publish"));
     for (const state of [
       "running",
       "retrying",
