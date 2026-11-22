@@ -60,7 +60,7 @@ Prefer L1 and L3 for behavior, L2 for what the person sees, and L5 only where no
 | Scripted harness | Engine tests that do not need a process | existing `scripted-harness.ts` |
 | `FixtureRunnerClient` | Every renderer test | existing `packages/fixtures`, extended for contract v2 |
 | Call recording | What a UI test asserts about calls (below) | `FixtureRunnerClient` |
-| Injected clock and ids | Schedules, expiry, 24-hour decisions, missed starts | engine and service dependencies |
+| Injected clock and ids | Schedules, sign-in waits, decisions waiting without a deadline, missed starts | engine and service dependencies |
 | Fake keychain (new, V2) | Secrets by reference (phone and bots, gateway) | `apps/desktop/electron/` tests |
 | Fake notifier (new) | System notifications | `apps/desktop/electron/` tests |
 | Shared builders (new) | The state a case would otherwise take from another case (`pendingDecision()` and the others of section 4.1) | `packages/runner/src/test-helpers/builders.ts` |

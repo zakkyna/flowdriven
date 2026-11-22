@@ -93,7 +93,7 @@ The person opens the list of flows, runs one with a click, reads what a flow nee
 - **FS-j21.E9 Flow not found.** An unknown id shows "Flow not found" and the button "Go to Flows".
 - **FS-j21.E10 Prototype gaps.** The prototype had no clock (after-triggers fired only from `finish`), no schedule checks, and tagged "Try the next run now" as "Sample". The real app has a clock, the checks above, and no tag; it has no first run when a schedule is turned on (P10).
 - **FS-j21.E11 Not applicable here: outside text trying to steer the agent.** Choosing a schedule or pressing "Run" reads no outside text, and a schedule changes only by the person's own click (SR-2). Outside text inside a run is handled by FS-j20.P13 and FS-j24.
-- **FS-j21.E12 Not applicable here: a decision that expires.** This screen only starts runs and shows a "Needs you" badge; the 24-hour expiry (PU-15) is specified in FS-j24.
+- **FS-j21.E12 Not applicable here: a decision that waits.** This screen only starts runs and shows a "Needs you" badge; the decision waits without a time limit, as specified in FS-j24.
 
 ## Data read and written
 

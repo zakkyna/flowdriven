@@ -182,7 +182,7 @@ Rules:
 - "Ask me again" revokes at once (`rules.revoke`). A call that already started under the rule is not undone.
 - At most one active rule per flow, touch, effect and place; making the same rule again returns the active one.
 - The store refuses to make a rule with any other effect (error `rule_effect_not_allowed`) or with a place kind that does not fit its effect (error `rule_place_not_allowed`), so no code path can store a rule for a risky kind; a rule row of another effect, from a damaged or later store, is never matched (SR-1).
-- After a Reject or an expiry in a run, no standing rule applies for the rest of that run; the held call shows the normal decision card.
+- After a Reject in a run, no standing rule applies for the rest of that run; the held call shows the normal decision card.
 - The audit records of a rule (`rule_created`, `rule_revoked`, `rule_used`) keep the rule id and the place kind, never the place value (3.16).
 
 ### 3.4 One-time grant (V1)
@@ -452,7 +452,7 @@ The `runs`, `steps`, `items` and `seen` tables stay. New fields go into `data`. 
 | `language` | `LanguageCode` | the language of its answer lines and dates | `"en"` |
 | `cause` | `{code: CauseCode, params?}` | why it is `blocked`, `needs_login`, `failed`, `interrupted` or `stopped` (`runner-api.md`, `Cause`) | `crash` for `interrupted`, else `step_failed` when `blockedReason` is set |
 | `needsLoginSince` | IsoDateTime | start of a sign-in wait; after 12 hours the run becomes `blocked` (FS-j25.A5) | none |
-| `decisionLines` | `Line[]` | the honest lines, as codes with the title as a value; the English drawings are "You approved: X.", "Done by your rule: X.", "You said no: X. It was not done.", "No answer in 24 hours: X. It was not done." (AD-12) | `[]` |
+| `decisionLines` | `Line[]` | the honest lines, as codes with the title as a value; the English drawings are "You approved: X.", "Done by your rule: X.", "You said no: X. It was not done." (AD-12) | `[]` |
 | `result` | `{kind: "chat" or "report", chatId?, messageId?}` | where the answer went | none |
 | `stoppedBy` | `"person"`, `"permission_off"`, `"flow_deleted"` or `"phone"` | who stopped it | none |
 
@@ -462,7 +462,7 @@ Today's fields stay: `flowHash` is the version the run runs (SR-3), `inputs` the
 |---|---|---|
 | `state` | `StepRunState` | adds `stopped` |
 | `ruleUses` | `{ruleId, tool, at}[]` | calls that ran by a standing rule; the evidence "Allowed by your rule" |
-| `skipped` | `{because: "rejected" or "expired" or "no_picks" or "needs_skipped_result", approvalId?, stepId?}` | why a step was skipped, so the report can say it (FS-j24.P2) |
+| `skipped` | `{because: "rejected" or "no_picks" or "needs_skipped_result", approvalId?, stepId?}` | why a step was skipped, so the report can say it (FS-j24.P2) |
 
 Items and seen keep their version 6 shape.
 
@@ -479,13 +479,13 @@ Decisions keep the `approvals` table and today's `ApprovalRow`. New fields go in
 | `fixedPlace` | boolean | the place equals the touch's fixed place (SR-1); "Always allow for this flow" may be offered only when this is true, the effect is `change` and the place did not come from outside text | false |
 | `similarGroup` | string | held calls of the same run and kind that "Approve all similar" may batch | none |
 | `chatId` | ChatId | the run's chat, for the decision card | none |
-| `resolvedVia` | `"window"`, `"chat"`, `"phone"`, `"rule"`, `"expiry"`, `"stop"` or `"permission_off"` | what ended it | `"window"` when resolved |
+| `resolvedVia` | `"window"`, `"chat"`, `"phone"`, `"rule"`, `"stop"` or `"permission_off"` | what ended it | `"window"` when resolved |
 | `editedSubject`, `editedText`, `editedDigest` | strings | Save and approve | none |
 | `ruleId` | RuleId | `allowed_always`: the rule it made | none |
 
 Rules:
 - In version 7 every held call is kind `risky_action` with an `effect` (for example `change` for a timesheet entry); `riskyAction` stays set for the five risky kinds.
-- `expiresAt` is `createdAt` plus 24 hours. A restart never restarts the clock (FS-j24.A16). An expired decision of a run counts as Reject.
+- A run decision never expires by time; it waits for an answer, Stop, permission off or flow deletion. Version 7 is already built (B-03): its `expiresAt` column stays, nothing reads it from B-05.T14 on, and the next store version drops it.
 - Two decisions belong to no run and are not rows here: `weekly_limit` (existing, settings key `weekly:<agentId>`) and the spending pause `budget_raise` (new, settings key `spending-pause`). `approvals.list` and Activity show both. Only `settings.update` resolves the spending pause, by raising the limit (SR-9); otherwise it ends when the next local month begins (`spending-pause.expiresAt`). Either way the paused runs continue under the limit, the decision closes with `resolvedVia` `window` or `expiry`, and it never counts as Reject.
 
 ### 3.16 Audit record (V1, changed)
@@ -515,7 +515,7 @@ New kinds:
 | `start_requested` | every `START` request | `flowId`, `source`, `outcome`, `reason`, `startId`, `runId` |
 | `run_stopped`, `run_resumed` | Stop; Try again or Sign in and continue | `runId`, `by`, `outcome` |
 | `decision_made` | approve, edit, reject, always allow, answer | `approvalId`, `runId`, `decision`, `via` |
-| `decision_expired` | expiry, Stop, permission off | `approvalId`, `runId`, `why` |
+| `decision_expired` | Stop, permission off, flow deletion | `approvalId`, `runId`, `why` |
 | `decisions_batch` | Approve all similar | `runId`, `group`, `approvalIds` |
 | `rule_created`, `rule_revoked`, `rule_used` | a standing rule is made, revoked or used | `ruleId`, `flowId`, `touchId`, `effect`, place kind (not the value), `by`, `runId`, `stepId` |
 | `question_asked`, `question_closed` | a waiting question opens; it is answered, cancelled or closed | `questionId`, `flowId`, `chatId`, `kind`, `missing`, `state` |

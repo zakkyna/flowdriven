@@ -34,7 +34,7 @@ Changes to approvals and the sandbox are safety-core changes (AD-06, AD-07, Reje
 Every case uses these names. Sample data validates against `@flowdriven/contracts`.
 
 - Clock and ids: `T0 = 2026-11-20T03:00:00.000Z`, zone `Asia/Bangkok` (UTC+07:00, no daylight saving; product code receives the IANA zone and never reads process `TZ`). Ids come from an injected `newId` and read `<prefix>-1`, `<prefix>-2` in creation order: `run-1`, `ap-1` (decision), `rule-1`, `chat-1`, `msg-1`, `start-1`, `wq-1`.
-- `makePolicy(options)` in `packages/runner/src/test-helpers/policy-fixture.ts` (new) compiles the policy of one step the way `buildPolicy` does. Options: `flow` (one of the flows below), `onItsOwn` (touch ids the person left under "Does on its own"), `rules` (active standing rules), `grants` (one-time grants), `source` (a `StartSource`, default `chat`), `earlierNo` (a step of this run was rejected or expired, default false), `stepId`, `runId` (default `run-1`), `sessionId` (default `session-1`). `callOf(tool, input, toolUseId = "tu-1")` builds the hook request `{hook_event_name: "PreToolUse", session_id: "session-1", tool_name, tool_use_id, tool_input}`; for a test-catalog id it adds the catalog's tool prefix.
+- `makePolicy(options)` in `packages/runner/src/test-helpers/policy-fixture.ts` (new) compiles the policy of one step the way `buildPolicy` does. Options: `flow` (one of the flows below), `onItsOwn` (touch ids the person left under "Does on its own"), `rules` (active standing rules), `grants` (one-time grants), `source` (a `StartSource`, default `chat`), `earlierNo` (a step of this run was rejected, default false), `stepId`, `runId` (default `run-1`), `sessionId` (default `session-1`). `callOf(tool, input, toolUseId = "tu-1")` builds the hook request `{hook_event_name: "PreToolUse", session_id: "session-1", tool_name, tool_use_id, tool_input}`; for a test-catalog id it adds the catalog's tool prefix.
 - Decision result (the test seam of `decide`, see Writer's calls): `{outcome: "run" | "hold" | "refuse", effect?: Effect, by?: "read" | "declared_write" | "declared_command" | "grant" | "rule", ruleId?: RuleId, reason?: string, held?: {tool, input, digest, action, effect, place?, fixedPlace, touchId?}}`.
 - Test catalog: `packages/runner/src/test-helpers/test-catalog.ts` (new). Effects: `calendar.read_events` read, `timesheet.read_entries` read, `timesheet.log_entry` change, `cloud-storage.upload` change, `social.post` post, `payments.pay` pay, `git.merge` merge, `skill:<name>` change; Gmail tools as in `connectors/catalog.ts` (`search_threads` read; `reply`, `send_message`, `forward` send; `trash_thread`, `trash_message`, `delete_draft` delete). Any tool not in the catalog has effect `change`.
 - Flows (confirmed at hash `sha256:` plus 64 `a`, unless a case says otherwise):
@@ -311,35 +311,35 @@ An action runs by itself only when it only reads and sends nothing out, or when 
 - Build step: B-05
 - Fails first because: rejection fails the step and the run today.
 
-### TC-SR1-18 Expiry after 24 hours counts as Reject
+### TC-SR1-18 An unanswered decision stays pending after 25 hours
 - Layer: L3
 - File: packages/runner/src/rules/decisions.test.ts
 - Given: the setup of TC-SR1-17 with `ap-1` created at T0; injected clock.
-- When: the clock moves to `T0 + 24h` and `approvals.list` runs the expiry sweep.
-- Then: `ap-1.state` is `expired`, `resolvedVia: "expiry"`; the step and later dependants behave exactly as in TC-SR1-17 with `because: "expired"`; the line is `{key: "report.noAnswer", params: {title: "Upload app.apk?"}}` (English drawing: "No answer in 24 hours: Upload app.apk?. It was not done."); at `T0 + 24h - 1ms` the decision is still `pending`; a restart in between does not restart the clock.
+- When: Advance the clock to `T0 + 24h - 1ms`, `T0 + 24h`, and `T0 + 25h`, reading `approvals.list` at each point; restart between reads.
+- Then: `ap-1` remains `pending` at every read and after restart; the run and step still wait, the action and dependent steps do not run, the notice remains, no grant or rejection report line is written, and no `decision_expired` audit is written.
 - Traces: SR-1, AD-07, T-06, T-25, FS-j24.A16
 - Build step: B-05
-- Fails first because: expiry fails the run and there is no "skipped because expired".
+- Fails first because: the current sweep expires the decision after 24 hours.
 
 ### TC-SR1-19 After a Reject no standing rule applies for the rest of that run
 - Layer: L3
 - File: packages/runner/src/rules/decisions.test.ts
-- Given: FLOW-BUILD confirmed with `upload-apk` (a `change` at the fixed folder `cloud:Builds`) under "Does on its own" and its rule `rule-2`; `post-note` is under "Asks you first" (a post always asks). Step 2 tries `social.post`, step 3 tries `cloud-storage.upload` to `cloud:Builds`. Scenario A: the post decision is rejected. Scenario B: the post decision is approved.
-- When: scenario A and scenario B are played on the fake claude.
-- Then: A: step 3's `cloud-storage.upload` is held as a normal decision (the same decision card as any other, with no extra line about the earlier no), `ran: false`, audit `call_held`; B: step 3 runs `by: "rule"` with audit `rule_used`; rule `uses` is 0 in A and 1 in B. The rule stays for the rest of that run only: it applies again in the next run of the flow.
+- Given: FLOW-BUILD confirmed with `upload-apk` (a `change` at the fixed folder `cloud:Builds`) under "Does on its own" and its rule `rule-2`; `post-note` is under "Asks you first" (a post always asks). Step 2 tries `social.post`, step 3 tries `cloud-storage.upload` to `cloud:Builds`. Scenario A: the post decision is rejected. Scenario B: the post decision is approved. Scenario C: the run is stopped while the post decision waits.
+- When: scenarios A, B and C are played on the fake claude.
+- Then: A: step 3's `cloud-storage.upload` is held as a normal decision (the same decision card as any other, with no extra line about the earlier no), `ran: false`, audit `call_held`; B: step 3 runs `by: "rule"` with audit `rule_used`; rule `uses` is 0 in A and 1 in B. C: the run is stopped, its decision is `expired`, no later step runs and no rule is used. The rule stays for the rest of that run only: it applies again in the next run of the flow.
 - Traces: SR-1, AD-07, T-06
 - Build step: B-05
 - Fails first because: no run-level "earlier no" flag exists and rules are not consulted at all.
 
-### TC-SR1-20 The same after an expiry, and later declared local work still runs
+### TC-SR1-20 Stop ends the run; later declared work does not run
 - Layer: L3
 - File: packages/runner/src/rules/decisions.test.ts
-- Given: as TC-SR1-19 scenario A but the first decision expires at `T0 + 24h` instead of being rejected; a step 4 writes a file in the declared folder `builds-out`.
-- When: the run continues after the sweep.
-- Then: step 3 is held as a normal decision; step 4's `local_write` runs (declared work stays allowed, the residual risk named in T-06); every later `change`, `send`, `post`, `pay`, `delete` and `merge` in this run is held even with a rule; the next run of the flow uses the rules again.
+- Given: As TC-SR1-19 scenario A, but Stop ends the run while its first decision waits; step 3 is a rule-eligible change and step 4 writes to the declared folder `builds-out`.
+- When: The person presses Stop, then starts a new run of the flow.
+- Then: The old run is `stopped`, the decision is `expired`, neither step 3 nor step 4 runs and no rule is used in that run; the new run can use the existing rule and its declared `local_write` runs normally.
 - Traces: SR-1, T-06
 - Build step: B-05
-- Fails first because: the flag is not set by expiry.
+- Fails first because: the current stop path does not pin these decision and later-work outcomes.
 
 ### TC-SR1-21 Runs started by other AI tools or a phone use no standing rules (decision table)
 - Layer: L1
@@ -1520,7 +1520,7 @@ Every tool call the agent tried, every decision (by rule, by the person, refused
   | 7 | person edits | `decision_made {decision: "edit", via: "window"}` |
   | 8 | person rejects | `decision_made {decision: "reject", via: "window"}` |
   | 9 | person chooses Always allow on a `change` decision (`log-hours`) | `decision_made {decision: "always_allow"}` and `rule_created {by: "always_allow", ruleId, placeKind}` |
-  | 10 | expiry | `decision_expired {why: "expiry"}` |
+  | 10 | flow deletion | `decision_expired {why: "flow_deleted"}` |
   | 11 | Stop | `decision_expired {why: "stop"}` and `run_stopped` |
   | 12 | permission off | `decision_expired {why: "permission_off"}` |
   | 13 | phone approve (V2) | `decision_made {via: "phone"}` |
@@ -1626,7 +1626,6 @@ Every tool call the agent tried, every decision (by rule, by the person, refused
   | 2 | person edited | `report.youApprovedEdited` | You approved your edited version: Send reply to Sam Example? |
   | 3 | rule ran the call (a `change`) | `report.doneByRule` | Done by your rule: Log 8 hours to Project Example. |
   | 4 | person rejected | `report.youSaidNo` | You said no: Send reply to Sam Example?. It was not done. |
-  | 5 | expiry | `report.noAnswer` | No answer in 24 hours: Send reply to Sam Example?. It was not done. |
   | 6 | Stop with a pending decision | `report.stoppedBeforeAnswer` | Stopped before you answered: Send reply to Sam Example?. It was not done. |
 
 - When: each run ends and `runs.report` is read; each line is checked with the English words and again in Bahasa Indonesia.
@@ -1743,11 +1742,11 @@ Stop ends the agent's process group at once and needs no confirmation. Turning o
 - Layer: L3
 - File: packages/runner/src/engine-recovery.test.ts
 - Given: a run `waiting_approval` with decision `ap-1` created at T0; the runner is killed and restarted at `T0 + 1h`.
-- When: the runner starts and the sweep runs; then at `T0 + 24h` the sweep runs again.
-- Then: `ap-1` is still `pending` with `expiresAt = T0 + 24h` after the restart (the clock does not restart); no agent process starts; the held call never ran; at `T0 + 24h` it is `expired` and treated as Reject.
+- When: The runner starts; then the clock advances to `T0 + 25h` and decisions are read again.
+- Then: `ap-1` remains `pending` after restart and at 25 hours; no agent process starts, no grant is written and the held call never ran.
 - Traces: SR-8, SR-1, FS-j24.A16
 - Build step: B-05
-- Fails first because: the expiry is not stored with the new decision model.
+- Fails first because: the current expiry ends the pending decision after restart.
 
 ### TC-SR8-10 A chat turn cut off by a crash becomes "Stopped unexpectedly" and nothing runs
 - Layer: L3
@@ -2079,7 +2078,7 @@ Every threat of `threat-model.md` that a safety rule mitigates, with the cases t
 | T-03 Injection or a misread request makes the chat start a run | TC-SR2-06; TC-SR5-02, 03, 04, 05; TC-START-01, 05, 06 | TC-j20-19 to TC-j20-23 |
 | T-04 Self-approval through the chat, the agent, MCP or a bot | TC-SR1-33; TC-SR2-01 to 12, 15, 19 | TC-j24-37, TC-j24-38 |
 | T-05 Approving a different action than the one shown | TC-SR1-07, 08, 10, 11, 12, 23, 24, 28; TC-SR8-07 | TC-j24-05 |
-| T-06 Reject or expiry lets later steps act on a broken plan | TC-SR1-17, 18, 19, 20 | TC-j24-08, TC-j24-29 |
+| T-06 Reject lets later steps act on a broken plan | TC-SR1-17, 18, 19, 20 | TC-j24-08, TC-j24-29 |
 | T-07 A standing rule carries words a stranger wrote | TC-SR1-16, 30, 44, 45, 47; TC-SR5-09, 10 | TC-j24-14 |
 | T-08 Private data leaves through an allowed channel | TC-SR5-11, 14, 15 | - |
 | T-09 A malicious marketplace flow (V3) | TC-SR2-16; TC-SR3-11 | MKT cases |
@@ -2118,7 +2117,7 @@ Rule coverage: SR-1 TC-SR1-01 to 47; SR-2 TC-SR2-01 to 20; SR-3 TC-SR3-01 to 12;
 - Stop grace. TC-SR8-01 demands the group be gone within 2,000 ms, so Stop uses SIGKILL after at most 1,500 ms; today's `graceMs` is 2,000 ms after SIGTERM, which would miss the target (NF-07).
 - Send-capable steps. TC-SR8-06 treats a step as send-capable when its effect is one of the five risky kinds or it holds an approved grant, whatever its `idempotent` flag says, because the threat model's verification says an idempotent send step does not resume.
 - New audit kinds beyond `data-model.md` 3.16: `caller_refused` (a refused operation from a tool or phone caller) and `phone_refused` (V2). Reason: SR-7 asks for every refusal on the record.
-- Decision line keys other than `report.youSaidNo` (`report.youApproved`, `report.youApprovedEdited`, `report.doneByRule`, `report.noAnswer`, `report.stoppedBeforeAnswer`) follow the pattern of the one key `runner-api.md` names. Reason: the cases need exact keys; the words file is the only place the English text lives.
+- Decision line keys other than `report.youSaidNo` (`report.youApproved`, `report.youApprovedEdited`, `report.doneByRule`, `report.stoppedBeforeAnswer`) follow the pattern of the one key `runner-api.md` names. Reason: the cases need exact keys; the words file is the only place the English text lives.
 - Retired operations. Per the owner's decision the retired version 1 operations stay in the `operations` table as retired entries and the real runner answers each `unavailable` with reason `retired` (this replaces the -32601 mapping of `runner-api.md` section 7 for the runner; `retired` is a new reason, and TC-SR2-19 is the case). The builder-first screens stay in the code, unrouted.
 - Gmail label special case. TC-SR1-05 keeps the one special case AD-06 names (a label change to Trash or Spam is a delete); the general rule cannot see it. No other special case is tested.
 - Placeholder groups. The gateway cases (TC-SR1-41 to 43), the bot and phone cases (TC-SR2-03, TC-SR2-15, TC-SR6-11) and the marketplace cases (TC-SR2-16, TC-SR3-11) belong to B-29, B-26 and B-28. They are complete cases, but their files are written in those steps and they are not part of the V1 gate; `.todo` is not used.

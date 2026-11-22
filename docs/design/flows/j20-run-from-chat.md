@@ -95,7 +95,7 @@ P11 depends on version 9; the others do not.
 | Run | `running` -> `needs_login` | The agent is signed out (FS-j25) |
 | Run | `running` -> `interrupted` | App or runner ended (FS-j20.E6) |
 | Run | `running` -> `failed` or `blocked` | A step failed, or a check cannot pass |
-| Decision | `pending` -> `approved`, `approved_edited`, `rejected`, `expired`, `allowed_always` | Person, or 24 hours with no answer (counts as Reject) |
+| Decision | `pending` -> `approved`, `approved_edited`, `rejected`, `expired`, `allowed_always` | Person, or Stop, permission off or flow deletion |
 | Standing rule | none -> active | "Always allow for this flow" (only a `change` at a fixed place) |
 | Schedule (Fill timesheet) | weekdays 17:00 -> `after` Build APK | "Yes, every time" |
 
@@ -124,7 +124,7 @@ E11 depends on version 9; the others do not. E15 and E16 say why some template i
 - **FS-j20.E12 Prototype gap: "Change" on a plan.** The prototype only replied "Tell me what to change." The real app lets the person say the change in the next message; the assistant returns a new plan card (reorder, drop a flow, change an input).
 - **FS-j20.E13 Prototype gap: Indonesian "Hanya kali ini".** The prototype matched the chip text "Hanya kali ini" as "yes" because "Hanya" contains "ya". The real app uses card buttons with action ids, never text matching (FS-j30).
 - **FS-j20.E14 Prototype gap: stubs.** Build APK always succeeded, and the timesheet service check "if the time is taken, take the free time the timesheet service suggests" was never shown. In the real app a failing step makes the run `failed` or `blocked`; the check is part of the flow's steps.
-- **FS-j20.E15 Not applicable here: a decision that expires on its own.** The 24-hour expiry (counts as Reject, state `Expired`, PU-15) is specified in FS-j24; this journey only shows the card, and an expired card loses its buttons.
+- **FS-j20.E15 A decision still waits the next day.** It remains under Needs you and the run page says the run waits for you (FS-j24.P7). Later scheduled slots for the busy flow are recorded as `skipped`.
 - **FS-j20.E16 Outside text trying to steer the agent.** Covered by P13 and P15 (a context with outside text, or pasted or dropped text, never starts a run by itself) and by SR-5; text inside a flow's results is data and never a command.
 
 ## Data read and written

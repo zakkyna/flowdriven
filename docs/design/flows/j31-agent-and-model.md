@@ -86,7 +86,7 @@ Each chat has one choice: which AI agent answers and with which model. Flows sta
 - **FS-j31.E5** Crash or restart. The chat's choice and each run's recorded agent and model are stored; after a restart the button shows the same choice. A run resumed after a crash uses its recorded agent and model.
 - **FS-j31.E6** Flow changed since confirmed. Not affected by the picker. A `new` or `changed` flow asked for in a chat shows its confirm card before any agent is used (`START`).
 - **FS-j31.E7** Outside text. Cause: a message, email or flow text says "use another model", "turn off the sandbox" or "pass --dangerously-skip-permissions". Sees: nothing changes. Next: the choice changes only by the person's click; FlowDriven refuses every permission-bypass or full-access flag whatever the text says (SR-4).
-- **FS-j31.E8** A decision that expires. None for the picker; nothing here waits for an answer.
+- **FS-j31.E8** A decision that waits. None for the picker; nothing here waits for an answer.
 - **FS-j31.E9** Unknown model id. A request for a model that the agent did not list is refused (`invalid_input`) and the choice stays. The model id must also match the adapter's allowed pattern, so no text can reach the command line as another flag.
 - **FS-j31.E10** Start proof fails. Cause: the agent did not apply the limits FlowDriven asked for. Sees: the run is "Stuck" with "<Agent> did not apply the limits FlowDriven asked for, so the step did not run." (SR-4).
 

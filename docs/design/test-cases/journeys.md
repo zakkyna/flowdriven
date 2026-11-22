@@ -2421,7 +2421,7 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - File: packages/runner/src/rules/decisions.test.ts (new)
 - Given: EMAIL-TRIAGE confirmed (its `reply` touch has no fixed place); a run started from a chat (`chat-7`) on the fake claude whose play calls `mcp__claude_ai_Gmail__reply` with REPLY-SAM; clock T0.
 - When: the step reaches the call and the run settles.
-- Then: the run state is `waiting_approval`; `approvals.list {state: "pending"}` has exactly one row with `kind` `risky_action`, `riskyAction` `send`, `state` `pending`, title "Send reply to Sam Example?", `expiresAt` T0 plus 24 hours; `activity.summary` lists it under needs-you and its needs-you count is 1; `chats.get {chatId: "chat-7"}` has a decision card message for it; exactly one notice of kind `approval_waiting` was sent, with the fixed lines `notice.decisionTitle` and `notice.decisionBody` and no params; the fake claude's log shows the call did not run (`ran: false`).
+- Then: the run state is `waiting_approval`; `approvals.list {state: "pending"}` has exactly one row with `kind` `risky_action`, `riskyAction` `send`, `state` `pending`, title "Send reply to Sam Example?"; `activity.summary` lists it under needs-you and its needs-you count is 1; `chats.get {chatId: "chat-7"}` has a decision card message for it; exactly one notice of kind `approval_waiting` was sent, with the fixed lines `notice.decisionTitle` and `notice.decisionBody` and no params; the fake claude's log shows the call did not run (`ran: false`).
 - Traces: FS-j24.S1, FS-j24.A1, F-13, F-16, SR-1, SR-7
 - Build step: B-05
 - Fails first because: decisions are not mirrored into the chat and the activity summary does not exist.
@@ -2441,7 +2441,7 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - File: apps/desktop/src/screens/activity/DecisionCard.test.tsx (new)
 - Given: a pending decision for REPLY-SAM whose body contains a zero-width space built with `String.fromCodePoint(0x200B)` and a link text "https://example.com/pay", `outside: true`, created at T0, clock at T0 plus 2 hours, and two more waiting sends of the same group.
 - When: the card is rendered.
-- Then: it shows the badge "Needs you"; the title "Send reply to Sam Example?"; the flow name "Email triage"; a one-line summary; the tag "Includes text from an email or web page"; To "Sam Example", Subject "Re: Invoice question" and the body with the hidden character shown as "[U+200B hidden character]"; the link text as plain text (no element with role `link`); no countdown text (V1 shows no "Expires in" line; an expired decision shows the state "Expired", TC-j24-29); buttons named "Approve", "Edit", "Reject" and "Approve all similar (3)".
+- Then: it shows the badge "Needs you"; the title "Send reply to Sam Example?"; the flow name "Email triage"; a one-line summary; the tag "Includes text from an email or web page"; To "Sam Example", Subject "Re: Invoice question" and the body with the hidden character shown as "[U+200B hidden character]"; the link text as plain text (no element with role `link`); no countdown text (a decision ended by Stop, permission off or flow deletion shows "Expired", TC-j24-30); buttons named "Approve", "Edit", "Reject" and "Approve all similar (3)".
 - Traces: FS-j24.S2, FS-j24.A2, FS-j24.E7, F-13, SR-5
 - Build step: B-19
 - Fails first because: the decision card does not exist.
@@ -2469,7 +2469,7 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
   | 4 | Same call in another step of run R | hold |
   | 5 | Same call in another run R2 of the same flow | hold |
   | 6 | Same call when its decision was `rejected` (a rejection writes no grant) | hold |
-  | 7 | Same call when its decision was `expired` (an expiry writes no grant) | hold |
+  | 7 | Same call when its decision was `expired` (Stop writes no grant) | hold |
 
 - When: each attempt is evaluated.
 - Then: each row is as shown and every `hold` carries the held-call fields (tool, input, digest, action); the `grant_used:` counter for G is 1 after row 1's first use and never 2. That a `hold` creates one new pending decision is asserted in TC-j24-01.
@@ -2750,45 +2750,45 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - Build step: B-05
 - Fails first because: the one-at-a-time rule is not in the v2 decision service.
 
-### TC-j24-29 A decision pending for 24 hours expires and counts as Reject
+### TC-j24-29 A decision pending for 25 hours is still pending and the run still waits
 - Layer: L3
 - File: packages/runner/src/rules/decisions.test.ts
 - Given: the pending decision of TC-j24-01 created at T0; the injected clock.
-- When: the clock is at T0 plus 23 hours 59 minutes 59 seconds and `approvals.list` is read; then at T0 plus 24 hours and `approvals.list` is read; separately, in a second run, the clock jumps to T0 plus 25 hours and only the 60-second sweep timer fires.
-- Then: at 23:59:59 the decision is `pending`; at exactly 24 hours it is `expired` (read-time sweep); in the second run the timer sweep makes it `expired`; in both, the action did not run (fake claude log), the step is `skipped`, the run goes on and ends `done`, the notice `approval:<id>` is removed, and the report decision lines include "No answer in 24 hours: Send reply to Sam Example. It was not done."
+- When: Read `approvals.list` at T0 plus 23 hours 59 minutes 59 seconds, 24 hours and 25 hours; separately advance a second run to 25 hours and tick the timer.
+- Then: At every read both decisions remain `pending`, the runs remain `waiting_approval`, the actions have not run, the steps still wait, the notices remain and no rejection or no-answer report line is written. A later scheduled slot of the same flow is recorded `skipped` with reason `still_running`; no second run starts.
 - Traces: FS-j24.P7, FS-j24.A15, F-13, SR-1, SR-7
 - Build step: B-05
-- Fails first because: the engine's expiry today fails the run and uses no "counts as Reject" path.
+- Fails first because: the engine currently expires an unanswered decision and ends the wait.
 
-### TC-j24-30 Approve at the moment of expiry gets a plain refusal
+### TC-j24-30 An answer after Stop gets a plain refusal
 - Layer: L3
 - File: packages/runner/src/rules/decisions.test.ts
-- Given: the pending decision of TC-j24-29 and the clock at T0 plus 24 hours plus one second.
-- When: `approvals.resolve {approvalId, decision: "approve"}` is called.
-- Then: the call fails with `conflict` and reason `decision_expired` (the renderer words it "This decision expired. The action was not done."); no grant row exists; the call never runs.
+- Given: A pending decision as in TC-j24-29, ended by Stop; repeat for permission off and flow deletion.
+- When: The person calls `approvals.resolve` with `approve`; separately answer an ended choice with `approvals.answer`.
+- Then: Each call fails with `conflict` and reason `decision_expired` (the renderer words it "This decision expired. The action was not done."); no grant row exists and the call never runs.
 - Traces: FS-j24.E8, FS-j24.P7, F-13, SR-1
 - Build step: B-05
-- Fails first because: the sweep does not run before a resolve.
+- Fails first because: the service does not return `decision_expired` for every ended decision.
 
-### TC-j24-31 A choice that expires follows the flow's own rule
+### TC-j24-31 A choice waits without a time limit
 - Layer: L3
 - File: packages/runner/src/engine-ask.test.ts
-- Given: two flows with a choice step: one with `on_expiry: end`, one with `on_expiry: fail`; each choice pending at T0.
-- When: the clock reaches T0 plus 24 hours and `approvals.list` is read.
-- Then: the `end` flow's run is `done` with picks `[]` and later steps `skipped`; the `fail` flow's step and run are `failed`; both decisions are `expired`.
+- Given: Two flows with a choice step: one with `on_expiry: end`, one with `on_expiry: fail`; each choice pending at T0.
+- When: The clock reaches T0 plus 25 hours and `approvals.list` is read; then the person answers each choice.
+- Then: Both choices remain `pending` and both runs remain `waiting_approval` with no later step run; neither `on_expiry` branch runs. Each answer is accepted and the corresponding run continues with the selected picks.
 - Traces: FS-j24.P4, FS-j24.A15, F-13
 - Build step: B-05
-- Fails first because: the `expired` state value, the skip of later steps and the 24-hour sweep of the v2 decision service do not exist.
+- Fails first because: the choice expiry sweep currently ends or fails the runs.
 
-### TC-j24-32 A restart keeps pending decisions and the original expiry
+### TC-j24-32 A restart keeps pending decisions without a deadline
 - Layer: L3
 - File: packages/runner/src/engine-recovery.test.ts
 - Given: a pending decision created at T0; one approved decision whose grant was not used yet; the runner stopped and a new service started at T0 plus 3 hours.
-- When: `approvals.list` and `runs.status` are read; then the clock reaches T0 plus 24 hours.
-- Then: the pending decision is still there with `expiresAt` T0 plus 24 hours (not T0 plus 27); the run shows `interrupted` ("Stopped unexpectedly") and a step that is not marked idempotent is not repeated by itself; no held call ran without its grant; the unused approved grant is still usable when the person resumes the run with `runs.resume`; at T0 plus 24 hours the pending decision becomes `expired`.
+- When: Read `approvals.list` and `runs.status` after restart, then advance to T0 plus 25 hours and read again.
+- Then: The decision remains `pending` after restart and at 25 hours; the run shows `interrupted` ("Stopped unexpectedly") and a non-idempotent step is not repeated by itself; no held call ran without its grant; the unused approved grant is still usable when the person resumes the run with `runs.resume`.
 - Traces: FS-j24.E5, FS-j24.A16, F-13, SR-8
 - Build step: B-05
-- Fails first because: decisions are created with a clock that restarts, or the `expired` state value does not exist.
+- Fails first because: the existing expiry can end a pending decision after restart.
 
 ### TC-j24-33 Stop ends the run at once and expires its decisions
 - Layer: L3
@@ -2853,9 +2853,9 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 ### TC-j24-39 Everything about a decision is in the audit log in plain words
 - Layer: L3
 - File: packages/runner/src/rules/decisions.test.ts
-- Given: one run with a held call that is approved, one rejected, one expired, one by rule, one refused (a call the flow never declared), one rule revoked; the body of one held call holds `String.fromCodePoint(0x200B)` and a fake token `"sk-" + "y".repeat(24)` in the chat text.
-- When: `audit.list {runId}` and `runs.report` are read.
-- Then: the log has records for each of: call held, approved, rejected, expired, done by rule, refused, rule revoked, each with a plain-words detail (for example "You approved: Send reply to Sam Example.", "No answer in 24 hours: ...", "Refused: this flow does not declare the tool ..."); the hidden character appears as "[U+200B hidden character]"; the fake token appears nowhere in the log; the report's decision lines carry the same words.
+- Given: runs with held calls: one approved, one rejected, one ended by Stop, one by rule, one refused (a call the flow never declared), one rule revoked; the body of one held call holds `String.fromCodePoint(0x200B)` and a fake token `"sk-" + "y".repeat(24)` in the chat text.
+- When: `audit.list {runId}` and `runs.report` are read for each run.
+- Then: the log has records for each of: call held, approved, rejected, expired, done by rule, refused, rule revoked, each with a plain-words detail (for example "You approved: Send reply to Sam Example.", "Stopped before you answered: ...", "Refused: this flow does not declare the tool ..."); the hidden character appears as "[U+200B hidden character]"; the fake token appears nowhere in the log; the report's decision lines carry the same words.
 - Traces: FS-j24.A21, F-13, SR-7, SR-6
 - Build step: B-05
 - Fails first because: the v2 decision events are not audited in words.
@@ -2863,9 +2863,9 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 ### TC-j24-40 The honest decision lines
 - Layer: L1
 - File: apps/desktop/src/screens/activity/decisionLines.test.ts (new)
-- Given: the `decisionLines` of a run as the runner returns them, `Line` values with the keys `report.youApproved` (title "Send reply to Sam Example."), `report.youApprovedEdited` (title "Send reply to Alex Example."), `report.youApproved` (title "Log hours."; an Always allow reads as an approval), `report.doneByRule` (title "Log hours."), `report.youSaidNo` (title "Post the update.") and `report.noAnswer` (title "Send reply to Robin Example."); the runner emits only these codes and params (a runner case checks them in TC-j24-39).
+- Given: the `decisionLines` of a run as the runner returns them, `Line` values with the keys `report.youApproved` (title "Send reply to Sam Example."), `report.youApprovedEdited` (title "Send reply to Alex Example."), `report.youApproved` (title "Log hours."; an Always allow reads as an approval), `report.doneByRule` (title "Log hours."), `report.youSaidNo` (title "Post the update."); the runner emits only these codes and params (a runner case checks them in TC-j24-39).
 - When: `drawDecisionLines(lines, "en")` is called.
-- Then: it returns exactly, in order, `["You approved: Send reply to Sam Example.", "You approved your edited text: Send reply to Alex Example.", "You approved: Log hours. You chose to always allow it for this flow.", "Done by your rule: Log hours.", "You said no: Post the update. It was not done.", "No answer in 24 hours: Send reply to Robin Example. It was not done."]` (titles lose a trailing "?" and a trailing "." is not doubled); no line carries an outside tag or any other tag.
+- Then: it returns exactly, in order, `["You approved: Send reply to Sam Example.", "You approved your edited text: Send reply to Alex Example.", "You approved: Log hours. You chose to always allow it for this flow.", "Done by your rule: Log hours.", "You said no: Post the update. It was not done."]` (titles lose a trailing "?" and a trailing "." is not doubled); no line carries an outside tag or any other tag.
 - Traces: FS-j24.S5, FS-j24.A6, FS-j24.A12, FS-j24.A15, F-13, F-06, SR-7
 - Build step: B-11
 - Fails first because: the renderer has no `drawDecisionLines` and the runner has no line keys for decisions.
@@ -3124,7 +3124,7 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - File: packages/runner/src/engine-needs-login.test.ts
 - Given: a run enters `needs_login` at `T0` (cause `site_sign_in`, site "Example Job Site"); a pending decision of another run exists.
 - When: the clock is set to `T0` + 11 h 59 min and `engine.sweepExpired()` runs; then to `T0` + 12 h and `engine.sweepExpired()` runs again.
-- Then: after the first sweep the run is still `needs_login`. After the second it is `blocked` with the same cause, `isResumable("blocked")` is true, and the audit log has one record of kind `run_blocked` with the words "Waiting for sign-in ended after 12 hours." The run is never `done`. A later sweep changes nothing. The other run's decision is not touched by the 12-hour rule (it expires at 24 hours).
+- Then: after the first sweep the run is still `needs_login`. After the second it is `blocked` with the same cause, `isResumable("blocked")` is true, and the audit log has one record of kind `run_blocked` with the words "Waiting for sign-in ended after 12 hours." The run is never `done`. A later sweep changes nothing. The other run's decision is not touched by the 12-hour rule (it remains pending after 24 hours).
 - Traces: FS-j25.A5, FS-j25.E8, SR-9, F-14
 - Build step: B-19
 - Fails first because: nothing times out a sign-in wait.
@@ -3162,12 +3162,12 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 ### TC-j25-16 After a restart only all-idempotent runs resume by themselves
 - Layer: L3
 - File: packages/runner/src/engine-recovery.test.ts
-- Given: a real store with run A (`running`, its only unfinished step is marked idempotent), run B (`running`, unfinished step "Submit the entry" not idempotent) and a pending decision with `expiresAt` = `T0` + 20 h. The first engine is dropped without finishing; a second engine opens the same store and calls `beginRecover()`.
+- Given: a real store with run A (`running`, its only unfinished step is marked idempotent), run B (`running`, unfinished step "Submit the entry" not idempotent) and a pending decision. The first engine is dropped without finishing; a second engine opens the same store and calls `beginRecover()`.
 - When: recovery finishes.
-- Then: both runs were marked `interrupted` with one audit record `run_interrupted` each. Run A then runs by itself to `done`. Run B stays `interrupted`; its harness got no call. The decision keeps `expiresAt` = `T0` + 20 h. After `runs.resume` for B, the step "Submit the entry" runs once.
+- Then: both runs were marked `interrupted` with one audit record `run_interrupted` each. Run A then runs by itself to `done`. Run B stays `interrupted`; its harness got no call. The decision remains pending without a deadline. After `runs.resume` for B, the step "Submit the entry" runs once.
 - Traces: FS-j25.A7, FS-j25.E5, SR-8, F-14
 - Build step: B-19
-- Fails first because: the existing recovery test does not cover the v2 run states, the decision expiry or the two-run mix.
+- Fails first because: the existing recovery test does not cover the v2 run states, the pending decision or the two-run mix.
 
 ### TC-j25-17 Run again on a new or changed flow shows the confirm card and starts nothing
 - Layer: L3
@@ -3419,15 +3419,15 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - Build step: B-19
 - Fails first because: the queue lines are not on the new run page.
 
-### TC-j25-42 A decision expires after 24 hours; a sign-in wait is different
+### TC-j25-42 A decision does not expire; a sign-in wait ends after 12 hours
 - Layer: L3
 - File: packages/runner/src/engine-needs-login.test.ts
 - Given: run A has a pending decision created at `T0` ("Send the summary"); run B is `needs_login` since `T0`.
-- When: the clock is `T0` + 24 h and `engine.sweepExpired()` runs.
-- Then: A's decision is `expired`, A goes on, its report line is "No answer in 24 hours: Send the summary. It was not done."; B became `blocked` at 12 h (TC-j25-12) and stays `blocked`, with no report line about a decision.
+- When: At T0 plus 12 hours run the sign-in sweep, then advance to T0 plus 25 hours and read both runs.
+- Then: A's decision is still `pending`, A is `waiting_approval`, its action has not run and no rejection or no-answer report line exists; B became `blocked` at 12 hours (TC-j25-12) and stays `blocked`, with no report line about a decision.
 - Traces: FS-j25.E8, SR-7, SR-9
 - Build step: B-19
-- Fails first because: the 12-hour rule does not exist, so B would still be waiting.
+- Fails first because: the engine currently expires A's decision after 24 hours.
 
 ### TC-j25-43 The start proof failing is Stuck with the limits words
 - Layer: L3
@@ -4817,15 +4817,15 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 - Build step: B-12
 - Fails first because: deleting a flow does not touch its questions.
 
-### TC-j28-51 A waiting question does not expire; a decision inside a run still does
+### TC-j28-51 A waiting question and a run decision do not expire
 - Layer: L3
 - File: packages/runner/src/starts/proactive.test.ts
 - Given: Harness H with the open question of TC-j28-04 (chat `c13`, one notice sent); a run of another flow that holds a pending decision created at the same moment `T0`.
 - When: the clock advances to `T0` + 25 hours and the service ticks; then to `T0` + 7 days; then the person answers the question.
-- Then: the question is still `open`, its `needsYou` row remains and no `expired` state is ever written for it; no second notice is sent; the decision of the other run is `expired` at 24 hours (TC-j24-29); the late answer starts the run normally.
+- Then: The question is still `open`, its `needsYou` row remains and no `expired` state is ever written for it; no second notice is sent; the other run's decision is still `pending` and its run still waits at 25 hours and seven days (TC-j24-29); the late answer starts the question's run normally.
 - Traces: FS-j28.E11, FS-j27.E12, FS-j28.A17
 - Build step: B-12
-- Fails first because: nothing states or tests that a question has no expiry of its own.
+- Fails first because: the engine currently expires the other run's decision.
 
 ## j29 Make a flow from a skill
 

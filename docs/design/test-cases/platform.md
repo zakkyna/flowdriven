@@ -158,7 +158,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/run.test.ts
 - Given: `RunState`, `StepRunState`, `ApprovalState`, `ApprovalDecision`, `ResolvedVia`, `AgentState`, `FlowState`.
 - When: each member is parsed, and "paused" is tried.
-- Then: `RunState` accepts the eleven values `queued, checking, running, waiting_approval, needs_login, retrying, blocked, interrupted, stopped, done, failed`; `StepRunState` accepts nine including `stopped`; `ApprovalState` accepts `pending, approved, approved_edited, rejected, expired, allowed_always`; `ApprovalDecision` accepts `approve, edit, reject, always_allow`; `ResolvedVia` accepts `window, chat, phone, rule, expiry, stop, permission_off`; `AgentState` accepts the six agent states; `FlowState` accepts `new, changed, confirmed`. "paused", "approved_always" and "waiting_login" (as a run state) fail.
+- Then: `RunState` accepts the eleven values `queued, checking, running, waiting_approval, needs_login, retrying, blocked, interrupted, stopped, done, failed`; `StepRunState` accepts nine including `stopped`; `ApprovalState` accepts `pending, approved, approved_edited, rejected, expired, allowed_always`; `ApprovalDecision` accepts `approve, edit, reject, always_allow`; `ResolvedVia` accepts `window, chat, phone, rule, stop, permission_off` (and rejects `expiry` after B-05.T14); `AgentState` accepts the six agent states; `FlowState` accepts `new, changed, confirmed`. "paused", "approved_always" and "waiting_login" (as a run state) fail.
 - Traces: AD-03, AD-07, F-13, F-14
 - Build step: B-01
 - Fails first because: version 1 has nine run states and four decision states.
@@ -418,7 +418,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/line-keys.test.ts (new)
 - Given: `LINE_KEYS` from `packages/contracts/src/line-keys.ts` (new), the list of every key the runner may emit in a `Line`.
 - When: it is read.
-- Then: every entry matches the `Line` key pattern and the list has no duplicate; it contains `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer`, `report.doneByRule`, `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `notice.decisionTitle`, `notice.decisionBody`, `notice.questionTitle`, `notice.questionBody`, `notice.problemTitle`, `notice.problemBody`, `notice.limitTitle`, `notice.limitBody`, `chat.permissionOff`, `chat.agentCannotRunFlow`, `flows.empty`, `chat.nothingWaiting`; it does not contain `decision.askAgainAfterNo`; no entry holds a space or a sentence.
+- Then: every entry matches the `Line` key pattern and the list has no duplicate; it contains `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.doneByRule`, `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `notice.decisionTitle`, `notice.decisionBody`, `notice.questionTitle`, `notice.questionBody`, `notice.problemTitle`, `notice.problemBody`, `notice.limitTitle`, `notice.limitBody`, `chat.permissionOff`, `chat.agentCannotRunFlow`, `flows.empty`, `chat.nothingWaiting`; it does not contain `decision.askAgainAfterNo`; no entry holds a space or a sentence.
 - Traces: AD-14, F-20
 - Build step: B-06
 - Fails first because: `line-keys.ts` does not exist.
@@ -477,6 +477,16 @@ Shared setup used by the L3 cases below.
 - Build step: B-01
 - Fails first because: the client answers `unavailable` for the new operations until this task.
 
+
+### TC-CON-44 Decisions have no time limit in the contract
+- Layer: L1
+- File: packages/contracts/src/approval.test.ts
+- Given: valid version 2 run decisions and the version 2 fixtures and fixture client.
+- When: parse decisions with and without `expiresAt`, parse each `ResolvedVia` value including `expiry`, and inspect the fixture client decisions.
+- Then: decisions without `expiresAt` parse and fixture client decisions omit it; `expiresAt` is rejected as an unknown key; `expiry` is rejected while `window`, `chat`, `phone`, `rule`, `stop` and `permission_off` pass. Version 1 contracts are unchanged.
+- Traces: F-13.R5, AD-07
+- Build step: B-05
+- Fails first because: version 2 requires `expiresAt` and accepts `expiry`.
 
 ### TC-SDK-01 Format 1.2 is accepted and unknown formats are refused
 - Layer: L1
@@ -1205,25 +1215,25 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - Build step: B-05
 - Fails first because: rejection marks the item failed and `on_item_fail: stop` ends the loop.
 
-### TC-ENG-15 Expiry counts as Reject
+### TC-ENG-15 A decision remains pending after 25 hours
 - Layer: L3
 - File: packages/runner/src/engine-reject.test.ts (new)
-- Given: decision `ap-000000000001` created at T0 with `expiresAt` T0 + 24 h; the run is `waiting_approval`.
-- When: the clock is set to T0 + 24 h - 1 ms and `engine.sweepExpired()` runs; then to T0 + 24 h and it runs again.
-- Then: after the first sweep the decision is `pending`; after the second it is `expired` with `resolvedVia: "expiry"`; the step is `skipped` with `because: "expired"`; the run continues and ends `done`; `decisionLines` has `{key: "report.noAnswer", params: {title}}` ("No answer in 24 hours: <title>. It was not done."); the action never ran; the audit has `decision_expired` with `why: "expiry"`; `approvals.resolve` with `approve` now gives `conflict: decision_expired`.
+- Given: Decision `ap-000000000001` created at T0; the run is `waiting_approval`.
+- When: Read the decision at T0 + 24 h - 1 ms, T0 + 24 h and T0 + 25 h, with timer ticks.
+- Then: At each read the decision is `pending`, the step and run still wait, the action never ran, no grant, rejection line or `decision_expired` audit exists, and a subsequent approval succeeds and runs the exact action once.
 - Traces: AD-07, FS-j24.A16, SR-8
 - Build step: B-05
-- Fails first because: an expired risky decision fails the step and run.
+- Fails first because: the current engine expires the decision and fails the run.
 
-### TC-ENG-16 The expiry clock survives a restart; ask steps keep their rule
+### TC-ENG-16 A decision stays pending across a restart
 - Layer: L3
 - File: packages/runner/src/engine-reject.test.ts (new)
-- Given: a pending decision created at T0; the service is stopped at T0 + 10 h and started again at T0 + 20 h; separately an `ask` step with `on_expiry: end` pending since T0.
-- When: the clock reaches T0 + 24 h.
-- Then: the decision expires at T0 + 24 h (not at restart time + 24 h); the `ask` step ends the run `done` with `choice: []` as in version 1 (the existing behavior is kept for `ask`).
+- Given: A pending held-call decision and an `ask` decision with `on_expiry: end` created at T0; the service stops at T0 + 10 h and restarts at T0 + 20 h.
+- When: The clock reaches T0 + 25 h and both decisions are read.
+- Then: Both decisions remain `pending`, both runs still wait and neither action nor choice expiry branch runs; answering each permits its run to continue.
 - Traces: FS-j24.A16, AD-07
 - Build step: B-05
-- Fails first because: the risky-action branch of expiry is not changed and the ordering is not pinned.
+- Fails first because: the current engine expires the decisions after restart.
 
 ### TC-ENG-17 Recovery repeats only steps marked idempotent
 - Layer: L3
@@ -1240,10 +1250,10 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - File: packages/runner/src/exec/recovery-v2.test.ts (new)
 - Given: a run `waiting_approval` with pending decision `ap-000000000001`, and the service killed and started again.
 - When: the service restarts and `engine.beginRecover` runs.
-- Then: the run is still `waiting_approval`; the decision is still `pending` with the same `expiresAt`; the fake log shows no spawn; `call_grants` has no row for the run.
+- Then: the run is still `waiting_approval`; the decision is still `pending` without a deadline; the fake log shows no spawn; `call_grants` has no row for the run.
 - Traces: SR-8, FS-j24.A16
 - Build step: B-04
-- Fails first because: the expiry and grant rows are in other tables in version 6.
+- Fails first because: the decision and grant rows are in other tables in version 6.
 
 ### TC-ENG-19 A run records its agent, model, language and start; version 6 runs get defaults
 - Layer: L3
@@ -2040,9 +2050,9 @@ Shared setup: `pickAnswerLines(result, language)` in `packages/runner/src/result
 ### TC-RES-07 The honest decision lines
 - Layer: L1
 - File: packages/runner/src/results/report-lines.test.ts (new)
-- Given: a run with decisions titled "Log 8 hours to Project Example?": one `approved`, one `approved_edited`, one `allowed_always`, one `rejected`, one `expired`, and one call that ran by a standing rule.
+- Given: a run with decisions titled "Log 8 hours to Project Example?": one `approved`, one `approved_edited`, one `allowed_always`, one `rejected`, one ended by Stop (`expired`), and one call that ran by a standing rule.
 - When: `decisionLines(run)` runs.
-- Then: the keys in order of time are `report.youApproved`, `report.youApprovedEdited`, `report.youApproved` (an Always allow reads as an approval), `report.youSaidNo`, `report.noAnswer`, `report.doneByRule`, each with `params: {title}`; the renderer draws the English lines "You approved: ...", "You approved your edited version: ...", "You said no: ... It was not done.", "No answer in 24 hours: ... It was not done.", "Done by your rule: ...".
+- Then: the keys in order of time are `report.youApproved`, `report.youApprovedEdited`, `report.youApproved` (an Always allow reads as an approval), `report.youSaidNo`, `report.stoppedBeforeAnswer`, `report.doneByRule`, each with `params: {title}`; the Stop decision is not reported as a rejection; the renderer draws the English lines "You approved: ...", "You approved your edited version: ...", "You said no: ... It was not done.", "Done by your rule: ...".
 - Traces: AD-12, FS-j24.P2, SR-7
 - Build step: B-11
 - Fails first because: `report-lines.ts` does not exist.
@@ -2476,15 +2486,15 @@ Shared setup: harness H. In V1 a standing rule and Always allow exist only for a
 - Build step: B-05
 - Fails first because: there is no `conflict` code.
 
-### TC-RUL-04 The 24-hour expiry boundary
+### TC-RUL-04 Answers remain valid after 24 hours; Stop ends a decision
 - Layer: L3
 - File: packages/runner/src/service/decisions-handlers.test.ts
-- Given: a decision created at T0 (`expiresAt` T0 + 24 h).
-- When: `approve` is called at T0 + 24 h - 1 ms; on another decision `approve` is called at T0 + 24 h; `approvals.list` is called at T0 + 25 h.
-- Then: the first call works; the second throws `conflict` with reason `decision_expired`; the list shows the decision `expired` with `resolvedVia: "expiry"` (the sweep runs before the list); no grant was written for the second.
+- Given: Three pending decisions created at T0; Stop ends the third.
+- When: Approve the first at T0 + 24 h - 1 ms and the second at T0 + 25 h; approve the stopped decision and read the list.
+- Then: Both timely and later approvals work and write exactly one matching grant each; the stopped decision reads `expired`, the call returns `conflict: decision_expired` and no grant is written for it.
 - Traces: FS-j24.A16, AD-07
 - Build step: B-05
-- Fails first because: the decision has no `resolvedVia` and the error has no `decision_expired` reason.
+- Fails first because: the current deadline refuses the second approval.
 
 ### TC-RUL-05 Edit approves the edited text only
 - Layer: L3
@@ -2656,12 +2666,12 @@ Shared setup: harness H. In V1 a standing rule and Always allow exist only for a
 - Build step: B-05
 - Fails first because: `already_answered` and the new reasons do not exist.
 
-### TC-RUL-22 approvals.list sweeps first and shows what can be offered
+### TC-RUL-22 approvals.list keeps old decisions pending and shows what can be offered
 - Layer: L3
 - File: packages/runner/src/service/decisions-handlers.test.ts (new)
 - Given: a decision 25 hours old, a pending `change` decision (`log-hours`) with a fixed place, a pending send with a fixed own address, a pending `change` with a place from outside text, a weekly-limit question and a spending pause.
 - When: `approvals.list {}` is called, then with `{state: "pending"}`, `{runId}`, `{flowId}`.
-- Then: the old decision reads `expired`; `canAlwaysAllow` is true only for the fixed-place `change` decision (false for the send even with a fixed place); the outside one has `outside: true` and `canAlwaysAllow: false`; the synthetic `weekly_limit` and `budget_raise` decisions are listed; the filters narrow the list; `similarWaiting` counts the other pending decisions of the group.
+- Then: the old decision reads `pending`; `canAlwaysAllow` is true only for the fixed-place `change` decision (false for the send even with a fixed place); the outside one has `outside: true` and `canAlwaysAllow: false`; the synthetic `weekly_limit` and `budget_raise` decisions are listed; the filters narrow the list; `similarWaiting` counts the other pending decisions of the group.
 - Traces: FS-j24.P3, FS-j24.A12, SR-9
 - Build step: B-05
 - Fails first because: the new fields do not exist.
@@ -3265,7 +3275,7 @@ Every active operation (45 in contract version 2) has a schema case (L1, contrac
 
 - Count: see the group table at the top, above the 150 to 250 aim, because every operation needs a schema case and a handler case and the migration, the Codex adapter and the conformance suite each need several. The build tasks can take them in groups by build step.
 - Owner decision of 2026-11-21 applied: the runner emits codes and `Line` values only (`LINE_KEYS`, TC-CON-38, TC-AST-36); a chat result stores template lines and typed values and the renderer fills them (TC-RES-01, TC-RES-02, TC-RES-04); `runs.export` returns structured parts and the renderer builds the Markdown (TC-RES-10 to TC-RES-15); a notice carries `title` and `body` as `Line` values plus `language` (TC-CON-27, TC-STR-20); retired operations stay in the table with `retired: true` and answer `unavailable` with reason `retired` (TC-CON-02, TC-CON-03, TC-ENG-25); `v1/` copies are read-only (TC-CON-39); the runner takes `--languages=en,id` (TC-AGT-30, TC-AGT-40). No case adds a dependency or touches CI.
-- Message keys and part names are mine where `runner-api.md` gives none: `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `chat.tellMe`, `chat.whatToChange`, `chat.permissionOff`, `chat.agentCannotRunFlow`, `chat.nothingWaiting`, `flows.empty`, `notice.decisionTitle`, `notice.decisionBody`, `notice.questionTitle`, `notice.questionBody`, `notice.problemTitle`, `notice.problemBody`, `notice.limitTitle`, `notice.limitBody`; `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.noAnswer`, `report.doneByRule` (only `report.youSaidNo` is named in `runner-api.md`). Reason: tests need exact keys; the build may rename them if the cases change in the same task.
+- Message keys and part names are mine where `runner-api.md` gives none: `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `chat.tellMe`, `chat.whatToChange`, `chat.permissionOff`, `chat.agentCannotRunFlow`, `chat.nothingWaiting`, `flows.empty`, `notice.decisionTitle`, `notice.decisionBody`, `notice.questionTitle`, `notice.questionBody`, `notice.problemTitle`, `notice.problemBody`, `notice.limitTitle`, `notice.limitBody`; `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.doneByRule` (only `report.youSaidNo` is named in `runner-api.md`). Reason: tests need exact keys; the build may rename them if the cases change in the same task.
 - A hidden character in an export part is marked `[U+200B]` by the runner (a code, not words); the renderer adds the words around it. This differs from the journey cases, which show `[U+200B hidden character]` in the finished Markdown; TC-RES-14 and the journey case then agree only after the renderer builds the text.
 - Parser choices the specs leave open: a bare number is not a duration; a relative or `..` path is not a `file` value; only `http` and `https` urls without credentials pass; an invalid optional input is dropped, never asked (TC-INP-15); `remember: true` on a `date` or `time` input is a format error `remember_date_time` (TC-SDK-05).
 - Format 1.2 choices: 1.2-only keys in a 1.1 file are errors `needs_format_1_2`; `answer` on a `report` result is `answer_on_report`; placeholders are `{inputId}` and `{outputs.<id>}`; a touch place must name a declared requirement (`touch_place_undeclared`); a risky effect with `runs_alone` is a warning `risky_claims_runs_alone` and never a grant. The input question text is the input's `label` plus `example`; the SDK has no separate `question` key (the data model lists none).

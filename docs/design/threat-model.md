@@ -143,7 +143,7 @@ Out of scope:
 | T-03 | Injection or a misread request makes the chat start a run | Medium | Medium | V1 |
 | T-04 | Self-approval through the chat, the agent, MCP or a bot | High | Medium | V1 |
 | T-05 | Approving a different action than the one shown | High | Medium | V1 |
-| T-06 | Reject or expiry lets later steps act on a broken plan | High | Low | V1 |
+| T-06 | Reject lets later steps act on a broken plan | High | Low | V1 |
 | T-07 | A standing rule carries words a stranger wrote | Medium | Medium | V1 |
 | T-08 | Private data leaves through an allowed channel | High | Medium | V1 |
 | T-09 | A malicious marketplace flow | High | Medium | V3 |
@@ -214,14 +214,14 @@ Tampering; time of check versus time of use. Actors: a misbehaving agent, a stra
 - Residual: all-ASCII look-alike domains.
 - Verification: SR-1, SR-7: one changed character after approval is held again; the batch dialog shows the whole text of each item and approves only listed items; a used grant serves nothing else; 4,001 characters give no card; a bidi control shows visibly.
 
-### T-06 Reject or expiry lets later steps act on a broken plan
+### T-06 Reject lets later steps act on a broken plan
 
 Tampering with the run's plan. Actors: a stranger who times a hold, a fragile flow. Assets: files. Impact High; likelihood Low.
 
-- Scenario: Reject needs no confirmation (owner decision, 2026-11-18) and skips the action while the run goes on (AD-07); expiry counts as Reject. A flow backs up files (asks), then rewrites the originals (by a rule on a `change`); the backup is rejected or expires, and the rewrite runs.
-- Mitigations: AD-07: steps referencing skipped outputs are skipped and listed. Decided for V1 (revisable): after a Reject or expiry, no standing rule applies for the rest of that run; every later `change`, `send`, `post`, `pay`, `delete` or `merge` asks, and the held call shows the normal decision card. SR-7 records it.
+- Scenario: Reject needs no confirmation (owner decision, 2026-11-18) and skips the action while the run goes on (AD-07). A flow backs up files (asks), then rewrites the originals (by a rule on a `change`); the backup is rejected, and the rewrite runs.
+- Mitigations: AD-07: steps referencing skipped outputs are skipped and listed. Decided for V1 (revisable): after a Reject, no standing rule applies for the rest of that run; every later `change`, `send`, `post`, `pay`, `delete` or `merge` asks, and the held call shows the normal decision card. SR-7 records it.
 - Residual: later declared local writes and commands still run.
-- Verification: SR-1: with a rejected step 2 and a rule for step 3's `change`, step 3 is held; without the Reject it runs by rule; an expiry behaves alike.
+- Verification: SR-1: with a rejected step 2 and a rule for step 3's `change`, step 3 is held; without the Reject it runs by rule.
 
 ### T-07 A standing rule carries words a stranger wrote
 
@@ -390,7 +390,7 @@ Tampering. No attacker needed. Assets: accounts. Impact High; likelihood Low.
 Spoofing of meaning; approval fatigue. Actors: a malicious publisher, a stranger, a misbehaving agent. Assets: attention. Impact High; likelihood High.
 
 - Scenario: many decisions teach unread clicks; item 7 of 9 in a batch has another recipient (the batch dialog shows every recipient and the whole text); a long "Does on its own" list is saved unread; an agent step title says "Just reading" over a send.
-- Mitigations: SR-1: reads and declared local work run alone, so remaining decisions matter; a routine repeatable `change` at a fixed place can become a revocable rule (owner decision, 2026-11-19, limited on 2026-11-21). Notifications only for decisions, problems and questions (F-16). Batches list every item in full (FS-j24.P3). Kinds, lists and touch sentences come from FlowDriven's catalog; places in full; outside text tagged (SR-5, AD-16). Expiry counts as Reject.
+- Mitigations: SR-1: reads and declared local work run alone, so remaining decisions matter; a routine repeatable `change` at a fixed place can become a revocable rule (owner decision, 2026-11-19, limited on 2026-11-21). Notifications only for decisions, problems and questions (F-16). Batches list every item in full (FS-j24.P3). Kinds, lists and touch sentences come from FlowDriven's catalog; places in full; outside text tagged (SR-5, AD-16).
 - Residual: approval is the last line.
 - Verification: SR-1: an agent step title saying "read" does not change the touch list. UI: places in full, the outside tag, batches approve only listed items.
 
@@ -454,7 +454,7 @@ Tampering. Actor: a compromised dependency or vendor update. Assets: the app. Im
 | Abuse | What stops it | Threat |
 |---|---|---|
 | Rejecting a backup lets a later rule change the originals | No rule applies for the rest of that run | T-06 |
-| A hold timed for the night so it expires | Expiry counts as Reject; the same fallback | T-06 |
+| A hold waits overnight | The decision stays pending until the person answers or ends the run | T-06 |
 | A later step uses a skipped result | Steps that reference it are skipped and listed | T-06 |
 
 ### 7.3 Chat intents
@@ -503,7 +503,7 @@ V1 only keeps today's behaviour: closing the window does not quit the app (F-22)
 
 | Abuse | What stops it | Threat |
 |---|---|---|
-| Runs at night with nobody watching | Risky actions still ask; expiry is Reject; rules only for a `change` at a fixed place | T-01, T-07 |
+| Runs at night with nobody watching | Risky actions still ask; decisions wait for an answer; rules only for a `change` at a fixed place | T-01, T-07 |
 | Two processes fire one slot | One runner per data folder; one fire key per slot | T-23 |
 | The running app ignores the permission switch | Turning it off stops everything (SR-8, F-22.R6) | T-22 |
 
@@ -569,7 +569,7 @@ Technical spikes for the build steps named; none is a question for the owner.
 
 - Boundary labels `TB1` to `TB13` and plain actor names, because `B-` ids are build steps and the brief gives this document only `T-` ids.
 - Decided for V1 (revisable): pasted composer text is marked outside, because FS-j22.E7 counts a pasted email as outside text and a paste is the only reliable signal; `chats.send` must carry the mark (for `runner-api.md`).
-- Decided for V1 (revisable): after a Reject or expiry, no standing rule applies for the rest of that run, so AD-07's Reject skipping cannot let a rule act on a broken plan (T-06).
+- Decided for V1 (revisable): after a Reject, no standing rule applies for the rest of that run, so AD-07's Reject skipping cannot let a rule act on a broken plan (T-06).
 - Decided for V1 (revisable): runs started by other AI tools use no standing rules, to keep the switch's promise and the rule of two (T-16, from B-26).
 - Decided for V1 (revisable): a step that can send, post, pay, delete or merge never resumes by itself after a crash; a grant's use is stored before the allow answer; the run page names what may have happened (SR-8, T-24).
 - Decided for V1 (revisable): standing rules exist only for `local_write`, `run_command` and `change`; Always allow only for a repeatable `change` at a fixed place; send, post, pay, delete and merge always ask (T-02, T-07, T-22). Widening this needs destination-level places and a step-level rule for outside text, as a later approvals change with its own review.

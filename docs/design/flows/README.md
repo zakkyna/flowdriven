@@ -26,7 +26,7 @@ Every file has these parts in this order:
 7. `## Other paths`.
 8. `## States`: a table of entity, from -> to, cause.
 9. `## Decisions and confirmations`: what asks, what confirms, what deliberately does not.
-10. `## Errors and edge cases`: cause, what the person sees, what happens next. Always covered: agent not set up or signed out, permission off, limits reached, a stopped or failed run, a crash or restart, a flow changed since it was confirmed, outside text trying to steer the agent, a decision that expires, and the prototype gaps for the journey. An item that cannot happen in the journey gets a short entry "Not applicable because ..." instead of being left out.
+10. `## Errors and edge cases`: cause, what the person sees, what happens next. Always covered: agent not set up or signed out, permission off, limits reached, a stopped or failed run, a crash or restart, a flow changed since it was confirmed, outside text trying to steer the agent, a decision that waits for an answer, and the prototype gaps for the journey. An item that cannot happen in the journey gets a short entry "Not applicable because ..." instead of being left out.
 11. `## Data read and written`.
 12. `## Runner API used`: operation names and topics.
 13. `## Acceptance criteria`.

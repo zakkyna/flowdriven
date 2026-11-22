@@ -92,7 +92,7 @@ P4 depends on version 9; the other paths do not.
 - **FS-j12.E9 Version 9 and what is new: main agent.** Version 9 already uses the main agent and its default model for new chats (the composer pill and the "New chats start with this agent and its default model." line). New in the real app: the main agent also decides the agent for starts outside a chat (S4), the models come from the real agent (`agents.models`), and the limits are real (the agents' own usage limits and the spending limit).
 - **FS-j12.E10 Prototype gap: busy fallback.** The prototype saved the toggle and nothing read it. The real app applies it (P3).
 - **FS-j12.E11 Prototype gap: spending.** "Spent" never changed in the prototype and no waiting limit decision was seeded. The real app counts per-use charges and enforces the limit (B-24).
-- **FS-j12.E12 Not applicable: outside text and a decision that expires on its own.** Settings reads no outside text and no agent output can change a setting (SR-2), so outside text cannot steer anything here. The only decisions this screen touches are expired by the person's own click (permission off) or resolved by raising the limit; the 24-hour expiry of FS-j24 applies to other decisions, and the limit decision never expires after 24 hours (E4).
+- **FS-j12.E12 Not applicable: outside text and a decision that waits for an answer.** Settings reads no outside text and no agent output can change a setting (SR-2), so outside text cannot steer anything here. The only decisions this screen touches are expired by the person's own click (permission off) or resolved by raising the limit; the 24-hour expiry of FS-j24 applies to other decisions, and the limit decision never expires after 24 hours (E4).
 
 ## Data read and written
 

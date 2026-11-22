@@ -111,7 +111,7 @@ type ApprovalState = "pending" | "approved" | "approved_edited" | "rejected" | "
 type ApprovalDecision = "approve" | "edit" | "reject" | "always_allow";   // v2 adds always_allow
 type ApprovalKind = "risky_action" | "flow_sign_off" | "result_sign_off" | "budget_raise"
   | "requirement_addition" | "ask" | "weekly_limit";                     // unchanged
-type ResolvedVia = "window" | "chat" | "phone" | "rule" | "expiry" | "stop" | "permission_off";
+type ResolvedVia = "window" | "chat" | "phone" | "rule" | "stop" | "permission_off";
 type FlowState = "new" | "changed" | "confirmed";
 type AgentState = "not_installed" | "installing" | "waiting_login" | "needs_login" | "ready" | "unknown";
 type TouchRule = "runs_alone" | "asks_first" | "not_allowed";
@@ -269,7 +269,7 @@ type Approval = {
   canAlwaysAllow: boolean;                       // true only for a pending risky_action whose effect is `change` with a fixed place not taken from outside text, and the caller is the window; always false for send, post, pay, delete and merge
   similarGroup?: string; similarWaiting?: number;   // "Approve all similar (N)"
   stepWaiting: number;                           // other pending decisions of the same step
-  createdAt: IsoDateTime; expiresAt: IsoDateTime;
+  createdAt: IsoDateTime;
   resolvedAt?: IsoDateTime; resolvedVia?: ResolvedVia;
   picks?: string[]; editedSubject?: string; editedText?: string;
   chatId?: ChatId; ruleId?: RuleId;
@@ -705,13 +705,13 @@ type SettingsPatch = {
 #### `approvals.list` (changed)
 
 - Input: `{state?: ApprovalState; runId?: RunId; flowId?: FlowId}`. Output: `Approval[]`, newest first. It includes the synthetic `weekly_limit` and `budget_raise` decisions.
-- Tests first: the expiry sweep runs before the list (a decision 24 hours old reads `expired`); `canAlwaysAllow` is false for a place taken from outside text and for every decision of effect `send`, `post`, `pay`, `delete` or `merge`, and true for a `change` with a fixed place.
+- Tests first: a decision 25 hours old remains `pending`; `canAlwaysAllow` is false for a place taken from outside text and for every decision of effect `send`, `post`, `pay`, `delete` or `merge`, and true for a `change` with a fixed place.
 
 #### `approvals.resolve` (changed)
 
 - Input: `{approvalId; decision: ApprovalDecision; editedText?: string (1..4000); editedSubject?: string (1..300)}`; `editedText` exactly when `decision` is `edit`.
 - Output: `{decision: Approval; stepWaiting: number; ruleId?: RuleId}`.
-- Errors: `not_found`; `conflict: already_answered` (params `via`), `decision_expired`; `invalid_input: edit_not_allowed`, `empty_text`, `hidden_characters`; `not_allowed: place_not_fixed`, `always_asks` (`always_allow` on a decision of effect `send`, `post`, `pay`, `delete` or `merge`), `raise_in_settings` (a `budget_raise` decision), `phone_no_rules` (V2).
+- Errors: `not_found`; `conflict: already_answered` (params `via`), `decision_expired` (after Stop, permission off or flow deletion); `invalid_input: edit_not_allowed`, `empty_text`, `hidden_characters`; `not_allowed: place_not_fixed`, `always_asks` (`always_allow` on a decision of effect `send`, `post`, `pay`, `delete` or `merge`), `raise_in_settings` (a `budget_raise` decision), `phone_no_rules` (V2).
 - Topics: writes `approvals`, `runs`, `rules`, `chats`, `activity`. Person only (the phone: restricted).
 - Does (AD-07):
   - `approve`: a one-time grant for the run, step, item, tool and exact digest; state `approved`; the step re-runs and the call is made once, exactly as written; decision line `report.youApproved` (English: "You approved: <title>.")
@@ -719,12 +719,12 @@ type SettingsPatch = {
   - `reject`: state `rejected`; the action is skipped, the step is `skipped`, later steps that needed its result are skipped and listed, and the run goes on; decision line `report.youSaidNo` (English: "You said no: <title>. It was not done."). No dialog. For the rest of that run no standing rule applies, and a held call of the run shows the normal decision card.
   - `always_allow` (window only; only for a pending `risky_action` decision whose effect is `change`, at a fixed place not taken from outside text): approves as `approve` and writes a standing rule `{flow, touch, effect, place}`; state `allowed_always`; decision line `report.youApproved`. A decision of effect `send`, `post`, `pay`, `delete` or `merge` gives `not_allowed: always_asks`; a place that is not fixed gives `place_not_fixed`.
   - Every decision clears its notice (`notice_clear`), audits `decision_made`, and, when the step has no more pending decisions, lets the run continue.
-- Tests first: an approved grant allows one exact call and holds the same call with another input (FS-j20.A14); a second resolve gives `conflict: already_answered` with `via: "window"`; at the expiry moment (injected clock) `approve` gives `decision_expired`; `edit` with text built from `String.fromCodePoint(0x202e)` gives `hidden_characters`; `edit` of a `diff` payload gives `edit_not_allowed`; `reject` leaves the run `running` and the step `skipped` (FS-j24.A6); `always_allow` on a `change` whose place came from the run gives `place_not_fixed`; `always_allow` on a `send` reply, even with an address that is fixed, gives `always_asks` and writes no rule.
+- Tests first: an approved grant allows one exact call and holds the same call with another input (FS-j20.A14); a second resolve gives `conflict: already_answered` with `via: "window"`; after Stop, permission off or flow deletion `approve` gives `decision_expired`; `edit` with text built from `String.fromCodePoint(0x202e)` gives `hidden_characters`; `edit` of a `diff` payload gives `edit_not_allowed`; `reject` leaves the run `running` and the step `skipped` (FS-j24.A6); `always_allow` on a `change` whose place came from the run gives `place_not_fixed`; `always_allow` on a `send` reply, even with an address that is fixed, gives `always_asks` and writes no rule.
 
 #### `approvals.answer` (changed)
 
 - Input: `{approvalId; picks: string[] (0..50, each 1..100)}`. Output: `{decision: Approval}`.
-- Errors: `not_found`; `conflict: already_answered`, `decision_expired`; `invalid_input: too_many_picks` (params `max`), `unknown_pick`.
+- Errors: `not_found`; `conflict: already_answered`, `decision_expired` (after Stop, permission off or flow deletion); `invalid_input: too_many_picks` (params `max`), `unknown_pick`.
 - Does: an `ask` decision: the picks become the later step's loop items; `[]` is "Pick none" and skips the steps that needed picks (FS-j24.P4); state `approved`.
 - Tests first: three picks with `maxPick` 2 give `too_many_picks`; a key outside the choices gives `unknown_pick`.
 

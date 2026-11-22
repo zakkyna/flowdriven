@@ -215,7 +215,7 @@ What the person experiences. A chat flow posts its answer lines in the chat ("Lo
 Requirements.
 - F-06.R1. `result` is `chat` or `report`. For `chat`, the answer lines (a template filled from inputs and outputs) are posted in the run's chat, or in a new chat for a start outside a chat. A line whose placeholder has no value is dropped.
 - F-06.R2. For `report`, the report stays with the run in Activity and the chat gets "Done. The report is in Activity."
-- F-06.R3. The runner records the decision lines as message codes with values, and the renderer words them: "You approved: <title>.", "Done by your rule: <step title>.", "You said no: <title>. It was not done." and, for a decision that nobody answered in 24 hours, "No answer in 24 hours: <title>. It was not done." (a deliberate line). Other outcomes add nothing the person did not decide.
+- F-06.R3. The runner records decision lines as message codes with values, and the renderer words them: "You approved: <title>.", "Done by your rule: <step title>.", and "You said no: <title>. It was not done." Other outcomes add nothing the person did not decide.
 - F-06.R4. A step shows as passed only with evidence from a check the agent does not control. A step the agent judged itself is labelled "Judged, not verified".
 - F-06.R5. FlowDriven's own posted lines follow the chat's language: "Done. The report is in Activity.", "<flow> needs a few details.", "<flow> finished, so <next> is next." The runner stores a message code with values and the chat's language; the renderer turns it into words with the language files (F-20.R5). (In the prototype (version 9).)
 - F-06.R6. A report has no token or usage numbers and no run ids. It starts with the flow name and when it started, then "Result".
@@ -345,7 +345,7 @@ Requirements.
 - F-13.R2. "Approve" writes a one-time grant bound to the run, the step, the tool and the exact input. The same call with different input is held again (SR-1).
 - F-13.R3. "Edit" is offered for text payloads only. "Save and approve" gives `approved_edited` and runs the edited text. An edit with a hidden character or with empty text is refused with a plain line (PU-17).
 - F-13.R4. "Reject" needs no confirmation. It skips that action, the run goes on, and the report says "You said no: <title>. It was not done." Nothing is sent. (Owner decision, 2026-11-18. This changes today's engine, where a rejection fails the run: Ask first, product decision, security review.)
-- F-13.R5. A decision that nobody answers within 24 hours expires, counts as Reject, and shows the state "Expired", with no countdown. (PU-15: the prototype shows no expiry.)
+- F-13.R5. A run's decision never expires by time. It waits until the person answers, presses Stop, turns agent permission off, or deletes the flow. While it waits the run is still running; a later scheduled slot of the same flow is recorded as `skipped` with reason `still_running`, as for any busy flow (data-model 3.7).
 - F-13.R6. "Approve all similar (N)" is offered when N is above 1, the items are `send` or `post` decisions of the same group in the same run, and never for pay, delete, merge, choices or sign-offs. It opens a dialog "Approves these N emails in this run only. This is logged." that lists every item in full (every recipient, the subject and the whole text) before anything is approved, with "Approve all N" and "Cancel". It never covers another run. (PU-18.)
 - F-13.R7. Choice items accept only picks from the listed options and enforce the maximum ("Pick up to 2.").
 - F-13.R8. "Always allow for this flow" is offered only for a pending `risky_action` decision whose effect is `change` and whose place is fixed in the flow (the person's timesheet account, one cloud storage folder), from the app window (`canAlwaysAllow`). It is never offered for `send`, `post`, `pay`, `delete` or `merge`, and never for a place that came from what the run read (SR-1). Decided for V1 (revisable): the prototype shows it only for these; anything wider goes into the prototype first and, as a change to approvals, gets its own independent security review. If send or post rules are ever allowed, they need destination-level places (every recipient, a channel) and a step-level rule that ignores standing rules after the step read outside text.
@@ -354,11 +354,11 @@ Requirements.
 - F-13.R11. "Ask me again" revokes a rule at once. The next matching action waits for the person.
 - F-13.R12. A step that passes by a rule says "Allowed by your rule", and the report says "Done by your rule: <step title>."
 - F-13.R13. Text from outside shows "Includes text from an email or web page" and reveals hidden characters (for example "[U+200B hidden character]") in the preview (SR-5).
-- F-13.R14. Deciding twice, from two places, counts once: the second answer finds the item already decided and says "Already answered"; an answer to an expired decision says "This decision expired". (PU-16.)
+- F-13.R14. Deciding twice, from two places, counts once: the second answer finds the item already decided and says "Already answered"; an answer to a decision ended by Stop, permission off or deleting the flow says "This decision expired". (PU-16.)
 - F-13.R15. A place with non-ASCII letters (for example a web address) is shown on the decision card in its own letters and also in ASCII, so a look-alike cannot pass as the one the person knows. (PU-24.)
-- F-13.R16. After a Reject or an expiry, no standing rule applies for the rest of that run; the held call shows the normal decision card.
+- F-13.R16. After a Reject, no standing rule applies for the rest of that run; the held call shows the normal decision card.
 
-Journeys and flow specs: j24, `flows/j24-decisions.md`. Release: V1 (B-04, B-05, B-19). Status: In the prototype (version 8); R3's checks, R5, R6's full listing, R14 and R15 are PU-17, PU-15, PU-18, PU-16 and PU-24.
+Journeys and flow specs: j24, `flows/j24-decisions.md`. Release: V1 (B-04, B-05, B-19). Status: In the prototype (version 8); R3's checks, R6's full listing, R14 and R15 are PU-17, PU-18, PU-16 and PU-24. PU-15 was decided by the owner on 2026-11-22: no expiry, which the prototype already shows; no further prototype approval is needed.
 
 ### F-14 Activity and the run page
 
@@ -653,7 +653,7 @@ Numbers marked "target" are the drafter's proposals. Other numbers come from the
 | NF-11 | If the runner ends unexpectedly, the window says so in plain words and restarts it once (target). | target |
 | NF-12 | The store version 6 to 7 migration only adds. A backup is taken first; a failed migration leaves the old store usable. | AD-05, target |
 | NF-13 | The pre-tool hook fails closed: no answer from FlowDriven within 5 s means the call is denied. | spec R12 |
-| NF-14 | A decision expires after 24 hours and counts as Reject. A sign-in wait lasts up to 12 hours. A step is retried twice by default. | spec |
+| NF-14 | A decision never expires by time. A sign-in wait lasts up to 12 hours. A step is retried twice by default. | spec |
 | NF-15 | Runs are kept 90 days or the last 50 per flow, whichever is larger. The audit log is append-only and is never trimmed by this. | spec |
 | NF-16 | A long step keeps the Mac awake while it runs. | code |
 
@@ -805,7 +805,7 @@ Each item below is kept in V1 because safety or correctness needs it, and goes i
 | PU-12 | The outside-text tag on a draft | F-10.R8, j22, j29 |
 | PU-13 | "Set this schedule?" for a schedule typed in a chat, instead of setting it directly | F-11.R6, j23 |
 | PU-14 | The confirm-again dialog for a changed flow, including "The skill <name> changed" | F-12.R6, j23, j29 |
-| PU-15 | A decision expires after 24 hours and counts as Reject, with the state "Expired" (no countdown) | F-13.R5, j24 |
+| PU-15 | Decided by the owner on 2026-11-22: no expiry, which the prototype already shows; no further prototype approval is needed. | F-13.R5, j24 |
 | PU-16 | "Already answered" and "This decision expired" | F-13.R14, j24, j28 |
 | PU-17 | Checks on edited text: hidden characters, empty text | F-13.R3, j24 |
 | PU-18 | The Approve all similar dialog listing every item in full | F-13.R6, j24 |
@@ -957,7 +957,7 @@ Other build steps and where they fit: B-00 the shared test harness (all features
 - One minimum size: the desktop window's minimum is 480 by 600 px (today it is 1100 by 720). The narrow layout (the drawer) applies below 768 px. Widths from 320 to 479 px apply only to the browser preview and to layout tests (NF-35, F-21.R10, F-02.R7).
 - Settings order is inferred from the prototype (Appearance, Language, AI agents, Permission, Main AI agent, busy fallback, Spending limit, Notifications), because the brief does not list it.
 - F-09.R8 (first run when a schedule is turned on) is Removed from V1: turning a schedule on never starts a run. The owner's decision of 2026-11-18 asked for no mandatory try run; the first run is a later prototype question. The "Run it now?" offer after Save flow stays.
-- Expiry of decisions after 24 hours, system notifications and install or sign-in failure paths are Not in the prototype yet, because the prototype does not show them; they are in the register of section 9.1. The "Missed" row is Removed from V1.
+- System notifications and install or sign-in failure paths are Not in the prototype yet, because the prototype does not show them; they are in the register of section 9.1. The "Missed" row is Removed from V1.
 - The skill archive hint went into F-24 (V2), not F-12, to keep V1 small.
 - Success measure targets (M-01, M-02, M-04, M-05, M-09, M-10, M-11) and performance numbers marked "target" are the drafter's proposals, not sourced; they are decided for V1 (revisable).
 - The defaults follow the decisions for V1: no Open at login and no menu bar (Q-02); the spending limit counts per-use charges only (Q-03). The limit's starting amount ($10.00 a month, as in the clickable prototype) is a target.

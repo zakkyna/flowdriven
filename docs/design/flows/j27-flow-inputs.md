@@ -107,7 +107,7 @@ P7 depends on version 9; the others do not.
 - **FS-j27.E9 Prototype gap: keyword parsing.** The prototype read sentences with word lists in English and Indonesian. In the real app the agent extracts values and FlowDriven validates them with its own parsers, so other phrasings and other languages work.
 - **FS-j27.E10 Prototype gap: stubs.** "Next free time" was always 13:00 and the timesheet service conflict check was never shown. In the real app the "Start" input is an optional `time` with the default "next free time" (the `What it needs` line reads "Default: Next free time"), and the flow's own step asks the timesheet service for the first free slot; a conflict makes the step fail or ask, as the flow says. This differs from the prototype brief, which made Start required; the change is recorded in F-05.R11.
 - **FS-j27.E11 Outside text trying to steer the agent.** Covered by P8 and A15 (an outside value may fill an input but never starts the run by itself and is never reused by "Use my last answers" until the person types or confirms it) and by SR-5.
-- **FS-j27.E12 Not applicable here: a decision that expires.** A waiting question is not a decision; it has no 24-hour expiry of its own and waits until it is answered, cancelled or the flow is deleted (a question posted for a schedule follows FS-j28). The 24-hour expiry applies to decisions inside a run (FS-j24.P7).
+- **FS-j27.E12 Not applicable here: a decision that waits.** A waiting question is not a decision; it has no 24-hour expiry of its own and waits until it is answered, cancelled or the flow is deleted (a question posted for a schedule follows FS-j28). A decision inside a run also waits without a time limit (FS-j24.P7).
 
 ## Data read and written
 
