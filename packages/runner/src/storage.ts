@@ -126,6 +126,7 @@ export type StepRow = {
   limitMs?: number;
   note?: string;
   noteLine?: Line;
+  skipped?: { because: "no_picks" };
   outside?: boolean;
   ownerApproved?: { output: string; hash: string; approvalId: string; at: string };
 };
@@ -151,7 +152,7 @@ export type ApprovalRow = {
   onExpiry: "end" | "fail";
   createdAt: string;
   expiresAt: string;
-  state: ApprovalState;
+  state: ApprovalState | "approved_edited";
   picks?: string[];
   resolvedAt?: string;
   riskyAction?: RiskyAction;

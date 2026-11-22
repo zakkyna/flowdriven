@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import {
   type FlowManifest,
   hasErrors,
+  hasHiddenText,
   type Requirement,
   type Value,
   validateManifest,
 } from "@flowdriven/sdk";
 import type { CommandRunner } from "./checks/command.ts";
-import { createGrantBook, pickKeyUsable } from "./connectors/grants.ts";
+import { createGrantBook, digestCall, pickKeyUsable } from "./connectors/grants.ts";
 import { EngineError } from "./errors.ts";
 import { runAsk } from "./exec/ask.ts";
 import { createChain } from "./exec/chain.ts";
@@ -73,7 +74,11 @@ export type Begun = { run: RunRow; settled: Promise<RunRow> };
 export interface Engine {
   beginStart(flowId: string, options: StartOptions): Begun;
   beginAnswer(approvalId: string, answer: { picks: string[] }): Begun;
-  beginDecide(approvalId: string, decision: "approve" | "reject"): Begun;
+  beginDecide(
+    approvalId: string,
+    decision: "approve" | "reject" | "edit",
+    edit?: { text: string; subject?: string },
+  ): Begun;
   beginResume(runId: string): Begun;
   beginRecover(): { runs: RunRow[]; settled: Promise<RunRow[]> };
   sweepExpired(): Promise<void>;
@@ -148,6 +153,7 @@ export function createEngine(input: EngineDeps): Engine {
       .listApprovals({ state: "pending" })
       .filter(
         (a) =>
+          a.kind !== "ask" &&
           a.expiresAt <= now().toISOString() &&
           (flowId === undefined || store.getRun(a.runId)?.flowId === flowId),
       )
@@ -361,8 +367,13 @@ export function createEngine(input: EngineDeps): Engine {
     const a = store.getApproval(id);
     if (!a) throw new EngineError("not_found", "Approval not found.");
     if (a.kind !== "ask") throw new EngineError("invalid_input", "Not a choice.");
-    if (a.state === "expired") throw new EngineError("not_allowed", "This approval expired.");
-    if (a.state !== "pending") throw new EngineError("not_allowed", "This decision was already made.");
+    if (a.state === "expired")
+      throw new EngineError("conflict", "This approval expired.", { reason: "decision_expired" });
+    if (a.state !== "pending")
+      throw new EngineError("conflict", "This decision was already made.", {
+        reason: "already_answered",
+        params: { via: a.resolvedVia ?? "window" },
+      });
     const run = runById(a.runId);
     if (run.state !== "waiting_approval")
       throw new EngineError("not_allowed", "This run is no longer waiting for approval.");
@@ -387,18 +398,27 @@ export function createEngine(input: EngineDeps): Engine {
         throw new EngineError("invalid_input", "Invalid choice option.");
       return { key: option.key, item: option.item };
     });
+    if (answer.picks.length > a.maxPick)
+      throw new EngineError("invalid_input", "Too many picks.", {
+        reason: "too_many_picks",
+        params: { max: a.maxPick },
+      });
     if (
       !Array.isArray(answer.picks) ||
       answer.picks.some((pick) => typeof pick !== "string" || !options.some((o) => o.key === pick)) ||
       new Set(answer.picks).size !== answer.picks.length
     )
-      throw new EngineError("invalid_input", "Invalid picks.");
-    if (answer.picks.length > a.maxPick) throw new EngineError("invalid_input", "Too many picks.");
+      throw new EngineError("invalid_input", "Invalid picks.", { reason: "unknown_pick" });
     const row = store.getStep(run.id, a.stepId);
     if (!row) throw new EngineError("not_found", "Step not found.");
     const at = now().toISOString();
     store.transaction(() => {
-      store.updateApproval(id, { state: "approved", picks: answer.picks, resolvedAt: at });
+      store.updateApproval(id, {
+        state: "approved",
+        picks: answer.picks,
+        resolvedAt: at,
+        resolvedVia: "window",
+      });
       for (const tool of a.approves)
         for (const pick of answer.picks)
           if (pickKeyUsable(pick))
@@ -423,36 +443,96 @@ export function createEngine(input: EngineDeps): Engine {
         runId: run.id,
         detail: { approvalId: id, picks: answer.picks },
       });
+      store.appendAudit({
+        at,
+        kind: "decision_made",
+        runId: run.id,
+        detail: { approvalId: id, decision: "answer", via: "window" },
+      });
       store.updateRun(run.id, { state: "running" });
     });
     const updated = runById(run.id);
     return enqueue(updated, () => walk(updated));
   }
-  function beginDecide(id: string, decision: "approve" | "reject"): Begun {
+  function beginDecide(
+    id: string,
+    decision: "approve" | "reject" | "edit",
+    edit?: { text: string; subject?: string },
+  ): Begun {
     assertRunning();
     sweep();
     const a = store.getApproval(id);
     if (!a) throw new EngineError("not_found", "Approval not found.");
     if (a.kind !== "result_sign_off" && a.kind !== "risky_action")
       throw new EngineError("invalid_input", "Not a result sign-off.");
-    if (a.state === "expired") throw new EngineError("not_allowed", "This approval expired.");
-    if (a.state !== "pending") throw new EngineError("not_allowed", "This approval was already decided.");
+    if (a.state === "expired")
+      throw new EngineError("conflict", "This approval expired.", { reason: "decision_expired" });
+    if (a.state !== "pending")
+      throw new EngineError("conflict", "This approval was already decided.", {
+        reason: "already_answered",
+        params: { via: a.resolvedVia ?? "window" },
+      });
     const run = runById(a.runId);
     if (run.state !== "waiting_approval")
       throw new EngineError("not_allowed", "Run is not waiting for approval.");
-    if (decision !== "approve" && decision !== "reject")
+    if (decision !== "approve" && decision !== "reject" && decision !== "edit")
       throw new EngineError("invalid_input", "Invalid decision.");
+    let editedCall: { tool: string; input: Value; digest: string } | undefined;
+    if (decision === "edit") {
+      const call = a.call;
+      if (
+        a.kind !== "risky_action" ||
+        !call ||
+        !edit ||
+        !call.input ||
+        typeof call.input !== "object" ||
+        Array.isArray(call.input)
+      )
+        throw new EngineError("invalid_input", "Only text can be edited.", { reason: "edit_not_allowed" });
+      const input = call.input;
+      for (const text of [edit.text, edit.subject]) {
+        if (text === undefined) continue;
+        if (!text.trim())
+          throw new EngineError("invalid_input", "Write the text first.", { reason: "empty_text" });
+        if (hasHiddenText(text) || /\p{Cf}/u.test(text))
+          throw new EngineError("invalid_input", "Remove hidden characters.", {
+            reason: "hidden_characters",
+          });
+      }
+      const payload = a.payload;
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        Array.isArray(payload) ||
+        (payload.kind !== "email" && payload.kind !== "text") ||
+        (edit.subject !== undefined && !Object.hasOwn(input, "subject"))
+      )
+        throw new EngineError("invalid_input", "Only text can be edited.", { reason: "edit_not_allowed" });
+      const bodyKey =
+        typeof input.body === "string" ? "body" : typeof input.text === "string" ? "text" : undefined;
+      if (!bodyKey)
+        throw new EngineError("invalid_input", "Only text can be edited.", { reason: "edit_not_allowed" });
+      const next = {
+        ...input,
+        [bodyKey]: edit.text,
+        ...(edit.subject === undefined ? {} : { subject: edit.subject }),
+      };
+      editedCall = { tool: call.tool, input: next, digest: digestCall(call.tool, next) };
+    }
     const row = store.getStep(a.runId, a.stepId, a.itemKey);
     if (!row) throw new EngineError("not_found", "Step not found.");
     const at = now().toISOString();
     if (a.kind === "risky_action") {
       store.transaction(() => {
         store.updateApproval(id, {
-          state: decision === "approve" ? "approved" : "rejected",
+          state: decision === "edit" ? "approved_edited" : decision === "approve" ? "approved" : "rejected",
           resolvedAt: at,
-          ...(decision === "approve" ? { resolvedVia: "window" } : {}),
+          ...(decision !== "reject" ? { resolvedVia: "window" } : {}),
+          ...(editedCall && edit
+            ? { editedText: edit.text, editedSubject: edit.subject, editedDigest: editedCall.digest }
+            : {}),
         });
-        if (decision === "approve")
+        if (decision !== "reject")
           for (const entry of a.approves) {
             const separator = entry.indexOf("#");
             if (separator < 0) continue;
@@ -463,7 +543,7 @@ export function createEngine(input: EngineDeps): Engine {
               stepId: a.stepId,
               itemKey: a.itemKey,
               tool: full < 0 ? qualified : qualified.slice(full + 1),
-              digest: entry.slice(separator + 1),
+              digest: editedCall?.digest ?? entry.slice(separator + 1),
               kind: "approve",
               createdAt: at,
               approvalId: id,
@@ -475,11 +555,20 @@ export function createEngine(input: EngineDeps): Engine {
           runId: run.id,
           detail: { approvalId: id, stepId: a.stepId, itemKey: a.itemKey, tool: a.call?.tool ?? "" },
         });
-        if (decision === "approve") {
+        store.appendAudit({
+          at,
+          kind: "decision_made",
+          runId: run.id,
+          detail: { approvalId: id, decision, via: "window" },
+        });
+        if (decision !== "reject") {
           store.updateRun(run.id, {
             decisionLines: [
               ...(store.getRun(run.id)?.decisionLines ?? []),
-              { key: "report.youApproved", params: { title: a.summary } },
+              {
+                key: decision === "edit" ? "report.youApprovedEdited" : "report.youApproved",
+                params: { title: a.summary },
+              },
             ],
           });
           store.upsertStep({ ...row, state: "pending" });
@@ -498,7 +587,7 @@ export function createEngine(input: EngineDeps): Engine {
       const remaining = store
         .listApprovals({ runId: run.id, state: "pending" })
         .filter((item) => item.stepId === a.stepId).length;
-      if (decision === "approve" && remaining) {
+      if (decision !== "reject" && remaining) {
         store.updateRun(run.id, { state: "waiting_approval" });
         const updated = runById(run.id);
         return enqueue(updated, async () => {
@@ -533,15 +622,23 @@ export function createEngine(input: EngineDeps): Engine {
         });
       }
       const updated = runById(run.id);
-      return decision === "approve"
+      return decision !== "reject"
         ? enqueue(updated, () => walk(updated))
         : { run: updated, settled: Promise.resolve(updated) };
     }
+    if (decision === "edit")
+      throw new EngineError("invalid_input", "Only text can be edited.", { reason: "edit_not_allowed" });
     store.transaction(() => {
       store.updateApproval(id, {
         state: decision === "approve" ? "approved" : "rejected",
         resolvedAt: at,
         ...(decision === "approve" ? { resolvedVia: "window" } : {}),
+      });
+      store.appendAudit({
+        at,
+        kind: "decision_made",
+        runId: run.id,
+        detail: { approvalId: id, decision, via: "window" },
       });
       if (decision === "approve")
         store.updateRun(run.id, {

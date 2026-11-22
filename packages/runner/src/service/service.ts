@@ -245,6 +245,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       v2: {
         "approvals.list": decisions.list,
         "approvals.resolve": decisions.resolve,
+        "approvals.answer": decisions.answer,
         "audit.list": createAuditHandler(store),
         "runs.list": runs.list,
         "runs.status": runs.status,

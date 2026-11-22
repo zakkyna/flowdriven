@@ -108,31 +108,54 @@ export function approvedCallsOf(
   stepId: string,
   itemKey: string,
 ): { tool: string; input: Value }[] {
-  return store.listApprovals({ runId, state: "approved" }).flatMap((row) => {
-    const grant = row.approves.at(0);
-    if (
-      row.kind !== "risky_action" ||
-      row.stepId !== stepId ||
-      row.itemKey !== itemKey ||
-      !row.call ||
-      !grant ||
-      !isCallGrant(grant) ||
-      !store.findGrant({
-        runId,
-        stepId,
-        itemKey,
-        tool: row.call.tool.startsWith("mcp__") ? row.call.tool : grant.slice(0, grant.indexOf("#")),
-        digest: grant.slice(grant.indexOf("#") + 1),
-        kind: "approve",
-        createdAt: "",
-      })
-    )
-      return [];
-    const tool = row.call.tool.startsWith("mcp__")
-      ? row.call.tool.slice(row.call.tool.lastIndexOf("__") + 2)
-      : row.call.tool;
-    return [{ ...row.call, tool }];
-  });
+  return store
+    .listApprovals({ runId })
+    .filter((row) => row.state === "approved" || row.state === "approved_edited")
+    .flatMap((row) => {
+      const grant = row.approves.at(0);
+      if (
+        row.kind !== "risky_action" ||
+        row.stepId !== stepId ||
+        row.itemKey !== itemKey ||
+        !row.call ||
+        !grant ||
+        !isCallGrant(grant) ||
+        !store.findGrant({
+          runId,
+          stepId,
+          itemKey,
+          tool: row.call.tool.startsWith("mcp__") ? row.call.tool : grant.slice(0, grant.indexOf("#")),
+          digest: row.editedDigest ?? grant.slice(grant.indexOf("#") + 1),
+          kind: "approve",
+          createdAt: "",
+        })
+      )
+        return [];
+      const tool = row.call.tool.startsWith("mcp__")
+        ? row.call.tool.slice(row.call.tool.lastIndexOf("__") + 2)
+        : row.call.tool;
+      const input = row.call.input;
+      if (
+        row.state === "approved_edited" &&
+        row.editedText !== undefined &&
+        input &&
+        typeof input === "object" &&
+        !Array.isArray(input)
+      ) {
+        const key = typeof input.body === "string" ? "body" : "text";
+        return [
+          {
+            tool,
+            input: {
+              ...input,
+              [key]: row.editedText,
+              ...(row.editedSubject === undefined ? {} : { subject: row.editedSubject }),
+            },
+          },
+        ];
+      }
+      return [{ ...row.call, tool }];
+    });
 }
 export function labelOf(requirements: Requirement[], requirementId: string): string {
   return (

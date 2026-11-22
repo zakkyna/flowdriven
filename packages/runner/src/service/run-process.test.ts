@@ -153,7 +153,9 @@ test("a run that was walking is found at the next start", { timeout: 20_000 }, a
   const p = start(dir);
   expect((await p.client.call("runs.status", { runId: "run-old" })).state).toBe("interrupted");
 });
-test("the sweep runs on its timer and sends a changed event", { timeout: 20_000 }, async () => {
+test("TC-j24-31 the sweep leaves a choice pending and emits no expiry event", {
+  timeout: 20_000,
+}, async () => {
   let time = new Date("2026-11-11T00:00:00.000Z").getTime();
   const p = start(temp(), { now: () => new Date(time), sweepEveryMs: 20 });
   const events: RunnerEvent[] = [];
@@ -165,11 +167,10 @@ test("the sweep runs on its timer and sends a changed event", { timeout: 20_000 
   await new Promise((resolve) => setTimeout(resolve, 30));
   events.length = 0;
   time += 24 * 60 * 60 * 1000 + 1;
-  await until(async () =>
-    events.some((e) => e.type === "changed" && e.topics.includes("approvals")) ? true : undefined,
-  );
-  expect(await p.client.call("approvals.list", { state: "expired" })).toEqual(
-    expect.arrayContaining([expect.objectContaining({ id: approval.id, state: "expired" })]),
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(events.some((e) => e.type === "changed" && e.topics.includes("approvals"))).toBe(false);
+  expect(await p.client.call("approvals.list", { state: "pending" })).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: approval.id, state: "pending" })]),
   );
 });
 

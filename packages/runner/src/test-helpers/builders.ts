@@ -1,3 +1,4 @@
+import { callGrant, digestCall } from "../connectors/grants.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import type { ApprovalRow, Store } from "../storage.ts";
 
@@ -50,5 +51,61 @@ export function pendingDecision(store: Store, options: { id: string; createdAt: 
     state: "pending",
   };
   store.createApproval(row);
+  return row;
+}
+
+export function approvedDecision(store: Store, options: { id: string; createdAt: string }): ApprovalRow {
+  const pending = pendingDecision(store, options);
+  const chatId = `chat-${options.id}`;
+  store.putChat({
+    id: chatId,
+    title: "Timesheet",
+    titleSource: "flowdriven",
+    createdAt: options.createdAt,
+    updatedAt: options.createdAt,
+    from: "flowdriven",
+    language: "en",
+    languageSource: "app",
+    agent: "claude-code",
+    model: "default",
+    agentSource: "main_default",
+  });
+  store.updateRun(pending.runId, { start: { source: "chat", chatId } });
+  const tool = "log_entry";
+  const input = { duration_h: 2 };
+  const digest = digestCall(tool, input);
+  const row: ApprovalRow = {
+    ...pending,
+    kind: "risky_action",
+    effect: "change",
+    state: "approved",
+    resolvedAt: options.createdAt,
+    resolvedVia: "window",
+    chatId,
+    call: { tool, input },
+    approves: [callGrant("timesheet", tool, digest)],
+  };
+  store.updateApproval(row.id, row);
+  const card = { type: "decision", state: "open" as const, approvalId: row.id };
+  store.putMessage({
+    id: `message-${options.id}`,
+    chatId,
+    seq: 1,
+    at: options.createdAt,
+    role: "flowdriven",
+    kind: "card",
+    outside: false,
+    card,
+  });
+  store.putCallGrant({
+    runId: row.runId,
+    stepId: row.stepId,
+    itemKey: row.itemKey,
+    tool: `timesheet.${tool}`,
+    digest,
+    kind: "approve",
+    createdAt: options.createdAt,
+    approvalId: row.id,
+  });
   return row;
 }

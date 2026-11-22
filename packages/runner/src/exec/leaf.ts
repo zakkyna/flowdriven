@@ -413,7 +413,7 @@ export async function runLeaf(
                   stepId: step.id,
                   itemKey,
                   summary: ownCheck
-                    ? OWN_TEXT.summary(step.title ?? step.id)
+                    ? OWN_TEXT.summary(visible(interpolate(step.title ?? step.id, scope), 80))
                     : `Approve the result of "${step.title ?? step.id}"`,
                   payload: ownCheck && typeof value === "string" ? value : result.text.slice(0, 4000),
                   ...(ownCheck && output !== undefined && typeof value === "string"

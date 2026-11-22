@@ -20,6 +20,12 @@ export function createChangeEmitter(
   };
 }
 export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Store {
+  const transactions: RunnerTopic[][] = [];
+  const notify = (topic: RunnerTopic) => {
+    const pending = transactions.at(-1);
+    if (pending) pending.push(topic);
+    else mark(topic);
+  };
   const topics: Partial<Record<keyof Store, RunnerTopic[]>> = {
     addUsage: ["runs", "settings"],
     putSetting: ["settings"],
@@ -57,17 +63,32 @@ export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Sto
   return new Proxy(store, {
     get(target, key, receiver) {
       const value: unknown = Reflect.get(target, key, receiver);
+      if (key === "transaction" && typeof value === "function")
+        return (fn: () => unknown) => {
+          const pending: RunnerTopic[] = [];
+          transactions.push(pending);
+          let result: unknown;
+          try {
+            result = Reflect.apply(value, target, [fn]);
+          } catch (error) {
+            transactions.pop();
+            throw error;
+          }
+          transactions.pop();
+          for (const topic of pending) notify(topic);
+          return result;
+        };
       if (typeof value !== "function" || typeof key !== "string" || !(key in topics)) return value;
       return (...args: unknown[]) => {
         const result: unknown = Reflect.apply(value, target, args);
-        for (const topic of topics[key as keyof Store] ?? []) mark(topic);
+        for (const topic of topics[key as keyof Store] ?? []) notify(topic);
         if (
           (key === "putSetting" || key === "deleteSetting") &&
           typeof args[0] === "string" &&
           (args[0].startsWith("weekly:") || args[0] === "spending-pause")
         ) {
-          mark("approvals");
-          mark("activity");
+          notify("approvals");
+          notify("activity");
         }
         return result;
       };

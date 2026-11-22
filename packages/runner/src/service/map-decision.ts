@@ -2,21 +2,54 @@ import { Approval, Payload } from "@flowdriven/contracts";
 import { FlowManifest } from "@flowdriven/sdk";
 import { canAlwaysAllow } from "../rules/always-allow.ts";
 import type { ApprovalRow, RunRow, Store } from "../storage.ts";
-import { toApproval } from "./map-approval.ts";
 
 export function toDecision(row: ApprovalRow, run: RunRow, store: Store): Approval {
   const flow = store.getFlow(run.flowId, run.flowHash);
   if (!flow) throw new Error("Flow not found");
-  const structured = Payload.safeParse(row.payload);
-  const source = {
-    ...row,
-    ...(structured.success && structured.data.kind !== "choice" ? { payload: "" } : {}),
-    ...(row.kind === "risky_action" && !row.riskyAction ? { riskyAction: "send" as const } : {}),
-  };
-  const { expiresAt: _expiresAt, ...legacy } = toApproval(source, run, FlowManifest.parse(flow.manifest));
+  const manifest = FlowManifest.parse(flow.manifest);
+  const step = manifest.steps.flatMap((s) => ("do" in s ? [s] : s.steps)).find((s) => s.id === row.stepId);
+  if (!step) throw new Error("Approval step not found");
+  let payload: Payload;
+  if (row.kind === "ask") {
+    if (
+      !row.payload ||
+      typeof row.payload !== "object" ||
+      Array.isArray(row.payload) ||
+      !Array.isArray(row.payload.options)
+    )
+      throw new Error("Invalid choice payload");
+    payload = Payload.parse({
+      kind: "choice",
+      question: row.payload.question,
+      options: row.payload.options.map((option) => {
+        if (!option || typeof option !== "object" || Array.isArray(option))
+          throw new Error("Invalid choice option");
+        return { key: option.key, label: option.label };
+      }),
+      maxPick: row.payload.maxPick,
+      approves: row.approves,
+    });
+  } else {
+    const structured = Payload.safeParse(row.payload);
+    payload = structured.success ? structured.data : Payload.parse({ kind: "text", text: row.payload });
+  }
   return Approval.parse({
-    ...legacy,
-    ...(structured.success ? { payload: structured.data } : {}),
+    id: row.id,
+    kind: row.kind,
+    state: row.state,
+    flowId: run.flowId,
+    flowName: manifest.name,
+    runId: row.runId,
+    stepId: row.stepId,
+    stepTitle: step.title ?? step.id,
+    itemKey: row.itemKey || undefined,
+    summary: row.summary,
+    payload,
+    editable: row.kind === "risky_action" && (payload.kind === "email" || payload.kind === "text"),
+    createdAt: row.createdAt,
+    resolvedAt: row.resolvedAt,
+    picks: row.picks,
+    ...(row.outside === true ? { outside: true } : {}),
     riskyAction: row.riskyAction,
     effect: row.effect ?? row.riskyAction,
     place: row.place,

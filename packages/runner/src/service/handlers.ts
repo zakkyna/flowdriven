@@ -18,9 +18,10 @@ import {
   type OperationName,
   type OperationOutput,
 } from "@flowdriven/contracts/v1";
-import { FlowManifest, hasErrors, type Value } from "@flowdriven/sdk";
+import { FlowManifest, hasErrors, hasHiddenText, type Value } from "@flowdriven/sdk";
 import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
 import type { Engine } from "../engine.ts";
+import { EngineError } from "../errors.ts";
 import type { HarnessQuota, Keeper } from "../keeper/types.ts";
 import { renderRunReport } from "../report.ts";
 import { needsAllow } from "../router/route.ts";
@@ -96,6 +97,17 @@ export function createDispatcher({
     if (!handler) throw new RunnerError("unavailable", "Operation unavailable.");
     const schema = v2Handler ? operations[rootKey] : legacyOperations[legacyKey];
     const parsed = schema.input.safeParse(input);
+    if (
+      !parsed.success &&
+      name === "approvals.resolve" &&
+      input &&
+      typeof input === "object" &&
+      "decision" in input &&
+      input.decision === "edit" &&
+      (("editedText" in input && input.editedText === "") ||
+        ("editedSubject" in input && input.editedSubject === ""))
+    )
+      throw new RunnerError("invalid_input", "Write the text first.", { reason: "empty_text" });
     if (!parsed.success)
       throw new RunnerError("invalid_input", parsed.error.issues.at(0)?.message ?? "Invalid input.");
     try {
@@ -109,6 +121,7 @@ export function createDispatcher({
         throw new RunnerError(error.code as RunnerErrorCode, error.message, {
           reason:
             "reason" in error && typeof error.reason === "string" ? (error.reason as ErrorReason) : undefined,
+          ...(error instanceof EngineError ? { params: error.params } : {}),
         });
       try {
         audit("internal_error", {
@@ -143,6 +156,8 @@ export function createHandlers({
   | "runs.list"
   | "runs.status"
   | "runs.report"
+  | "approvals.answer"
+  | "approvals.resolve"
 > &
   Pick<V2Handlers, "activity.summary"> {
   function flow(id: string): FlowRow {
@@ -179,11 +194,6 @@ export function createHandlers({
     const f = store.getFlow(r.flowId, r.flowHash);
     if (!f) throw new Error("Flow not found.");
     return toApproval(row, r, FlowManifest.parse(f.manifest));
-  }
-  function approvalById(id: string) {
-    const row = store.getApproval(id);
-    if (!row) throw new RunnerError("not_found", `There is no approval ${id}.`);
-    return row;
   }
   function unavailable(message: string): never {
     throw new RunnerError("unavailable", message);
@@ -343,25 +353,6 @@ export function createHandlers({
         ...engine.listApprovals({ state }).reverse().map(approval),
         ...(weekly?.list() ?? []).filter((a) => !state || a.state === state),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    "approvals.answer": ({ approvalId, picks }) => {
-      engine.beginAnswer(approvalId, { picks });
-      return [approval(approvalById(approvalId))];
-    },
-    "approvals.resolve": ({ approvalId, decision, applyToSimilar }) => {
-      if (approvalId.startsWith("weekly-limit:")) {
-        if (applyToSimilar) throw new RunnerError("not_allowed", "Nothing here can be approved as a batch.");
-        if (decision === "edit") throw new RunnerError("invalid_input", "Only text can be edited.");
-        if (!weekly) throw new RunnerError("not_found", `There is no approval ${approvalId}.`);
-        return weekly.resolve(approvalId, decision);
-      }
-      const row = approvalById(approvalId);
-      if (applyToSimilar) throw new RunnerError("not_allowed", "Nothing here can be approved as a batch.");
-      if (row.kind === "ask")
-        throw new RunnerError("invalid_input", "This is a choice. Pick from its options.");
-      if (decision === "edit") throw new RunnerError("invalid_input", "Only text can be edited.");
-      engine.beginDecide(approvalId, decision);
-      return [approval(approvalById(approvalId))];
-    },
     "flows.import": ({ path }) => {
       if (!isAbsolute(path))
         throw new RunnerError("invalid_input", "The flow folder must be an absolute path.");
@@ -562,9 +553,26 @@ export function createDecisionHandlers(
         reason: "already_answered",
         params: { via: row.resolvedVia ?? "window" },
       });
-    if (input.decision !== "approve" && input.decision !== "reject")
+    if (input.decision !== "approve" && input.decision !== "reject" && input.decision !== "edit")
       throw new RunnerError("invalid_input", "Only text can be edited.");
-    engine.beginDecide(row.id, input.decision);
+    if (input.decision === "edit") {
+      for (const text of [input.editedText, input.editedSubject]) {
+        if (text === undefined) continue;
+        if (!text.trim())
+          throw new RunnerError("invalid_input", "Write the text first.", { reason: "empty_text" });
+        if (hasHiddenText(text) || /\p{Cf}/u.test(text))
+          throw new RunnerError("invalid_input", "Remove hidden characters.", {
+            reason: "hidden_characters",
+          });
+      }
+    }
+    engine.beginDecide(
+      row.id,
+      input.decision,
+      input.decision === "edit" && input.editedText !== undefined
+        ? { text: input.editedText, subject: input.editedSubject }
+        : undefined,
+    );
     const current = store.getApproval(row.id);
     const run = store.getRun(row.runId);
     if (!current || !run) throw new RunnerError("not_found", "Approval not found.");
@@ -572,5 +580,14 @@ export function createDecisionHandlers(
     clear(`approval:${row.id}`);
     return { decision, stepWaiting: decision.stepWaiting };
   };
-  return { list, resolve };
+  const answer = (input: V2Input<"approvals.answer">) => {
+    engine.beginAnswer(input.approvalId, { picks: input.picks });
+    const row = store.getApproval(input.approvalId);
+    const run = row && store.getRun(row.runId);
+    if (!row || !run) throw new RunnerError("not_found", "Approval not found.");
+    const decision = toDecision(row, run, store);
+    clear(`approval:${row.id}`);
+    return { decision };
+  };
+  return { list, resolve, answer };
 }

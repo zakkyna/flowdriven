@@ -285,6 +285,41 @@ test(
     });
   },
 );
+test("TC-SR1-28 one approved reply runs and a changed reply is held", timeout, async () => {
+  const input = { to: ["sam@example.test"], subject: "Invoice", body: "Thanks." };
+  const changed = { ...input, body: "Thanks!" };
+  const t = await setup([tool("a", "reply", input), tool("b", "reply", changed), done]);
+  const grant = callGrant("gmail", "reply", digestCall("reply", input));
+  t.store.putCallGrant(legacyGrant("r1", "s", "j1", grant));
+  expect(await t.adapter.runStep(t.request)).toMatchObject({
+    hold: {
+      requirementId: "gmail",
+      tool: "reply",
+      input: changed,
+      digest: digestCall("reply", changed),
+      action: "send",
+    },
+  });
+  expect(readFakeCalls(t.home)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: "tool", id: "a", ran: true }),
+      expect.objectContaining({ kind: "tool", id: "b", ran: false }),
+    ]),
+  );
+  const db = new DatabaseSync(t.dbPath);
+  const row = db
+    .prepare("SELECT data FROM call_grants WHERE run_id = ? AND step_id = ? AND item_key = ? AND tool = ?")
+    .get("r1", "s", "j1", "gmail.reply");
+  const used = row ? (JSON.parse(String(row.data)) as { usedAt?: string }).usedAt : undefined;
+  db.close();
+  expect(used).toEqual(expect.any(String));
+  expect(t.audits).toContainEqual(
+    expect.objectContaining({
+      kind: "grant_used",
+      detail: expect.objectContaining({ grant: "call", tool: "reply" }),
+    }),
+  );
+});
 test(
   "a call grant is used once: the second identical call in the same attempt is held",
   timeout,

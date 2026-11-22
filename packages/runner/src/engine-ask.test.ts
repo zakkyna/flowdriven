@@ -20,6 +20,7 @@ async function ready(
     empty?: boolean;
     expiry?: string;
     source?: string;
+    signoff?: boolean;
   } = {},
 ) {
   const parsed = parseManifest({
@@ -80,9 +81,13 @@ async function ready(
         steps: [
           {
             id: "proto",
+            ...(options.signoff ? { title: "Approve the build plan for ${job.id}" } : {}),
             do: "worker",
             instructions: "Build ${job}",
-            checks: [{ type: "files", paths: ["out.txt"], min_count: 1 }],
+            ...(options.signoff ? { outputs: [{ id: "plan", type: "text" }] } : {}),
+            checks: options.signoff
+              ? [{ type: "user", own_text: true }]
+              : [{ type: "files", paths: ["out.txt"], min_count: 1 }],
           },
         ],
       },
@@ -106,7 +111,7 @@ async function ready(
       }),
       proto: () => {
         duringProto?.();
-        return {};
+        return options.signoff ? { outputs: { plan: "Plan text" } } : {};
       },
     },
   });
@@ -149,7 +154,46 @@ test("an answer picks among the options and feeds the next loop", async () => {
   expect(c.harness.calls.filter((x) => x.stepId === "proto").map((x) => x.itemKey)).toEqual(["j3"]);
   expect(after.state).toBe("done");
 });
-test("refuses picks outside the options and a second answer", async () => {
+test("TC-j24-26 a choice enforces its maximum and runs only the chosen items", async () => {
+  const c = await ready({ maxPick: 2, allFit: true });
+  const ap = approval(c);
+  await expect(c.engine.answerAsk(ap.id, { picks: ["j1", "j2", "j3"] })).rejects.toMatchObject({
+    code: "invalid_input",
+    reason: "too_many_picks",
+    params: { max: 2 },
+  });
+  expect(c.store.getApproval(ap.id)?.state).toBe("pending");
+  expect((await c.engine.answerAsk(ap.id, { picks: ["j1", "j2"] })).state).toBe("done");
+  expect(c.harness.calls.filter((x) => x.stepId === "proto").map((x) => x.itemKey)).toEqual(["j1", "j2"]);
+});
+test("TC-j24-27 picking none skips the dependent loop with its reason", async () => {
+  const c = await ready();
+  const ap = approval(c);
+  expect((await c.engine.answerAsk(ap.id, { picks: [] })).state).toBe("done");
+  expect(c.store.getApproval(ap.id)).toMatchObject({ state: "approved", picks: [] });
+  expect(c.store.getStep(c.run.id, "build")).toMatchObject({
+    state: "skipped",
+    skipped: { because: "no_picks" },
+  });
+  expect(c.harness.calls.filter((x) => x.stepId === "proto")).toEqual([]);
+});
+test("TC-j24-28 picked jobs ask for own-text sign-off one at a time", async () => {
+  const c = await ready({ maxPick: 2, allFit: true, signoff: true });
+  await c.engine.answerAsk(approval(c).id, { picks: ["j1", "j2"] });
+  let pending = c.store.listApprovals({ runId: c.run.id, state: "pending" });
+  expect(pending).toHaveLength(1);
+  expect(pending[0]).toMatchObject({ kind: "result_sign_off", itemKey: "j1", payload: "Plan text" });
+  expect(pending[0]?.summary).toContain("run commands on your Mac");
+  expect(pending[0]?.summary).toContain("Approve the build plan for j1");
+  const first = pending[0];
+  if (!first) throw new Error("missing sign-off");
+  await c.engine.decide(first.id, "approve");
+  pending = c.store.listApprovals({ runId: c.run.id, state: "pending" });
+  expect(pending).toHaveLength(1);
+  expect(pending[0]).toMatchObject({ kind: "result_sign_off", itemKey: "j2", payload: "Plan text" });
+  expect(pending[0]?.summary).toContain("Approve the build plan for j2");
+});
+test("TC-RUL-21 refuses picks outside the options and a second answer", async () => {
   const c = await ready();
   const ap = approval(c);
   await expect(c.engine.answerAsk(ap.id, { picks: ["j2"] })).rejects.toMatchObject({ code: "invalid_input" });
@@ -165,7 +209,9 @@ test("refuses picks outside the options and a second answer", async () => {
   ]);
   expect(both.map((r) => r.status).sort()).toEqual(["fulfilled", "rejected"]);
   expect((both.find((r) => r.status === "rejected") as PromiseRejectedResult).reason).toMatchObject({
-    code: "not_allowed",
+    code: "conflict",
+    reason: "already_answered",
+    params: { via: "window" },
     message: "This decision was already made.",
   });
   expect(c.harness.calls.filter((x) => x.stepId === "proto").length).toBe(1);
@@ -184,27 +230,19 @@ test("a max_pick that is not a whole number blocks the run", async () => {
   expect(c.run).toMatchObject({ state: "blocked", blockedReason: expect.stringContaining("max_pick") });
   expect(c.engine.listApprovals()).toEqual([]);
 });
-test("expiry applies on every read", async () => {
-  const c = await ready();
-  const ap = approval(c);
-  c.clock.advance(24 * 3_600_000 + 1);
-  const view = c.engine.getRun(c.run.id);
-  expect(view.run.state).toBe("done");
-  expect(view.approvals.at(0)?.state).toBe("expired");
-  expect(view.steps.find((s) => s.stepId === "pick")).toMatchObject({
-    state: "passed",
-    outputs: { choice: [] },
-  });
-  expect(view.steps.find((s) => s.stepId === "build")?.state).toBe("skipped");
-  await expect(c.engine.answerAsk(ap.id, { picks: ["j1"] })).rejects.toMatchObject({
-    code: "not_allowed",
-    message: "This approval expired.",
-  });
-  const d = await ready({ expiry: "fail" });
-  d.clock.advance(24 * 3_600_000 + 1);
-  expect(d.engine.listRuns().at(0)?.state).toBe("failed");
-  expect(d.store.getStep(d.run.id, "pick")?.note).toBe("The approval expired.");
-  expect(d.engine.listApprovals().at(0)?.state).toBe("expired");
+test("TC-j24-31 choices wait beyond 25 hours for both expiry modes", async () => {
+  for (const expiry of ["end", "fail"]) {
+    const c = await ready({ expiry });
+    const ap = approval(c);
+    c.clock.advance(25 * 3_600_000);
+    const view = c.engine.getRun(c.run.id);
+    expect(view.run.state).toBe("waiting_approval");
+    expect(view.approvals.at(0)?.state).toBe("pending");
+    expect(view.steps.find((s) => s.stepId === "pick")?.state).toBe("waiting_approval");
+    expect(view.steps.find((s) => s.stepId === "build")).toBeUndefined();
+    expect((await c.engine.answerAsk(ap.id, { picks: ["j1"] })).state).toBe("done");
+    expect(c.harness.calls.filter((x) => x.stepId === "proto").map((x) => x.itemKey)).toEqual(["j1"]);
+  }
 });
 test("ask.approves grants only the picked items, only in this run", async () => {
   const c = await ready();

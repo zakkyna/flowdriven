@@ -208,7 +208,7 @@ test("a user check holds the run, approve completes it, reject fails it", async 
     }
   }
 });
-test("a result sign-off expires after 24 hours and fails the run", async () => {
+test("TC-RUL-04 an expired sign-off refuses a later decision with a conflict", async () => {
   const c = await ready([worker({ checks: [{ type: "user" }] })], { steps: { a: {} } });
   const run = await c.start();
   c.clock.advance(24 * 3600000 + 1);
@@ -219,7 +219,8 @@ test("a result sign-off expires after 24 hours and fails the run", async () => {
   expect(c.store.getStep(run.id, "a")?.note).toBe("The approval expired after 24 hours.");
   if (!ap) throw new Error("missing approval");
   await expect(c.engine.decide(ap.id, "approve")).rejects.toMatchObject({
-    code: "not_allowed",
+    code: "conflict",
+    reason: "decision_expired",
     message: "This approval expired.",
   });
 });

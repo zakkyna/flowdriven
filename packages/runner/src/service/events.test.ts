@@ -2,7 +2,9 @@ import type { RunnerTopic } from "@flowdriven/contracts";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
+import { pendingDecision } from "../test-helpers/builders.ts";
 import { createChangeEmitter, wrapStore } from "./events.ts";
+import { createRunnerService } from "./service.ts";
 
 const stores: Store[] = [];
 afterEach(() => {
@@ -99,6 +101,130 @@ test("reads, counters and the audit log mark nothing, and a call that throws mar
   store.increment("n", "d");
   expect(() => store.updateRun("missing", {})).toThrow(expect.objectContaining({ code: "not_found" }));
   expect(marks).toEqual([]);
+});
+
+test("TC-SR7-03 a rolled-back decision emits no changed event", async () => {
+  const original = await openSqliteStore(":memory:");
+  stores.push(original);
+  original.putFlow(flow);
+  original.createRun(run);
+  original.upsertStep(step);
+  original.createApproval(approval);
+  const scheduled: (() => void)[] = [];
+  const events: { type: "changed"; topics: RunnerTopic[] }[] = [];
+  const emitter = createChangeEmitter(
+    (event) => events.push(event),
+    (fn) => scheduled.push(fn),
+  );
+  const store = wrapStore(original, emitter.mark);
+  expect(() =>
+    store.transaction(() => {
+      store.updateApproval("a", { state: "approved" });
+      store.putCallGrant({
+        runId: "r",
+        stepId: "s",
+        itemKey: "",
+        tool: "tool",
+        digest: "d",
+        kind: "approve",
+        createdAt: "2026",
+      });
+      throw new Error("audit insert failed");
+    }),
+  ).toThrow("audit insert failed");
+  for (const callback of scheduled) callback();
+  expect(original.getApproval("a")?.state).toBe("pending");
+  expect(
+    original.findGrant({
+      runId: "r",
+      stepId: "s",
+      itemKey: "",
+      tool: "tool",
+      digest: "d",
+      kind: "approve",
+      createdAt: "",
+    }),
+  ).toBeUndefined();
+  expect(events).toEqual([]);
+  const order: string[] = [];
+  store.transaction(() => {
+    store.updateApproval("a", { state: "approved" });
+    store.putCallGrant({
+      runId: "r",
+      stepId: "s",
+      itemKey: "",
+      tool: "tool",
+      digest: "d",
+      kind: "approve",
+      createdAt: "2026",
+    });
+    store.appendAudit({
+      at: "2026",
+      kind: "decision_made",
+      runId: "r",
+      detail: { decision: "approve", via: "window" },
+    });
+    order.push("write");
+    expect(events).toEqual([]);
+  });
+  order.push("commit");
+  for (const callback of scheduled) callback();
+  if (events.length) order.push("event");
+  expect(order).toEqual(["write", "commit", "event"]);
+  expect(events).toEqual([{ type: "changed", topics: ["runs", "approvals", "chats", "activity"] }]);
+});
+test("TC-SR7-03 an audit insertion failure rolls back the actual handler", async () => {
+  const original = await openSqliteStore(":memory:");
+  stores.push(original);
+  const row = pendingDecision(original, { id: "event-fault", createdAt: "2026-11-21T00:00:00Z" });
+  const tool = "mcp__claude_ai_Gmail__reply";
+  const { callGrant, digestCall } = await import("../connectors/grants.ts");
+  const input = { to: "sam@example.test", body: "Thanks" };
+  const digest = digestCall(tool, input);
+  original.updateApproval(row.id, {
+    kind: "risky_action",
+    riskyAction: "send",
+    effect: "send",
+    call: { tool, input },
+    approves: [callGrant("mail", tool, digest)],
+  });
+  const faulty = new Proxy(original, {
+    get(target, key, receiver) {
+      if (key === "appendAudit")
+        return (entry: Parameters<Store["appendAudit"]>[0]) => {
+          if (entry.kind === "decision_made") throw new Error("audit insert failed");
+          return target.appendAudit(entry);
+        };
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const marks: RunnerTopic[] = [];
+  const service = createRunnerService({
+    store: wrapStore(faulty, (topic) => marks.push(topic)),
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    await expect(
+      service.call("approvals.resolve", { approvalId: row.id, decision: "approve" }),
+    ).rejects.toMatchObject({ code: "unavailable" });
+    expect(original.getApproval(row.id)?.state).toBe("pending");
+    expect(
+      original.findGrant({
+        runId: row.runId,
+        stepId: row.stepId,
+        itemKey: row.itemKey,
+        tool,
+        digest,
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toBeUndefined();
+    expect(marks).toEqual([]);
+  } finally {
+    service.stop();
+  }
 });
 test("writes in one turn make one event with sorted topics", async () => {
   const callbacks: (() => void)[] = [];

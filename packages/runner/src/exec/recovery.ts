@@ -18,7 +18,7 @@ export function createRecovery(ctx: {
     ctx.sweep();
     const run = store.getRun(id);
     if (!run) throw new EngineError("not_found", "Run not found.");
-    if (!["blocked", "failed", "interrupted"].includes(run.state))
+    if (!["blocked", "failed", "interrupted", "needs_login"].includes(run.state))
       throw new EngineError("not_allowed", "This run cannot be resumed.");
     try {
       ctx.flowFor(run);

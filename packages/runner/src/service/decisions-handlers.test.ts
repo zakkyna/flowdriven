@@ -3,6 +3,367 @@ import { openSqliteStore } from "../sqlite-store.ts";
 import { pendingDecision } from "../test-helpers/builders.ts";
 import { createRunnerService } from "./service.ts";
 
+test("TC-j24-46 a waiting run keeps its own version after the flow head changes", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, { id: "version", createdAt: "2026-11-21T00:00:00Z" });
+    const run = store.getRun(row.runId);
+    if (!run) throw new Error("missing run");
+    const { digestCall, callGrant } = await import("../connectors/grants.ts");
+    const tool = "mcp__claude_ai_Gmail__reply";
+    const input = { to: "sam@example.test", body: "Thanks" };
+    const digest = digestCall(tool, input);
+    store.updateApproval(row.id, {
+      kind: "risky_action",
+      riskyAction: "send",
+      effect: "send",
+      call: { tool, input },
+      approves: [callGrant("mail", tool, digest)],
+    });
+    store.putFlowHead({
+      id: run.flowId,
+      name: "Flow",
+      summary: "",
+      createdAt: row.createdAt,
+      updatedAt: row.createdAt,
+      origin: { kind: "demo" },
+      headHash: `sha256:${"b".repeat(64)}`,
+    });
+    expect(await service.call("runs.status", { runId: run.id })).toMatchObject({ versionChanged: true });
+    await service.call("approvals.resolve", { approvalId: row.id, decision: "approve" });
+    expect(store.getRun(run.id)?.flowHash).toBe(run.flowHash);
+    expect(
+      store.findGrant({
+        runId: run.id,
+        stepId: row.stepId,
+        itemKey: row.itemKey,
+        tool,
+        digest,
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toBeDefined();
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-RUL-01 approve records a call grant and decision audit atomically", async () => {
+  const store = await openSqliteStore(":memory:");
+  const cleared: string[] = [];
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    clearNotice: (id) => cleared.push(id),
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, { id: "approve-grant", createdAt: "2026-11-21T00:00:00Z" });
+    const { digestCall, callGrant } = await import("../connectors/grants.ts");
+    const tool = "mcp__claude_ai_Gmail__reply";
+    const input = { to: "sam@example.test", body: "Thanks" };
+    const digest = digestCall(tool, input);
+    store.updateApproval(row.id, {
+      kind: "risky_action",
+      riskyAction: "send",
+      effect: "send",
+      call: { tool, input },
+      approves: [callGrant("mail", tool, digest)],
+    });
+    expect(
+      await service.call("approvals.resolve", { approvalId: row.id, decision: "approve" }),
+    ).toMatchObject({ decision: { state: "approved", resolvedVia: "window" } });
+    expect(cleared).toEqual([`approval:${row.id}`]);
+    expect(
+      store.findGrant({
+        runId: row.runId,
+        stepId: row.stepId,
+        itemKey: row.itemKey,
+        tool,
+        digest,
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toMatchObject({ approvalId: row.id });
+    expect(store.listAudit(row.runId)).toContainEqual(
+      expect.objectContaining({
+        kind: "decision_made",
+        detail: expect.objectContaining({ decision: "approve", via: "window" }),
+      }),
+    );
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-j24-23 edit changes only the approved body", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, { id: "edited-body", createdAt: "2026-11-21T00:00:00Z" });
+    const { digestCall, callGrant } = await import("../connectors/grants.ts");
+    const tool = "mcp__claude_ai_Gmail__reply";
+    const input = { to: "sam@example.test", cc: ["alex@example.test"], subject: "Invoice", body: "Monday" };
+    store.updateApproval(row.id, {
+      kind: "risky_action",
+      effect: "send",
+      riskyAction: "send",
+      call: { tool, input },
+      approves: [callGrant("mail", tool, digestCall(tool, input))],
+      payload: { kind: "email", to: [input.to], cc: input.cc, subject: input.subject, body: input.body },
+    });
+    const body = "To: other@example.test\nTuesday";
+    expect(
+      await service.call("approvals.resolve", { approvalId: row.id, decision: "edit", editedText: body }),
+    ).toMatchObject({ decision: { state: "approved_edited", editedText: body } });
+    const editedDigest = digestCall(tool, { ...input, body });
+    expect(store.getApproval(row.id)).toMatchObject({ editedDigest });
+    expect(
+      store.findGrant({
+        runId: row.runId,
+        stepId: row.stepId,
+        itemKey: "",
+        tool,
+        digest: editedDigest,
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toBeDefined();
+    expect(
+      store.findGrant({
+        runId: row.runId,
+        stepId: row.stepId,
+        itemKey: "",
+        tool,
+        digest: digestCall(tool, input),
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toBeUndefined();
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-RUL-03 a second decision cannot change an approved decision", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, { id: "answered", createdAt: "2026-11-21T00:00:00Z" });
+    await service.call("approvals.resolve", { approvalId: row.id, decision: "approve" });
+    const before = store.getApproval(row.id);
+    const audit = store.listAudit(row.runId);
+    await expect(
+      service.call("approvals.resolve", { approvalId: row.id, decision: "reject" }),
+    ).rejects.toMatchObject({ code: "conflict", reason: "already_answered", params: { via: "window" } });
+    expect(store.getApproval(row.id)).toEqual(before);
+    expect(store.listAudit(row.runId)).toEqual(audit);
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-RUL-21 choices reject excess and unknown picks and answer once", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, { id: "choice", createdAt: "2026-11-21T00:00:00Z" });
+    store.updateApproval(row.id, {
+      kind: "ask",
+      maxPick: 2,
+      payload: {
+        question: "Choose",
+        options: ["a", "b", "c"].map((key) => ({ key, label: key, item: { id: key } })),
+        maxPick: 2,
+      },
+    });
+    await expect(
+      service.call("approvals.answer", { approvalId: row.id, picks: ["a", "b", "c"] }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "too_many_picks", params: { max: 2 } });
+    await expect(
+      service.call("approvals.answer", { approvalId: row.id, picks: ["z"] }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "unknown_pick" });
+    expect(await service.call("approvals.answer", { approvalId: row.id, picks: ["a", "b"] })).toMatchObject({
+      decision: { state: "approved", picks: ["a", "b"] },
+    });
+    await expect(service.call("approvals.answer", { approvalId: row.id, picks: [] })).rejects.toMatchObject({
+      code: "conflict",
+      reason: "already_answered",
+    });
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-j24-24 and TC-RUL-06 reject hidden or empty edits without a grant", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, { id: "invalid-edit", createdAt: "2026-11-21T00:00:00Z" });
+    const tool = "mcp__claude_ai_Gmail__reply";
+    const input = { to: "sam@example.test", subject: "Invoice", body: "Monday" };
+    const { digestCall, callGrant } = await import("../connectors/grants.ts");
+    store.updateApproval(row.id, {
+      kind: "risky_action",
+      effect: "send",
+      riskyAction: "send",
+      call: { tool, input },
+      approves: [callGrant("mail", tool, digestCall(tool, input))],
+      payload: { kind: "email", to: [input.to], subject: input.subject, body: input.body },
+    });
+    for (const [editedText, reason] of [
+      [`ok${String.fromCodePoint(0x200b)}`, "hidden_characters"],
+      [`ok${String.fromCodePoint(0x202e)}`, "hidden_characters"],
+      ["", "empty_text"],
+      ["  \n ", "empty_text"],
+    ]) {
+      await expect(
+        service.call("approvals.resolve", { approvalId: row.id, decision: "edit", editedText }),
+      ).rejects.toMatchObject({ code: "invalid_input", reason });
+      expect(store.getApproval(row.id)?.state).toBe("pending");
+      expect(
+        store.findGrant({
+          runId: row.runId,
+          stepId: row.stepId,
+          itemKey: "",
+          tool,
+          digest: digestCall(tool, input),
+          kind: "approve",
+          createdAt: "",
+        }),
+      ).toBeUndefined();
+    }
+    for (const [editedSubject, reason] of [
+      [`ok${String.fromCodePoint(0x200b)}`, "hidden_characters"],
+      [`ok${String.fromCodePoint(0x202e)}`, "hidden_characters"],
+      ["", "empty_text"],
+      ["  ", "empty_text"],
+    ]) {
+      await expect(
+        service.call("approvals.resolve", {
+          approvalId: row.id,
+          decision: "edit",
+          editedText: "valid",
+          editedSubject,
+        }),
+      ).rejects.toMatchObject({ code: "invalid_input", reason });
+      expect(store.getApproval(row.id)?.state).toBe("pending");
+    }
+    store.updateApproval(row.id, { payload: { kind: "diff", files: [{ path: "a", patch: "change" }] } });
+    await expect(
+      service.call("approvals.resolve", { approvalId: row.id, decision: "edit", editedText: "valid" }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "edit_not_allowed" });
+    expect(store.getApproval(row.id)?.state).toBe("pending");
+    store.updateApproval(row.id, {
+      payload: { kind: "text", text: "Message" },
+      call: { tool, input: { body: "Message" } },
+    });
+    await expect(
+      service.call("approvals.resolve", {
+        approvalId: row.id,
+        decision: "edit",
+        editedText: "valid",
+        editedSubject: "Subject",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "edit_not_allowed" });
+    expect(store.getApproval(row.id)?.state).toBe("pending");
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-RUL-05 edit binds the grant to the edited subject and body", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, { id: "edit", createdAt: "2026-11-21T00:00:00Z" });
+    const { digestCall, callGrant } = await import("../connectors/grants.ts");
+    const tool = "mcp__claude_ai_Gmail__reply";
+    const input = { to: "sam@example.test", subject: "Re: Invoice question", body: "Monday" };
+    store.updateApproval(row.id, {
+      kind: "risky_action",
+      effect: "send",
+      riskyAction: "send",
+      call: { tool, input },
+      approves: [callGrant("mail", tool, digestCall(tool, input))],
+      payload: { kind: "email", to: [input.to], subject: input.subject, body: input.body },
+    });
+    await expect(
+      service.call("approvals.resolve", { approvalId: row.id, decision: "edit" }),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    await expect(
+      service.call("approvals.resolve", { approvalId: row.id, decision: "approve", editedText: "Tuesday" }),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    expect(store.getApproval(row.id)?.state).toBe("pending");
+    const result = await service.call("approvals.resolve", {
+      approvalId: row.id,
+      decision: "edit",
+      editedSubject: "Re: Invoice",
+      editedText: "Tuesday",
+    });
+    const edited = { ...input, subject: "Re: Invoice", body: "Tuesday" };
+    expect(result).toMatchObject({
+      decision: { state: "approved_edited", editedSubject: edited.subject, editedText: edited.body },
+    });
+    expect(
+      store.findGrant({
+        runId: row.runId,
+        stepId: row.stepId,
+        itemKey: "",
+        tool,
+        digest: digestCall(tool, edited),
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toMatchObject({ approvalId: row.id });
+    expect(store.getRun(row.runId)?.decisionLines).toContainEqual({
+      key: "report.youApprovedEdited",
+      params: { title: "Review" },
+    });
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
 test("TC-RUL-22 lists old decisions, filters and standing-rule eligibility", async () => {
   const store = await openSqliteStore(":memory:");
   const service = createRunnerService({

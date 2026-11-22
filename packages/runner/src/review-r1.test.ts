@@ -188,7 +188,7 @@ test("an unknown harness exit fails closed", async () => {
   }
 });
 
-test("resume sweeps expired choices before checking the run state", async () => {
+test("TC-j24-31 resume leaves an unanswered choice pending without a deadline", async () => {
   const manifest = makeFlow(
     [
       {
@@ -210,8 +210,9 @@ test("resume sweeps expired choices before checking the run state", async () => 
   try {
     const run = await c.engine.startRun("local.test", { project: "/tmp", inputs: { jobs: [{ id: "j1" }] } });
     c.clock.advance(3600001);
-    expect((await c.engine.resumeRun(run.id)).state).toBe("waiting_approval");
-    expect(c.store.listApprovals({ runId: run.id }).map((a) => a.state)).toContain("expired");
+    await expect(c.engine.resumeRun(run.id)).rejects.toMatchObject({ code: "not_allowed" });
+    expect(c.store.getRun(run.id)?.state).toBe("waiting_approval");
+    expect(c.store.listApprovals({ runId: run.id }).map((a) => a.state)).toContain("pending");
   } finally {
     c.store.close();
   }

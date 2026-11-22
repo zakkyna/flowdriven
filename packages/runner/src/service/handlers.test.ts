@@ -119,7 +119,7 @@ test("the demo story end to end", async () => {
     "Items: 2 processed, 2 skipped as seen, 0 failed.",
   );
 });
-test("approvals.resolve refuses a choice, an edit and a batch, and approvals.answer shows the engine's refusals", async () => {
+test("TC-RUL-21 approvals.resolve refuses a choice, an edit and a batch, and approvals.answer shows the engine's refusals", async () => {
   const { service: s } = await setup();
   await run(s);
   const ask = await pending(s, "ask");
@@ -134,7 +134,9 @@ test("approvals.resolve refuses a choice, an edit and a batch, and approvals.ans
   });
   await s.call("approvals.answer", { approvalId: ask.id, picks: ["j1"] });
   await expect(s.call("approvals.answer", { approvalId: ask.id, picks: ["j1"] })).rejects.toMatchObject({
-    code: "not_allowed",
+    code: "conflict",
+    reason: "already_answered",
+    params: { via: "window" },
     message: "This decision was already made.",
   });
   const sign = await pending(s, "result_sign_off");

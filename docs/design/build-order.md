@@ -865,6 +865,8 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 
 | Case | First stated step | Now | Reason |
 |---|---|---|---|
+| j24-46 (standing-rule clause) | B-05.T2 | B-05.T5 | Rule matching and standingRule() are built in T5; T2 checks the run hash and exact grant. |
+| SR1-28 (hook execution and changed call) | B-05.T2 | B-05.T2 | The existing fake-Claude coverage is in `claude/adapter-held.test.ts`; decision state and line are checked in the decision tests. |
 | j24-15 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
 | j24-39 | B-05 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
 | j24-48 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
@@ -985,6 +987,9 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/engine-begin.test.ts`, `review-r1.test.ts`, `service/run-process.test.ts` | Ask expiry during sweeps or resume, and the old second-answer error | A choice stays pending through sweeps and a second answer reports conflict (TC-j24-31, TC-RUL-21; FS-j24.P4) | B-05.T2 |
+| `packages/runner/src/service/handlers.test.ts` | A second choice answer is not_allowed | It is a conflict with the original answer source (TC-RUL-21; FS-j24.P4) | B-05.T2 |
+| `packages/runner/src/engine-steps.test.ts` (expired sign-off refusal) | A later answer to an expired decision is not_allowed | The answer is a conflict with decision_expired (TC-RUL-04; FS-j24.A16); the separate removal of expiry stays in T3 | B-05.T2 |
 | `packages/runner/src/claude/decide.test.ts`, `decide-connector.test.ts` | Undeclared calls are refused | In-scope undeclared reads and other effects hold as `outside_flow` with exact payload and digest; protected targets stay locked (FS-j24.P15) | B-32.T2 |
 | `packages/runner/src/claude/decide-browser.test.ts` | A URL outside a declared template is refused | An in-scope URL outside the template holds as `outside_flow`; an undeclared server stays locked, and links are never followed automatically (FS-j24.P15) | B-32.T2 |
 | `packages/runner/src/claude/decide-commands.test.ts` | An undeclared in-scope command is refused | It holds as `outside_flow`; the protected and scoped command locks stay checked (FS-j24.P15) | B-32.T2 |

@@ -1,7 +1,13 @@
 import { expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
-import type { ApprovalRow, RunRow } from "../storage.ts";
-import { toApproval } from "./map-approval.ts";
+import type { ApprovalRow, RunRow, Store } from "../storage.ts";
+import { toDecision } from "./map-decision.ts";
+
+// TC-j24-23: the version 2 decision mapper keeps these payload assertions.
+function toApproval(row: ApprovalRow, run: RunRow, manifest: ReturnType<typeof demoFlow>["manifest"]) {
+  const store = { getFlow: () => ({ manifest }), listApprovals: () => [] } as unknown as Store;
+  return toDecision(row, run, store);
+}
 
 const manifest = demoFlow().manifest;
 const date = "2026-11-11T00:00:00.000Z";

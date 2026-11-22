@@ -122,7 +122,12 @@ test("begin variants refuse bad input at once and write nothing", { timeout: 20_
   const d = await choice();
   const b = d.engine.beginAnswer(d.ap.id, { picks: ["j1"] });
   expect(() => d.engine.beginAnswer(d.ap.id, { picks: ["j1"] })).toThrow(
-    expect.objectContaining({ code: "not_allowed", message: "This decision was already made." }),
+    expect.objectContaining({
+      code: "conflict",
+      reason: "already_answered",
+      params: { via: "window" },
+      message: "This decision was already made.",
+    }),
   );
   await vi.waitFor(() => expect(d.g.calls).toHaveLength(2));
   d.g.release("run-1");
@@ -244,14 +249,14 @@ test("settled never rejects", { timeout: 20_000 }, async () => {
   g.release("run-1");
   await expect(b.settled).resolves.toMatchObject({ id: "run-1" });
 });
-test("sweepExpired expires an approval without any read, through the flow's chain", {
+test("TC-j24-31 sweepExpired leaves a choice waiting without a deadline", {
   timeout: 20_000,
 }, async () => {
   const c = await choice();
   c.advance(24 * 3600000 + 1);
   await c.engine.sweepExpired();
-  expect(c.store.getApproval(c.ap.id)?.state).toBe("expired");
-  expect(c.store.getRun("run-1")?.state).toBe("done");
+  expect(c.store.getApproval(c.ap.id)?.state).toBe("pending");
+  expect(c.store.getRun("run-1")?.state).toBe("waiting_approval");
 });
 test("shutdown refuses new work and drops walks that have not begun", { timeout: 20_000 }, async () => {
   const g = gated();
