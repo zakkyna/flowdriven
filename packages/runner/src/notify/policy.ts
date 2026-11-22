@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { sanitizeText } from "../triggers/rules.ts";
 
 export type NoticeEvent =
+  | { kind: "question_waiting" | "confirm_waiting"; chatId: string; questionId: string }
   | { kind: "approval_waiting"; runId: string; approvalId: string; flowName: string }
   | { kind: "run_blocked"; runId: string; flowId: string; flowName: string }
   | { kind: "weekly_limit"; harnessId: string; percent: number; resetsAtMs: number }
@@ -14,28 +14,28 @@ export type NoticeEvent =
       pausedAt: string;
       why?: "blocked_runs" | "challenge";
     };
-export type NoticeTarget =
-  | { screen: "inbox"; approvalId?: string }
-  | { screen: "run"; runId: string }
-  | { screen: "builder"; flowId: string };
 export type NoticeOut = {
   id: string;
   kind: NoticeEvent["kind"];
-  title: string;
-  body: string;
-  target: NoticeTarget;
+  title: { key: string };
+  body: { key: string };
+  language: string;
+  target:
+    | { screen: "run"; runId: string; approvalId?: string }
+    | { screen: "chat"; chatId: string }
+    | { screen: "flow"; flowId: string }
+    | { screen: "activity" };
 };
 
 const RUN_THROTTLE_MS = 600_000;
 const BLOCKED_FLOW_QUIET_MS = 21_600_000;
 const WEEKLY_QUIET_MS = 86_400_000;
-const NAME_MAX = 60;
 const SENT_MAX = 1000;
 const validId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9:._-]{1,100}$/.test(id);
 const quiet = (last: number | undefined, now: number, duration: number) =>
   last !== undefined && now - last < duration;
 
-export function createNoticePolicy(o: { nowMs: () => number }): {
+export function createNoticePolicy(o: { nowMs: () => number; language?: () => string }): {
   decide(event: NoticeEvent): NoticeOut | undefined;
 } {
   const sent = new Set<string>();
@@ -49,16 +49,29 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
       if (!Number.isFinite(now)) return undefined;
       let notice: NoticeOut;
       switch (event.kind) {
+        case "question_waiting":
+        case "confirm_waiting": {
+          if (!validId(event.chatId) || !validId(event.questionId)) return undefined;
+          notice = {
+            id: `question:${event.questionId}`,
+            kind: event.kind,
+            title: { key: "notice.questionTitle" },
+            body: { key: "notice.questionBody" },
+            language: o.language?.() ?? "en",
+            target: { screen: "chat", chatId: event.chatId },
+          };
+          break;
+        }
         case "approval_waiting": {
           if (!validId(event.runId) || !validId(event.approvalId) || typeof event.flowName !== "string")
             return undefined;
-          const name = sanitizeText(event.flowName, NAME_MAX) || "A flow";
           notice = {
             id: `approval:${event.approvalId}`,
             kind: event.kind,
-            title: "Waiting for you",
-            body: `${name}: an approval is waiting.`,
-            target: { screen: "inbox", approvalId: event.approvalId },
+            title: { key: "notice.decisionTitle" },
+            body: { key: "notice.decisionBody" },
+            language: o.language?.() ?? "en",
+            target: { screen: "run", runId: event.runId, approvalId: event.approvalId },
           };
           break;
         }
@@ -71,12 +84,12 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
             quiet(flows.get(event.flowId), now, BLOCKED_FLOW_QUIET_MS)
           )
             return undefined;
-          const name = sanitizeText(event.flowName, NAME_MAX) || "A flow";
           notice = {
             id: `blocked:${event.runId}`,
             kind: event.kind,
-            title: "Run blocked",
-            body: `${name} is blocked and needs a look.`,
+            title: { key: "notice.problemTitle" },
+            body: { key: "notice.problemBody" },
+            language: o.language?.() ?? "en",
             target: { screen: "run", runId: event.runId },
           };
           break;
@@ -93,14 +106,13 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
             quiet(weekly.get(event.harnessId), now, WEEKLY_QUIET_MS)
           )
             return undefined;
-          const who = event.harnessId === "claude-code" ? "Claude Code" : "A harness";
-          const weekday = new Date(event.resetsAtMs).toLocaleDateString("en-US", { weekday: "long" });
           notice = {
             id: `weekly:${event.harnessId}:${event.resetsAtMs}`,
             kind: event.kind,
-            title: `${who}'s weekly limit`,
-            body: `${who}'s weekly limit is ${event.percent}% used and resets on ${weekday}. Keep running triggered flows?`,
-            target: { screen: "inbox", approvalId: `weekly-limit:${event.harnessId}` },
+            title: { key: "notice.limitTitle" },
+            body: { key: "notice.limitBody" },
+            language: o.language?.() ?? "en",
+            target: { screen: "activity" },
           };
           break;
         }
@@ -114,13 +126,13 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
             event.cap < 1
           )
             return undefined;
-          const name = sanitizeText(event.flowName, NAME_MAX) || "A flow";
           notice = {
             id: `flood:${createHash("sha256").update(event.flowId).digest("hex").slice(0, 16)}:${event.day}`,
             kind: event.kind,
-            title: "Too many runs",
-            body: `${name} reached its limit of ${event.cap} runs today. More fires are dropped until tomorrow.`,
-            target: validId(event.flowId) ? { screen: "builder", flowId: event.flowId } : { screen: "inbox" },
+            title: { key: "notice.limitTitle" },
+            body: { key: "notice.limitBody" },
+            language: o.language?.() ?? "en",
+            target: validId(event.flowId) ? { screen: "flow", flowId: event.flowId } : { screen: "activity" },
           };
           break;
         }
@@ -134,16 +146,13 @@ export function createNoticePolicy(o: { nowMs: () => number }): {
             (event.why !== undefined && event.why !== "blocked_runs" && event.why !== "challenge")
           )
             return undefined;
-          const name = sanitizeText(event.flowName, NAME_MAX) || "A flow";
           notice = {
             id: `paused:${createHash("sha256").update(event.flowId).digest("hex").slice(0, 16)}:${event.index}:${event.pausedAt}`,
             kind: event.kind,
-            title: "Trigger paused",
-            body:
-              event.why === "challenge"
-                ? `${name} was switched off because a site asked for a login or a robot check.`
-                : `${name} was switched off after 3 blocked runs in a row.`,
-            target: validId(event.flowId) ? { screen: "builder", flowId: event.flowId } : { screen: "inbox" },
+            title: { key: "notice.limitTitle" },
+            body: { key: "notice.limitBody" },
+            language: o.language?.() ?? "en",
+            target: validId(event.flowId) ? { screen: "flow", flowId: event.flowId } : { screen: "activity" },
           };
           break;
         }

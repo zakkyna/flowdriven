@@ -1,8 +1,8 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RunDetail, RunSummary as RunSummaryV2 } from "@flowdriven/contracts";
-import { Approval, FlowDetail, RunSummary } from "@flowdriven/contracts/v1";
+import { Approval, RunDetail, RunSummary as RunSummaryV2 } from "@flowdriven/contracts";
+import { FlowDetail, RunSummary } from "@flowdriven/contracts/v1";
 import { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
 import { createFixtureRunnerClient } from "../../../fixtures/src/client.ts";
@@ -128,7 +128,7 @@ test("approvals.resolve refuses a choice, an edit and a batch, and approvals.ans
   ).rejects.toMatchObject({ code: "invalid_input", message: "This is a choice. Pick from its options." });
   await expect(
     s.call("approvals.resolve", { approvalId: ask.id, decision: "approve", applyToSimilar: true }),
-  ).rejects.toMatchObject({ code: "not_allowed", message: "Nothing here can be approved as a batch." });
+  ).rejects.toMatchObject({ code: "invalid_input", message: 'Unrecognized key: "applyToSimilar"' });
   await expect(s.call("approvals.answer", { approvalId: ask.id, picks: ["bad"] })).rejects.toMatchObject({
     code: "invalid_input",
   });

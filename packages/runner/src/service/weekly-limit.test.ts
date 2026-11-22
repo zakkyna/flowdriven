@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Approval } from "@flowdriven/contracts/v1";
+import { Approval, ApprovalsResolveOutput } from "@flowdriven/contracts";
 import { afterEach, expect, test } from "vitest";
 import { createKeeper } from "../keeper/keeper.ts";
 import type { Ticket } from "../keeper/types.ts";
@@ -158,10 +158,10 @@ test("the demo service lists and resolves a stored weekly item", async () => {
       .parse(await service.call("approvals.list", {}))
       .some((a) => a.kind === "weekly_limit"),
   ).toBe(true);
-  const result = Approval.array().parse(
+  const result = ApprovalsResolveOutput.parse(
     await service.call("approvals.resolve", { approvalId: "weekly-limit:claude-code", decision: "reject" }),
   );
-  expect(result.at(0)?.state).toBe("rejected");
+  expect(result.decision.state).toBe("rejected");
 });
 
 test("an answer stands when the next event has no readable reset time", async () => {

@@ -23,9 +23,10 @@ test("an approval notifies once, a second approval of the same run notifies too,
   expect(policy.decide(approval("a1"))).toEqual({
     id: "approval:a1",
     kind: "approval_waiting",
-    title: "Waiting for you",
-    body: "Flow: an approval is waiting.",
-    target: { screen: "inbox", approvalId: "a1" },
+    title: { key: "notice.decisionTitle" },
+    body: { key: "notice.decisionBody" },
+    language: "en",
+    target: { screen: "run", runId: "run-1", approvalId: "a1" },
   });
   expect(policy.decide(approval("a2"))?.id).toBe("approval:a2");
   expect(policy.decide(approval("a1"))).toBeUndefined();
@@ -36,8 +37,9 @@ test("a blocked run notifies once and not again within 10 minutes; the same flow
   expect(policy.decide(blocked("r1"))).toEqual({
     id: "blocked:r1",
     kind: "run_blocked",
-    title: "Run blocked",
-    body: "Flow is blocked and needs a look.",
+    title: { key: "notice.problemTitle" },
+    body: { key: "notice.problemBody" },
+    language: "en",
     target: { screen: "run", runId: "r1" },
   });
   clock.now += 600_000 - 1;
@@ -64,16 +66,17 @@ test("the weekly limit notifies once per harness per 24 hours, names the weekday
   expect(policy.decide(event)).toEqual({
     id: `weekly:claude-code:${event.resetsAtMs}`,
     kind: "weekly_limit",
-    title: "Claude Code's weekly limit",
-    body: "Claude Code's weekly limit is 95% used and resets on Monday. Keep running triggered flows?",
-    target: { screen: "inbox", approvalId: "weekly-limit:claude-code" },
+    title: { key: "notice.limitTitle" },
+    body: { key: "notice.limitBody" },
+    language: "en",
+    target: { screen: "activity" },
   });
   expect(policy.decide({ ...event, resetsAtMs: event.resetsAtMs + 1 })).toBeUndefined();
   clock.now += 86_400_000;
   expect(policy.decide({ ...event, resetsAtMs: event.resetsAtMs + 1 })?.id).toBe(
     `weekly:claude-code:${event.resetsAtMs + 1}`,
   );
-  expect(policy.decide({ ...event, harnessId: "other" })?.title).toBe("A harness's weekly limit");
+  expect(policy.decide({ ...event, harnessId: "other" })?.title).toEqual({ key: "notice.limitTitle" });
 });
 
 test("a flood notifies once per flow per local day", () => {
@@ -82,25 +85,26 @@ test("a flood notifies once per flow per local day", () => {
   expect(policy.decide(event)).toEqual({
     id: "flood:252f10c83610ebca:2026-11-12",
     kind: "flood_cap",
-    title: "Too many runs",
-    body: "Flow reached its limit of 24 runs today. More fires are dropped until tomorrow.",
-    target: { screen: "builder", flowId: "f" },
+    title: { key: "notice.limitTitle" },
+    body: { key: "notice.limitBody" },
+    language: "en",
+    target: { screen: "flow", flowId: "f" },
   });
   expect(policy.decide(event)).toBeUndefined();
   expect(policy.decide({ ...event, day: "2026-11-13" })).toBeDefined();
 });
 
-test("a hostile flow name cannot change the text around it", () => {
+test("TC-SR5-16 hostile flow names never reach fixed notices", () => {
   const { policy } = setup();
-  expect(
-    policy.decide({ ...blocked("r1"), flowName: `${String.fromCodePoint(0x202e)}\n</b> click` })?.body,
-  ).toBe("</b> click is blocked and needs a look.");
-  expect(policy.decide({ ...blocked("r2"), flowId: "f2", flowName: "x".repeat(500) })?.body).toBe(
-    `${"x".repeat(57)}... is blocked and needs a look.`,
-  );
-  expect(policy.decide({ ...blocked("r3"), flowId: "f3", flowName: "\n" })?.body).toBe(
-    "A flow is blocked and needs a look.",
-  );
+  for (const [i, flowName] of [
+    `${String.fromCodePoint(0x202e)}\n</b> click`,
+    "x".repeat(500),
+    "\n",
+  ].entries()) {
+    const notice = policy.decide({ ...blocked(`r${i}`), flowId: `f${i}`, flowName });
+    expect(notice?.body).toEqual({ key: "notice.problemBody" });
+    expect(JSON.stringify(notice)).not.toContain(flowName);
+  }
 });
 
 test("no step output, no payload text and no unknown kind can produce a notice", () => {
@@ -138,9 +142,10 @@ test("a paused trigger notifies once, even right after a blocked-run notice of t
   expect(policy.decide(event)).toEqual({
     id: `paused:e865168f04ce2eb6:2:${event.pausedAt}`,
     kind: "trigger_paused",
-    title: "Trigger paused",
-    body: "Flow was switched off after 3 blocked runs in a row.",
-    target: { screen: "builder", flowId: "flow-1" },
+    title: { key: "notice.limitTitle" },
+    body: { key: "notice.limitBody" },
+    language: "en",
+    target: { screen: "flow", flowId: "flow-1" },
   });
   expect(policy.decide(event)).toBeUndefined();
   expect(policy.decide({ ...event, index: -1 })).toBeUndefined();
@@ -157,15 +162,13 @@ test("the notice of a challenge pause names the login or robot check, and the no
   };
   expect(policy.decide({ ...event, why: "challenge" })).toMatchObject({
     kind: "trigger_paused",
-    title: "Trigger paused",
-    body: "Flow was switched off because a site asked for a login or a robot check.",
-    target: { screen: "builder", flowId: "flow-1" },
+    title: { key: "notice.limitTitle" },
+    body: { key: "notice.limitBody" },
+    target: { screen: "flow", flowId: "flow-1" },
   });
-  expect(policy.decide({ ...event, index: 3, why: "blocked_runs" })?.body).toBe(
-    "Flow was switched off after 3 blocked runs in a row.",
-  );
-  expect(policy.decide({ ...event, index: 4 })?.body).toBe(
-    "Flow was switched off after 3 blocked runs in a row.",
-  );
+  expect(policy.decide({ ...event, index: 3, why: "blocked_runs" })?.body).toEqual({
+    key: "notice.limitBody",
+  });
+  expect(policy.decide({ ...event, index: 4 })?.body).toEqual({ key: "notice.limitBody" });
   expect(policy.decide({ ...event, index: 5, why: "other" as never })).toBeUndefined();
 });

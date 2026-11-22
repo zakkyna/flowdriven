@@ -29,7 +29,14 @@ export const LONG_STEP = {
 
 export async function runLeaf(
   step: LeafStep,
-  ctx: { deps: ResolvedDeps; run: RunRow; manifest: FlowManifest; scope: Scope; itemKey: string },
+  ctx: {
+    deps: ResolvedDeps;
+    run: RunRow;
+    manifest: FlowManifest;
+    scope: Scope;
+    itemKey: string;
+    keepWaiting?: boolean;
+  },
 ): Promise<"passed" | "skipped" | "failed" | "halt"> {
   const { deps, run, manifest, scope, itemKey } = ctx;
   const { store, harness, now, newId } = deps;
@@ -94,7 +101,7 @@ export async function runLeaf(
     const replan = n === replanAt;
     const ctl = new AbortController();
     row.state = "running";
-    store.updateRun(run.id, { state: "running" });
+    if (!ctx.keepWaiting) store.updateRun(run.id, { state: "running" });
     const attempt = { number: n, replan, worker: harness.name, startedAt: now().toISOString() };
     row.attempts.push(attempt);
     save();
@@ -208,12 +215,28 @@ export async function runLeaf(
       if (result.outside === true) row.outside = true;
       if (result.hold) {
         const hold = result.hold;
-        const payload = heldPayload(hold.input);
+        const payload = heldPayload(hold.input, hold.tool);
         if (payload === undefined) {
           Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+          row.noteLine = { key: "hold.tooLarge" };
           block(HOLD_TEXT.tooLarge);
+          store.updateRun(run.id, {
+            cause: { code: "step_failed", params: { step: step.title ?? step.id } },
+          });
           return "failed";
         }
+        const recipients =
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          payload.kind === "email" &&
+          Array.isArray(payload.to)
+            ? payload.to.join(", ")
+            : undefined;
+        const replyTitle =
+          /(?:^|__)reply$/.test(hold.tool) && recipients && recipients.length <= 150
+            ? `Send reply to ${recipients}?`
+            : undefined;
         const grant = callGrant(hold.requirementId, hold.tool, hold.digest);
         const holds = store
           .listApprovals({ runId: run.id })
@@ -223,7 +246,11 @@ export async function runLeaf(
         );
         if (!pending && holds.length >= MAX_HOLDS) {
           Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+          row.noteLine = { key: "hold.tooMany" };
           block(HOLD_TEXT.tooMany);
+          store.updateRun(run.id, {
+            cause: { code: "step_failed", params: { step: step.title ?? step.id } },
+          });
           return "failed";
         }
         store.transaction(() => {
@@ -232,8 +259,14 @@ export async function runLeaf(
           save();
           if (!pending) {
             const createdAt = now().toISOString();
+            const approvalId = newId("ap");
+            const chatId = store.getRun(run.id)?.start?.chatId;
             store.createApproval({
-              id: newId("ap"),
+              id: approvalId,
+              ...(chatId ? { chatId } : {}),
+              ...(hold.touchId && (hold.effect === "send" || hold.effect === "post")
+                ? { similarGroup: `${hold.effect}:${run.flowId}:${hold.touchId}` }
+                : {}),
               kind: "risky_action",
               ...(hold.action === undefined ? {} : { riskyAction: hold.action }),
               ...(hold.effect === undefined ? {} : { effect: hold.effect }),
@@ -243,7 +276,9 @@ export async function runLeaf(
               runId: run.id,
               stepId: step.id,
               itemKey,
-              summary: `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
+              summary:
+                replyTitle ??
+                `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
               payload,
               call: { tool: hold.tool, input: hold.input },
               approves: [grant],
@@ -253,6 +288,19 @@ export async function runLeaf(
               state: "pending",
               ...(row.outside === true ? { outside: true } : {}),
             });
+            if (chatId) {
+              const card = { type: "decision", state: "open" as const, approvalId };
+              store.putMessage({
+                id: newId("message"),
+                chatId,
+                seq: (store.listMessages(chatId).at(-1)?.seq ?? 0) + 1,
+                at: createdAt,
+                role: "flowdriven",
+                kind: "card",
+                outside: false,
+                card,
+              });
+            }
           }
           store.updateRun(run.id, { state: "waiting_approval" });
         });
@@ -404,7 +452,7 @@ export async function runLeaf(
     row.state = "retrying";
     row.note = failure;
     save();
-    store.updateRun(run.id, { state: "retrying" });
+    if (!ctx.keepWaiting) store.updateRun(run.id, { state: "retrying" });
   }
   block(
     `Blocked at step "${step.title ?? step.id}": checks still failing after ${row.attempts.length} attempts.`,

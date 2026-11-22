@@ -9,7 +9,7 @@ export const MAX_HOLDS = 3;
 export const MAX_HELD_CHARS = 4000;
 export const HOLD_TEXT = {
   tooMany: "This step asked for approval too many times.",
-  tooLarge: "This call is too large to show for your approval.",
+  tooLarge: "FlowDriven could not show the whole text, so it did not ask.",
 };
 export function asciiAddress(address: string): string {
   const at = address.lastIndexOf("@");
@@ -17,7 +17,66 @@ export function asciiAddress(address: string): string {
   const domain = domainToASCII(address.slice(at + 1).toLowerCase());
   return domain ? `${address.slice(0, at).toLowerCase()}@${domain}` : address.toLowerCase();
 }
-export function heldPayload(input: Value): string | undefined {
+function markHeld(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => visible(line, Infinity).replace(/<U\+([0-9A-F]+)>/g, "[U+$1 hidden character]"))
+    .join("\n");
+}
+export function heldPayload(input: Value, tool?: string): Value | undefined {
+  if (
+    tool &&
+    /(?:^|__)(?:reply|send_message)$/.test(tool) &&
+    input &&
+    typeof input === "object" &&
+    !Array.isArray(input)
+  ) {
+    const keys = Object.keys(input);
+    const allowed = ["to", "cc", "bcc", "subject", "body", "attachments"];
+    if (
+      keys.every((key) => allowed.includes(key)) &&
+      input.to !== undefined &&
+      typeof input.subject === "string" &&
+      typeof input.body === "string"
+    ) {
+      const list = (value: Value | undefined) =>
+        typeof value === "string"
+          ? [markHeld(value)]
+          : Array.isArray(value) && value.every((v) => typeof v === "string")
+            ? value.map((v) => markHeld(v as string))
+            : undefined;
+      const to = list(input.to);
+      const cc = input.cc === undefined ? undefined : list(input.cc);
+      const bcc = input.bcc === undefined ? undefined : list(input.bcc);
+      const attachments = input.attachments === undefined ? undefined : list(input.attachments);
+      const subject = typeof input.subject === "string" ? markHeld(input.subject) : undefined;
+      const body = typeof input.body === "string" ? markHeld(input.body) : undefined;
+      const validList = (value: string[]) =>
+        value.length <= 50 && value.every((item) => item.length <= MAX_HELD_CHARS);
+      if (
+        !to ||
+        to.length === 0 ||
+        !validList(to) ||
+        (input.cc !== undefined && (!cc || !validList(cc))) ||
+        (input.bcc !== undefined && (!bcc || !validList(bcc))) ||
+        (input.attachments !== undefined && (!attachments || !validList(attachments))) ||
+        subject === undefined ||
+        subject.length > MAX_HELD_CHARS ||
+        body === undefined ||
+        body.length > MAX_HELD_CHARS
+      )
+        return undefined;
+      return {
+        kind: "email",
+        to,
+        ...(cc ? { cc } : {}),
+        ...(bcc ? { bcc } : {}),
+        ...(attachments ? { attachments } : {}),
+        subject,
+        body,
+      };
+    }
+  }
   const addresses =
     input && typeof input === "object" && !Array.isArray(input)
       ? ["to", "cc", "bcc"].flatMap((key) => {
@@ -35,7 +94,7 @@ export function heldPayload(input: Value): string | undefined {
   const text =
     JSON.stringify(input, null, 2)
       .split("\n")
-      .map((line) => visible(line, Infinity))
+      .map((line) => markHeld(line))
       .join("\n") +
     ascii
       .map(([address, converted]) => `\n${visible(address, Infinity)} (${visible(converted, Infinity)})`)

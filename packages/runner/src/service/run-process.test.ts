@@ -200,12 +200,32 @@ test("a notice sink holds up to 20 notices raised before the server is attached,
   const notice = {
     id: "n",
     kind: "run_blocked" as const,
-    title: "Run blocked",
-    body: "Blocked",
+    title: { key: "notice.problemTitle" },
+    body: { key: "notice.problemBody" },
+    language: "en",
     target: { screen: "run" as const, runId: "r" },
   };
   for (let i = 0; i < 21; i++) sink.send({ ...notice, id: `n${i}` });
-  sink.attach({ notice: (n) => received.push(n.id) });
+  sink.attach({ notice: (n) => received.push(n.id), clearNotice: () => {} });
   sink.send({ ...notice, id: "later" });
   expect(received).toEqual([...Array.from({ length: 20 }, (_, i) => `n${i}`), "later"]);
+});
+
+test("TC-j24-04 clearing an early notice prevents it being sent after attach", () => {
+  const sink = createNoticeSink();
+  const sent: string[] = [];
+  const cleared: string[] = [];
+  sink.send({
+    id: "approval:ap-1",
+    kind: "approval_waiting",
+    title: { key: "notice.decisionTitle" },
+    body: { key: "notice.decisionBody" },
+    language: "en",
+    target: { screen: "run", runId: "run-1", approvalId: "ap-1" },
+  });
+  sink.clear("approval:ap-1");
+  sink.attach({ notice: (notice) => sent.push(notice.id), clearNotice: (id) => cleared.push(id) });
+  expect(sent).toEqual([]);
+  sink.clear("approval:ap-2");
+  expect(cleared).toEqual(["approval:ap-2"]);
 });

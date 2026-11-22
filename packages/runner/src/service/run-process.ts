@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { type Notice, RunnerTopic } from "@flowdriven/contracts/v1";
+import type { Notice } from "@flowdriven/contracts";
+import { RunnerTopic } from "@flowdriven/contracts/v1";
 import { EngineError } from "../errors.ts";
 import { retentionDue, retentionSweep } from "../retention.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
@@ -35,14 +36,20 @@ export function guardProcess(proc: Pick<NodeJS.Process, "on">, errors: (line: st
 }
 export function createNoticeSink(): {
   send(notice: Notice): void;
-  attach(server: Pick<RpcServer, "notice">): void;
+  clear(id: string): void;
+  attach(server: Pick<RpcServer, "notice" | "clearNotice">): void;
 } {
   const pending: Notice[] = [];
-  let server: Pick<RpcServer, "notice"> | undefined;
+  let server: Pick<RpcServer, "notice" | "clearNotice"> | undefined;
   return {
     send(notice) {
       if (server) server.notice(notice);
       else if (pending.length < 20) pending.push(notice);
+    },
+    clear(id) {
+      const index = pending.findIndex((notice) => notice.id === id);
+      if (index >= 0) pending.splice(index, 1);
+      server?.clearNotice(id);
     },
     attach(next) {
       server = next;
@@ -84,7 +91,7 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
       if (topics.length) server?.notify({ type: "changed", topics });
     });
     service = createRunnerService({
-      ...{ notify: sink.send },
+      ...{ notify: sink.send, clearNotice: sink.clear },
       store: wrapStore(store, emitter.mark),
       markChanged: emitter.mark,
       dataDir: dir,

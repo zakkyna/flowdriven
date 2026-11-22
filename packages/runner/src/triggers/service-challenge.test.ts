@@ -326,7 +326,7 @@ test("a run blocked by a challenge that pauses its trigger sends one notice, and
   let time = Date.parse("2026-11-12T00:00:00.000Z");
   let next = 0;
   const jobs: (() => void)[] = [];
-  const notices: { kind: string; body: string }[] = [];
+  const notices: { kind: string; body: { key: string } }[] = [];
   const service = createRunnerService({
     store,
     dataDir: dirname(tempPath()),
@@ -363,7 +363,7 @@ test("a run blocked by a challenge that pauses its trigger sends one notice, and
   expect(notices).toEqual([
     {
       kind: "trigger_paused",
-      body: "Test was switched off because a site asked for a login or a robot check.",
+      body: { key: "notice.limitBody" },
     },
   ]);
   notices.length = 0;
@@ -373,7 +373,7 @@ test("a run blocked by a challenge that pauses its trigger sends one notice, and
   await begun.settled;
   await flush();
   expect(inner.getRun(begun.run.id)).toMatchObject({ state: "blocked", blockedReason: STOP.challenge });
-  expect(notices).toEqual([{ kind: "run_blocked", body: "Test is blocked and needs a look." }]);
+  expect(notices).toEqual([{ kind: "run_blocked", body: { key: "notice.problemBody" } }]);
 });
 
 test("B-03.T7 TC-SR2-12 refused flow_done is claimed and never replayed", async () => {

@@ -1,7 +1,8 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Notice, RunSummary, TriggerStatus } from "@flowdriven/contracts/v1";
+import type { Notice } from "@flowdriven/contracts";
+import { RunSummary, TriggerStatus } from "@flowdriven/contracts/v1";
 import { FlowManifest } from "@flowdriven/sdk";
 import { createRunnerService, DEMO_HASH } from "../service/service.ts";
 import { openSqliteStore } from "../sqlite-store.ts";

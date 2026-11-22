@@ -1,4 +1,4 @@
-import { Notice } from "@flowdriven/contracts/v1";
+import { Notice } from "@flowdriven/contracts";
 import { createNoticePolicy, type NoticeEvent } from "../notify/policy.ts";
 import type { RunState } from "../states.ts";
 import type { ApprovalRow, Store } from "../storage.ts";
@@ -70,7 +70,13 @@ export function createNotifier(o: {
   now: () => Date;
   send: (notice: Notice) => void;
 }): Hooks & { onFlood(event: FloodEvent): void; onPaused(event: PausedEvent): void } {
-  const policy = createNoticePolicy({ nowMs: () => o.now().getTime() });
+  const policy = createNoticePolicy({
+    nowMs: () => o.now().getTime(),
+    language: () => {
+      const value = o.store.getSetting("language");
+      return typeof value === "string" ? value : "en";
+    },
+  });
   function send(event: NoticeEvent) {
     try {
       const notice = policy.decide(event);
@@ -99,6 +105,11 @@ export function createNotifier(o: {
     onRunState(id, state) {
       try {
         if (state !== "blocked" && state !== "needs_login") return;
+        if (
+          state === "blocked" &&
+          o.store.listSteps(id).some((step) => step.noteLine?.key === "hold.tooLarge")
+        )
+          return;
         const info = runInfo(id);
         if (info?.run.state === state)
           send({ kind: "run_blocked", runId: id, flowId: info.run.flowId, flowName: info.flowName });

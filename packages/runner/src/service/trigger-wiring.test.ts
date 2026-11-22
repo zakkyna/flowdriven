@@ -1,7 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { Notice } from "@flowdriven/contracts";
 import { RunDetail } from "@flowdriven/contracts";
-import { type Notice, RunSummary, TriggerStatus } from "@flowdriven/contracts/v1";
+import { RunSummary, TriggerStatus } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { scriptedHarness } from "../scripted-harness.ts";
 import { openSqliteStore } from "../sqlite-store.ts";

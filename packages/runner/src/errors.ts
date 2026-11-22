@@ -1,5 +1,5 @@
 export class EngineError extends Error {
-  code: "not_found" | "invalid_input" | "not_allowed" | "unavailable";
+  code: "not_found" | "invalid_input" | "not_allowed" | "unavailable" | "conflict";
   reason?: string;
   constructor(code: EngineError["code"], message: string, reason?: string) {
     super(message);

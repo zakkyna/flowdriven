@@ -1,7 +1,9 @@
 import { isAbsolute } from "node:path";
 import type { SettingsPatch } from "@flowdriven/contracts";
 import {
+  type ErrorReason,
   operations,
+  RUNNER_ERROR_CODES as ROOT_ERROR_CODES,
   RunnerError,
   type RunnerErrorCode,
   type OperationInput as V2Input,
@@ -15,7 +17,6 @@ import {
   type OperationInput,
   type OperationName,
   type OperationOutput,
-  RUNNER_ERROR_CODES,
 } from "@flowdriven/contracts/v1";
 import { FlowManifest, hasErrors, type Value } from "@flowdriven/sdk";
 import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
@@ -23,6 +24,7 @@ import type { Engine } from "../engine.ts";
 import type { HarnessQuota, Keeper } from "../keeper/types.ts";
 import { renderRunReport } from "../report.ts";
 import { needsAllow } from "../router/route.ts";
+import { restrictedApprovals } from "../rules/decisions.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { TriggerService } from "../triggers/service.ts";
 import { createActivityHandler } from "./activity.ts";
@@ -31,6 +33,7 @@ import type { HarnessService } from "./claude-harness.ts";
 import { ALLOW_FIRST } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
+import { toDecision } from "./map-decision.ts";
 import { type LocalChecks, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
 import { toQueueView } from "./map-queue.ts";
 import { runTrigger, toRunSummary } from "./map-run-v1.ts";
@@ -59,13 +62,17 @@ export type Handlers = {
   [N in OperationName]: (input: OperationInput<N>) => OperationOutput<N> | Promise<OperationOutput<N>>;
 };
 export type Caller = "window" | "tool" | "phone";
-export type V2Handlers = { [N in V2Name]: (input: V2Input<N>) => V2Output<N> | Promise<V2Output<N>> };
+export type V2Handlers = {
+  [N in V2Name]: (input: V2Input<N>, context: { caller: Caller }) => V2Output<N> | Promise<V2Output<N>>;
+};
 export function createDispatcher({
   v2,
   legacy,
   audit,
 }: {
-  v2: Partial<V2Handlers>;
+  v2: Partial<Omit<V2Handlers, "approvals.list">> & {
+    "approvals.list"?: (input: V2Input<"approvals.list">, context: { caller: Caller }) => unknown;
+  };
   legacy: Partial<Handlers> & Partial<Pick<V2Handlers, "activity.summary">>;
   audit: (kind: string, detail: Value) => void;
 }): (name: string, input: unknown, caller?: Caller) => Promise<unknown> {
@@ -81,22 +88,28 @@ export function createDispatcher({
       throw new RunnerError("unavailable", "Operation retired.", { reason: "retired" });
     const v2Handler = (v2[rootKey] ??
       (rootKey === "activity.summary" ? legacy["activity.summary"] : undefined)) as
-      | ((input: unknown) => unknown)
+      | ((input: unknown, context: { caller: Caller }) => unknown)
       | undefined;
     const legacyKey = name as OperationName;
     const legacyHandler = legacy[legacyKey] as ((input: unknown) => unknown) | undefined;
-    const handler = v2Handler ?? legacyHandler;
+    const handler = v2Handler ?? (legacyHandler ? (input: unknown) => legacyHandler(input) : undefined);
     if (!handler) throw new RunnerError("unavailable", "Operation unavailable.");
     const schema = v2Handler ? operations[rootKey] : legacyOperations[legacyKey];
     const parsed = schema.input.safeParse(input);
     if (!parsed.success)
       throw new RunnerError("invalid_input", parsed.error.issues.at(0)?.message ?? "Invalid input.");
     try {
-      return schema.output.parse(await handler(parsed.data));
+      const result = await handler(parsed.data, { caller });
+      if (name === "approvals.list" && caller !== "window" && v2Handler)
+        return restrictedApprovals.parse(result);
+      return schema.output.parse(result);
     } catch (error) {
       if (error instanceof RunnerError) throw error;
-      if (error instanceof Error && "code" in error && RUNNER_ERROR_CODES.some((code) => code === error.code))
-        throw new RunnerError(error.code as RunnerErrorCode, error.message);
+      if (error instanceof Error && "code" in error && ROOT_ERROR_CODES.some((code) => code === error.code))
+        throw new RunnerError(error.code as RunnerErrorCode, error.message, {
+          reason:
+            "reason" in error && typeof error.reason === "string" ? (error.reason as ErrorReason) : undefined,
+        });
       try {
         audit("internal_error", {
           method: name,
@@ -467,4 +480,97 @@ export function createSettingsHandlers(store: Store, now: () => Date) {
       return get();
     },
   };
+}
+
+export function createDecisionHandlers(
+  store: Store,
+  engine: Engine,
+  weekly: ReturnType<typeof createWeekly>,
+  clear: (id: string) => void,
+) {
+  const list = (input: V2Input<"approvals.list">, { caller }: { caller: Caller }) => {
+    const rows = store
+      .listApprovals({ runId: input.runId })
+      .filter((row) => !input.state || row.state === input.state)
+      .flatMap((row) => {
+        const run = store.getRun(row.runId);
+        if (!run || (input.flowId && input.flowId !== run.flowId)) return [];
+        return [toDecision(row, run, store)];
+      });
+    const synthetic =
+      !input.runId && !input.flowId
+        ? weekly
+            .list()
+            .map(({ expiresAt: _expiresAt, ...row }) => ({ ...row, canAlwaysAllow: false, stepWaiting: 0 }))
+        : [];
+    const pause = store.getSetting("spending-pause");
+    const budget =
+      !input.runId &&
+      !input.flowId &&
+      pause &&
+      typeof pause === "object" &&
+      !Array.isArray(pause) &&
+      typeof pause.id === "string" &&
+      typeof pause.reachedAt === "string" &&
+      pause.state === "pending" &&
+      (!input.state || input.state === "pending")
+        ? [
+            {
+              id: pause.id,
+              kind: "budget_raise" as const,
+              state: "pending" as const,
+              summary: "Spending limit reached",
+              payload: { kind: "text" as const, text: "Spending limit reached" },
+              editable: false,
+              createdAt: pause.reachedAt,
+              canAlwaysAllow: false,
+              stepWaiting: 0,
+            },
+          ]
+        : [];
+    const all = [
+      ...rows,
+      ...synthetic.filter((row) => !input.state || row.state === input.state),
+      ...budget,
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return caller === "window"
+      ? all
+      : rows.map((row) => ({ flowId: row.flowId, stepId: row.stepId, state: row.state }));
+  };
+  const resolve = (input: V2Input<"approvals.resolve">) => {
+    if (input.approvalId.startsWith("weekly-limit:")) {
+      if (input.decision !== "approve" && input.decision !== "reject")
+        throw new RunnerError("invalid_input", "Invalid decision.");
+      const [old] = weekly.resolve(input.approvalId, input.decision);
+      if (!old) throw new RunnerError("not_found", "Approval not found.");
+      const { expiresAt: _expiresAt, ...rest } = old;
+      clear(`approval:${input.approvalId}`);
+      return { decision: { ...rest, canAlwaysAllow: false, stepWaiting: 0 }, stepWaiting: 0 };
+    }
+    const row = store.getApproval(input.approvalId);
+    if (!row) {
+      if (input.approvalId === (store.getSetting("spending-pause") as { id?: string } | undefined)?.id)
+        throw new RunnerError("not_allowed", "Raise the limit in settings.", { reason: "raise_in_settings" });
+      throw new RunnerError("not_found", "Approval not found.");
+    }
+    if (row.kind === "ask")
+      throw new RunnerError("invalid_input", "This is a choice. Pick from its options.");
+    if (row.state === "expired")
+      throw new RunnerError("conflict", "This approval expired.", { reason: "decision_expired" });
+    if (row.state !== "pending")
+      throw new RunnerError("conflict", "This approval was already decided.", {
+        reason: "already_answered",
+        params: { via: row.resolvedVia ?? "window" },
+      });
+    if (input.decision !== "approve" && input.decision !== "reject")
+      throw new RunnerError("invalid_input", "Only text can be edited.");
+    engine.beginDecide(row.id, input.decision);
+    const current = store.getApproval(row.id);
+    const run = store.getRun(row.runId);
+    if (!current || !run) throw new RunnerError("not_found", "Approval not found.");
+    const decision = toDecision(current, run, store);
+    clear(`approval:${row.id}`);
+    return { decision, stepWaiting: decision.stepWaiting };
+  };
+  return { list, resolve };
 }

@@ -15,7 +15,7 @@ import { runLeaf } from "./exec/leaf.ts";
 import { runLoop } from "./exec/loop.ts";
 import { ownTextHash } from "./exec/own-text.ts";
 import { createRecovery } from "./exec/recovery.ts";
-import { makeScope } from "./exec/scope.ts";
+import { itemScope, makeScope } from "./exec/scope.ts";
 import type { HarnessAdapter } from "./harness.ts";
 import type { Waiting } from "./keeper/types.ts";
 import type { Routed } from "./router/types.ts";
@@ -447,7 +447,11 @@ export function createEngine(input: EngineDeps): Engine {
     const at = now().toISOString();
     if (a.kind === "risky_action") {
       store.transaction(() => {
-        store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
+        store.updateApproval(id, {
+          state: decision === "approve" ? "approved" : "rejected",
+          resolvedAt: at,
+          ...(decision === "approve" ? { resolvedVia: "window" } : {}),
+        });
         if (decision === "approve")
           for (const entry of a.approves) {
             const separator = entry.indexOf("#");
@@ -472,6 +476,12 @@ export function createEngine(input: EngineDeps): Engine {
           detail: { approvalId: id, stepId: a.stepId, itemKey: a.itemKey, tool: a.call?.tool ?? "" },
         });
         if (decision === "approve") {
+          store.updateRun(run.id, {
+            decisionLines: [
+              ...(store.getRun(run.id)?.decisionLines ?? []),
+              { key: "report.youApproved", params: { title: a.summary } },
+            ],
+          });
           store.upsertStep({ ...row, state: "pending" });
           store.updateRun(run.id, { state: "running" });
         } else {
@@ -485,13 +495,61 @@ export function createEngine(input: EngineDeps): Engine {
             store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
         }
       });
+      const remaining = store
+        .listApprovals({ runId: run.id, state: "pending" })
+        .filter((item) => item.stepId === a.stepId).length;
+      if (decision === "approve" && remaining) {
+        store.updateRun(run.id, { state: "waiting_approval" });
+        const updated = runById(run.id);
+        return enqueue(updated, async () => {
+          const manifest = flowFor(updated).manifest as FlowManifest;
+          const loop = manifest.steps.find(
+            (step) => "for_each" in step && step.steps.some((nested) => nested.id === a.stepId),
+          );
+          const item = store
+            .listItems(run.id)
+            .find((entry) => entry.key === a.itemKey && entry.loopId === loop?.id);
+          const nested =
+            loop && "for_each" in loop ? loop.steps.find((step) => step.id === a.stepId) : undefined;
+          if (!loop || !("for_each" in loop) || !item || !nested) return runById(run.id);
+          const scope = makeScope(updated, store.listSteps(run.id), manifest, store.listItems(run.id));
+          const outcome = await runLeaf(nested, {
+            deps,
+            run: updated,
+            manifest,
+            itemKey: a.itemKey,
+            keepWaiting: true,
+            scope: itemScope(scope, loop, item.item, store.listSteps(run.id), item.key),
+          });
+          if (outcome === "passed" && loop.steps.at(-1)?.id === nested.id)
+            store.transaction(() => {
+              store.upsertItem({ ...item, status: "passed" });
+              if (loop.key !== undefined)
+                store.markSeen(updated.flowId, loop.id, item.key, now().toISOString());
+            });
+          if (outcome === "passed" || outcome === "skipped")
+            store.updateRun(run.id, { state: "waiting_approval" });
+          return runById(run.id);
+        });
+      }
       const updated = runById(run.id);
       return decision === "approve"
         ? enqueue(updated, () => walk(updated))
         : { run: updated, settled: Promise.resolve(updated) };
     }
     store.transaction(() => {
-      store.updateApproval(id, { state: decision === "approve" ? "approved" : "rejected", resolvedAt: at });
+      store.updateApproval(id, {
+        state: decision === "approve" ? "approved" : "rejected",
+        resolvedAt: at,
+        ...(decision === "approve" ? { resolvedVia: "window" } : {}),
+      });
+      if (decision === "approve")
+        store.updateRun(run.id, {
+          decisionLines: [
+            ...(store.getRun(run.id)?.decisionLines ?? []),
+            { key: "report.youApproved", params: { title: a.summary } },
+          ],
+        });
       if (decision === "approve") {
         const attempt = row.attempts.at(-1);
         if (attempt) attempt.exit = "ok";
@@ -536,6 +594,14 @@ export function createEngine(input: EngineDeps): Engine {
           store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
       }
     });
+    if (
+      decision === "approve" &&
+      store.listApprovals({ runId: run.id, state: "pending" }).some((item) => item.stepId === a.stepId)
+    ) {
+      store.updateRun(run.id, { state: "waiting_approval" });
+      const updated = runById(run.id);
+      return { run: updated, settled: Promise.resolve(updated) };
+    }
     const updated = runById(run.id);
     return decision === "approve"
       ? enqueue(updated, () => walk(updated))

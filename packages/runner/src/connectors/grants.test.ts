@@ -74,13 +74,14 @@ test("a call grant: has is true after addGrant and before use, use is true once 
   expect(book.use("r1", grant, "j1")).toBe(false);
 });
 
-test("heldPayload returns the text for 4,000 characters and undefined for 4,001, counting the characters that visible adds", () => {
+test("TC-SR1-23 heldPayload keeps the 4,000 character limit after marking hidden characters", () => {
   const hidden = String.fromCodePoint(0x200b);
-  const value = { x: hidden + "a".repeat(3979) };
-  const text = heldPayload(value);
+  const marker = "[U+200B hidden character]";
+  const padding = 4000 - JSON.stringify({ x: "" }, null, 2).length - marker.length;
+  const text = heldPayload({ x: hidden + "a".repeat(padding) });
   expect(text).toHaveLength(4000);
-  expect(text).toContain("<U+200B>");
-  expect(heldPayload({ x: hidden + "a".repeat(3980) })).toBeUndefined();
+  expect(text).toContain(marker);
+  expect(heldPayload({ x: hidden + "a".repeat(padding + 1) })).toBeUndefined();
 });
 test("a pick grant is not honoured for an item key that starts with #, and not for the empty key", async () => {
   const store = await memoryStore();

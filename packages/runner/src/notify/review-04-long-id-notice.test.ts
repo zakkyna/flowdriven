@@ -26,11 +26,11 @@ test("invalid builder targets fall back to inbox and long flow ids still allow b
   const flowId = "bad/" + "a".repeat(110);
   expect(
     policy.decide({ kind: "flood_cap", flowId, flowName: "F", day: "2026-11-12", cap: 24 })?.target,
-  ).toEqual({ screen: "inbox" });
+  ).toEqual({ screen: "activity" });
   expect(
     policy.decide({ kind: "trigger_paused", flowId, index: 0, flowName: "F", pausedAt: "2026-11-12" })
       ?.target,
-  ).toEqual({ screen: "inbox" });
+  ).toEqual({ screen: "activity" });
   expect(policy.decide({ kind: "run_blocked", flowId, flowName: "F", runId: "run-1" })?.target).toEqual({
     screen: "run",
     runId: "run-1",

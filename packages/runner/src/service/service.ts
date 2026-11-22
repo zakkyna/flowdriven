@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdtempSync, readFileSync, rmdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { Notice } from "@flowdriven/contracts";
 import { CONTRACT_VERSION, operations, type RunnerTopic } from "@flowdriven/contracts";
-import type { Notice } from "@flowdriven/contracts/v1";
 import { STOP } from "../claude/browser-post.ts";
 import { visible } from "../claude/text.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
@@ -22,7 +22,13 @@ import { createCapabilities } from "./capabilities.ts";
 import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
-import { type Caller, createDispatcher, createHandlers, createSettingsHandlers } from "./handlers.ts";
+import {
+  type Caller,
+  createDecisionHandlers,
+  createDispatcher,
+  createHandlers,
+  createSettingsHandlers,
+} from "./handlers.ts";
 import { createKeepAwake } from "./keep-awake.ts";
 import { type Every, wireKeeper } from "./keeper-wiring.ts";
 import { createNotifier, observeStore } from "./notify-wiring.ts";
@@ -49,6 +55,7 @@ export type ServiceOptions = {
   keeper?: { probes?: Probes; every?: Every };
   markChanged?: (topic: RunnerTopic) => void;
   notify?: (notice: Notice) => void;
+  clearNotice?: (id: string) => void;
   triggers?: { every?: Every; watch?: TriggerDeps["watch"]; dayOf?: (date: Date) => string };
 };
 export type RunnerService = {
@@ -224,6 +231,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     harnessIdOf: (name) =>
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   });
+  const decisions = createDecisionHandlers(store, engine, weekly, (id) => options.clearNotice?.(id));
   const settings = createSettingsHandlers(store, now);
   const runs = createRunHandlers(store, engine, (name) =>
     name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
@@ -235,6 +243,8 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     engine,
     call: createDispatcher({
       v2: {
+        "approvals.list": decisions.list,
+        "approvals.resolve": decisions.resolve,
         "audit.list": createAuditHandler(store),
         "runs.list": runs.list,
         "runs.status": runs.status,
