@@ -41,6 +41,37 @@ test("an email payload needs a recipient", () => {
   expect(Approval.safeParse({ ...base, payload: { ...base.payload, to: [] } }).success).toBe(false);
 });
 
+test("B-05.T15 email payload preserves bcc and attachment names", () => {
+  const payload = { ...base.payload, bcc: ["b@example.com"], attachments: ["invoice.pdf"] };
+  expect(Approval.parse({ ...base, payload }).payload).toEqual(payload);
+});
+
+test("B-05.T15 bcc is limited to 50 entries", () => {
+  const payload = { ...base.payload, bcc: Array(50).fill("b@example.com") };
+  expect(Approval.safeParse({ ...base, payload }).success).toBe(true);
+  expect(Approval.safeParse({ ...base, payload: { ...payload, bcc: Array(51).fill("b") } }).success).toBe(
+    false,
+  );
+  expect(Approval.safeParse({ ...base, payload: { ...payload, bcc: ["x".repeat(4001)] } }).success).toBe(
+    false,
+  );
+});
+
+test("B-05.T15 attachment names are limited to 4000 characters", () => {
+  const payload = { ...base.payload, attachments: ["x".repeat(4000)] };
+  expect(Approval.safeParse({ ...base, payload }).success).toBe(true);
+  expect(
+    Approval.safeParse({ ...base, payload: { ...payload, attachments: ["x".repeat(4001)] } }).success,
+  ).toBe(false);
+  expect(
+    Approval.safeParse({ ...base, payload: { ...payload, attachments: Array(51).fill("x") } }).success,
+  ).toBe(false);
+});
+
+test("B-05.T15 email payload without bcc or attachments still parses", () => {
+  expect(Approval.parse(base).payload).toEqual(base.payload);
+});
+
 test("a choice approval carries its question, options and limit", () => {
   const payload = {
     kind: "choice",

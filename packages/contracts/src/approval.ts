@@ -30,6 +30,8 @@ export const Payload = z.discriminatedUnion("kind", [
     kind: z.literal("email"),
     to: payloadList.min(1),
     cc: payloadList.optional(),
+    bcc: payloadList.optional(),
+    attachments: payloadList.optional(),
     subject: payloadText,
     body: payloadText,
   }),
