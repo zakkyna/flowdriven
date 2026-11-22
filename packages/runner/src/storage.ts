@@ -155,6 +155,17 @@ export type ApprovalRow = {
   picks?: string[];
   resolvedAt?: string;
   riskyAction?: RiskyAction;
+  effect?: import("./rules/effects.ts").Effect;
+  touchId?: string;
+  place?: NonNullable<import("@flowdriven/sdk").Touch["place"]>;
+  fixedPlace?: boolean;
+  similarGroup?: string;
+  chatId?: string;
+  resolvedVia?: "window" | "chat" | "phone" | "rule" | "expiry" | "stop" | "permission_off";
+  editedSubject?: string;
+  editedText?: string;
+  editedDigest?: string;
+  ruleId?: string;
   outside?: boolean;
   call?: { tool: string; input: Value };
   ownText?: { output: string; hash: string };

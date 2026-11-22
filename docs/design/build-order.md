@@ -842,6 +842,9 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 
 | Case | First stated step | Now | Reason |
 |---|---|---|---|
+| SR1-26 (`canAlwaysAllow`) | B-04 | B-05 | the eligibility field is built in B-05.T6; B-04.T6 checks the held effect and fixed place |
+| SR5-11 (second held call) | B-04 | B-04 | a hold ends the attempt, so the send and delete are checked in separate plays |
+| SR7-04 (second held call and test file) | B-04 | B-04 | a hold ends the attempt, so the count uses one held send after the reads and refusals; the case uses `claude/review-r15-injection.test.ts` for the shared fake Gmail setup |
 | SR1-12 (decision row) | B-04 | B-05 | the decision row place and canAlwaysAllow are built in B-05.T1 and B-05.T6; held payload and held place are checked in B-04.T3 |
 | j01-29 | B-06 | B-21 | the welcome screen is built in B-21 |
 | j12-13 | B-20 | B-12 | it is the runner-level owner of the permission-off rule and calls `chats.send`, `flows.start` and `flows.tryNextRun`, which B-12.T5 completes |
@@ -969,6 +972,8 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 | `packages/runner/src/connectors/grants.test.ts`, `engine-held.test.ts`, `engine-pick-keys.test.ts`, `review-r2.test.ts`, `exec/leaf-hold.test.ts`, `claude/adapter-held.test.ts`, `claude/review-05b-r.test.ts`, `service/claude-harness-connector.test.ts`, and the grant assertions in `claude/decide.test.ts` | Grants and their use live in the old grant store and counter; a held connector call uses the bare tool name | Exact call grants live in `call_grants` keyed by run, step, item, tool and digest; `usedAt` records use, pick grants remain scoped to picked items, and touch-compiled policies hold the full hook name (TC-j24-05, TC-ENG-20). TC-j24-05 counts G by its unchanged first `usedAt` and the absence of a second row. Legacy policies retain their original key. | B-04.T3 |
 | `packages/runner/src/engine-steps.test.ts`, `packages/runner/src/exec/leaf-hold.test.ts` | An auth exit blocks the run with its sign-in reason | Auth waits in `needs_login`, retaining the same reason for v1 (TC-ENG-02, FS-j25.P3) | B-04.T4 |
 | `packages/runner/src/states.test.ts` | The run states are nine | They are eleven, with `stopped` and `needs_login` (TC-ENG-01) | B-04.T4 |
+| `packages/runner/src/claude/adapter-limits.test.ts`, `adapter-commands.test.ts`, `adapter-post.test.ts`, `review-05-b.test.ts` | The attempt record counts `allowed`, `denied` and result-reported `refused` | The attempt record counts `allowed`, `held` and `refused`, with a count of refusals beyond the cap (TC-SR1-25, TC-SR1-27, TC-SR7-04) | B-04.T6 |
+| `packages/runner/src/claude/adapter-held.test.ts` | A held call is also listed as `tool_denied` | A held call is recorded as `call_held` and counted as held, while the agent still stops (TC-SR1-26, FS-j24.A1) | B-04.T6 |
 | `packages/runner/src/claude/hook-script.test.ts` | An unterminated `allow` answer is accepted | Only a newline-terminated `allow` is accepted; an incomplete answer is refused (TC-SR1-32) | B-04.T5 |
 | `apps/desktop/src/nav/route.test.ts` and `apps/desktop/src/screens.test.ts` | The start route opens `#/builder` | The start route opens `#/welcome` or the chat; the old routes still parse but are not linked (j01-01 is in B-21) | B-21.T1 |
 | `apps/desktop/src/styles/tokens.test.ts` and `apps/desktop/src/review-b.test.ts` | Today's colour values and the `:root[data-theme="dark"]` and `:root:not([data-theme="light"])` blocks | The new tokens with no `data-theme`; the colour mode is `nativeTheme` (`architecture.md` AD-15); equally strict checks on each token | B-16.T1 |

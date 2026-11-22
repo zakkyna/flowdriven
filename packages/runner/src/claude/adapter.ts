@@ -2,12 +2,12 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { describeTemplate, type Value } from "@flowdriven/sdk";
+import { describeTemplate, type Touch, type Value } from "@flowdriven/sdk";
 import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
 import type { GrantBook } from "../connectors/grants.ts";
 import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
 import { type LoadedSkill, skillSource } from "../skills/skill-folder.ts";
-import type { ConsentPins } from "../storage.ts";
+import type { Confirmation, ConsentPins, RuleRow } from "../storage.ts";
 import { CONNECTOR_DENY } from "./connector.ts";
 import type { ConnectorFact } from "./connector-scan.ts";
 import type { PageCounter } from "./pages.ts";
@@ -25,6 +25,16 @@ import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
 import { prepareSkillStep, SKILL_STOP } from "./skill-step.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
+  confirmation?: (runId: string) =>
+    | {
+        confirmation: Pick<Confirmation, "flowId" | "hash" | "onItsOwn"> & { touches: Touch[] };
+        rules?: RuleRow[];
+        grants?: GrantBook;
+        source?: string;
+        earlierNo?: boolean;
+      }
+    | undefined;
+  rules?: (flowId: string) => RuleRow[];
   grantedFolders?: (runId: string) => ConsentPins["folders"] | undefined;
   skillPin?: (runId: string, requirementId: string) => string | undefined;
   home?: string;
@@ -121,6 +131,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
         .flatMap((r) => (r.type === "mcp_server" ? catalog.filter((entry) => entry.ref === r.ref) : []))
         .at(0)?.prefix;
       const schema = outputSchema(req.outputs);
+      const confirmed = options.confirmation?.(req.runId);
       let call: CallInfo | undefined;
       let outside = false;
       let workFolder: string | undefined;
@@ -143,11 +154,42 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                 outside = true;
                 req.onOutside?.();
               },
+              books: {
+                grants: confirmed?.grants ?? options.grants,
+                rules: confirmed
+                  ? () => options.rules?.(confirmed.confirmation.flowId) ?? confirmed.rules ?? []
+                  : undefined,
+              },
               makePolicy: (control, sessionId) => {
                 const id = basename(control.cwd === "" ? "" : dirname(control.cwd));
                 const folder = source ? join(copyRoot, id, source.name) : undefined;
+                const covers = new Set(
+                  req.requirements.flatMap((requirement) => {
+                    if (requirement.type === "mcp_server")
+                      return (requirement.tools ?? []).map((tool) => `${requirement.id}.${tool}`);
+                    if (requirement.type === "cli_tool") return requirement.commands ?? [];
+                    return [];
+                  }),
+                );
+                const touches = confirmed?.confirmation.touches.flatMap((touch) => {
+                  const inStep = touch.covers.filter((cover) => covers.has(cover));
+                  const folderInStep =
+                    touch.place?.kind === "folder" &&
+                    req.requirements.some(
+                      (requirement) => requirement.type === "path" && requirement.id === touch.place?.value,
+                    );
+                  return inStep.length || folderInStep ? [{ ...touch, covers: inStep }] : [];
+                });
                 const policy = buildPolicy({
                   kind: req.kind === "agent" ? "agent" : "worker",
+                  ...(confirmed
+                    ? {
+                        flowId: confirmed.confirmation.flowId,
+                        hash: confirmed.confirmation.hash,
+                        touches,
+                        onItsOwn: confirmed.confirmation.onItsOwn,
+                      }
+                    : {}),
                   requirements: req.requirements,
                   takesOutside: req.takesOutside,
                   routes: req.routes ?? [],
@@ -163,6 +205,14 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   schema: schema !== undefined,
                   ...(folder ? { skillFolder: folder } : {}),
                 });
+                if (confirmed)
+                  Object.assign(policy, {
+                    runId: req.runId,
+                    stepId: req.stepId,
+                    itemKey: req.itemKey,
+                    source: confirmed.source,
+                    earlierNo: confirmed.earlierNo,
+                  });
                 workFolder = policy.workFolder;
                 if (skillRequirement) {
                   const result = prepareSkillStep({

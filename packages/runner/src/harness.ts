@@ -8,7 +8,11 @@ export type HeldCall = {
   tool: string;
   input: Value;
   digest: string;
-  action: RiskyAction;
+  action?: RiskyAction;
+  effect?: import("./rules/effects.ts").Effect;
+  touchId?: string;
+  place?: NonNullable<import("@flowdriven/sdk").Touch["place"]>;
+  fixedPlace?: boolean;
 };
 export type RateLimit = {
   status: string;

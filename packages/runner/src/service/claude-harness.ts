@@ -346,6 +346,8 @@ export function createHarnessService(options: {
     return queue;
   };
   const adapter = createClaudeAdapter({
+    confirmation: () => undefined,
+    rules: (flowId) => options.store.listRules().filter((rule) => rule.flowId === flowId),
     claudePath: () => (cache?.scan.detected ? cache.scan.path : undefined),
     env: () => options.env,
     controlRoot: controlRoot(options.dataDir),

@@ -235,7 +235,11 @@ export async function runLeaf(
             store.createApproval({
               id: newId("ap"),
               kind: "risky_action",
-              riskyAction: hold.action,
+              ...(hold.action === undefined ? {} : { riskyAction: hold.action }),
+              ...(hold.effect === undefined ? {} : { effect: hold.effect }),
+              ...(hold.touchId === undefined ? {} : { touchId: hold.touchId }),
+              ...(hold.place === undefined ? {} : { place: hold.place }),
+              ...(hold.fixedPlace === undefined ? {} : { fixedPlace: hold.fixedPlace }),
               runId: run.id,
               stepId: step.id,
               itemKey,

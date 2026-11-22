@@ -2,14 +2,16 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { Requirement } from "@flowdriven/sdk";
+import { parseManifest, Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { CONNECTORS } from "../connectors/catalog.ts";
 import { callGrant, createGrantBook, digestCall, pickGrant } from "../connectors/grants.ts";
+import { createEngine } from "../engine.ts";
 import type { StepRequest } from "../harness.ts";
 import { routeRequirement } from "../router/route.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
+import { setup as setupEngine } from "../test-helpers/engine.ts";
 import {
   FAKE_CLAUDE_PATH,
   type FakeAction,
@@ -39,7 +41,7 @@ const fact = {
   id: `mcpsrv_${"a".repeat(24)}`,
   status: "connected" as const,
   tools: [
-    ...gmail.read.map((name) => ({ name, readOnly: true })),
+    ...["search_threads"].map((name) => ({ name, readOnly: true })),
     ...Object.keys(gmail.risky).map((name) => ({ name, readOnly: false })),
   ],
 };
@@ -64,7 +66,7 @@ const tool = (
   input: Record<string, unknown> = { id: "d1" },
 ): FakeAction => ({ do: "tool", id, name: gmail.prefix + name, input });
 const done: FakeAction = { do: "result", result: "done" };
-async function setup(actions: FakeAction[], withGrants = true) {
+async function setup(actions: FakeAction[], withGrants = true, confirmed = false) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven- ")));
   roots.push(root);
   const connectors = { [gmail.name]: { url: fact.url, id: fact.id, tools: fact.tools } };
@@ -87,6 +89,36 @@ async function setup(actions: FakeAction[], withGrants = true) {
     exitWaitMs: 30_000,
     connectors: () => [fact],
     ...(withGrants ? { grants: createGrantBook(store) } : {}),
+    ...(confirmed
+      ? {
+          confirmation: () => ({
+            confirmation: {
+              flowId: "example.email-triage",
+              hash: "hash",
+              onItsOwn: [],
+              touches: [
+                ...["search_threads"].map((name) => ({
+                  id: `read-${name.replaceAll("_", "-")}`,
+                  sentence: "Read",
+                  effect: "read" as const,
+                  rule: "runs_alone" as const,
+                  covers: [`gmail.${name}`],
+                })),
+                ...Object.entries(gmail.risky).map(([name, effect]) => ({
+                  id: name.replaceAll("_", "-"),
+                  sentence: "Action",
+                  effect: effect as "send" | "delete",
+                  rule: "asks_first" as const,
+                  covers: [`gmail.${name}`],
+                })),
+              ],
+            },
+            rules: [],
+            source: "chat",
+            earlierNo: false,
+          }),
+        }
+      : {}),
   };
   const request: StepRequest = {
     runId: "r1",
@@ -149,7 +181,7 @@ test(
   },
 );
 test(
-  "the audit has call_held with the digest and a tool_denied row with the hold sentence, and no later action of the play runs a tool",
+  "the audit has call_held with the digest and counts the hold, and no later action of the play runs a tool",
   timeout,
   async () => {
     const t = await setup([tool("a"), tool("b", "search_threads"), done]);
@@ -167,8 +199,8 @@ test(
     });
     expect(t.audits).toContainEqual(
       expect.objectContaining({
-        kind: "tool_denied",
-        detail: expect.objectContaining({ reason: CONNECTOR_DENY.held }),
+        kind: "tool_calls",
+        detail: expect.objectContaining({ allowed: 0, held: 1, refused: 0 }),
       }),
     );
     expect(readFakeCalls(t.home)).not.toContainEqual(
@@ -329,3 +361,58 @@ test(
     );
   },
 );
+
+test("TC-SR1-26 a held reply carries effect and fixed place through the fake hook", timeout, async () => {
+  const t = await setup(
+    [
+      tool("tu-1", "reply", { threadId: "thread-sam", body: "Thanks, I will send the invoice on Monday." }),
+      done,
+    ],
+    true,
+    true,
+  );
+  const result = await t.adapter.runStep(t.request);
+  expect(result).toMatchObject({ hold: { effect: "send", fixedPlace: false } });
+  expect(readFakeCalls(t.home)).toContainEqual(
+    expect.objectContaining({ kind: "tool", id: "tu-1", hookExit: 2, ran: false }),
+  );
+  expect(t.audits).toContainEqual(
+    expect.objectContaining({
+      kind: "call_held",
+      detail: expect.objectContaining({ digest: expect.any(String) }),
+    }),
+  );
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.mail",
+    name: "Mail",
+    kind: "build",
+    requirements: [requirement],
+    steps: [
+      {
+        id: "s",
+        do: "worker",
+        instructions: "Held test",
+        uses: ["gmail"],
+        checks: [{ type: "contains", pattern: "ok" }],
+      },
+    ],
+  });
+  if (!parsed.ok) throw Error(JSON.stringify(parsed.issues));
+  const c = await setupEngine(parsed.manifest, {});
+  try {
+    const engine = createEngine({
+      store: c.store,
+      harness: t.adapter,
+      now: c.clock.now,
+      routeOf: () => [routed],
+    });
+    const run = await engine.startRun(parsed.manifest.id, { project: t.request.project });
+    expect(run.state).toBe("waiting_approval");
+    expect(c.store.listApprovals({ runId: run.id })).toEqual([
+      expect.objectContaining({ kind: "risky_action", state: "pending", effect: "send", fixedPlace: false }),
+    ]);
+  } finally {
+    c.store.close();
+  }
+});

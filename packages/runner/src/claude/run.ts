@@ -45,6 +45,7 @@ export type RunInput = {
   browser?: boolean;
   connectorPrefix?: string;
   onOutside?: () => void;
+  books?: { grants?: GrantBook; rules?: () => import("../storage.ts").RuleRow[] };
   makePolicy: (control: { root: string; cwd: string }, sessionId: string) => Policy;
   makePrompt: (policy: Policy) => string;
 };
@@ -103,6 +104,8 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
   let stopTimer: ReturnType<typeof setTimeout> | undefined;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let result: ResultInfo | undefined;
+  const counts = { allowed: 0, held: 0, refused: 0 };
+  let notListed = 0;
   const limits: RateLimit[] = [];
   const nowMs = deps.nowMs ?? Date.now;
   let startedAt: number | undefined;
@@ -208,14 +211,14 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             calls: connectorCalls,
             granted: (grant) =>
               (isCallGrant(grant) || (input.pickTools?.includes(grant) ?? false)) &&
-              (deps.grants?.has(input.runId, grant, input.itemKey, input.stepId) ?? false),
+              ((input.books?.grants ?? deps.grants)?.has(input.runId, grant, input.itemKey, input.stepId) ??
+                false),
           },
-          { grants: deps.grants },
+          { grants: input.books?.grants ?? deps.grants, rules: input.books?.rules?.() },
         );
         if (
           !decision.allow &&
           decision.held &&
-          decision.held.action !== undefined &&
           call !== null &&
           typeof call === "object" &&
           "tool_use_id" in call &&
@@ -226,7 +229,15 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             tool: decision.held.tool,
             input: decision.held.input,
             digest: decision.held.digest,
-            action: decision.held.action,
+            ...(decision.held.action === undefined ? {} : { action: decision.held.action }),
+            ...("effect" in decision.held
+              ? {
+                  effect: decision.held.effect,
+                  fixedPlace: decision.held.fixedPlace,
+                  ...(decision.held.touchId === undefined ? {} : { touchId: decision.held.touchId }),
+                  ...(decision.held.place === undefined ? {} : { place: decision.held.place }),
+                }
+              : {}),
           };
           pendingStop = { id: call.tool_use_id, outcome: { kind: "hold", held } };
           stopTimer = setTimeout(() => {
@@ -242,7 +253,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         }
         if (decision.allow && decision.by === "grant" && decision.grant) {
           try {
-            deps.grants?.useGrant(decision.grant, new Date(nowMs()).toISOString());
+            (input.books?.grants ?? deps.grants)?.useGrant(decision.grant, new Date(nowMs()).toISOString());
             audit("grant_used", { ...detail, tool: decision.grant.tool, grant: "call" });
           } catch {
             return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
@@ -252,7 +263,14 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           const grant = decision.connector.grant;
           if (
             grant?.kind === "call" &&
-            !(deps.grants?.use(input.runId, grant.key, input.itemKey, input.stepId) ?? false)
+            !(
+              (input.books?.grants ?? deps.grants)?.use(
+                input.runId,
+                grant.key,
+                input.itemKey,
+                input.stepId,
+              ) ?? false
+            )
           )
             return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
           if (grant)
@@ -433,7 +451,22 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       beforeAllow: deps.beforeAllow,
       pollMs: deps.pollMs,
       onCall: ({ decision }) => {
-        if (!decision.allow && deniedEntries < (deps.maxDeniedEntries ?? MAX_DENIED_ENTRIES)) {
+        if (decision.allow) counts.allowed++;
+        else if (decision.outcome === "hold" || decision.held) counts.held++;
+        else counts.refused++;
+        if (
+          !decision.allow &&
+          decision.outcome !== "hold" &&
+          !decision.held &&
+          deniedEntries >= (deps.maxDeniedEntries ?? MAX_DENIED_ENTRIES)
+        )
+          notListed++;
+        if (
+          !decision.allow &&
+          decision.outcome !== "hold" &&
+          !decision.held &&
+          deniedEntries < (deps.maxDeniedEntries ?? MAX_DENIED_ENTRIES)
+        ) {
           deniedEntries++;
           audit("tool_denied", {
             ...detail,
@@ -606,8 +639,8 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     channel?.stop();
     audit("tool_calls", {
       ...detail,
-      ...(channel?.counts() ?? { allowed: 0, denied: 0 }),
-      refused: result?.denials ?? 0,
+      ...counts,
+      ...(notListed ? { notListed } : {}),
     });
     if (startedAt !== undefined)
       deps.onCall?.({
