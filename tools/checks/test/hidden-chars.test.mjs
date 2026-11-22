@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
-import { formatFinding, scanText } from "../hidden-chars.mjs";
+import { formatFinding, run, scanText } from "../hidden-chars.mjs";
 import { charClass, HIDDEN_RANGES } from "../lib/ranges.mjs";
+import { makeRepo, removeRepo } from "./helpers/temp-repo.mjs";
 
 const cases = [
   [0x200b, "zero-width"],
@@ -49,6 +50,18 @@ test("formats findings", () => {
     formatFinding({ path: "b.md", line: 1, column: 1, codePoint: 0xe0041, cls: "tag" }),
     "b.md:1:1 U+E0041 tag",
   );
+});
+
+test("scan rejects a TrueType file without the signature when it contains NUL", () => {
+  const root = makeRepo({ "font.ttf": Buffer.from([0x00, 0x02, 0x00, 0x00]) });
+  try {
+    assert.deepEqual(run(root, []), {
+      lines: ["font.ttf: NUL byte in a text file", "hidden-chars: FAIL, 1 findings"],
+      code: 1,
+    });
+  } finally {
+    removeRepo(root);
+  }
 });
 
 test("CLI passes on this repository", () => {

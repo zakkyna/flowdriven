@@ -70,6 +70,7 @@ test("isBinaryFile needs the extension and the signature", () => {
   const cases = [
     ["logo.png", png],
     ["a.jpg", Buffer.from([0xff, 0xd8, 0xff])],
+    ["a.jpeg", Buffer.from([0xff, 0xd8, 0xff])],
     ["a.gif", Buffer.from("GIF8")],
     ["a.webp", Buffer.from("RIFF1234WEBP")],
     ["a.ico", Buffer.from([0, 0, 1, 0])],
@@ -77,10 +78,16 @@ test("isBinaryFile needs the extension and the signature", () => {
   ];
   for (const [path, head] of cases) {
     assert.equal(isBinaryFile(path, head), true, path);
+    assert.equal(isBinaryFile(path, Buffer.from("text")), false, path);
   }
   assert.equal(isBinaryFile("logo.png", Buffer.from("text")), false);
   assert.equal(isBinaryFile("notes.md", png), false);
   assert.equal(isBinaryFile("a.pdf", Buffer.from("%PDF")), false);
+});
+
+test("TrueType files need the TrueType signature", () => {
+  assert.equal(isBinaryFile("font.ttf", Buffer.from([0x00, 0x01, 0x00, 0x00])), true);
+  assert.equal(isBinaryFile("font.ttf", Buffer.from([0x00, 0x02, 0x00, 0x00])), false);
 });
 
 test("showText escapes every refused code point", () => {

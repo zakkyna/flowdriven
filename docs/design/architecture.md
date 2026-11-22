@@ -320,7 +320,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 - Context. The current renderer has the right base but builder-first screens.
 - Decision. React 19, the existing hash router (`nav/route.ts`), `RunnerClient` only, view state only, plain CSS modules with `tokens.css` (the live current tokens, both color modes), status always icon plus words, a safe text renderer for agent and outside text: no raw HTML, no remote images, links shown but opened only after the person clicks and main checks them.
 - Alternatives. A router or state library: not allowlisted, not needed.
-- Consequences. Decided for V1 (revisable): the system font stack, with no font files; the clickable prototype's font is a later Ask-first item. `prd.md` F-25 holds the look-and-feel checks. Routes in section 5.4; the old screens stay unrouted.
+- Consequences. Decided for V1 (revisable): V1 bundles the prototype's Plus Jakarta Sans as one variable font file with its OFL license next to it (owner decision 2026-11-22, plan decision 6). The renderer loads it with `@font-face` from `apps/desktop/src/styles/fonts/`, with the system font stack as fallback; nothing is loaded from the internet (NF-23).  `prd.md` F-25 holds the look-and-feel checks. Routes in section 5.4; the old screens stay unrouted.
 - Code. New `shell/`, `screens/*` (section 5.4), `text/`; `nav/route.ts`, `ui/`, `styles/`.
 
 ### AD-17 Search
@@ -894,7 +894,7 @@ Removing the island is a later Ask-first item.
 
 ### 13.5 Ask-first items
 
-None in V1: the translations come from the owner's request, the approval and sandbox changes follow the approved clickable prototype (each with one independent security review), and V1 adds no workspace package, font file, dependency, CI change or edit to `tools/checks/` or AGENTS.md. Behaviour the owner has not seen in the prototype is in the register of `prd.md` (PU-01 to PU-29) and goes into the prototype first. Signing, notarization, tags and releases are not Ask-first items an agent can lift: they are the owner's own steps (AGENTS.md). Later Ask-first items: removing the frozen island; the prototype's font files; AGENTS.md's "Design:" pointer and its sentence about the language files; moving the contributor guides' check into `tools/checks/`; packaging and the runner bundle with its root script (B-30). Later prototype-first items (decisions of 2026-11-21): the menu-bar icon, Open at login and the quit warning; a first run when a schedule is turned on; Duplicate; Missed, Skipped and Run late rows; one-time use of another agent; a bug-report copy; standing rules for send and post.
+None in V1: the translations come from the owner's request, the approval and sandbox changes follow the approved clickable prototype (each with one independent security review), and V1 adds no workspace package, dependency, CI change or edit to AGENTS.md; the owner approved the font file and the `tools/checks/` change on 2026-11-22. Behaviour the owner has not seen in the prototype is in the register of `prd.md` (PU-01 to PU-29) and goes into the prototype first. Signing, notarization, tags and releases are not Ask-first items an agent can lift: they are the owner's own steps (AGENTS.md). Later Ask-first items: removing the frozen island; AGENTS.md's "Design:" pointer and its sentence about the language files; moving the contributor guides' check into `tools/checks/`; packaging and the runner bundle with its root script (B-30). Later prototype-first items (decisions of 2026-11-21): the menu-bar icon, Open at login and the quit warning; a first run when a schedule is turned on; Duplicate; Missed, Skipped and Run late rows; one-time use of another agent; a bug-report copy; standing rules for send and post.
 
 ## 14. Build order overview
 
@@ -964,7 +964,7 @@ Decisions built into V1 and revisable later. A PU id (the register in `prd.md`) 
 |---|---|
 | The language files are approved by the owner's request for English, Bahasa Indonesia and easy added languages; they are not an Ask-first item | AD-14 |
 | No new workspace package: the words live in `apps/desktop/src/i18n/`, checked by `apps/desktop/src/i18n/i18n.test.ts` in `pnpm test`; no words in `packages/*`, which carry codes, `Line` values and typed values; `line-keys.ts` lists the runner's keys; main draws notices and passes `--languages=en,id`; the renderer builds "Copy report" and fills chat results | AD-14, section 10 |
-| No font files in V1: the system font stack; the prototype's font is a later Ask-first item | AD-16 |
+| V1 bundles Plus Jakarta Sans locally with its OFL license and the system font stack as fallback | AD-16 |
 | The builder-first screens are unrouted, not deleted; a frozen island keeps contract version 1 and its fixtures for them and their tests; retired operations are marked in the table by B-01 and answer `unavailable` with reason `retired` from the step each leaves with | AD-01, AD-03, section 13.3 |
 | Packaging and the runner bundle stay out of V1 (B-30); V1 runs from a checkout | AD-20 |
 | No CI change and no new dependency in V1 | Section 1.2 |

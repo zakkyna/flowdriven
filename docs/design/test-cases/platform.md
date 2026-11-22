@@ -4,7 +4,7 @@ Status: complete for the V1 build, 2026-11-21.
 
 These are the component test cases (533 cases): the parts underneath the journeys (`journeys.md`) and the safety rules (`safety.md`), and the parts no journey reaches. Every case follows `test-plan.md`: layer, file, Given, When, Then, traces, build step, and why it fails first, so it can be written as the failing test of its build task (`build-order.md`). No case uses the network, a real agent or a real account. Time and ids are injected.
 
-Words and lines (owner decision, 2026-11-21): the words live in `apps/desktop/src/i18n/`; the runner never builds a sentence. It emits a message code with values (a `Line`: a key from `packages/contracts/src/line-keys.ts` and its params), and the renderer, or Electron main for a system notification, turns it into words. Where a runner case here quotes a FlowDriven sentence (a chat line, a run page line, a notice), the quoted sentence is only the English drawing of its `Line`: the case asserts the key and the params, and only a renderer (L2) or main-process case asserts the words. Sentences that FlowDriven gives to an agent (a hook reason) are not `Line` values and are asserted as written. V1 ships no font files (system font stack).
+Words and lines (owner decision, 2026-11-21): the words live in `apps/desktop/src/i18n/`; the runner never builds a sentence. It emits a message code with values (a `Line`: a key from `packages/contracts/src/line-keys.ts` and its params), and the renderer, or Electron main for a system notification, turns it into words. Where a runner case here quotes a FlowDriven sentence (a chat line, a run page line, a notice), the quoted sentence is only the English drawing of its `Line`: the case asserts the key and the params, and only a renderer (L2) or main-process case asserts the words. Sentences that FlowDriven gives to an agent (a hook reason) are not `Line` values and are asserted as written. V1 bundles the prototype's Plus Jakarta Sans as one variable font file with its OFL license next to it (owner decision 2026-11-22, plan decision 6). The renderer loads it with `@font-face` from `apps/desktop/src/styles/fonts/`, with the system font stack as fallback; nothing is loaded from the internet (NF-23).
 
 V1 scope (owner decisions, 2026-11-21, revisable): the contract has 45 live operations plus 12 retired entries; there is no first run when a schedule is turned on, no menu bar icon, no Open at login (the app stays alive when its window closes), no Duplicate, no Missed or Skipped rows in Activity (missed and skipped slots stay as `starts` rows), no `other_agent` card, and no Always allow or standing rule for a send, post, pay, delete or merge. The cases below test that behaviour. Hidden characters are built at test time with `String.fromCodePoint`. Sample names only: flows `example.fill-timesheet`, `example.build-apk`, `example.weekly-supplier-report`, `example.email-triage`, `example.job-review`; model ids `opus-5.5`, `sonnet-5.5`, `haiku-5.5`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`.
 
@@ -5441,10 +5441,10 @@ Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). De
 - File: apps/desktop/src/repo-checks.test.ts
 - Given: the tracked files (`git ls-files`) and every `.css` file under `apps/desktop/src`
 - When: they are searched
-- Then: no tracked file ends in `.woff`, `.woff2`, `.ttf` or `.otf`; no CSS holds `@font-face` or `url(` with a font extension; `--font-ui` in `styles/tokens.css` is a system font stack (it holds `system-ui` and no remote name); `apps/desktop/electron/csp.json` keeps `font-src 'self'`.
-- Traces: NF-23, T-30, owner decision (no font files in V1)
+- Then: the bundled Plus Jakarta Sans variable font and its OFL license are in `styles/fonts/`; `base.css` declares its local `@font-face`; `--font-ui` in `styles/tokens.css` uses it with a system font stack fallback (including `system-ui`); `apps/desktop/electron/csp.json` keeps `font-src 'self'`.
+- Traces: NF-23, T-30, owner decision 2026-11-22 (plan decision 6)
 - Build step: B-16
-- Fails first because: Pinning case: `tokens.css` already uses a system font stack and no font file is tracked, so the case passes when it is written; the first green run is shown. The failing tests of this task are the rewritten token tests.
+- Fails first because: The font declaration and fallback tests fail until the bundled font is configured.
 
 ### TC-REPO-11 Fixtures and test helpers hold no local path, no private address and no long token
 - Layer: L1

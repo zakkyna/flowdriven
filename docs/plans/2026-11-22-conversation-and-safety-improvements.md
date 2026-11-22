@@ -100,3 +100,16 @@ Gate for every task: `pnpm format`, then `pnpm check`.
     - `codex exec` has no approval option. A headless exec run cannot ask a person: it offers only automatic review (`--approve-for-me`) or the forbidden bypass flag.
     - The experimental `codex app-server` speaks JSON-RPC and sends its client approval requests before commands, file changes and extra permissions, and for MCP elicitations. Connector tools also have a `prompt` approval mode. So FlowDriven can be the approving client in front of Codex, as the hook channel is in front of Claude Code.
     - Still open: whether every MCP tool call reaches the client before it runs. The protocol is marked experimental, so a build plan would pin the Codex version and cover it in the conformance suite (B-22.T5).
+- [x] **T9 Bundle Plus Jakarta Sans (decision 6).** The owner's yes to the `tools/checks/` change, 2026-11-22: "ya boleh", with "selesaikan task T1 sampai T8 tanpa bertanya".
+  Done by: Codex gpt-6.1-terra, 2026-11-22. Evidence: pnpm check.
+  - The Chair copied `PlusJakartaSans-VariableFont.ttf` and `OFL.txt` into `apps/desktop/src/styles/fonts/`. Their SHA-256 values are in `.workflow/scratch/fonts/SOURCE.txt`.
+  - `tools/checks/lib/repo-files.mjs`: `ttf` joins the binary list, and a file counts as binary only if it starts with the TrueType signature (bytes 00 01 00 00). A `.ttf` without it is still read as text and fails, as today.
+  - Tests first in `tools/checks/test/` (`node:test`, bytes built at test time):
+    - a `.ttf` with the signature is binary;
+    - a `.ttf` without it fails with "NUL byte in a text file";
+    - every other extension behaves as before.
+  - Design text: the PRD lines on the font (F-25 and its release line, and item 3 "No font files in V1"), and B-16.T1 in `build-order.md` with its plan copy.
+    - The renderer loads the bundled font with `@font-face` from that folder, with the system font stack as the fallback.
+    - Nothing is loaded from the internet (NF-23).
+    - The OFL license stays next to the font.
+  - Gate: `pnpm format`, then `pnpm check`.

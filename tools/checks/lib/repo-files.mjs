@@ -4,7 +4,7 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { charClass } from "./ranges.mjs";
 
-export const BINARY_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "ico", "icns"];
+export const BINARY_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "ico", "icns", "ttf"];
 
 /** @returns {string} */
 export function repoRoot() {
@@ -89,6 +89,7 @@ export function isBinaryFile(path, head) {
     webp: Buffer.from("RIFF"),
     ico: Buffer.from([0, 0, 1, 0]),
     icns: Buffer.from("icns"),
+    ttf: Buffer.from([0x00, 0x01, 0x00, 0x00]),
   };
   const signature = signatures[ext];
   if (head.length < signature.length || !head.subarray(0, signature.length).equals(signature)) return false;
