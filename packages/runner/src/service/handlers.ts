@@ -26,6 +26,7 @@ import { EngineError } from "../errors.ts";
 import type { HarnessQuota, Keeper } from "../keeper/types.ts";
 import { renderRunReport } from "../report.ts";
 import { needsAllow } from "../router/route.ts";
+import { canAlwaysAllow } from "../rules/always-allow.ts";
 import { restrictedApprovals } from "../rules/decisions.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { TriggerService } from "../triggers/service.ts";
@@ -529,7 +530,10 @@ export function createDecisionHandlers(
       ? all
       : rows.map((row) => ({ flowId: row.flowId, stepId: row.stepId, state: row.state }));
   };
-  const resolve = (input: V2Input<"approvals.resolve">) => {
+  const resolve = (
+    input: V2Input<"approvals.resolve">,
+    { caller }: { caller: Caller } = { caller: "window" },
+  ) => {
     if (input.approvalId.startsWith("weekly-limit:")) {
       if (input.decision !== "approve" && input.decision !== "reject")
         throw new RunnerError("invalid_input", "Invalid decision.");
@@ -555,13 +559,19 @@ export function createDecisionHandlers(
         params: { via: row.resolvedVia ?? "window" },
       });
     if (input.decision === "always_allow") {
+      if (caller === "phone")
+        throw new RunnerError("not_allowed", "Rules cannot be created from a phone.", {
+          reason: "phone_no_rules",
+        });
       if (row.effect && ["send", "post", "pay", "delete", "merge"].includes(row.effect))
         throw new RunnerError("not_allowed", "This action always asks.", { reason: "always_asks" });
       if (
         row.kind !== "risky_action" ||
-        row.effect !== "change" ||
-        !row.fixedPlace ||
-        row.outside ||
+        !canAlwaysAllow({
+          effect: row.effect,
+          place: row.outside ? "outside" : row.fixedPlace ? "fixed" : "none",
+          caller,
+        }) ||
         !row.place ||
         !["account", "folder"].includes(row.place.kind)
       )

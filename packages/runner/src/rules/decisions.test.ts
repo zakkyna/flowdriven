@@ -769,3 +769,210 @@ test("TC-j24-19 batch resumes each held loop item with its exact input once", as
   await vi.waitFor(() => expect(c.store.getRun(run.id)?.state).toBe("done"));
   expect(ran).toEqual(["one", "two", "three"]);
 });
+
+test("TC-j24-12 TC-RUL-08 always allow creates a rule and approves the decision", async () => {
+  const { openSqliteStore } = await import("../sqlite-store.ts");
+  const { createRunnerService } = await import("../service/service.ts");
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const { callGrant, digestCall } = await import("../connectors/grants.ts");
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T01:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, { id: "always", createdAt: "2026-11-21T00:00:00Z" });
+    const run = store.getRun(row.runId);
+    if (!run) throw new Error("Missing run");
+    const flow = store.getFlow(run.flowId, run.flowHash);
+    if (!flow || !flow.manifest || typeof flow.manifest !== "object") throw new Error("Missing flow");
+    const place = { kind: "account" as const, value: "timesheet-account", label: "Timesheet" };
+    store.putFlow({
+      ...flow,
+      manifest: {
+        ...flow.manifest,
+        format: "flowdriven-flow/1.2",
+        touches: [
+          {
+            id: "log-hours",
+            sentence: "Log hours",
+            effect: "change",
+            rule: "asks_first",
+            covers: ["timesheet.log_entry"],
+            place,
+          },
+        ],
+      },
+    });
+    const tool = "timesheet.log_entry";
+    const input = { hours: 8 };
+    store.updateApproval(row.id, {
+      kind: "risky_action",
+      effect: "change",
+      touchId: "log-hours",
+      fixedPlace: true,
+      place,
+      call: { tool, input },
+      approves: [callGrant("timesheet", tool, digestCall(tool, input))],
+    });
+    const result = await service.call("approvals.resolve", { approvalId: row.id, decision: "always_allow" });
+    expect(result).toMatchObject({ decision: { state: "allowed_always", ruleId: expect.any(String) } });
+    expect(await service.call("rules.list", { flowId: store.getRun(row.runId)?.flowId })).toHaveLength(1);
+    expect(store.listAudit(row.runId)).toContainEqual(
+      expect.objectContaining({
+        kind: "rule_created",
+        detail: expect.objectContaining({ by: "always_allow" }),
+      }),
+    );
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-j24-14 and TC-SR1-29 a rule use is recorded without its place value", async () => {
+  const { openSqliteStore } = await import("../sqlite-store.ts");
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const standing = await import("./standing.ts");
+  const store = await openSqliteStore(":memory:");
+  try {
+    const row = pendingDecision(store, { id: "rule-use", createdAt: "2026-11-21T00:00:00Z" });
+    const run = store.getRun(row.runId);
+    if (!run) throw new Error("Missing run");
+    const rule = store.makeRule({
+      flowId: run.flowId,
+      touchId: "log-hours",
+      effect: "change",
+      place: { kind: "account", value: "timesheet-account" },
+      sentence: "Log hours",
+    });
+    const at = "2026-11-22T00:00:00.000Z";
+    standing.recordRuleUse(store, {
+      ruleId: rule.id,
+      runId: run.id,
+      stepId: row.stepId,
+      itemKey: "",
+      tool: "timesheet.log_entry",
+      title: "Log 8 hours",
+      at,
+    });
+    expect(store.listRules()[0]).toMatchObject({ uses: 1, lastUsedAt: at });
+    expect(store.getStep(run.id, row.stepId)).toMatchObject({
+      ruleUses: [{ ruleId: rule.id, tool: "timesheet.log_entry", at }],
+    });
+    expect(store.getRun(run.id)?.decisionLines).toContainEqual({
+      key: "report.doneByRule",
+      params: { title: "Log 8 hours" },
+    });
+    const audit = store.listAudit(run.id).find((entry) => entry.kind === "rule_used");
+    expect(audit?.detail).toMatchObject({
+      ruleId: rule.id,
+      flowId: run.flowId,
+      touchId: "log-hours",
+      effect: "change",
+      placeKind: "account",
+      runId: run.id,
+      stepId: row.stepId,
+    });
+    expect(JSON.stringify(audit)).not.toContain("timesheet-account");
+  } finally {
+    store.close();
+  }
+});
+
+test("TC-j24-12 the chat line is posted and the approved run finishes", async () => {
+  const { FlowManifest } = await import("@flowdriven/sdk");
+  const { callGrant, digestCall } = await import("../connectors/grants.ts");
+  const { scriptedHarness } = await import("../scripted-harness.ts");
+  const { openSqliteStore } = await import("../sqlite-store.ts");
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const { createRunnerService } = await import("../service/service.ts");
+  const { vi } = await import("vitest");
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T01:00:00Z"),
+    harness: scriptedHarness({ steps: { alerts: { text: "ok" } } }),
+  });
+  try {
+    const row = pendingDecision(store, { id: "chat-rule", createdAt: "2026-11-21T00:00:00Z" });
+    const run = store.getRun(row.runId);
+    if (!run) throw new Error("Missing run");
+    const flow = store.getFlow(run.flowId, run.flowHash);
+    if (!flow || !flow.manifest || typeof flow.manifest !== "object") throw new Error("Missing flow");
+    const place = { kind: "account" as const, value: "timesheet-account", label: "Timesheet" };
+    const manifest = FlowManifest.parse({
+      ...flow.manifest,
+      format: "flowdriven-flow/1.2",
+      name: "Fill timesheet",
+      steps: [
+        {
+          id: "alerts",
+          do: "worker",
+          instructions: "Log hours",
+          checks: [{ type: "contains", pattern: "ok" }],
+        },
+      ],
+      touches: [
+        {
+          id: "log-hours",
+          sentence: "Log hours",
+          effect: "change",
+          rule: "asks_first",
+          covers: ["timesheet.log_entry"],
+          place,
+        },
+      ],
+    });
+    store.putFlow({ ...flow, manifest });
+    store.putChat({
+      id: "chat-rule",
+      title: "Timesheet",
+      titleSource: "flowdriven",
+      createdAt: row.createdAt,
+      updatedAt: row.createdAt,
+      from: "flowdriven",
+      language: "en",
+      languageSource: "app",
+      agent: "claude-code",
+      model: "default",
+      agentSource: "main_default",
+    });
+    store.updateRun(run.id, { start: { source: "chat", chatId: "chat-rule" } });
+    const tool = "log_entry";
+    const input = { hours: 8 };
+    store.updateApproval(row.id, {
+      kind: "risky_action",
+      effect: "change",
+      touchId: "log-hours",
+      fixedPlace: true,
+      place,
+      chatId: "chat-rule",
+      call: { tool, input },
+      approves: [callGrant("timesheet", tool, digestCall(tool, input))],
+    });
+    await service.call("approvals.resolve", { approvalId: row.id, decision: "always_allow" });
+    await vi.waitFor(() => expect(store.getRun(run.id)?.state).toBe("done"));
+    expect(store.listMessages("chat-rule")).toContainEqual(
+      expect.objectContaining({ line: { key: "chat.alwaysAllowed", params: { flow: "Fill timesheet" } } }),
+    );
+    expect(
+      store.findGrant({
+        runId: run.id,
+        stepId: row.stepId,
+        itemKey: "",
+        tool: "timesheet.log_entry",
+        digest: digestCall(tool, input),
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toBeDefined();
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
