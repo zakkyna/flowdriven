@@ -150,7 +150,7 @@ What the person experiences. An empty chat shows "What should I do?" and "I can 
 Requirements.
 - F-03.R1. Enter sends the message. Shift+Enter adds a new line. A draft is kept per chat until sent.
 - F-03.R2. `chats.send` returns at once. The reply arrives through the `chats` topic. The person's message shows immediately and a working indicator shows while the agent answers.
-- F-03.R3. Each turn is one agent call with no tools and a fixed answer shape (an intent plus reply text and its language). FlowDriven checks the intent against its own state and turns it into messages and cards. The agent never starts anything.
+- F-03.R3. Each turn uses the agent's own memory as the agent normally loads it, and is one agent call with no tools and a fixed answer shape (an intent plus reply text and its language). FlowDriven checks the intent against its own state and turns it into messages and cards. The agent never starts anything.
 - F-03.R4. The context for a turn is compact: flows with names and inputs, remembered answers, what runs and what needs the person, and the last turns up to 12 turns or 24,000 characters.
 - F-03.R5. Cards are real controls: buttons and form submits go through `chats.act`. A card that was answered shows its answer and its fields disabled. A card for a deleted flow says "a deleted flow" and loses its buttons.
 - F-03.R6. Typing "yes" or "ok" while a card is open that needs a click gets "Use the buttons on the card above." and does nothing else.
@@ -518,7 +518,7 @@ Requirements.
 - F-21.R1. A new chat starts with the main agent and its default model from Settings. Changing the choice changes only that chat.
 - F-21.R2. Each agent reports its own models: Claude Code's aliases and Codex's list, or a catalog per CLI version.
 - F-21.R3. The choice is passed with the agent's own model flag and no other flag. The picker never changes the sandbox or the approvals (SR-4).
-- F-21.R4. A run started from the chat uses the chat's agent and model. A run already going keeps its own.
+- F-21.R4. A run started from the chat uses the chat's agent and model. A run already going keeps its own. Flow runs leave out the person's own agent memory while keeping FlowDriven's hooks and scoped configuration. If an agent cannot do both, it keeps the memory and records the gap in its capability tier. Project instruction files still load; those written by others are outside text. Memory never approves an action; every call still goes through FlowDriven's decision.
 - F-21.R5. A run keeps the agent and model it ran on and the run card and run page name them (F-04.R11, F-14.R10).
 - F-21.R6. An agent that is not ready cannot be chosen. The menu shows its next step and does what the same button does in Settings. An agent in state `unknown` shows its status, and "Manage AI agents" leads to Settings, where "Scan again" is (there is no "Check again" in the picker in V1).
 - F-21.R7. The menu works with the keyboard: Arrow keys move, Enter chooses, Escape closes and returns focus to the button. Models are menu items with radio state, grouped under each agent's name. The button's accessible name always says the agent, the model and the status; on a phone-width screen the button shows the model only.

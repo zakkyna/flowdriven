@@ -14,6 +14,12 @@ The owner answered these in this session, in plain words. Decisions 2 and 3 chan
 6. **The prototype is approved, and V1 uses its look and font.** Owner, after trying prototype versions 10 and 11: "Oke buatkan versi 1 dengan UI yang bagus keren wow dan AI savvy". Asked about the font: "Plus Jakarta Sans". The download was approved with "ya unduh".
    - The variable font file and its OFL license come from the official Google Fonts repository. Their SHA-256 values are in `.workflow/scratch/fonts/SOURCE.txt`.
    - They wait outside the tree until the hidden-character scan accepts `.ttf` files. That change is to `tools/checks/`, which is Ask first.
+7. **The agents' own memory: in chats, not in flow runs.** The owner first answered "Tetap dipakai", then refined it: "Saat menjalankan flow tidak perlu memory agent, saat chating baru perlu memory agent".
+   - A chat turn uses the agent's own memory, loaded the way the agent loads it by default: Claude Code's `CLAUDE.md` files and auto-memory, and Codex's `AGENTS.md`.
+   - A flow run starts its worker without the person's own memory: the global `CLAUDE.md`, the auto-memory and the global `AGENTS.md`. FlowDriven's hooks and scoped config stay on.
+   - Chair's reading (owner may override): instruction files inside the run's project folder belong to that project and still load. When someone else wrote them, they count as outside text.
+   - An agent may be unable to turn the person's memory off without also dropping the hooks. Then its runs keep the memory, and the gap is recorded on its capability tier. A run never goes without the hooks.
+   - Memory text approves nothing: every call still goes through the decision function.
 
 ## Chair's calls (owner may override)
 
@@ -112,4 +118,16 @@ Gate for every task: `pnpm format`, then `pnpm check`.
     - The renderer loads the bundled font with `@font-face` from that folder, with the system font stack as the fallback.
     - Nothing is loaded from the internet (NF-23).
     - The OFL license stays next to the font.
+  - Gate: `pnpm format`, then `pnpm check`.
+- [x] **T10 Memory in chats, not in runs (decision 7).** Design set only. The research and the code come in B-21.T4, B-22.T1, B-07 and B-22.
+  Done by: Codex gpt-6.1-terra, 2026-11-22. Evidence: pnpm check.
+  - AD-08 and AD-10 name two start profiles:
+    - a chat turn, which uses the agent's own memory;
+    - a worker run, which leaves out the person's own memory and keeps the hooks and the scoped config on.
+  - PRD: the agents feature states it. The architecture table of 2026-11-22 owner decisions gets a row.
+  - build-order.md:
+    - B-21.T4 (Claude Code) and B-22.T1 (Codex) research how each agent turns off the person's own memory while keeping hooks, from local help and a local spike only.
+    - B-07.T3 and B-22.T3 add those settings to worker runs only.
+    - New cases are added. The plan copies of B-07 and B-21 change identically.
+  - threat-model.md: the person's memory no longer steers flow runs. Project instruction files written by others stay outside text.
   - Gate: `pnpm format`, then `pnpm check`.

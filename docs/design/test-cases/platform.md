@@ -2,7 +2,7 @@
 
 Status: complete for the V1 build, 2026-11-21.
 
-These are the component test cases (533 cases): the parts underneath the journeys (`journeys.md`) and the safety rules (`safety.md`), and the parts no journey reaches. Every case follows `test-plan.md`: layer, file, Given, When, Then, traces, build step, and why it fails first, so it can be written as the failing test of its build task (`build-order.md`). No case uses the network, a real agent or a real account. Time and ids are injected.
+These are the component test cases (537 cases): the parts underneath the journeys (`journeys.md`) and the safety rules (`safety.md`), and the parts no journey reaches. Every case follows `test-plan.md`: layer, file, Given, When, Then, traces, build step, and why it fails first, so it can be written as the failing test of its build task (`build-order.md`). No case uses the network, a real agent or a real account. Time and ids are injected.
 
 Words and lines (owner decision, 2026-11-21): the words live in `apps/desktop/src/i18n/`; the runner never builds a sentence. It emits a message code with values (a `Line`: a key from `packages/contracts/src/line-keys.ts` and its params), and the renderer, or Electron main for a system notification, turns it into words. Where a runner case here quotes a FlowDriven sentence (a chat line, a run page line, a notice), the quoted sentence is only the English drawing of its `Line`: the case asserts the key and the params, and only a renderer (L2) or main-process case asserts the words. Sentences that FlowDriven gives to an agent (a hook reason) are not `Line` values and are asserted as written. V1 bundles the prototype's Plus Jakarta Sans as one variable font file with its OFL license next to it (owner decision 2026-11-22, plan decision 6). The renderer loads it with `@font-face` from `apps/desktop/src/styles/fonts/`, with the system font stack as fallback; nothing is loaded from the internet (NF-23).
 
@@ -3171,6 +3171,46 @@ Shared setup: the agent catalog (`packages/runner/src/agents/registry.ts`, new) 
 - Build step: B-06
 - Fails first because: `parseArguments` accepts only `--stdio`, `--data-dir` and `--demo`.
 
+
+### TC-AGT-41 Claude Code start profiles
+- Layer: L1
+- File: packages/runner/src/claude/args.test.ts
+- Given: a synthetic Claude Code profile with memory-off and hook settings.
+- When: worker and chat arguments are built.
+- Then: the worker has the exact memory-off settings, hooks and scoped config; the chat has no memory-off settings.
+- Traces: AD-08, AD-10, F-21.R4
+- Build step: B-07
+- Fails first because: Claude Code arguments do not distinguish the start profiles.
+
+### TC-AGT-42 Claude Code memory gap
+- Layer: L1
+- File: packages/runner/src/claude/args.test.ts
+- Given: a synthetic Claude Code profile unable to turn memory off without losing hooks.
+- When: worker arguments are built.
+- Then: hooks and scoped config remain, memory stays on, and the capability tier records the gap; no bypass flag is used.
+- Traces: AD-08, SR-4
+- Build step: B-07
+- Fails first because: the worker does not record the memory gap.
+
+### TC-AGT-43 Codex start profiles
+- Layer: L1
+- File: packages/runner/src/codex/args.test.ts
+- Given: a synthetic Codex profile with memory-off and hook settings.
+- When: worker and chat arguments are built.
+- Then: the worker has the exact memory-off settings, hooks and scoped config; the chat has no memory-off settings.
+- Traces: AD-08, AD-10, F-21.R4
+- Build step: B-22
+- Fails first because: Codex arguments do not distinguish the start profiles.
+
+### TC-AGT-44 Codex memory gap
+- Layer: L1
+- File: packages/runner/src/codex/args.test.ts
+- Given: a synthetic Codex profile unable to turn memory off without losing hooks.
+- When: worker arguments are built.
+- Then: hooks and scoped config remain, memory stays on, and the capability tier records the gap; no bypass flag is used.
+- Traces: AD-08, SR-4
+- Build step: B-22
+- Fails first because: the worker does not record the memory gap.
 ## SRCH Search
 
 Shared setup: `searchQuery(store, text)` in `packages/runner/src/search/query.ts` (new) behind `search.query`. It uses `LIKE ... ESCAPE '\'` over `chats.title`, `messages.search_text`, `flow_heads.name` and `flow_heads.summary`. `messages.search_text` holds the person's text, the agent's reply and result lines (the template lines with text and choice values filled in); lines, notes and cards have none.
