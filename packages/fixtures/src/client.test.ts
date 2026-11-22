@@ -93,11 +93,7 @@ test("TC-CON-42 permission off stops active runs and expires decisions", async (
   );
 });
 
-test("TC-CON-42 expiry, refusal and unfinished operations", async () => {
-  const expired = createFixtureRunnerClient({ now: () => new Date("2026-11-21T03:00:00.000Z") });
-  await expect(
-    expired.call("approvals.resolve", { approvalId: "decision-1", decision: "approve" }),
-  ).rejects.toMatchObject({ code: "conflict", reason: "decision_expired" });
+test("TC-CON-42 refusal and unfinished operations (TC-CON-44)", async () => {
   const client = createFixtureRunnerClient();
   await expect(client.call("runs.resume", { runId: "run-apk-stopped" })).rejects.toMatchObject({
     code: "not_allowed",
@@ -490,4 +486,18 @@ test("TC-CON-42 rule ids never repeat after revocation", async () => {
   });
   expect(first.ruleId).toMatch(/^rule-fixture-\d+$/);
   expect(second.ruleId).not.toBe(first.ruleId);
+});
+
+test("TC-CON-44 fixture decisions wait beyond 25 hours and can be answered", async () => {
+  const client = createFixtureRunnerClient({ now: () => new Date("2026-11-22T04:00:00.000Z") });
+  const decisions = await client.call("approvals.list", {});
+  expect(decisions.length).toBeGreaterThan(0);
+  expect(decisions.every((decision) => !("expiresAt" in decision))).toBe(true);
+  const decision = decisions.find((item) => item.id === "decision-1");
+  expect(decision?.state).toBe("pending");
+  expect((await client.call("runs.status", { runId: "run-timesheet-wait" })).state).toBe("waiting_approval");
+  expect(
+    (await client.call("approvals.resolve", { approvalId: "decision-1", decision: "approve" })).decision
+      .state,
+  ).toBe("approved");
 });

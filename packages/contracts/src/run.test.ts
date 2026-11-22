@@ -144,15 +144,7 @@ test("TC-CON-12 version 2 states", async () => {
     "allowed_always",
   ]);
   expect(c.ApprovalDecision.options).toEqual(["approve", "edit", "reject", "always_allow"]);
-  expect(c.ResolvedVia.options).toEqual([
-    "window",
-    "chat",
-    "phone",
-    "rule",
-    "expiry",
-    "stop",
-    "permission_off",
-  ]);
+  expect(c.ResolvedVia.options).toEqual(["window", "chat", "phone", "rule", "stop", "permission_off"]);
   expect(c.AgentState.options).toEqual([
     "not_installed",
     "installing",

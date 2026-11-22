@@ -14,7 +14,6 @@ const base = {
   payload: { kind: "email", to: ["a@example.com"], subject: "s", body: "b" },
   editable: true,
   createdAt: "2026-11-10T09:00:00.000Z",
-  expiresAt: "2026-11-11T09:00:00.000Z",
   state: "pending",
 };
 
@@ -85,7 +84,6 @@ const weekly = {
   },
   editable: false,
   createdAt: "2026-11-11T09:00:00.000Z",
-  expiresAt: "2026-11-14T09:00:00.000Z",
   state: "pending",
 };
 test("a weekly limit approval names no flow", () => {
@@ -273,4 +271,15 @@ test("TC-CON-13 payload variants reject unknown keys and bound contents", async 
     { kind: "choice", question: "q", options: [{ key: "k", label: "l", extra: true }], maxPick: 1 },
   ])
     expect(Payload.safeParse(payload).success).toBe(false);
+});
+
+test("TC-CON-44 decisions have no deadline", async () => {
+  const { ResolvedVia } = await import("./approval.ts");
+  const decision = base;
+  const expiresAt = "2026-11-11T09:00:00.000Z";
+  expect(Approval.safeParse(decision).success).toBe(true);
+  expect(Approval.safeParse({ ...decision, expiresAt }).success).toBe(false);
+  for (const via of ["window", "chat", "phone", "rule", "stop", "permission_off"])
+    expect(ResolvedVia.safeParse(via).success).toBe(true);
+  expect(ResolvedVia.safeParse("expiry").success).toBe(false);
 });

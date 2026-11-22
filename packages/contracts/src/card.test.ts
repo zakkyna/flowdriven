@@ -78,7 +78,6 @@ test("TC-CON-19 card types and states", () => {
     payload: { kind: "text", text: "x" },
     editable: false,
     createdAt: "2026-11-19T02:00:00.000Z",
-    expiresAt: "2026-11-20T02:00:00.000Z",
     state: "pending",
   };
   const cards = [

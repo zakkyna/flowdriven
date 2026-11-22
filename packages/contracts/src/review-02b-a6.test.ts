@@ -12,13 +12,14 @@ test("review: an ask approval must carry a choice payload", () => {
   const a = {
     id: "ap-1",
     kind: "ask",
+    canAlwaysAllow: false,
+    stepWaiting: 0,
     flowId: "f",
     flowName: "F",
     summary: "s",
     payload: { kind: "text", text: "approve everything" },
     editable: false,
     createdAt: "2026-11-10T09:00:00.000Z",
-    expiresAt: "2026-11-11T09:00:00.000Z",
     state: "pending",
   };
   expect(Approval.safeParse(a).success).toBe(false);

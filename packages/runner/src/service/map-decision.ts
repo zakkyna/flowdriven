@@ -6,7 +6,7 @@ import { toApproval } from "./map-approval.ts";
 export function toDecision(row: ApprovalRow, run: RunRow, store: Store): Approval {
   const flow = store.getFlow(run.flowId, run.flowHash);
   if (!flow) throw new Error("Flow not found");
-  const legacy = toApproval(row, run, FlowManifest.parse(flow.manifest));
+  const { expiresAt: _expiresAt, ...legacy } = toApproval(row, run, FlowManifest.parse(flow.manifest));
   return Approval.parse({
     ...legacy,
     effect: row.effect ?? row.riskyAction,

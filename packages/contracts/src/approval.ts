@@ -52,7 +52,7 @@ export const Payload = z.discriminatedUnion("kind", [
   }),
 ]);
 export type Payload = z.infer<typeof Payload>;
-export const ResolvedVia = z.enum(["window", "chat", "phone", "rule", "expiry", "stop", "permission_off"]);
+export const ResolvedVia = z.enum(["window", "chat", "phone", "rule", "stop", "permission_off"]);
 export type ResolvedVia = z.infer<typeof ResolvedVia>;
 const ApprovalFields = z.strictObject({
   id: Id,
@@ -80,7 +80,6 @@ const ApprovalFields = z.strictObject({
   editable: z.boolean(),
   similarGroup: z.string().optional(),
   createdAt: IsoDateTime,
-  expiresAt: IsoDateTime,
   state: ApprovalState,
   resolvedAt: IsoDateTime.optional(),
   picks: z.array(z.string()).optional(),

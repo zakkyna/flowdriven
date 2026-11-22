@@ -44,31 +44,6 @@ export function createFixtureRunnerClient(
   ) => {
     state.audit.push({ id: state.audit.length + 1, at: now(), kind, detail, ...(runId ? { runId } : {}) });
   };
-  const expire = () => {
-    for (const decision of state.decisions) {
-      if (decision.state !== "pending" || decision.kind === "budget_raise" || decision.expiresAt > now())
-        continue;
-      decision.state = "expired";
-      decision.resolvedAt = decision.expiresAt;
-      decision.resolvedVia = "expiry";
-      decision.canAlwaysAllow = false;
-      audit("decision_expired", { why: "expiry" }, decision.runId);
-      if (decision.runId) {
-        const item = run(decision.runId);
-        const step = item.steps.find((s) => s.stepId === decision.stepId);
-        if (step) step.state = "skipped";
-        item.decisionLines.push({
-          key: "report.noAnswer",
-          params: { title: decision.stepTitle ?? decision.summary },
-        });
-        if (
-          item.state === "waiting_approval" &&
-          !state.decisions.some((d) => d.runId === item.id && d.state === "pending")
-        )
-          item.state = "running";
-      }
-    }
-  };
   const statuses = (id: string): TriggerStatus[] => {
     const item = flow(id);
     return (item.manifest.triggers ?? []).flatMap((trigger, index): TriggerStatus[] => {
@@ -611,7 +586,6 @@ export function createFixtureRunnerClient(
     },
     "approvals.resolveSimilar": ({ runId, group, approvalIds }) => {
       run(runId);
-      expire();
       const decisions = state.decisions.filter(
         (d) => d.runId === runId && d.similarGroup === group && d.state === "pending",
       );
@@ -652,7 +626,6 @@ export function createFixtureRunnerClient(
       return { rule, changed: !!active };
     },
     "activity.summary": ({ filter, before, limit }) => {
-      expire();
       const needsYou = state.decisions
         .filter((d) => d.state === "pending")
         .map((decision) => ({ kind: "decision" as const, decision }));
@@ -886,7 +859,6 @@ export function createFixtureRunnerClient(
       return { outcome: "resumed", run: RunSummary.strip().parse(r) };
     },
     "approvals.list": (input) => {
-      expire();
       return state.decisions
         .filter(
           (d) =>
@@ -897,7 +869,6 @@ export function createFixtureRunnerClient(
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
     "approvals.resolve": (input) => {
-      expire();
       const d = find(state.decisions, (a) => a.id === input.approvalId);
       if (d.state === "expired")
         throw new RunnerError("conflict", "Decision expired.", { reason: "decision_expired" });
@@ -1017,7 +988,6 @@ export function createFixtureRunnerClient(
       };
     },
     "approvals.answer": ({ approvalId, picks }) => {
-      expire();
       const d = find(state.decisions, (a) => a.id === approvalId);
       if (d.state === "expired")
         throw new RunnerError("conflict", "Decision expired.", { reason: "decision_expired" });

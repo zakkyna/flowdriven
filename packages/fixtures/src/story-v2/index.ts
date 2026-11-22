@@ -331,7 +331,6 @@ const decision: Approval = {
   payload: { kind: "text", text: "Log work for Project Example" },
   editable: false,
   createdAt: STORY_V2_NOW,
-  expiresAt: "2026-11-21T03:00:00.000Z",
   state: "pending",
 };
 const chats: ChatView[] = [
