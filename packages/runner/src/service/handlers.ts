@@ -25,6 +25,7 @@ import { renderRunReport } from "../report.ts";
 import { needsAllow } from "../router/route.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { TriggerService } from "../triggers/service.ts";
+import { createActivityHandler } from "./activity.ts";
 import type { createCapabilities } from "./capabilities.ts";
 import type { HarnessService } from "./claude-harness.ts";
 import { ALLOW_FIRST } from "./claude-harness.ts";
@@ -65,7 +66,7 @@ export function createDispatcher({
   audit,
 }: {
   v2: Partial<V2Handlers>;
-  legacy: Partial<Handlers>;
+  legacy: Partial<Handlers> & Partial<Pick<V2Handlers, "activity.summary">>;
   audit: (kind: string, detail: Value) => void;
 }): (name: string, input: unknown, caller?: Caller) => Promise<unknown> {
   return async (name, input, caller = "window") => {
@@ -78,7 +79,10 @@ export function createDispatcher({
     }
     if (name === "flows.build" || name === "flows.update")
       throw new RunnerError("unavailable", "Operation retired.", { reason: "retired" });
-    const v2Handler = v2[rootKey] as ((input: unknown) => unknown) | undefined;
+    const v2Handler = (v2[rootKey] ??
+      (rootKey === "activity.summary" ? legacy["activity.summary"] : undefined)) as
+      | ((input: unknown) => unknown)
+      | undefined;
     const legacyKey = name as OperationName;
     const legacyHandler = legacy[legacyKey] as ((input: unknown) => unknown) | undefined;
     const handler = v2Handler ?? legacyHandler;
@@ -110,7 +114,6 @@ export function createHandlers({
   mode,
   projectDir,
   now,
-  harnessIdOf,
   harnesses,
   keeper,
   weekly,
@@ -127,7 +130,8 @@ export function createHandlers({
   | "runs.list"
   | "runs.status"
   | "runs.report"
-> {
+> &
+  Pick<V2Handlers, "activity.summary"> {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
     if (!row) throw new RunnerError("not_found", `There is no flow ${id}.`);
@@ -266,6 +270,7 @@ export function createHandlers({
     });
   }
   return {
+    "activity.summary": createActivityHandler(store, engine),
     "flows.list": () => store.listFlows().map((r) => toFlowSummary(r, store.listRuns({ flowId: r.id }))),
     "flows.capabilities": ({ flowId }) => {
       flow(flowId);
