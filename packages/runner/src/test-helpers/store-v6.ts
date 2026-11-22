@@ -108,6 +108,7 @@ export function makeStoreV6(folder: string, options?: { clock?: () => Date }): s
     INSERT INTO seen VALUES ('example.fill-timesheet','loop','item','2026');
     INSERT INTO approvals VALUES ('bad','running','pending','invalid');
     INSERT INTO grants VALUES ('waiting_approval','mcp__x__send#digest',''), ('waiting_approval','pick',''), ('done','pick','');
+    INSERT INTO counters VALUES ('grant-used:waiting_approval::mcp__x__send#digest','run',1);
     INSERT INTO fire_keys VALUES ('example.fill-timesheet',0,'key','2026');
     INSERT INTO settings VALUES ('keeper','{}'), ('quota:claude-code','{}'), ('weekly:claude-code','{}');
     INSERT INTO harness_state VALUES ('claude-code','{"id":"claude-code","consent":"given"}');

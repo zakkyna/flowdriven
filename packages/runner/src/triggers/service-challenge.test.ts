@@ -375,3 +375,23 @@ test("a run blocked by a challenge that pauses its trigger sends one notice, and
   expect(inner.getRun(begun.run.id)).toMatchObject({ state: "blocked", blockedReason: STOP.challenge });
   expect(notices).toEqual([{ kind: "run_blocked", body: "Test is blocked and needs a look." }]);
 });
+
+test("B-03.T7 TC-SR2-12 refused flow_done is claimed and never replayed", async () => {
+  const up = "local.permission-up";
+  const down = "local.permission-down";
+  const r = await triggerRig([
+    { manifest: triggerFlow(up, [{ kind: "manual" }]) },
+    { manifest: triggerFlow(down, [{ kind: "flow_done", flow: up, status: "done" }]) },
+  ]);
+  r.enable(down, 0);
+  const run = r.engine.beginStart(up, { project: r.project });
+  await run.settled;
+  r.store.updateRun(run.run.id, { state: "done", endedAt: r.clock.now().toISOString() });
+  r.store.putSetting("agentPermission", "unset");
+  for (let i = 0; i < 3; i++) await r.svc.tick();
+  expect(r.store.claimKey(down, 0, run.run.id, r.clock.now().toISOString())).toBe(false);
+  r.store.putSetting("agentPermission", "on");
+  await r.svc.tick();
+  await r.idle();
+  expect(r.runsOf(down)).toHaveLength(0);
+});

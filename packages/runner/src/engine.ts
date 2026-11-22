@@ -533,7 +533,12 @@ export function createEngine(input: EngineDeps): Engine {
         files,
         registeredAt: now().toISOString(),
       };
-      store.putFlow(row);
+      store.transaction(() => {
+        store.putFlow(row);
+        const head = store.getFlowHead(row.id);
+        if (head && !head.deletedAt && head.headHash !== hash)
+          store.putFlowHead({ ...head, headHash: hash, updatedAt: row.registeredAt });
+      });
       return row;
     },
     beginStart,

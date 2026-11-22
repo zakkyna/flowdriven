@@ -668,6 +668,8 @@ export async function openSqliteStore(
       store.transaction(() => {
         execute("DELETE FROM consent_pins WHERE flow_id = ?", flowId);
         execute("DELETE FROM capability_consents WHERE flow_id = ?", flowId);
+        if (store.getConfirmation(flowId)?.legacy)
+          execute("DELETE FROM confirmations WHERE flow_id = ?", flowId);
       });
     },
     getTrigger(flowId, index) {

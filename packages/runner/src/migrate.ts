@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { grantUsedKey } from "./connectors/grants.ts";
 import { EngineError } from "./errors.ts";
 import {
   CAPABILITY_SCHEMA,
@@ -208,6 +209,14 @@ export function migrate(db: DatabaseSync, path: string, options?: MigrationOptio
           } catch {}
         }
       }
+      const at = (options?.now?.() ?? new Date()).toISOString();
+      const used =
+        separator >= 0 &&
+        Number(
+          db
+            .prepare("SELECT value FROM counters WHERE name = ? AND day = 'run'")
+            .get(grantUsedKey(String(row.run_id), String(row.item_key), text))?.value ?? 0,
+        ) > 0;
       const grant = {
         runId: String(row.run_id),
         stepId,
@@ -215,7 +224,8 @@ export function migrate(db: DatabaseSync, path: string, options?: MigrationOptio
         tool,
         digest,
         kind: "migrated",
-        createdAt: (options?.now?.() ?? new Date()).toISOString(),
+        createdAt: at,
+        ...(used ? { usedAt: at } : {}),
       };
       insertGrant.run(grant.runId, stepId, grant.itemKey, tool, digest, JSON.stringify(grant));
       grants++;

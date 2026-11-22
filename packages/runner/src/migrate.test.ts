@@ -469,3 +469,59 @@ test.each([1, 2, 3, 4, 5])("TC-STO-13 version %s migrates in one open", async (v
   expect(store.listAudit().at(-1)?.detail).toMatchObject({ from: version, to: 7 });
   store.close();
 });
+
+test("B-03.T7 TC-STO-10 used migrated call grants cannot be found", async () => {
+  const dir = folder();
+  const path = makeStoreV6(dir);
+  const old = new DatabaseSync(path);
+  old.exec("INSERT INTO grants VALUES ('waiting_approval', 'mcp__x__send#unused', '')");
+  old.close();
+  const store = await openSqliteStore(path, { now: clock });
+  const db = new DatabaseSync(path);
+  const key = {
+    runId: "waiting_approval",
+    stepId: "step",
+    itemKey: "",
+    tool: "mcp__x__send",
+    digest: "digest",
+    kind: "migrated" as const,
+    createdAt: clock().toISOString(),
+  };
+  expect(store.findGrant(key)).toBeUndefined();
+  expect(dataRows(db, "call_grants").find((row) => row.digest === "digest")).toMatchObject({
+    usedAt: clock().toISOString(),
+  });
+  expect(store.findGrant({ ...key, stepId: "*", digest: "unused" })).toBeDefined();
+  db.close();
+  store.close();
+});
+
+test("B-03.T7 TC-SR3-12 withdrawal removes only legacy confirmation", async () => {
+  const { store, db } = await migrated();
+  const { flowState } = await import("./flow-state.ts");
+  const other = store.getConfirmation("example.build-apk");
+  if (!other) throw new Error("missing confirmation");
+  const { legacy: _legacy, ...modern } = other;
+  store.putConfirmation(modern);
+  store.deleteCapabilityConsent("example.fill-timesheet");
+  store.deleteCapabilityConsent("example.build-apk");
+  expect(flowState(store, "example.fill-timesheet")).toBe("new");
+  expect(store.getConfirmation("example.build-apk")).toEqual(modern);
+  db.close();
+  store.close();
+});
+
+test("B-03.T7 TC-SR3-12 re-import moves a migrated head", async () => {
+  const { store, db } = await migrated();
+  const { createEngine } = await import("./engine.ts");
+  const { scriptedHarness } = await import("./scripted-harness.ts");
+  const { triggerFlow } = await import("./test-helpers/trigger-rig.ts");
+  const { flowState } = await import("./flow-state.ts");
+  const engine = createEngine({ store, harness: scriptedHarness({ steps: {} }), now: clock });
+  const id = "example.fill-timesheet";
+  engine.registerFlow(triggerFlow(id, [{ kind: "schedule", every: "1h" }]), "H3");
+  expect(store.getFlow(id)?.hash).toBe("H3");
+  expect(flowState(store, id)).toBe("changed");
+  db.close();
+  store.close();
+});
