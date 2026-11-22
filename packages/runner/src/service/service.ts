@@ -28,6 +28,7 @@ import { type Every, wireKeeper } from "./keeper-wiring.ts";
 import { createNotifier, observeStore } from "./notify-wiring.ts";
 import { commandReadiness } from "./readiness-commands.ts";
 import { nativeHostPath } from "./readiness-web.ts";
+import { createRunHandlers } from "./runs.ts";
 import { wireTriggers } from "./trigger-wiring.ts";
 import { createWeekly } from "./weekly-limit.ts";
 
@@ -224,6 +225,9 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   });
   const settings = createSettingsHandlers(store, now);
+  const runs = createRunHandlers(store, engine, (name) =>
+    name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
+  );
   const appVersion = (
     JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
   ).version;
@@ -232,6 +236,9 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     call: createDispatcher({
       v2: {
         "audit.list": createAuditHandler(store),
+        "runs.list": runs.list,
+        "runs.status": runs.status,
+        "runs.report": runs.report,
         "settings.get": settings.get,
         "settings.update": settings.update,
         "runner.info": () => ({

@@ -1,4 +1,4 @@
-import { RunDetail } from "@flowdriven/contracts/v1";
+import { RunDetail } from "@flowdriven/contracts";
 import { expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
 import type { RunView } from "../engine.ts";
@@ -26,7 +26,7 @@ function view(): RunView {
     run: {
       id: "run-1",
       flowId: manifest.id,
-      flowHash: "a".repeat(64),
+      flowHash: `sha256:${"a".repeat(64)}`,
       flowVersion: "1.2.3",
       state: "blocked",
       project: ".",

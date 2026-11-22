@@ -706,7 +706,7 @@ export async function openSqliteStore(
     },
     addUsage(row) {
       execute(
-        "INSERT INTO usage_events (at, run_id, step_id, item_key, attempt, kind, harness, models, turns, wall_ms, queued_ms, memory_peak_mb, exit, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO usage_events (at, run_id, step_id, item_key, attempt, kind, harness, models, turns, wall_ms, queued_ms, memory_peak_mb, exit, cost_usd, billing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         row.at,
         row.runId,
         row.stepId,
@@ -721,6 +721,7 @@ export async function openSqliteStore(
         row.memoryPeakMb ?? null,
         row.exit,
         row.costUsd ?? null,
+        row.billing ?? null,
       );
     },
     listUsage(filter) {
@@ -745,6 +746,7 @@ export async function openSqliteStore(
         ...(row.memory_peak_mb === null ? {} : { memoryPeakMb: Number(row.memory_peak_mb) }),
         exit: row.exit as UsageEventRow["exit"],
         ...(row.cost_usd === null ? {} : { costUsd: Number(row.cost_usd) }),
+        ...(row.billing === null ? {} : { billing: row.billing as "plan" | "per_use" }),
       }));
     },
     recentPeaks(q) {

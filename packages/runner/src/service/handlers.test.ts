@@ -1,7 +1,8 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Approval, FlowDetail, RunDetail, RunSummary } from "@flowdriven/contracts/v1";
+import { RunDetail, RunSummary as RunSummaryV2 } from "@flowdriven/contracts";
+import { Approval, FlowDetail, RunSummary } from "@flowdriven/contracts/v1";
 import { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
 import { createFixtureRunnerClient } from "../../../fixtures/src/client.ts";
@@ -92,7 +93,7 @@ test("flows.run answers at once with a queued run and the run reaches the choice
   await expect(
     s.call("flows.run", { flowId: demoFlow().manifest.id, inputs: { project: "/etc" } }),
   ).rejects.toMatchObject({ code: "invalid_input", message: "Unknown input project." });
-  const rows = RunSummary.array().parse(await s.call("runs.list", {}));
+  const rows = RunSummaryV2.array().parse(await s.call("runs.list", {}));
   expect(rows).toHaveLength(1);
   expect(rows.at(0)?.project).toBe(join(dataDir, "demo-project"));
 });
@@ -161,7 +162,7 @@ test("live mode blocks a run when Claude Code is not found, and resume checks ag
   if (!row) throw new Error("Missing run");
   store.createRun({ ...row, id: "manual", blockedReason: undefined });
   expect(
-    RunSummary.array()
+    RunSummaryV2.array()
       .parse(await s.call("runs.list", {}))
       .find((x) => x.id === "manual")?.reportFirstLine,
   ).toBeUndefined();

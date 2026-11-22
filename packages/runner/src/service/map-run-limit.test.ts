@@ -12,7 +12,7 @@ test("the run read model carries a step's time limit", () => {
     run: {
       id: "run-1",
       flowId: manifest.id,
-      flowHash: "a".repeat(64),
+      flowHash: `sha256:${"a".repeat(64)}`,
       flowVersion: "1.2.3",
       state: "running",
       project: ".",

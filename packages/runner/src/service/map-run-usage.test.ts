@@ -49,7 +49,7 @@ function view(usage: UsageEventRow[]): RunView & { usage: UsageEventRow[] } {
     run: {
       id: "run-1",
       flowId: manifest.id,
-      flowHash: "hash",
+      flowHash: `sha256:${"a".repeat(64)}`,
       flowVersion: manifest.version,
       state: "done",
       project: ".",

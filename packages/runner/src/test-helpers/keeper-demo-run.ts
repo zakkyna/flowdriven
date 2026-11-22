@@ -1,7 +1,8 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { QueueView, RunDetail } from "@flowdriven/contracts/v1";
+import { RunDetail } from "@flowdriven/contracts";
+import { QueueView } from "@flowdriven/contracts/v1";
 import { FlowManifest } from "@flowdriven/sdk";
 import { createRunnerService, DEMO_HASH } from "../service/service.ts";
 import { openSqliteStore } from "../sqlite-store.ts";

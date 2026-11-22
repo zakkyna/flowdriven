@@ -53,7 +53,7 @@ test("a stored row with a count above the safe range still gives a valid run vie
       run: {
         id: "r",
         flowId: manifest.id,
-        flowHash: "h",
+        flowHash: `sha256:${"a".repeat(64)}`,
         flowVersion: manifest.version,
         state: "done",
         project: ".",

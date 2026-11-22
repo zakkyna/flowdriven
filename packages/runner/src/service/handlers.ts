@@ -21,7 +21,7 @@ import { FlowManifest, hasErrors, type Value } from "@flowdriven/sdk";
 import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
 import type { Engine } from "../engine.ts";
 import type { HarnessQuota, Keeper } from "../keeper/types.ts";
-import { renderRunReport, reportLines } from "../report.ts";
+import { renderRunReport } from "../report.ts";
 import { needsAllow } from "../router/route.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { TriggerService } from "../triggers/service.ts";
@@ -32,7 +32,7 @@ import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
 import { type LocalChecks, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
 import { toQueueView } from "./map-queue.ts";
-import { runTrigger, toRunDetail, toRunSummary } from "./map-run.ts";
+import { runTrigger, toRunSummary } from "./map-run-v1.ts";
 import { toTriggerStatus } from "./map-trigger.ts";
 import { readSettings } from "./settings.ts";
 import { liveWindow, summarizeUsage } from "./usage-summary.ts";
@@ -118,7 +118,16 @@ export function createHandlers({
   webCheck,
   connectors,
   local,
-}: HandlerContext): Omit<Handlers, "runner.info" | "settings.get" | "settings.update" | "audit.list"> {
+}: HandlerContext): Omit<
+  Handlers,
+  | "runner.info"
+  | "settings.get"
+  | "settings.update"
+  | "audit.list"
+  | "runs.list"
+  | "runs.status"
+  | "runs.report"
+> {
   function flow(id: string): FlowRow {
     const row = store.getFlow(id);
     if (!row) throw new RunnerError("not_found", `There is no flow ${id}.`);
@@ -290,27 +299,6 @@ export function createHandlers({
         undefined,
         runTrigger(begun.run, flowNameOf),
       );
-    },
-    "runs.list": ({ flowId, project, state }) =>
-      store
-        .listRuns({ flowId, state })
-        .filter((r) => project === undefined || r.project === project)
-        .reverse()
-        .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-        .map((r) => {
-          let first: string | undefined;
-          try {
-            first = reportLines(engine.getRun(r.id)).at(0);
-          } catch {}
-          return toRunSummary(r, flowName(r), first, engine.waitingOf(r.id).run, runTrigger(r, flowNameOf));
-        }),
-    "runs.status": ({ runId }) => {
-      run(runId);
-      return toRunDetail(engine.getRun(runId), harnessIdOf, flowNameOf);
-    },
-    "runs.report": ({ runId }) => {
-      run(runId);
-      return { runId, lines: reportLines(engine.getRun(runId)), saveOffer: false };
     },
     "runs.export": ({ runId }) => {
       run(runId);

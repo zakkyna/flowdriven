@@ -365,6 +365,7 @@ export type UsageEventRow = {
   memoryPeakMb?: number;
   exit: ExitClass;
   costUsd?: number;
+  billing?: "plan" | "per_use";
 };
 export type TriggerOutcome =
   | "started"
