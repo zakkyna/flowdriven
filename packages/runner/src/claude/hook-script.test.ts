@@ -98,11 +98,11 @@ test("an answer deny with a reason exits 2 with the reason on standard error and
     stderr: "This path is outside the folders this step declares.\n",
   });
 });
-test("every other answer exits 2 with the generic sentence", { timeout: 20_000 }, async () => {
+test("TC-SR1-32 every other answer exits 2 with the generic sentence", { timeout: 20_000 }, async () => {
   const dir = setup(20);
   let answer = "";
   answerer(dir, () => answer);
-  for (const value of ["deny\n", "yes\n", "ALLOW\n", " allow\n", "allowed\n", "\n", ""]) {
+  for (const value of ["deny\n", "yes\n", "ALLOW\n", " allow\n", "allowed\n", "maybe\n", "allow", "\n", ""]) {
     answer = value;
     expect(await run([join(dir, "hook.sh")]).result).toEqual({
       code: 2,
@@ -110,14 +110,8 @@ test("every other answer exits 2 with the generic sentence", { timeout: 20_000 }
       stderr: "FlowDriven did not allow this call.\n",
     });
   }
-  answer = "allow";
-  expect(await run([join(dir, "hook.sh")]).result).toEqual({
-    code: 0,
-    stdout: `${ALLOW_JSON}\n`,
-    stderr: "",
-  });
 });
-test("no answer in 3 rounds exits 2 with the time-out sentence and leaves its request", {
+test("TC-SR1-31 no answer in 3 rounds exits 2 with the time-out sentence and leaves its request", {
   timeout: 20_000,
 }, async () => {
   const dir = setup();

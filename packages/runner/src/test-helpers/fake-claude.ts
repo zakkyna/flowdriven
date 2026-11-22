@@ -471,6 +471,8 @@ else if (command === "play") {
           content = "Permission denied: no approval surface";
         }
         log({ kind: "tool", id, name, hookExit: reply.code, ran });
+      } else {
+        log({ kind: "tool", id, name, hookExit: null, ran: true });
       }
       if (
         ran &&

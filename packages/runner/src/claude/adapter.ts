@@ -272,7 +272,15 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       }
       if (result.kind === "block")
         return withCall(
-          { exit: "failed", text: result.sentence, outputs: {}, block: result.sentence, ...mark },
+          {
+            exit: "failed",
+            text: result.sentence,
+            outputs: {},
+            block: result.sentence,
+            ...(result.cause ? { cause: result.cause } : {}),
+            ...(result.noteLine ? { noteLine: result.noteLine } : {}),
+            ...mark,
+          },
           call,
         );
       if (result.kind === "stop")

@@ -125,6 +125,7 @@ export type StepRow = {
   checks: CheckOutcome[];
   limitMs?: number;
   note?: string;
+  noteLine?: Line;
   outside?: boolean;
   ownerApproved?: { output: string; hash: string; approvalId: string; at: string };
 };

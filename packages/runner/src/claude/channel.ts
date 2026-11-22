@@ -34,7 +34,7 @@ export const CHANNEL = {
   reused: "This tool call was already seen.",
   checkFailed: "FlowDriven could not check this call.",
 };
-export type CallRecord = { decision: Decision; toolUseId?: string };
+export type CallRecord = { decision: Decision; toolUseId?: string; reused?: true };
 export type Channel = {
   stop(): void;
   allowedIds: ReadonlySet<string>;
@@ -65,13 +65,17 @@ export function startChannel(options: {
   let allowed = 0;
   let denied = 0;
   let stopped = false;
-  function record(decision: Decision, toolUseId?: string) {
+  function record(decision: Decision, toolUseId?: string, reused = false) {
     if (decision.allow) {
       allowed++;
       if (toolUseId !== undefined) allowedIds.add(toolUseId);
     } else denied++;
     try {
-      options.onCall?.({ decision, ...(toolUseId === undefined ? {} : { toolUseId }) });
+      options.onCall?.({
+        decision,
+        ...(toolUseId === undefined ? {} : { toolUseId }),
+        ...(reused ? { reused: true as const } : {}),
+      });
     } catch {}
   }
   const deny = (reason: string): Decision => ({ allow: false, outcome: "refuse", tool: "unknown", reason });
@@ -97,6 +101,7 @@ export function startChannel(options: {
       const name = file.slice(0, -5);
       let decision: Decision;
       let id: string | undefined;
+      let reused = false;
       try {
         const previous = answers.get(name);
         if (previous !== undefined) {
@@ -172,8 +177,10 @@ export function startChannel(options: {
               typeof (call as Record<string, unknown>).tool_use_id === "string"
             )
               id = (call as { tool_use_id: string }).tool_use_id;
-            if (id !== undefined && ids.has(id)) decision = deny(CHANNEL.reused);
-            else {
+            if (id !== undefined && ids.has(id)) {
+              reused = true;
+              decision = deny(CHANNEL.reused);
+            } else {
               if (id !== undefined) ids.add(id);
               try {
                 decision = options.decide(call);
@@ -203,7 +210,7 @@ export function startChannel(options: {
           }
         }
         if (decision.allow) options.beforeAllow?.();
-        record(decision, id);
+        record(decision, id, reused);
         const answer = decision.allow
           ? "allow\n"
           : `deny\n${decision.reason.replace(/[\r\n]/g, " ").slice(0, 300)}\n`;

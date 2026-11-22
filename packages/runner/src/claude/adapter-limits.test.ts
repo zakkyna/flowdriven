@@ -9,9 +9,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Requirement, type Value } from "@flowdriven/sdk";
+import { parseManifest, Requirement, type Value } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
+import { createEngine } from "../engine.ts";
 import type { StepRequest } from "../harness.ts";
+import { setup as setupEngine } from "../test-helpers/engine.ts";
 import {
   FAKE_CLAUDE_PATH,
   type FakeAction,
@@ -243,7 +245,9 @@ test("a removed control folder blocks the next call (R12, folder)", { timeout: 2
   });
   expect(existsSync(path)).toBe(false);
 });
-test("the start proof fails when the SessionStart hook did not run", { timeout: 20_000 }, async () => {
+test("TC-SR1-34 the start proof fails when the SessionStart hook did not run", {
+  timeout: 20_000,
+}, async () => {
   const t = setup({ when: "", startHook: false, actions: [] });
   const path = join(t.notes, "out.txt");
   writeFakeScript(t.home, {
@@ -259,7 +263,11 @@ test("the start proof fails when the SessionStart hook did not run", { timeout: 
     ],
   });
   const result = await t.adapter.runStep(t.request);
-  expect(result).toMatchObject({ exit: "failed", block: LIMITS_NOT_APPLIED });
+  expect(result).toMatchObject({
+    exit: "failed",
+    block: LIMITS_NOT_APPLIED,
+    cause: { code: "limits_not_applied", params: { agent: "Claude Code" } },
+  });
   expect(t.audits).toContainEqual({
     kind: "limits_not_applied",
     runId: "r1",
@@ -273,6 +281,7 @@ test("the start proof fails for an init that lists a tool, a server, another mod
 }, async () => {
   const t = setup(play([]));
   for (const init of [
+    { tools: ["Read", "Glob", "Grep", "WebFetch"] },
     { tools: ["Read", "Glob", "Grep", "Bash"] },
     { mcp_servers: [{ name: "x" }] },
     { permissionMode: "acceptEdits" },
@@ -290,11 +299,15 @@ test("the start proof fails for an init that lists a tool, a server, another mod
         },
       ],
     });
-    expect(await t.adapter.runStep(t.request)).toMatchObject({ block: LIMITS_NOT_APPLIED });
+    expect(await t.adapter.runStep(t.request)).toMatchObject({
+      block: LIMITS_NOT_APPLIED,
+      cause: { code: "limits_not_applied", params: { agent: "Claude Code" } },
+    });
     await gone(pid(t.home));
   }
+  expect(readFakeCalls(t.home).filter((call) => call.kind === "tool" && call.ran)).toHaveLength(0);
 });
-test("the tripwire stops a tool that ran without the check", { timeout: 20_000 }, async () => {
+test("TC-SR1-35 the tripwire stops a tool that ran without the check", { timeout: 20_000 }, async () => {
   const t = setup(play([]));
   const a = join(t.notes, "a"),
     b = join(t.notes, "b");
@@ -309,6 +322,8 @@ test("the tripwire stops a tool that ran without the check", { timeout: 20_000 }
   });
   expect(await t.adapter.runStep(t.request)).toMatchObject({
     block: "A tool ran without FlowDriven's check (Write). The step was stopped.",
+    cause: { code: "step_failed", params: { step: "s" } },
+    noteLine: { key: "step.toolRanUnchecked" },
   });
   expect(t.audits).toContainEqual({
     kind: "tool_unchecked",
@@ -479,4 +494,70 @@ test("a failed start hook, and more than eight start hook events, fail the proof
   }
   writeFakeScript(t.home, { plays: [{ when: "", startEvents: 4, actions: [{ do: "result" }] }] });
   expect((await t.adapter.runStep(t.request)).exit).toBe("ok");
+});
+
+test("TC-SR1-34 and TC-SR1-35 persist the block and stop later steps", { timeout: 20_000 }, async () => {
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.hook",
+    name: "Hook",
+    kind: "build",
+    steps: ["s", "later"].map((id) => ({
+      id,
+      do: "worker",
+      instructions: "Work",
+      checks: [{ type: "contains", pattern: "ok" }],
+    })),
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  for (const trip of [false, true]) {
+    const t = setup(play([]));
+    const toolName = "mcp__claude_ai_Gmail__send_message";
+    writeFakeScript(t.home, {
+      plays: [
+        {
+          when: "",
+          ...(trip ? {} : { startHook: false }),
+          actions: [
+            ...(trip
+              ? [{ do: "ungated" as const, id: "unchecked", name: toolName, input: { to: "a@example.com" } }]
+              : [
+                  { do: "pause" as const, ms: 1500 },
+                  { do: "ungated" as const, id: "unchecked", name: toolName },
+                ]),
+            { do: "result" },
+          ],
+        },
+      ],
+    });
+    const c = await setupEngine(parsed.manifest, {});
+    try {
+      const engine = createEngine({ store: c.store, harness: t.adapter, now: c.clock.now });
+      const run = await engine.startRun(parsed.manifest.id, { project: t.project });
+      expect(run).toMatchObject({
+        state: "blocked",
+        cause: trip
+          ? { code: "step_failed", params: { step: "s" } }
+          : { code: "limits_not_applied", params: { agent: "Claude Code" } },
+      });
+      const step = c.store.getStep(run.id, "s");
+      expect(step?.state).toBe("failed");
+      if (trip) {
+        expect(step?.noteLine).toEqual({ key: "step.toolRanUnchecked" });
+        expect(t.audits).toContainEqual(
+          expect.objectContaining({
+            kind: "tool_unchecked",
+            detail: expect.objectContaining({ tool: toolName }),
+          }),
+        );
+        expect(readFakeCalls(t.home).filter((call) => call.kind === "tool" && call.ran)).toHaveLength(1);
+      } else {
+        expect(t.audits.some((audit) => audit.kind === "limits_not_applied")).toBe(true);
+        expect(readFakeCalls(t.home).filter((call) => call.kind === "tool" && call.ran)).toHaveLength(0);
+      }
+      expect(c.store.getStep(run.id, "later")).toBeUndefined();
+    } finally {
+      c.store.close();
+    }
+  }
 });

@@ -53,7 +53,12 @@ export type Outcome =
   | { kind: "auth" }
   | { kind: "quota" }
   | { kind: "interrupted" }
-  | { kind: "block"; sentence: string }
+  | {
+      kind: "block";
+      sentence: string;
+      cause?: import("../harness.ts").StepResult["cause"];
+      noteLine?: import("../harness.ts").StepResult["noteLine"];
+    }
   | { kind: "stop"; sentence: string }
   | { kind: "hold"; held: HeldCall }
   | { kind: "failed"; text: string };
@@ -476,7 +481,12 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         if (policy.browser || policy.connector) {
           // A line over the limit may hold a result that was never checked: block, never retry.
           audit("tool_unchecked", { ...detail, tool: "unknown" });
-          forced = { kind: "block", sentence: tripSentence("unknown") };
+          forced = {
+            kind: "block",
+            sentence: tripSentence("unknown"),
+            cause: { code: "step_failed", params: { step: input.stepId } },
+            noteLine: { key: "step.toolRanUnchecked" },
+          };
         } else forced = { kind: "failed", text: "Claude Code sent a line that was too long." };
         child?.kill();
         return;
@@ -508,6 +518,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             });
             forced = {
               kind: "block",
+              cause: { code: "limits_not_applied", params: { agent: "Claude Code" } },
               sentence:
                 proof.why === STOP.chromeDown ||
                 (policy.connector &&
@@ -525,7 +536,12 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         const trip = tripwire.check(event);
         if (trip.tripped) {
           audit("tool_unchecked", { ...detail, tool: trip.tool });
-          forced = { kind: "block", sentence: tripSentence(trip.tool) };
+          forced = {
+            kind: "block",
+            sentence: tripSentence(trip.tool),
+            cause: { code: "step_failed", params: { step: input.stepId } },
+            noteLine: { key: "step.toolRanUnchecked" },
+          };
           child?.kill();
           break;
         }

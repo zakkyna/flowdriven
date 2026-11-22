@@ -71,7 +71,7 @@ export function hookScript(options: { rounds: number }): string {
     '  if [ -f "$dir/res/$name" ]; then',
     "    first=",
     "    second=",
-    '    { IFS= read -r first; IFS= read -r second; } < "$dir/res/$name"',
+    '    { IFS= read -r first || first=; IFS= read -r second; } < "$dir/res/$name"',
     '    rm -f "$dir/res/$name"',
     '    if [ "$first" = "allow" ]; then',
     `      printf '%s\\n' '${ALLOW_JSON}'`,

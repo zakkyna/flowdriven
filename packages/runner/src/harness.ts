@@ -66,6 +66,8 @@ export type StepResult = {
   workFolder?: string;
   site?: string;
   block?: string;
+  cause?: import("./storage.ts").RunRow["cause"];
+  noteLine?: import("./storage.ts").StepRow["noteLine"];
   noRetry?: string;
   hold?: HeldCall;
   outside?: boolean;

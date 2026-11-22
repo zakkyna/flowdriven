@@ -12,7 +12,7 @@ import { runChecks } from "../checks/run-checks.ts";
 import { visible } from "../claude/text.ts";
 import { callGrant } from "../connectors/grants.ts";
 import type { ResolvedDeps } from "../engine.ts";
-import type { HeldCall } from "../harness.ts";
+import type { StepResult } from "../harness.ts";
 import type { RunRow, StepRow } from "../storage.ts";
 import { approvedCallsOf, HOLD_TEXT, heldPayload, labelOf, MAX_HOLDS } from "./held.ts";
 import { limits } from "./limits.ts";
@@ -148,17 +148,7 @@ export async function runLeaf(
         }
         instructions = plan.instructions;
       }
-      let result: {
-        exit: "ok" | "failed" | "quota" | "auth" | "interrupted";
-        text: string;
-        outputs: Record<string, Value>;
-        workFolder?: string;
-        site?: string;
-        block?: string;
-        noRetry?: string;
-        outside?: boolean;
-        hold?: HeldCall;
-      };
+      let result: StepResult;
       if (step.do === "builtin") {
         const fn = deps.builtins[step.builtin];
         if (!fn) throw new Error("unknown builtin");
@@ -266,7 +256,9 @@ export async function runLeaf(
       }
       if (result.block !== undefined) {
         Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+        if (result.noteLine) row.noteLine = result.noteLine;
         block(result.block);
+        store.updateRun(run.id, { cause: result.cause ?? { code: "step_failed" } });
         return "halt";
       }
       if (result.noRetry !== undefined) {

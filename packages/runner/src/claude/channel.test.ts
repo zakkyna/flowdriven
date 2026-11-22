@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import { CHANNEL, type Channel, MAX_REQUEST_BYTES, startChannel } from "./channel.ts";
 import { type ControlDir, createControlDir, removeControlDir } from "./control.ts";
+import { decide } from "./decide.ts";
 import { hookCommand } from "./hook-script.ts";
 
 const roots: string[] = [];
@@ -137,14 +138,18 @@ test("a request that is not JSON, a name of the wrong form and a request that is
   expect(readFileSync(outside, "utf8")).toBe("secret");
   expect(decide).not.toHaveBeenCalled();
 });
-test("a tool_use_id used twice is denied the second time, also when the first was denied", {
+test("TC-SR1-33 a tool_use_id used twice is denied the second time, also when the first was denied", {
   timeout: 20_000,
 }, async () => {
   const dir = setup();
-  const c = start(dir, (v) =>
-    (v as { tool_use_id: string }).tool_use_id === "yes"
-      ? allow()
-      : { allow: false, tool: "Read", reason: "No." },
+  const onCall = vi.fn();
+  const c = start(
+    dir,
+    (v) =>
+      (v as { tool_use_id: string }).tool_use_id === "yes"
+        ? allow()
+        : { allow: false, tool: "Read", reason: "No." },
+    onCall,
   );
   for (const [name, id] of [
     ["aaaaaaaaaaaaaaaa", "yes"],
@@ -158,8 +163,54 @@ test("a tool_use_id used twice is denied the second time, also when the first wa
   }
   for (const n of ["bbbbbbbbbbbbbbbb", "dddddddddddddddd"])
     expect(readFileSync(join(dir.res, n), "utf8")).toBe(`deny\n${CHANNEL.reused}\n`);
+  expect(onCall.mock.calls[1]?.[0]).toMatchObject({ reused: true });
   expect([...c.allowedIds]).toEqual(["yes"]);
   expect(c.counts()).toEqual({ allowed: 1, denied: 3 });
+});
+test("TC-SR1-33 reused ids and wrong sessions do not reach grants or rules", {
+  timeout: 20_000,
+}, async () => {
+  const dir = setup();
+  const grants = { findGrant: vi.fn() };
+  const rules = { match: vi.fn() };
+  const onCall = vi.fn();
+  const policy = {
+    tools: ["Read"],
+    folders: [{ path: dir.cwd, write: false }],
+    cwd: dir.cwd,
+    addDirs: [],
+    schema: false,
+    sessionId: "session-1",
+    touches: [],
+  };
+  start(dir, (call) => decide(policy, call, undefined, undefined, { grants, rules }), onCall);
+  for (const [name, id, session] of [
+    ["aaaaaaaaaaaaaaaa", "tu-1", "session-1"],
+    ["bbbbbbbbbbbbbbbb", "tu-1", "session-1"],
+    ["cccccccccccccccc", "tu-2", "session-2"],
+  ]) {
+    if (!name || !id || !session) throw new Error("missing request");
+    request(
+      dir,
+      name,
+      JSON.stringify({
+        hook_event_name: "PreToolUse",
+        tool_name: "Read",
+        tool_input: { file_path: dir.cwd },
+        tool_use_id: id,
+        session_id: session,
+      }),
+    );
+    await waitFor(() => existsSync(join(dir.res, name)));
+  }
+  expect(readFileSync(join(dir.res, "aaaaaaaaaaaaaaaa"), "utf8")).toBe("allow\n");
+  expect(readFileSync(join(dir.res, "bbbbbbbbbbbbbbbb"), "utf8")).toBe(`deny\n${CHANNEL.reused}\n`);
+  expect(readFileSync(join(dir.res, "cccccccccccccccc"), "utf8")).toBe(
+    "deny\nThis request belongs to another session.\n",
+  );
+  expect(onCall.mock.calls[1]?.[0]).toMatchObject({ reused: true });
+  expect(grants.findGrant).not.toHaveBeenCalled();
+  expect(rules.match).not.toHaveBeenCalled();
 });
 test("a decide that throws denies the call, and after stop nothing is answered", {
   timeout: 20_000,
