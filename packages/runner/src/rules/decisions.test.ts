@@ -1,5 +1,5 @@
 import { parseManifest } from "@flowdriven/sdk";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { digestCall } from "../connectors/grants.ts";
 import { approvedCallsOf } from "../exec/held.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
@@ -673,4 +673,99 @@ test("TC-SR1-19 a fake cloud call asks after a rejection and runs by rule in the
     rmSync(root, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test("TC-j24-19 batch resumes each held loop item with its exact input once", async () => {
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.batch",
+    name: "Batch",
+    kind: "build",
+    steps: [
+      {
+        id: "items",
+        do: "worker",
+        instructions: "Items",
+        outputs: [
+          { id: "list", type: "json" },
+          { id: "message", type: "text" },
+        ],
+        checks: [{ type: "contains", pattern: "ok" }],
+      },
+      {
+        id: "loop",
+        for_each: "${steps.items.outputs.list}",
+        as: "item",
+        key: "${item.id}",
+        steps: [
+          { id: "send", do: "worker", instructions: "Send", checks: [{ type: "contains", pattern: "ok" }] },
+        ],
+      },
+    ],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const tool = "reply";
+  const ran: string[] = [];
+  const c = await setup(parsed.manifest, {
+    steps: {
+      items: {
+        text: "ok",
+        outputs: { list: [{ id: "one" }, { id: "two" }, { id: "three" }], message: "ok" },
+      },
+      send: (req) => {
+        const input = { body: `message-${req.itemKey}` };
+        if (!req.approvedCalls)
+          return {
+            hold: {
+              requirementId: "mail",
+              tool,
+              input,
+              digest: digestCall(tool, input),
+              effect: "send",
+              action: "send",
+            },
+          };
+        expect(req.approvedCalls).toEqual([{ tool, input }]);
+        ran.push(req.itemKey);
+        return { text: "ok" };
+      },
+    },
+  });
+  stores.push(c.store);
+  const run = await c.engine.startRun(parsed.manifest.id, { project: "." });
+  const first = c.store.listApprovals({ runId: run.id, state: "pending" })[0];
+  if (!first) throw new Error(`missing held call: ${JSON.stringify(run)}`);
+  const { callGrant } = await import("../connectors/grants.ts");
+  const ids = [first.id, "batch-two", "batch-three"];
+  for (const [index, itemKey] of ["one", "two", "three"].entries()) {
+    const input = { body: `message-${itemKey}` };
+    const row = {
+      ...first,
+      id: ids[index] ?? "",
+      itemKey,
+      kind: "risky_action" as const,
+      riskyAction: "send" as const,
+      effect: "send" as const,
+      similarGroup: "send:local.batch:reply",
+      call: { tool, input },
+      approves: [callGrant("mail", tool, digestCall(tool, input))],
+    };
+    if (index === 0) c.store.updateApproval(row.id, row);
+    else c.store.createApproval(row);
+    c.store.upsertStep({
+      runId: run.id,
+      stepId: "send",
+      itemKey,
+      state: "waiting_approval",
+      attempts: [],
+      outputs: {},
+      checks: [],
+    });
+    const item = c.store.listItems(run.id).find((entry) => entry.key === itemKey);
+    if (!item) throw new Error("missing item");
+    c.store.upsertItem({ ...item, status: "running" });
+  }
+  c.engine.beginDecideSimilar(ids, "send:local.batch:reply");
+  await vi.waitFor(() => expect(c.store.getRun(run.id)?.state).toBe("done"));
+  expect(ran).toEqual(["one", "two", "three"]);
 });

@@ -74,7 +74,7 @@ export function toDecision(row: ApprovalRow, run: RunRow, store: Store): Approva
       ? {
           similarWaiting: store
             .listApprovals({ runId: row.runId, state: "pending" })
-            .filter((item) => item.id !== row.id && item.similarGroup === row.similarGroup).length,
+            .filter((item) => item.similarGroup === row.similarGroup).length,
         }
       : {}),
     stepWaiting: store

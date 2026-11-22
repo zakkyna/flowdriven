@@ -249,6 +249,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
         "rules.revoke": rules.revoke,
         "approvals.list": decisions.list,
         "approvals.resolve": decisions.resolve,
+        "approvals.resolveSimilar": decisions.resolveSimilar,
         "approvals.answer": decisions.answer,
         "audit.list": createAuditHandler(store),
         "runs.list": runs.list,

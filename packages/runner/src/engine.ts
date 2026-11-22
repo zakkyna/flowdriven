@@ -80,6 +80,7 @@ export interface Engine {
     decision: "approve" | "reject" | "edit" | "always_allow",
     edit?: { text: string; subject?: string },
   ): Begun;
+  beginDecideSimilar(ids: string[], group: string): void;
   beginResume(runId: string): Begun;
   beginRecover(): { runs: RunRow[]; settled: Promise<RunRow[]> };
   sweepExpired(): Promise<void>;
@@ -430,7 +431,15 @@ export function createEngine(input: EngineDeps): Engine {
     id: string,
     decision: "approve" | "reject" | "edit" | "always_allow",
     edit?: { text: string; subject?: string },
+    deferred?: Array<() => void>,
   ): Begun {
+    const schedule = (run: RunRow, task: () => Promise<RunRow>): Begun => {
+      if (!deferred) return enqueue(run, task);
+      deferred.push(() => {
+        enqueue(run, task);
+      });
+      return { run, settled: Promise.resolve(run) };
+    };
     assertRunning();
     sweep();
     const a = store.getApproval(id);
@@ -584,7 +593,7 @@ export function createEngine(input: EngineDeps): Engine {
               itemKey: a.itemKey,
               tool: full < 0 ? qualified : qualified.slice(full + 1),
               digest: editedCall?.digest ?? entry.slice(separator + 1),
-              kind: "approve",
+              kind: deferred ? "similar" : "approve",
               createdAt: at,
               approvalId: id,
             });
@@ -644,7 +653,7 @@ export function createEngine(input: EngineDeps): Engine {
       if (remaining) {
         store.updateRun(run.id, { state: "waiting_approval" });
         const updated = runById(run.id);
-        return enqueue(updated, async () => {
+        return schedule(updated, async () => {
           const manifest = flowFor(updated).manifest as FlowManifest;
           const loop = manifest.steps.find(
             (step) => "for_each" in step && step.steps.some((nested) => nested.id === a.stepId),
@@ -676,7 +685,7 @@ export function createEngine(input: EngineDeps): Engine {
         });
       }
       const updated = runById(run.id);
-      return enqueue(updated, () => walk(updated));
+      return schedule(updated, () => walk(updated));
     }
     if (decision === "edit")
       throw new EngineError("invalid_input", "Only text can be edited.", { reason: "edit_not_allowed" });
@@ -757,7 +766,7 @@ export function createEngine(input: EngineDeps): Engine {
       return { run: updated, settled: Promise.resolve(updated) };
     }
     const updated = runById(run.id);
-    return enqueue(updated, () => walk(updated));
+    return schedule(updated, () => walk(updated));
   }
   return {
     registerFlow(manifest, hash, files = {}) {
@@ -794,6 +803,26 @@ export function createEngine(input: EngineDeps): Engine {
     beginStart,
     beginAnswer,
     beginDecide,
+    beginDecideSimilar(ids, group) {
+      const deferred: Array<() => void> = [];
+      store.transaction(() => {
+        const first = store.getApproval(ids[0] ?? "");
+        if (!first) throw new EngineError("not_found", "Approval not found.");
+        if (runById(first.runId).state !== "waiting_approval")
+          throw new EngineError("not_allowed", "Run is not waiting for approval.");
+        for (const id of ids) {
+          store.updateRun(first.runId, { state: "waiting_approval" });
+          beginDecide(id, "approve", undefined, deferred);
+        }
+        store.appendAudit({
+          at: now().toISOString(),
+          kind: "decisions_batch",
+          runId: first.runId,
+          detail: { runId: first.runId, group, approvalIds: ids },
+        });
+      });
+      for (const start of deferred) start();
+    },
     ...recovery,
     async startRun(flowId, options) {
       return beginStart(flowId, options).settled;

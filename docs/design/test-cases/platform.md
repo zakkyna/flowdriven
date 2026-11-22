@@ -2691,7 +2691,7 @@ Shared setup: harness H. In V1 a standing rule and Always allow exist only for a
 - File: packages/runner/src/service/decisions-handlers.test.ts (new)
 - Given: a decision 25 hours old, a pending `change` decision (`log-hours`) with a fixed place, a pending send with a fixed own address, a pending `change` with a place from outside text, a weekly-limit question and a spending pause.
 - When: `approvals.list {}` is called, then with `{state: "pending"}`, `{runId}`, `{flowId}`.
-- Then: the old decision reads `pending`; `canAlwaysAllow` is true only for the fixed-place `change` decision (false for the send even with a fixed place); the outside one has `outside: true` and `canAlwaysAllow: false`; the synthetic `weekly_limit` and `budget_raise` decisions are listed; the filters narrow the list; `similarWaiting` counts the other pending decisions of the group.
+- Then: the old decision reads `pending`; `canAlwaysAllow` is true only for the fixed-place `change` decision (false for the send even with a fixed place); the outside one has `outside: true` and `canAlwaysAllow: false`; the synthetic `weekly_limit` and `budget_raise` decisions are listed; the filters narrow the list; `similarWaiting` counts the pending decisions of the group, this one included (prd.md F-13.R6).
 - Traces: FS-j24.P3, FS-j24.A12, SR-9
 - Build step: B-05
 - Fails first because: the new fields do not exist.

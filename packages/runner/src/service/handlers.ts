@@ -602,7 +602,42 @@ export function createDecisionHandlers(
     clear(`approval:${row.id}`);
     return { decision };
   };
-  return { list, resolve, answer };
+  const resolveSimilar = (input: V2Input<"approvals.resolveSimilar">) => {
+    const run = store.getRun(input.runId);
+    if (!run) throw new RunnerError("not_found", "Run not found.");
+    const rows = input.approvalIds.map((id) => store.getApproval(id));
+    if (
+      rows.some(
+        (row) =>
+          !row ||
+          row.state !== "pending" ||
+          row.runId !== input.runId ||
+          row.kind !== "risky_action" ||
+          (row.riskyAction !== "send" && row.riskyAction !== "post") ||
+          row.similarGroup !== input.group,
+      )
+    )
+      throw new RunnerError("not_allowed", "This kind cannot be batched.", { reason: "kind_not_batchable" });
+    const current = store
+      .listApprovals({ runId: input.runId, state: "pending" })
+      .filter((row) => row.similarGroup === input.group)
+      .map((row) => row.id);
+    if (current.length !== input.approvalIds.length || current.some((id) => !input.approvalIds.includes(id)))
+      throw new RunnerError("conflict", "The list changed.", {
+        reason: "list_changed",
+        params: { approvalIds: current },
+      });
+    engine.beginDecideSimilar(input.approvalIds, input.group);
+    for (const id of input.approvalIds) clear(`approval:${id}`);
+    return {
+      decisions: input.approvalIds.map((id) => {
+        const row = store.getApproval(id);
+        if (!row) throw new RunnerError("not_found", "Approval not found.");
+        return toDecision(row, run, store);
+      }),
+    };
+  };
+  return { list, resolve, answer, resolveSimilar };
 }
 
 export function createRuleHandlers(store: Store, now: () => Date) {

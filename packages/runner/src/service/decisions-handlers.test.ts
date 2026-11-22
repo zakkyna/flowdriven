@@ -424,7 +424,7 @@ test("TC-RUL-22 lists old decisions, filters and standing-rule eligibility", asy
     expect(all).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: "old", state: "pending", canAlwaysAllow: true }),
-        expect.objectContaining({ id: "send", state: "pending", canAlwaysAllow: false, similarWaiting: 1 }),
+        expect.objectContaining({ id: "send", state: "pending", canAlwaysAllow: false, similarWaiting: 2 }),
         expect.objectContaining({ id: "outside", outside: true, canAlwaysAllow: false }),
         expect.objectContaining({
           id: "budget",
@@ -705,6 +705,271 @@ test("TC-RUL-07 reject records the decision and clears the notice in one call", 
         detail: expect.objectContaining({ decision: "reject", via: "window" }),
       }),
     );
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+for (const id of ["TC-j24-19", "TC-j24-20", "TC-j24-21", "TC-SR1-24", "TC-RUL-19", "TC-RUL-20"]) {
+  test(`${id} similar decisions are checked and approved as one batch`, async () => {
+    const store = await openSqliteStore(":memory:");
+    const service = createRunnerService({
+      store,
+      dataDir: ".",
+      mode: "demo",
+      now: () => new Date("2026-11-21T00:00:00Z"),
+    });
+    try {
+      const first = pendingDecision(store, { id: "batch-1", createdAt: "2026-11-21T00:00:00Z" });
+      const { digestCall, callGrant } = await import("../connectors/grants.ts");
+      let group = "send:local.flow-batch-1:reply";
+      const ids = ["batch-1", "batch-2", "batch-3"];
+      for (const [index, approvalId] of ids.entries()) {
+        const tool = "mcp__claude_ai_Gmail__reply";
+        const input = {
+          to: `person${index}@example.test`,
+          subject: "Subject",
+          body: "Full message".repeat(30),
+        };
+        const row = {
+          ...first,
+          id: approvalId,
+          itemKey: String(index),
+          kind: "risky_action" as const,
+          effect: "send" as const,
+          riskyAction: "send" as const,
+          similarGroup: group,
+          call: { tool, input },
+          approves: [callGrant("mail", tool, digestCall(tool, input))],
+          payload: { kind: "email", to: [input.to], subject: input.subject, body: input.body },
+        };
+        store.upsertStep({
+          runId: first.runId,
+          stepId: first.stepId,
+          itemKey: row.itemKey,
+          state: "waiting_approval",
+          attempts: [],
+          outputs: {},
+          checks: [],
+        });
+        if (index === 0) store.updateApproval(approvalId, row);
+        else store.createApproval(row);
+      }
+      if (id === "TC-j24-19" || id === "TC-SR1-24") {
+        const other = pendingDecision(store, { id: "other-run", createdAt: "2026-11-21T00:00:00Z" });
+        store.updateApproval(other.id, {
+          kind: "risky_action",
+          riskyAction: "send",
+          effect: "send",
+          similarGroup: group,
+        });
+        store.createApproval({
+          ...first,
+          id: "batch-pay",
+          kind: "risky_action",
+          riskyAction: "pay",
+          effect: "pay",
+        });
+      }
+      const listed = await service.call("approvals.list", { runId: first.runId });
+      expect(listed).toEqual(
+        expect.arrayContaining(
+          ids.map((approvalId) =>
+            expect.objectContaining({
+              id: approvalId,
+              similarWaiting: 3,
+              payload: expect.objectContaining({ body: "Full message".repeat(30) }),
+            }),
+          ),
+        ),
+      );
+      if (["TC-j24-20", "TC-RUL-20"].includes(id)) {
+        await expect(
+          service.call("approvals.resolveSimilar", {
+            runId: first.runId,
+            group,
+            approvalIds: ids.slice(0, 2),
+          }),
+        ).rejects.toMatchObject({
+          code: "conflict",
+          reason: "list_changed",
+          params: { approvalIds: expect.arrayContaining(ids) },
+        });
+        expect(ids.map((approvalId) => store.getApproval(approvalId)?.state)).toEqual([
+          "pending",
+          "pending",
+          "pending",
+        ]);
+      }
+      if (id === "TC-RUL-20") {
+        await expect(
+          service.call("approvals.resolveSimilar", {
+            runId: first.runId,
+            group,
+            approvalIds: ["batch-1", "unknown"],
+          }),
+        ).rejects.toMatchObject({ code: "not_allowed", reason: "kind_not_batchable" });
+        await expect(
+          service.call("approvals.resolveSimilar", { runId: "missing", group, approvalIds: ids }),
+        ).rejects.toMatchObject({ code: "not_found" });
+        group = "post:local.flow-batch-1:reply";
+        for (const approvalId of ids)
+          store.updateApproval(approvalId, { riskyAction: "post", effect: "post", similarGroup: group });
+      }
+      if (id === "TC-j24-21") {
+        store.updateApproval("batch-2", { state: "expired" });
+        store.updateApproval("batch-3", { state: "expired" });
+        expect(await service.call("approvals.list", { runId: first.runId, state: "pending" })).toEqual([
+          expect.objectContaining({ id: "batch-1", similarWaiting: 1 }),
+        ]);
+        await expect(
+          service.call("approvals.resolveSimilar", {
+            runId: first.runId,
+            group,
+            approvalIds: ["batch-1", "unknown"],
+          }),
+        ).rejects.toMatchObject({ code: "not_allowed", reason: "kind_not_batchable" });
+        store.updateApproval("batch-2", { state: "pending" });
+        store.updateApproval("batch-3", { state: "pending" });
+        for (const effect of ["pay", "delete", "merge", "change"] as const) {
+          store.updateApproval("batch-3", { riskyAction: effect === "change" ? undefined : effect, effect });
+          await expect(
+            service.call("approvals.resolveSimilar", { runId: first.runId, group, approvalIds: ids }),
+          ).rejects.toMatchObject({ code: "not_allowed", reason: "kind_not_batchable" });
+        }
+        store.updateApproval("batch-3", { riskyAction: "post", effect: "post", similarGroup: "post:other" });
+        await expect(
+          service.call("approvals.resolveSimilar", { runId: first.runId, group, approvalIds: ids }),
+        ).rejects.toMatchObject({ code: "not_allowed", reason: "kind_not_batchable" });
+        expect(ids.map((approvalId) => store.getApproval(approvalId)?.state)).toEqual([
+          "pending",
+          "pending",
+          "pending",
+        ]);
+        return;
+      }
+      if (id === "TC-SR1-24") {
+        store.updateApproval("batch-2", { stepId: "missing" });
+        await expect(
+          service.call("approvals.resolveSimilar", { runId: first.runId, group, approvalIds: ids }),
+        ).rejects.toMatchObject({ code: "not_found" });
+        expect(ids.map((approvalId) => store.getApproval(approvalId)?.state)).toEqual([
+          "pending",
+          "pending",
+          "pending",
+        ]);
+        expect(
+          store
+            .listAudit(first.runId)
+            .filter((entry) => entry.kind === "decision_made" || entry.kind === "decisions_batch"),
+        ).toHaveLength(0);
+        store.updateApproval("batch-2", { stepId: first.stepId });
+      }
+      await service.call("approvals.resolveSimilar", {
+        runId: first.runId,
+        group,
+        approvalIds: [...ids].reverse(),
+      });
+      expect(ids.map((approvalId) => store.getApproval(approvalId)?.state)).toEqual([
+        "approved",
+        "approved",
+        "approved",
+      ]);
+      for (const approvalId of ids) {
+        const row = store.getApproval(approvalId);
+        if (!row?.call) throw new Error("missing call");
+        expect(
+          store.findGrant({
+            runId: row.runId,
+            stepId: row.stepId,
+            itemKey: row.itemKey,
+            tool: row.call.tool,
+            digest: digestCall(row.call.tool, row.call.input),
+            kind: "approve",
+            createdAt: "",
+          }),
+        ).toMatchObject({ approvalId, kind: "similar" });
+      }
+      if (id === "TC-j24-19" || id === "TC-SR1-24") {
+        expect(store.getApproval("other-run")?.state).toBe("pending");
+        expect(store.getApproval("batch-pay")?.state).toBe("pending");
+      }
+      expect(store.listAudit(first.runId).filter((entry) => entry.kind === "decision_made")).toHaveLength(3);
+      expect(store.listAudit(first.runId).filter((entry) => entry.kind === "decisions_batch")).toHaveLength(
+        1,
+      );
+    } finally {
+      service.stop();
+      store.close();
+    }
+  });
+}
+
+test("TC-j24-21 non-batchable decision kinds never offer a group", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const first = pendingDecision(store, { id: "nonbatch-1", createdAt: "2026-11-21T00:00:00Z" });
+    store.createApproval({ ...first, id: "nonbatch-2" });
+    for (const kind of ["pay", "delete", "merge", "ask", "result_sign_off"] as const) {
+      for (const id of ["nonbatch-1", "nonbatch-2"]) {
+        store.updateApproval(id, {
+          kind: kind === "ask" || kind === "result_sign_off" ? kind : "risky_action",
+          effect: kind === "pay" || kind === "delete" || kind === "merge" ? kind : undefined,
+          riskyAction: kind === "pay" || kind === "delete" || kind === "merge" ? kind : undefined,
+          similarGroup: undefined,
+          payload:
+            kind === "ask"
+              ? { question: "Choose", options: [{ key: "a", label: "A", item: "a" }], maxPick: 1 }
+              : "Review",
+        });
+      }
+      const rows = (await service.call("approvals.list", { runId: first.runId })) as Array<{
+        similarGroup?: string;
+        similarWaiting?: number;
+      }>;
+      expect(rows).toHaveLength(2);
+      for (const row of rows) expect(row.similarGroup).toBeUndefined();
+      for (const row of rows) expect(row.similarWaiting).toBeUndefined();
+      await expect(
+        service.call("approvals.resolveSimilar", {
+          runId: first.runId,
+          group: kind,
+          approvalIds: ["nonbatch-1", "nonbatch-2"],
+        }),
+      ).rejects.toMatchObject({ code: "not_allowed", reason: "kind_not_batchable" });
+      expect([store.getApproval("nonbatch-1")?.state, store.getApproval("nonbatch-2")?.state]).toEqual([
+        "pending",
+        "pending",
+      ]);
+    }
+    store.putSetting("spending-pause", {
+      id: "budget",
+      month: "2026-11",
+      reachedAt: first.createdAt,
+      limitUsd: 10,
+      expiresAt: "2026-12-01T00:00:00Z",
+      state: "pending",
+    });
+    const rows = (await service.call("approvals.list", { state: "pending" })) as Array<{
+      id: string;
+      similarGroup?: string;
+    }>;
+    expect(rows.find((row) => row.id === "budget")?.similarGroup).toBeUndefined();
+    expect(rows.some((row) => row.id === "budget")).toBe(true);
+    await expect(
+      service.call("approvals.resolveSimilar", {
+        runId: first.runId,
+        group: "budget",
+        approvalIds: ["budget", "nonbatch-1"],
+      }),
+    ).rejects.toMatchObject({ code: "not_allowed", reason: "kind_not_batchable" });
   } finally {
     service.stop();
     store.close();

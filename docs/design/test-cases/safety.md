@@ -966,7 +966,7 @@ A flow runs only as the exact version the person confirmed (its content hash). A
 - File: packages/runner/src/starts/start-rule.test.ts (new)
 - Given: a chain `[example.build-apk, example.fill-timesheet]` started from a chat; while the first runs, FLOW-TS gets a new version.
 - When: the first ends `done`.
-- Then: the second starts through `START` with source `after`, key `chain:<id>:1`; it gets `needs_confirmation` and a confirm card; the chain posts `{key: "chat.chainStopped", params: {names: ["Fill timesheet"]}}` (English drawing: "Stopped. Fill timesheet did not start."); no run for the second. See TC-j20-15.
+- Then: the second starts through `START` with source `after`, key `chain:<id>:1`; it gets `needs_confirmation` and a confirm card; the chain posts `{key: "chat.chainStopped", params: {names: "Fill timesheet"}}` (English drawing: "Stopped. Fill timesheet did not start."); no run for the second. See TC-j20-15.
 - Traces: SR-3, START, FS-j20.A9
 - Build step: B-10
 - Fails first because: chain starts go straight to the engine.
@@ -1528,7 +1528,7 @@ Every tool call the agent tried, every decision (by rule, by the person, refused
 - File: packages/runner/src/service/flows-handlers.test.ts (new)
 - Given: a flow version `example.timesheet-login` whose manifest declares one input of kind `secret_ref` (the keychain comes in V2); the permission `on`.
 - When: `flows.confirm {flowId, hash, onItsOwn: []}` is called.
-- Then: the call fails with `not_allowed` and reason `needs_keychain` (`save_flow` of B-13.T2 uses the same function, so it gives the same refusal); no confirmation, rule or pin row is written; the flow stays `new`; the audit holds the refusal with the reason code and no input value.
+- Then: the call fails with `not_allowed` and reason `needs_keychain` (`save_flow` of B-13.T2 uses the same function, so it gives the same refusal); no confirmation, rule or pin row is written; the flow stays `new`; nothing is written to the audit either, so no input value is stored (runner-api.md `flows.confirm`: V1 refuses and writes nothing).
 - Traces: SR-6, SR-3, T-20
 - Build step: B-05
 - Fails first because: `flows.confirm` does not exist.
