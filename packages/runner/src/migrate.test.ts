@@ -519,7 +519,11 @@ test("B-03.T7 TC-SR3-12 re-import moves a migrated head", async () => {
   const { flowState } = await import("./flow-state.ts");
   const engine = createEngine({ store, harness: scriptedHarness({ steps: {} }), now: clock });
   const id = "example.fill-timesheet";
+  const head = store.getFlowHead(id);
+  if (!head) throw new Error("missing head");
+  store.putFlowHead({ ...head, origin: { kind: "chat", chatId: "chat", draftId: "draft" } });
   engine.registerFlow(triggerFlow(id, [{ kind: "schedule", every: "1h" }]), "H3");
+  expect(store.getFlowHead(id)?.origin).toEqual({ kind: "import" });
   expect(store.getFlow(id)?.hash).toBe("H3");
   expect(flowState(store, id)).toBe("changed");
   db.close();

@@ -357,6 +357,21 @@ test("TC-SR1-01 covers all effect classes and held digests", async () => {
   }
   const write = {
     ...policy,
+    flowId: "flow",
+    rules: [
+      {
+        id: "write-rule",
+        flowId: "flow",
+        touchId: "write",
+        effect: "local_write" as const,
+        place: { kind: "folder" as const, value: notes, label: "Notes" },
+        state: "active" as const,
+        createdAt: "2026-11-22",
+        createdBy: "confirm" as const,
+        sentence: "Write",
+        uses: 0,
+      },
+    ],
     touches: [
       {
         touchId: "write",
@@ -378,12 +393,28 @@ test("TC-SR1-01 covers all effect classes and held digests", async () => {
     ...policy,
     tools: ["Bash"],
     commands: { patterns: ["flutter build apk"] },
+    flowId: "flow",
+    rules: [
+      {
+        id: "build-rule",
+        flowId: "flow",
+        touchId: "build",
+        effect: "run_command" as const,
+        place: { kind: "command" as const, value: "flutter build apk", label: "Build" },
+        state: "active" as const,
+        createdAt: "2026-11-22",
+        createdBy: "confirm" as const,
+        sentence: "Build",
+        uses: 0,
+      },
+    ],
     touches: [
       {
         touchId: "build",
         effect: "run_command" as const,
         matcher: "command" as const,
-        fixedPlace: false,
+        place: { kind: "command" as const, value: "flutter build apk", label: "Build" },
+        fixedPlace: true,
         list: "on_its_own" as const,
         covers: ["flutter build apk"],
       },
@@ -1195,3 +1226,100 @@ test("TC-SR1-21 rule sources hold while exact grants take precedence", async () 
     });
   }
 });
+
+test.each([false, true])("TC-SR1-01 nested Never folder wins in either order (%s)", (reverse) => {
+  const parent = {
+    touchId: "parent",
+    effect: "local_write" as const,
+    matcher: "folder" as const,
+    place: { kind: "folder" as const, value: notes, label: "Notes" },
+    fixedPlace: true,
+    list: "on_its_own" as const,
+    covers: [],
+  };
+  const child = {
+    ...parent,
+    touchId: "child",
+    place: { ...parent.place, value: join(notes, "private") },
+    list: "never" as const,
+  };
+  expect(
+    decide(
+      { ...policy, touches: reverse ? [child, parent] : [parent, child] },
+      call("Write", { file_path: join(notes, "private", "a") }),
+    ),
+  ).toMatchObject({ outcome: "refuse" });
+});
+test("TC-SR1-01 uncovered write holds", () => {
+  expect(decide({ ...policy, touches: [] }, call("Write", { file_path: join(notes, "a") }))).toMatchObject({
+    outcome: "hold",
+    effect: "local_write",
+  });
+});
+test("TC-j24-15 revoked on-its-own write holds", () => {
+  const place = { kind: "folder" as const, value: notes, label: "Notes" };
+  const touch = {
+    touchId: "write",
+    effect: "local_write" as const,
+    matcher: "folder" as const,
+    place,
+    fixedPlace: true,
+    list: "on_its_own" as const,
+    covers: [],
+  };
+  const rule = {
+    id: "rule",
+    flowId: "flow",
+    touchId: "write",
+    effect: "local_write" as const,
+    place,
+    state: "revoked" as const,
+    createdAt: "2026-11-22",
+    createdBy: "confirm" as const,
+    sentence: "Write",
+    uses: 0,
+  };
+  expect(
+    decide(
+      { ...policy, flowId: "flow", touches: [touch], rules: [rule] },
+      call("Write", { file_path: join(notes, "a") }),
+    ),
+  ).toMatchObject({ outcome: "hold", effect: "local_write", held: { touchId: "write" } });
+});
+test.each([0x202e, 0x200b])(
+  "TC-SR1-12 hidden character U+%s in address is visible and not fixed",
+  (point) => {
+    const name = "mcp__claude_ai_Gmail__send_message";
+    const address = `sam${String.fromCodePoint(point)}@example.test`;
+    const place = { kind: "address" as const, value: address, label: "Recipient" };
+    const touch = {
+      touchId: "send",
+      effect: "send" as const,
+      matcher: "exact" as const,
+      place,
+      fixedPlace: true,
+      list: "asks_first" as const,
+      covers: ["gmail.send_message"],
+    };
+    const p = {
+      ...policy,
+      tools: [name],
+      declaredTools: [{ tool: name, cover: "gmail.send_message" }],
+      touches: [touch],
+    };
+    expect(decide(p, call(name, { to: address }))).toMatchObject({
+      outcome: "hold",
+      held: {
+        place: { kind: "address", value: `sam<U+${point.toString(16).toUpperCase()}>@example.test` },
+        fixedPlace: false,
+      },
+    });
+    const escaped = `sam<U+${point.toString(16).toUpperCase()}>@example.test`;
+    expect(
+      decide(
+        { ...p, touches: [{ ...touch, place: { ...place, value: escaped } }] },
+        call(name, { to: address }),
+      ),
+    ).toMatchObject({ outcome: "hold", held: { place: { value: escaped }, fixedPlace: false } });
+  },
+);

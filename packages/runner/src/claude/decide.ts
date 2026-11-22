@@ -5,7 +5,7 @@ import { throwsMailAway } from "../connectors/label-rule.ts";
 import { asciiAddress } from "../exec/held.ts";
 import type { HeldCall } from "../harness.ts";
 import { matchGrant } from "../rules/decisions.ts";
-import { EFFECTS, type Effect, effectOf } from "../rules/effects.ts";
+import { EFFECT_RANK, EFFECTS, type Effect, effectOf } from "../rules/effects.ts";
 import { matchRule } from "../rules/standing.ts";
 import type { CallGrant, RuleRow, Store } from "../storage.ts";
 import { BROWSER_DENY, type BrowserState, CHROME_PREFIX, decideBrowser } from "./browser.ts";
@@ -232,15 +232,26 @@ export function decide(
   let touch = policy.touches.find((item) => item.covers.includes(cover));
   let effect: Effect;
   let catalogPlace: NonNullable<import("./policy.ts").CompiledTouch["place"]> | undefined;
+  let hiddenAddress = false;
   if (name === "Read" || name === "Glob" || name === "Grep") effect = "read";
   else if (name === "Write" || name === "Edit") effect = "local_write";
   else if (name === "Bash") {
     effect = "run_command";
     const parsed = typeof input.command === "string" ? parseCommandLine(input.command) : undefined;
-    if (parsed?.ok)
-      touch = policy.touches.find((item) =>
+    if (parsed?.ok) {
+      const matches = policy.touches.filter((item) =>
         item.covers.some((pattern) => commandLineAllowed([pattern], parsed.words)),
       );
+      const priority = { never: 0, asks_first: 1, on_its_own: 2 };
+      matches.sort(
+        (a, b) => priority[a.list] - priority[b.list] || EFFECT_RANK[b.effect] - EFFECT_RANK[a.effect],
+      );
+      touch = matches[0];
+      effect = matches.reduce<Effect>(
+        (highest, item) => (EFFECT_RANK[item.effect] > EFFECT_RANK[highest] ? item.effect : highest),
+        effect,
+      );
+    }
   } else {
     const catalog = policy.effectCatalog ?? EFFECTS;
     const entry = catalog.find((item) => item.tool === name) ?? effectOf(cover, catalog);
@@ -256,16 +267,24 @@ export function decide(
             ? (value as string[])
             : [];
       });
+      hiddenAddress = addresses.some((address) => visible(address, Infinity) !== address);
       if (addresses.length)
         catalogPlace = {
           kind: "address",
-          value: addresses.map(asciiAddress).sort().join(", "),
+          value: addresses
+            .map((address) =>
+              visible(address, Infinity) === address
+                ? asciiAddress(address)
+                : visible(address.toLowerCase(), Infinity),
+            )
+            .sort()
+            .join(", "),
           label: touch?.place?.label ?? "Address",
         };
     }
     if (connector?.labelTools?.includes(connectorName) && throwsMailAway(input)) effect = "delete";
   }
-  if ((effect === "local_write" || effect === "read") && !touch) {
+  if (["Read", "Glob", "Grep", "Write", "Edit"].includes(name)) {
     const path =
       typeof input.file_path === "string"
         ? input.file_path
@@ -273,13 +292,17 @@ export function decide(
           ? input.path
           : policy.cwd;
     const resolved = resolveDeep(path);
-    touch = policy.touches.find(
+    const matches = policy.touches.filter(
       (item) =>
         item.effect === effect &&
         item.place?.kind === "folder" &&
         resolved !== undefined &&
         isInside(item.place.value, resolved),
     );
+    if (matches.some((item) => item.list === "never"))
+      return refuse(`This step does not declare the tool ${visible(name, 60)}.`);
+    matches.sort((a, b) => (b.place?.value.length ?? 0) - (a.place?.value.length ?? 0));
+    touch = matches.find((item) => item.list !== "on_its_own") ?? matches[0];
   }
   if (touch?.list === "never") return refuse(`This step does not declare the tool ${visible(name, 60)}.`);
   if (external && !touch) return refuse(`This step does not declare the tool ${visible(name, 60)}.`);
@@ -314,7 +337,40 @@ export function decide(
       : {}),
   });
   if (effect === "read") return allowed("read");
-  if ((effect === "local_write" || effect === "run_command") && (!touch || touch.list === "on_its_own"))
+  const place = external ? catalogPlace : touch?.place;
+  const findRule = () => {
+    if (
+      touch?.fixedPlace &&
+      policy.flowId &&
+      ((touch.list === "on_its_own" && (effect === "local_write" || effect === "run_command")) ||
+        (!policy.earlierNo && policy.source !== "tool" && policy.source !== "phone")) &&
+      ((effect === "change" && (place?.kind === "account" || place?.kind === "folder")) ||
+        (effect === "local_write" && place?.kind === "folder") ||
+        (effect === "run_command" && place?.kind === "command"))
+    ) {
+      const book = books?.rules;
+      const candidate =
+        book && !Array.isArray(book)
+          ? book.match(policy.runId ?? "", policy.flowId, touch.touchId, effect, place)
+          : undefined;
+      const rules = Array.isArray(book) ? book : book ? (candidate ? [candidate] : []) : (policy.rules ?? []);
+      const rule = matchRule(
+        rules,
+        { flowId: policy.flowId, touchId: touch.touchId, effect, place },
+        {
+          touches: (policy.touches ?? []).map((item) => ({
+            id: item.touchId,
+            effect: item.effect,
+            place: item.place,
+          })),
+        },
+      );
+      return rule;
+    }
+    return undefined;
+  };
+  const ownLocal = touch?.list === "on_its_own" && (effect === "local_write" || effect === "run_command");
+  if (ownLocal && findRule())
     return allowed(effect === "local_write" ? "declared_write" : "declared_command");
   if (books?.grants && policy.runId && policy.stepId) {
     const grant = matchGrant(books.grants, {
@@ -327,30 +383,8 @@ export function decide(
     if (grant) return allowed("grant", undefined, grant);
   }
   if (base.allow && base.connector?.grant?.kind === "pick") return allowed("grant");
-  const place = external ? catalogPlace : touch?.place;
-  if (
-    touch?.fixedPlace &&
-    policy.flowId &&
-    !policy.earlierNo &&
-    policy.source !== "tool" &&
-    policy.source !== "phone" &&
-    ((effect === "change" && (place?.kind === "account" || place?.kind === "folder")) ||
-      (effect === "local_write" && place?.kind === "folder") ||
-      (effect === "run_command" && place?.kind === "command"))
-  ) {
-    const book = books?.rules;
-    const candidate =
-      book && !Array.isArray(book)
-        ? book.match(policy.runId ?? "", policy.flowId, touch.touchId, effect, place)
-        : undefined;
-    const rules = Array.isArray(book) ? book : book ? (candidate ? [candidate] : []) : (policy.rules ?? []);
-    const rule = matchRule(
-      rules,
-      { flowId: policy.flowId, touchId: touch.touchId, effect, place },
-      {
-        touches: policy.touches.map((item) => ({ id: item.touchId, effect: item.effect, place: item.place })),
-      },
-    );
+  if (!ownLocal) {
+    const rule = findRule();
     if (rule) return allowed("rule", rule.id);
   }
   let copy: Value;
@@ -374,6 +408,7 @@ export function decide(
     ...(touch ? { touchId: touch.touchId } : {}),
     ...(place ? { place } : {}),
     fixedPlace:
+      !hiddenAddress &&
       !!touch?.fixedPlace &&
       place !== undefined &&
       touch.place?.kind === place.kind &&

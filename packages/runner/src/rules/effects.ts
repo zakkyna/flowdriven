@@ -1,6 +1,17 @@
 import type { Touch } from "@flowdriven/sdk";
 
 export type Effect = Touch["effect"];
+export const EFFECT_RANK: Record<Effect, number> = {
+  read: 0,
+  local_write: 1,
+  run_command: 1,
+  change: 2,
+  send: 3,
+  post: 3,
+  pay: 3,
+  delete: 3,
+  merge: 3,
+};
 export type EffectEntry = {
   tool: string;
   effect: Effect;

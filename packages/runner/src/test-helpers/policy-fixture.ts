@@ -18,8 +18,13 @@ export function makePolicy(
     .map((touch) => touch.id);
   const policy = buildPolicy({ ...input, touches, onItsOwn: [...defaults, ...(input.onItsOwn ?? [])] });
   const rules = (policy.touches ?? [])
-    .filter((touch) => touch.effect === "change" && touch.list === "on_its_own" && touch.place)
-    .map((touch) => ruleOf(policy.flowId ?? "", touch.touchId, { place: touch.place }));
+    .filter(
+      (touch) =>
+        ["local_write", "run_command", "change"].includes(touch.effect) &&
+        touch.list === "on_its_own" &&
+        touch.place,
+    )
+    .map((touch) => ruleOf(policy.flowId ?? "", touch.touchId, { effect: touch.effect, place: touch.place }));
   return {
     ...policy,
     ...(touches === undefined ? {} : { rules }),

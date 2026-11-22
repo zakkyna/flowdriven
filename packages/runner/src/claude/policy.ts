@@ -12,7 +12,7 @@ import {
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
 import { fold, isExtraRef, resolveExtraFolder } from "../folders/extra.ts";
 import type { Routed } from "../router/types.ts";
-import { EFFECTS, type Effect, type EffectEntry, effectOf } from "../rules/effects.ts";
+import { EFFECT_RANK, EFFECTS, type Effect, type EffectEntry, effectOf } from "../rules/effects.ts";
 import type { RuleRow } from "../storage.ts";
 import type { BrowserPolicy } from "./browser.ts";
 import { COMMAND_STOP, type CommandPolicy } from "./commands.ts";
@@ -135,25 +135,14 @@ export function buildPolicy(input: {
         }));
       return [];
     });
-    const ranks: Record<Effect, number> = {
-      read: 0,
-      local_write: 1,
-      run_command: 1,
-      change: 2,
-      send: 3,
-      post: 3,
-      pay: 3,
-      delete: 3,
-      merge: 3,
-    };
     for (const item of declared) {
       const matches = input.touches.filter((touch) => touch.covers.includes(item.cover));
       const match = matches[0];
       if (
         matches.length !== 1 ||
         !match ||
-        ranks[match.effect] < ranks[item.entry.effect] ||
-        (ranks[item.entry.effect] === 3 && match.effect !== item.entry.effect)
+        EFFECT_RANK[match.effect] < EFFECT_RANK[item.entry.effect] ||
+        (EFFECT_RANK[item.entry.effect] === 3 && match.effect !== item.entry.effect)
       )
         throw new Error(`Invalid touch coverage: ${item.cover}`);
     }

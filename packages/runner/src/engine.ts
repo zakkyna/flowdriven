@@ -564,7 +564,12 @@ export function createEngine(input: EngineDeps): Engine {
         store.putFlow(row);
         const head = store.getFlowHead(row.id);
         if (head && !head.deletedAt && head.headHash !== hash)
-          store.putFlowHead({ ...head, headHash: hash, updatedAt: row.registeredAt });
+          store.putFlowHead({
+            ...head,
+            headHash: hash,
+            origin: head.origin.kind === "demo" ? head.origin : { kind: "import" },
+            updatedAt: row.registeredAt,
+          });
       });
       return row;
     },

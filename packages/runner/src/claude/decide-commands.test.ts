@@ -105,3 +105,79 @@ test("TC-SR1-39 declared and undeclared commands have distinct outcomes", () => 
     outcome: "refuse",
   });
 });
+
+const commandTouch = (
+  touchId: string,
+  effect: "run_command" | "post",
+  list: "on_its_own" | "asks_first" | "never",
+  pattern: string,
+) => ({
+  touchId,
+  effect,
+  list,
+  matcher: "command" as const,
+  place: { kind: "command" as const, value: pattern, label: pattern },
+  fixedPlace: true,
+  covers: [pattern],
+});
+const ownPush = commandTouch("push", "run_command", "on_its_own", "git push origin *");
+const neverMain = commandTouch("main", "run_command", "never", "git push origin main");
+const ownMake = commandTouch("make", "run_command", "on_its_own", "make *");
+const postDeploy = commandTouch("deploy", "post", "asks_first", "make deploy");
+const commandRule = (touch: typeof ownPush) => ({
+  id: "rule",
+  flowId: "flow",
+  touchId: touch.touchId,
+  effect: touch.effect,
+  place: touch.place,
+  state: "active" as const,
+  createdAt: "2026-11-22",
+  createdBy: "confirm" as const,
+  sentence: "Command",
+  uses: 0,
+});
+
+test.each([false, true])("TC-SR1-39 Never command wins in either order (%s)", (reverse) => {
+  const p = {
+    ...policy,
+    flowId: "flow",
+    commands: { patterns: ["git push origin *", "git push origin main"] },
+    touches: reverse ? [neverMain, ownPush] : [ownPush, neverMain],
+    rules: [commandRule(ownPush)],
+  };
+  expect(decide(p, call("git push origin main"))).toMatchObject({ outcome: "refuse" });
+  expect(decide(p, call("git push origin feature"))).toMatchObject({ outcome: "run", effect: "run_command" });
+});
+test.each([false, true])("TC-SR1-01 stricter post command wins in either order (%s)", (reverse) => {
+  const p = {
+    ...policy,
+    flowId: "flow",
+    commands: { patterns: ["make *", "make deploy"] },
+    touches: reverse ? [postDeploy, ownMake] : [ownMake, postDeploy],
+    rules: [commandRule(ownMake)],
+  };
+  expect(decide(p, call("make deploy"))).toMatchObject({
+    outcome: "hold",
+    effect: "post",
+    held: { action: "post", touchId: "deploy", place: postDeploy.place, fixedPlace: true },
+  });
+});
+test("TC-SR1-01 risky command on its own still holds", () => {
+  const p = {
+    ...policy,
+    flowId: "flow",
+    commands: { patterns: ["make deploy"] },
+    touches: [{ ...postDeploy, list: "on_its_own" as const }],
+  };
+  expect(decide(p, call("make deploy"))).toMatchObject({
+    outcome: "hold",
+    effect: "post",
+    held: { action: "post" },
+  });
+});
+test("TC-SR1-01 uncovered command holds", () => {
+  expect(decide({ ...policy, touches: [] }, call("git status"))).toMatchObject({
+    outcome: "hold",
+    effect: "run_command",
+  });
+});
