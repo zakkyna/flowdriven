@@ -986,3 +986,257 @@ test("TC-j24-12 the chat line is posted and the approved run finishes", async ()
     store.close();
   }
 });
+
+test("TC-j24-36 phone can approve or reject but cannot edit, batch or create rules", async () => {
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const { createRunnerService } = await import("../service/service.ts");
+  const { createDecisionHandlers } = await import("../service/handlers.ts");
+  const { createWeekly } = await import("../service/weekly-limit.ts");
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({ store, dataDir: ".", mode: "demo" });
+  const handlers = createDecisionHandlers(
+    store,
+    service.engine,
+    createWeekly({ store, now: () => new Date(), recheck: () => {} }),
+    () => {},
+  );
+  try {
+    const change = pendingDecision(store, { id: "phone-change", createdAt: "2026-11-21T00:00:00Z" });
+    store.updateApproval(change.id, {
+      kind: "risky_action",
+      effect: "change",
+      fixedPlace: true,
+      place: { kind: "account", value: "private", label: "Account" },
+    });
+    const editable = pendingDecision(store, { id: "phone-editable", createdAt: "2026-11-21T00:00:00Z" });
+    store.updateApproval(editable.id, {
+      kind: "risky_action",
+      effect: "send",
+      riskyAction: "send",
+      payload: { kind: "email", to: ["sam@example.test"], subject: "Hello", body: "Thanks" },
+    });
+    const group = `send:${change.runId}:reply`;
+    const first = {
+      ...change,
+      id: "phone-send-one",
+      kind: "risky_action" as const,
+      effect: "send" as const,
+      riskyAction: "send" as const,
+      similarGroup: group,
+    };
+    const second = { ...first, id: "phone-send-two" };
+    store.createApproval(first);
+    store.createApproval(second);
+    expect(() =>
+      handlers.resolve({ approvalId: change.id, decision: "always_allow" }, { caller: "phone" }),
+    ).toThrow(expect.objectContaining({ code: "not_allowed", reason: "phone_no_rules" }));
+    expect(() =>
+      handlers.resolve(
+        { approvalId: editable.id, decision: "edit", editedText: "edited" },
+        { caller: "phone" },
+      ),
+    ).toThrow(expect.objectContaining({ code: "not_allowed", reason: "phone_no_rules" }));
+    await expect(
+      service.call(
+        "approvals.resolveSimilar",
+        { runId: change.runId, group, approvalIds: [first.id, second.id] },
+        "phone",
+      ),
+    ).rejects.toMatchObject({ code: "not_allowed", reason: "caller_not_allowed" });
+    expect(store.getApproval(change.id)?.state).toBe("pending");
+    expect(store.getApproval(editable.id)?.state).toBe("pending");
+    expect(store.getApproval(first.id)?.state).toBe("pending");
+    expect(store.getApproval(second.id)?.state).toBe("pending");
+    for (const decision of ["approve", "reject"] as const) {
+      const row = pendingDecision(store, { id: `phone-case-${decision}`, createdAt: "2026-11-21T00:00:00Z" });
+      expect(handlers.resolve({ approvalId: row.id, decision }, { caller: "phone" }).decision).toMatchObject({
+        resolvedVia: "phone",
+      });
+      expect(store.listAudit(row.runId)).toContainEqual(
+        expect.objectContaining({
+          kind: "decision_made",
+          detail: { approvalId: row.id, decision, via: "phone" },
+        }),
+      );
+    }
+    expect(store.listRules()).toEqual([]);
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-SR8-07 used grant precedes allow and a crash requires a new decision", {
+  timeout: 20000,
+}, async () => {
+  const { mkdtempSync, mkdirSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { DatabaseSync } = await import("node:sqlite");
+  const { join } = await import("node:path");
+  const { Requirement } = await import("@flowdriven/sdk");
+  const { CONNECTORS } = await import("../connectors/catalog.ts");
+  const { callGrant, createGrantBook } = await import("../connectors/grants.ts");
+  const { routeRequirement } = await import("../router/route.ts");
+  const { legacyGrant } = await import("../test-helpers/policy-fixture.ts");
+  const { FAKE_CLAUDE_PATH, makeFakeHome, readFakeCalls } = await import(
+    "../test-helpers/fake-claude-script.ts"
+  );
+  const { createClaudeAdapter } = await import("../claude/adapter.ts");
+  const gmail = CONNECTORS[0];
+  if (!gmail) throw new Error("missing connector");
+  const fact = {
+    name: gmail.name,
+    url: gmail.url,
+    id: `mcpsrv_${"a".repeat(24)}`,
+    status: "connected" as const,
+    tools: [{ name: "reply", readOnly: false }],
+  };
+  const requirement = Requirement.parse({
+    id: "gmail",
+    type: "mcp_server",
+    ref: "connector:gmail",
+    tools: ["reply"],
+  });
+  const route = routeRequirement(requirement, { hooks: true, chrome: false, connectors: [fact] });
+  if (!route?.routed) throw new Error("missing route");
+  const root = mkdtempSync(join(tmpdir(), "flowdriven-grant-"));
+  const home = makeFakeHome({
+    connectors: { [gmail.name]: { url: fact.url, id: fact.id, tools: fact.tools } },
+    plays: [
+      {
+        when: "Held test",
+        actions: [
+          {
+            do: "tool",
+            id: "a",
+            name: `${gmail.prefix}reply`,
+            input: { to: "sam@example.test", body: "Thanks" },
+          },
+          { do: "result", result: "done" },
+        ],
+      },
+    ],
+  });
+  let store = await openSqliteStore(join(root, "store.sqlite"));
+  const project = join(root, "project");
+  mkdirSync(project);
+  const grant = callGrant("gmail", "reply", digestCall("reply", { to: "sam@example.test", body: "Thanks" }));
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const initial = pendingDecision(store, { id: "original-approval", createdAt: "2026-11-21T00:00:00Z" });
+  store.updateApproval(initial.id, { state: "approved" });
+  const key = {
+    ...legacyGrant(initial.runId, initial.stepId, initial.itemKey, grant),
+    approvalId: initial.id,
+  };
+  store.putCallGrant(key);
+  const log: string[] = [];
+  const audits: { kind: string; detail: unknown }[] = [];
+  const book = createGrantBook(store);
+  const originalUse = book.use;
+  book.use = (...args) => {
+    const result = originalUse(...args);
+    if (result) log.push("write-used");
+    return result;
+  };
+  let controller = new AbortController();
+  const options = {
+    claudePath: () => FAKE_CLAUDE_PATH,
+    env: () => ({ HOME: home, PATH: process.env.PATH, USER: "u", TMPDIR: "/tmp", LANG: "C" }),
+    controlRoot: join(root, "control"),
+    audit: (kind: string, _run: string, detail: unknown) => audits.push({ kind, detail }),
+    newId: () => "cc-1",
+    newSessionId: () => "session-1",
+    connectors: () => [fact],
+    grants: book,
+    afterAllow: () => {
+      const db = new DatabaseSync(join(root, "store.sqlite"));
+      const stored = db
+        .prepare(
+          "SELECT data FROM call_grants WHERE run_id = ? AND step_id = ? AND item_key = ? AND tool = ? AND digest = ?",
+        )
+        .get(key.runId, key.stepId, key.itemKey, key.tool, key.digest);
+      db.close();
+      expect(stored && JSON.parse(String(stored.data))).toMatchObject({
+        usedAt: expect.any(String),
+        approvalId: initial.id,
+      });
+      log.push("write-allow");
+      controller.abort();
+      throw new Error("crash");
+    },
+  };
+  const request = {
+    runId: key.runId,
+    stepId: key.stepId,
+    itemKey: key.itemKey,
+    attempt: 1,
+    replan: false,
+    kind: "worker" as const,
+    title: "t",
+    instructions: "Held test",
+    uses: ["gmail"],
+    project,
+    requirements: [requirement],
+    routes: [route],
+    outputs: [],
+    maxDurationMs: 10000,
+    signal: controller.signal,
+  };
+  try {
+    await createClaudeAdapter(options).runStep(request);
+    expect(log).toEqual(["write-used", "write-allow"]);
+    expect(store.findGrant(key)).toBeUndefined();
+    store.close();
+    store = await openSqliteStore(join(root, "store.sqlite"));
+    options.grants = createGrantBook(store);
+    controller = new AbortController();
+    const next = await createClaudeAdapter({ ...options, afterAllow: undefined }).runStep({
+      ...request,
+      signal: controller.signal,
+    });
+    expect(next).toMatchObject({
+      hold: { tool: "reply", input: { to: "sam@example.test", body: "Thanks" } },
+    });
+    expect(readFakeCalls(home).filter((call) => call.kind === "tool" && call.ran).length).toBeLessThanOrEqual(
+      1,
+    );
+    expect(audits).toContainEqual(
+      expect.objectContaining({
+        kind: "grant_used",
+        detail: expect.objectContaining({ grant: "call", tool: "reply" }),
+      }),
+    );
+    store.putCallGrant(key);
+    expect(store.findGrant(key)).toBeUndefined();
+    const second = {
+      ...initial,
+      id: "new-approval",
+      kind: "risky_action" as const,
+      effect: "send" as const,
+      riskyAction: "send" as const,
+      call: { tool: "reply", input: { to: "sam@example.test", body: "Thanks" } },
+      approves: [grant],
+    };
+    store.createApproval(second);
+    const { createRunnerService } = await import("../service/service.ts");
+    const service = createRunnerService({ store, dataDir: ".", mode: "demo" });
+    const begun = service.engine.beginDecide(second.id, "approve");
+    expect(store.getApproval(second.id)).toMatchObject({ state: "approved", resolvedVia: "window" });
+    expect(store.findGrant(key)).toMatchObject({ approvalId: second.id });
+    await begun.settled;
+    service.stop();
+    expect(
+      await createClaudeAdapter({ ...options, afterAllow: undefined }).runStep({
+        ...request,
+        signal: controller.signal,
+      }),
+    ).toMatchObject({ exit: "ok" });
+    expect(readFakeCalls(home).filter((call) => call.kind === "tool" && call.ran).length).toBeLessThanOrEqual(
+      1,
+    );
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});

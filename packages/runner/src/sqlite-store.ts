@@ -316,6 +316,39 @@ export async function openSqliteStore(
       execute("UPDATE standing_rules SET data = ? WHERE id = ?", json(next), id);
     },
     putCallGrant(row) {
+      const previous = decode<CallGrant>(
+        get(
+          "SELECT data FROM call_grants WHERE run_id = ? AND step_id = ? AND item_key = ? AND tool = ? AND digest = ?",
+          row.runId,
+          row.stepId,
+          row.itemKey,
+          row.tool,
+          row.digest,
+        ),
+      );
+      const approval = row.approvalId ? store.getApproval(row.approvalId) : undefined;
+      if (
+        previous?.usedAt &&
+        approval &&
+        previous.approvalId !== approval.id &&
+        approval.state === "approved" &&
+        approval.kind === "risky_action" &&
+        approval.runId === row.runId &&
+        approval.stepId === row.stepId &&
+        approval.itemKey === row.itemKey &&
+        approval.approves.includes(`${row.tool}#${row.digest}`)
+      ) {
+        execute(
+          "UPDATE call_grants SET data = ? WHERE run_id = ? AND step_id = ? AND item_key = ? AND tool = ? AND digest = ?",
+          json(row),
+          row.runId,
+          row.stepId,
+          row.itemKey,
+          row.tool,
+          row.digest,
+        );
+        return;
+      }
       execute(
         "INSERT OR IGNORE INTO call_grants VALUES (?, ?, ?, ?, ?, ?)",
         row.runId,

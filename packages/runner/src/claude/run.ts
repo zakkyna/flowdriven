@@ -85,6 +85,7 @@ export type RunDeps = {
   maxDeniedEntries?: number;
   recordRule?: (ruleId: string, tool: string, at: string) => void;
   beforeAllow?: () => void;
+  afterAllow?: () => void;
   register?: (stop: (sentence?: string) => void) => () => void;
 };
 export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome> {
@@ -460,6 +461,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         } catch {}
       },
       beforeAllow: deps.beforeAllow,
+      afterAllow: deps.afterAllow,
       pollMs: deps.pollMs,
       onCall: ({ decision }) => {
         if (decision.allow) counts.allowed++;

@@ -975,3 +975,48 @@ test("TC-j24-21 non-batchable decision kinds never offer a group", async () => {
     store.close();
   }
 });
+
+test("TC-RUL-10 phone decisions retain their source and cannot edit or create rules", async () => {
+  const { createDecisionHandlers } = await import("./handlers.ts");
+  const { createWeekly } = await import("./weekly-limit.ts");
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({ store, dataDir: ".", mode: "demo" });
+  const handlers = createDecisionHandlers(
+    store,
+    service.engine,
+    createWeekly({ store, now: () => new Date(), recheck: () => {} }),
+    () => {},
+  );
+  try {
+    const row = pendingDecision(store, { id: "phone-refuse", createdAt: "2026-11-21T00:00:00Z" });
+    for (const decision of ["edit", "always_allow"] as const) {
+      expect(() =>
+        handlers.resolve(
+          { approvalId: row.id, decision, ...(decision === "edit" ? { editedText: "changed" } : {}) },
+          { caller: "phone" },
+        ),
+      ).toThrow(expect.objectContaining({ code: "not_allowed", reason: "phone_no_rules" }));
+      expect(store.getApproval(row.id)?.state).toBe("pending");
+    }
+    for (const decision of ["approve", "reject"] as const) {
+      const next = pendingDecision(store, { id: `phone-${decision}`, createdAt: "2026-11-21T00:00:00Z" });
+      expect(handlers.resolve({ approvalId: next.id, decision }, { caller: "phone" }).decision).toMatchObject(
+        { resolvedVia: "phone" },
+      );
+      expect(store.listAudit(next.runId)).toContainEqual(
+        expect.objectContaining({
+          kind: "decision_made",
+          detail: { approvalId: next.id, decision, via: "phone" },
+        }),
+      );
+    }
+    expect(store.listRules()).toHaveLength(0);
+    await expect(service.call("rules.revoke", { ruleId: "missing" }, "phone")).rejects.toMatchObject({
+      code: "not_allowed",
+      reason: "caller_not_allowed",
+    });
+  } finally {
+    service.stop();
+    store.close();
+  }
+});

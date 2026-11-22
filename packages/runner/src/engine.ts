@@ -81,6 +81,7 @@ export interface Engine {
     approvalId: string,
     decision: "approve" | "reject" | "edit" | "always_allow",
     edit?: { text: string; subject?: string },
+    via?: "window" | "phone",
   ): Begun;
   beginDecideSimilar(ids: string[], group: string): void;
   beginResume(runId: string): Begun;
@@ -438,6 +439,7 @@ export function createEngine(input: EngineDeps): Engine {
     id: string,
     decision: "approve" | "reject" | "edit" | "always_allow",
     edit?: { text: string; subject?: string },
+    via: "window" | "phone" = "window",
     deferred?: Array<() => void>,
   ): Begun {
     const schedule = (run: RunRow, task: () => Promise<RunRow>): Begun => {
@@ -583,7 +585,7 @@ export function createEngine(input: EngineDeps): Engine {
                   : "rejected",
           ...(rule ? { ruleId: rule.id } : {}),
           resolvedAt: at,
-          resolvedVia: "window",
+          resolvedVia: via,
           ...(editedCall && edit
             ? { editedText: edit.text, editedSubject: edit.subject, editedDigest: editedCall.digest }
             : {}),
@@ -615,7 +617,7 @@ export function createEngine(input: EngineDeps): Engine {
           at,
           kind: "decision_made",
           runId: run.id,
-          detail: { approvalId: id, decision, via: "window" },
+          detail: { approvalId: id, decision, via },
         });
         if (decision !== "reject") {
           store.updateRun(run.id, {
@@ -700,13 +702,13 @@ export function createEngine(input: EngineDeps): Engine {
       store.updateApproval(id, {
         state: decision === "approve" ? "approved" : "rejected",
         resolvedAt: at,
-        resolvedVia: "window",
+        resolvedVia: via,
       });
       store.appendAudit({
         at,
         kind: "decision_made",
         runId: run.id,
-        detail: { approvalId: id, decision, via: "window" },
+        detail: { approvalId: id, decision, via },
       });
       if (decision === "approve")
         store.updateRun(run.id, {
@@ -846,7 +848,7 @@ export function createEngine(input: EngineDeps): Engine {
           throw new EngineError("not_allowed", "Run is not waiting for approval.");
         for (const id of ids) {
           store.updateRun(first.runId, { state: "waiting_approval" });
-          beginDecide(id, "approve", undefined, deferred);
+          beginDecide(id, "approve", undefined, "window", deferred);
         }
         store.appendAudit({
           at: now().toISOString(),

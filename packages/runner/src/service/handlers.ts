@@ -553,6 +553,10 @@ export function createDecisionHandlers(
     input: V2Input<"approvals.resolve">,
     { caller }: { caller: Caller } = { caller: "window" },
   ) => {
+    if (caller === "phone" && (input.decision === "edit" || input.decision === "always_allow"))
+      throw new RunnerError("not_allowed", "This decision is not available from a phone.", {
+        reason: "phone_no_rules",
+      });
     if (input.approvalId.startsWith("weekly-limit:")) {
       if (input.decision !== "approve" && input.decision !== "reject")
         throw new RunnerError("invalid_input", "Invalid decision.");
@@ -578,10 +582,6 @@ export function createDecisionHandlers(
         params: { via: row.resolvedVia ?? "window" },
       });
     if (input.decision === "always_allow") {
-      if (caller === "phone")
-        throw new RunnerError("not_allowed", "Rules cannot be created from a phone.", {
-          reason: "phone_no_rules",
-        });
       if (row.effect && ["send", "post", "pay", "delete", "merge"].includes(row.effect))
         throw new RunnerError("not_allowed", "This action always asks.", { reason: "always_asks" });
       if (
@@ -614,6 +614,7 @@ export function createDecisionHandlers(
       input.decision === "edit" && input.editedText !== undefined
         ? { text: input.editedText, subject: input.editedSubject }
         : undefined,
+      caller === "phone" ? "phone" : "window",
     );
     const current = store.getApproval(row.id);
     const run = store.getRun(row.runId);

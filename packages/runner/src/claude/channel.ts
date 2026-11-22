@@ -48,6 +48,7 @@ export function startChannel(options: {
   decide: (call: unknown) => Decision;
   onCall?: (record: CallRecord) => void;
   beforeAllow?: () => void;
+  afterAllow?: () => void;
   post?: (call: unknown) => { text: string; line: string } | undefined;
   onPost?: (record: { toolUseId: string; text: string }) => void;
   onUnanswered?: (record: { toolUseId?: string; tool?: string }) => void;
@@ -218,6 +219,7 @@ export function startChannel(options: {
         const tmp = join(dir.res, `.${name}.tmp`);
         writeFileSync(tmp, answer, { mode: 0o600 });
         renameSync(tmp, join(dir.res, name));
+        if (decision.allow) options.afterAllow?.();
         rmSync(path, { recursive: true, force: true });
       } catch {
         /* A missing or unreadable file must never produce an allow. */

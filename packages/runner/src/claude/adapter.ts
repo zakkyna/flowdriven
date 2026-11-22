@@ -75,6 +75,7 @@ export type ClaudeAdapterOptions = {
   maxLineBytes?: number;
   maxDeniedEntries?: number;
   allowed?: () => string | undefined;
+  afterAllow?: () => void;
 };
 export type ClaudeAdapter = HarnessAdapter & { interrupt(sentence: string): void };
 export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapter {
@@ -115,6 +116,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       closeWaitMs: options.closeWaitMs ?? 8000,
       maxLineBytes: options.maxLineBytes ?? MAX_LINE_BYTES,
       maxDeniedEntries: options.maxDeniedEntries ?? MAX_DENIED_ENTRIES,
+      afterAllow: options.afterAllow,
       register: (stop) => {
         active.add(stop);
         return () => active.delete(stop);
