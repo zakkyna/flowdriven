@@ -230,8 +230,11 @@ test("a user check on a nested step holds the run; approve finishes the item and
   const rejected = await start(d);
   const ap = d.engine.listApprovals({ state: "pending" }).at(0);
   if (!ap) throw new Error("missing approval");
-  expect((await d.engine.decide(ap.id, "reject")).state).toBe("failed");
-  expect(d.engine.getRun(rejected.id).items.at(0)?.status).toBe("failed");
+  expect((await d.engine.decide(ap.id, "reject")).state).toBe("waiting_approval"); // TC-ENG-14
+  expect(d.engine.getRun(rejected.id).items.at(0)).toMatchObject({
+    status: "skipped",
+    skipped: { because: "rejected", approvalId: ap.id },
+  });
   expect(d.store.isSeen("local.f", "review", "j1")).toBe(false);
 });
 test("a value that looks like a reference is not expanded", async () => {

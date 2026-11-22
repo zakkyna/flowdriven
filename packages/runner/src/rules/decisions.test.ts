@@ -375,3 +375,302 @@ test("TC-RUL-02 an exact canonical grant matches once and is bound to run and st
   store.useGrant(grant, "2026-11-22T00:00:00.000Z");
   expect(matchGrant(store, grant)).toBeUndefined();
 });
+
+test("TC-SR1-19 an earlier rejection disables rules only for that run", async () => {
+  // Scenario C belongs to B-05.T7.
+  const { earlierNo } = await import("./decisions.ts");
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const store = await openSqliteStore(":memory:");
+  stores.push(store);
+  const rejected = pendingDecision(store, { id: "earlier-no", createdAt: "2026-11-21T00:00:00Z" });
+  const approved = pendingDecision(store, { id: "earlier-yes", createdAt: "2026-11-21T00:00:00Z" });
+  store.updateApproval(rejected.id, { state: "rejected" });
+  store.updateApproval(approved.id, { state: "approved" });
+  expect(earlierNo(store, rejected.runId)).toBe(true);
+  expect(earlierNo(store, approved.runId)).toBe(false);
+});
+
+test("TC-SR1-19 matching change asks after reject and uses its rule in another run", async () => {
+  // Scenario C belongs to B-05.T7.
+  const { earlierNo } = await import("./decisions.ts");
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const { decide } = await import("../claude/decide.ts");
+  const { recordRuleUse } = await import("./standing.ts");
+  const store = await openSqliteStore(":memory:");
+  stores.push(store);
+  const row = pendingDecision(store, { id: "post-no", createdAt: "2026-11-21T00:00:00Z" });
+  const run = store.getRun(row.runId);
+  if (!run) throw new Error("missing run");
+  const place = { kind: "account" as const, value: "timesheet", label: "Timesheet" };
+  const rule = store.makeRule({
+    flowId: run.flowId,
+    touchId: "log-hours",
+    effect: "change",
+    place,
+    sentence: "Log hours",
+  });
+  const name = "timesheet.log_entry";
+  const policy = {
+    tools: [name],
+    folders: [],
+    cwd: ".",
+    addDirs: [],
+    schema: false,
+    sessionId: "s1",
+    flowId: run.flowId,
+    effectCatalog: [
+      { tool: name, effect: "change" as const, place: { kind: "account" as const, value: place.value } },
+    ],
+    touches: [
+      {
+        touchId: rule.touchId,
+        effect: "change" as const,
+        matcher: "exact" as const,
+        place,
+        fixedPlace: true,
+        list: "on_its_own" as const,
+        covers: [name],
+      },
+    ],
+    rules: [rule],
+  };
+  const call = {
+    hook_event_name: "PreToolUse",
+    session_id: "s1",
+    tool_name: name,
+    tool_input: { hours: 2 },
+    tool_use_id: "t1",
+  };
+  store.updateApproval(row.id, { state: "rejected" });
+  expect(decide({ ...policy, earlierNo: earlierNo(store, run.id) }, call)).toMatchObject({
+    outcome: "hold",
+    effect: "change",
+  });
+  expect(store.listRules().find((r) => r.id === rule.id)?.uses).toBe(0);
+  const next = { ...run, id: "next-run" };
+  store.createRun(next);
+  expect(decide({ ...policy, earlierNo: earlierNo(store, next.id) }, call)).toMatchObject({
+    outcome: "run",
+    by: "rule",
+    ruleId: rule.id,
+  });
+  store.upsertStep({
+    runId: next.id,
+    stepId: row.stepId,
+    itemKey: "",
+    state: "running",
+    attempts: [],
+    outputs: {},
+    checks: [],
+  });
+  recordRuleUse(store, {
+    ruleId: rule.id,
+    runId: next.id,
+    stepId: row.stepId,
+    itemKey: "",
+    tool: name,
+    title: "Log hours",
+    at: "2026-11-21T01:00:00Z",
+  });
+  expect(store.listRules().find((r) => r.id === rule.id)?.uses).toBe(1);
+  expect(store.listAudit(next.id)).toContainEqual(expect.objectContaining({ kind: "rule_used" }));
+});
+
+test("TC-SR1-19 a fake cloud call asks after a rejection and runs by rule in the next run", {
+  timeout: 20000,
+}, async () => {
+  const { mkdtempSync, mkdirSync, realpathSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { FlowManifest, Requirement } = await import("@flowdriven/sdk");
+  const { createEngine } = await import("../engine.ts");
+  const { demoFlow } = await import("../demo/demo-flow.ts");
+  const { routeRequirement } = await import("../router/route.ts");
+  const { openSqliteStore } = await import("../sqlite-store.ts");
+  const { FAKE_CLAUDE_PATH, makeFakeHome, readFakeCalls } = await import(
+    "../test-helpers/fake-claude-script.ts"
+  );
+  const { createClaudeAdapter } = await import("../claude/adapter.ts");
+  const { recordRuleUse } = await import("./standing.ts");
+  const { createGrantBook } = await import("../connectors/grants.ts");
+  const { earlierNo } = await import("./decisions.ts");
+  const connector = {
+    ref: "connector:cloud",
+    name: "cloud",
+    url: "https://cloud.example.test/mcp",
+    prefix: "mcp__cloud__",
+    label: "Cloud",
+    read: [],
+    write: ["upload"],
+    risky: {},
+  };
+  const fact = {
+    name: connector.name,
+    url: connector.url,
+    id: `mcpsrv_${"b".repeat(24)}`,
+    status: "connected" as const,
+    tools: [{ name: "upload", readOnly: false }],
+  };
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "flow-rule-miss-")));
+  const home = makeFakeHome({
+    connectors: { [connector.name]: { url: fact.url, id: fact.id, tools: fact.tools } },
+    plays: [
+      {
+        when: "First step",
+        actions: [
+          {
+            do: "tool",
+            id: "first-call",
+            name: `${connector.prefix}upload`,
+            input: { folder: "cloud:Other", name: "app.apk" },
+          },
+          { do: "result", result: "done" },
+        ],
+      },
+      {
+        when: "Upload test",
+        actions: [
+          {
+            do: "tool",
+            id: "upload-1",
+            name: `${connector.prefix}upload`,
+            input: { folder: "cloud:Builds", name: "app.apk" },
+          },
+          { do: "result", result: "done" },
+        ],
+      },
+    ],
+  });
+  const store = await openSqliteStore(":memory:");
+  try {
+    const base = demoFlow().manifest;
+    const place = { kind: "folder" as const, value: "cloud:Builds", label: "Builds" };
+    const touch = {
+      id: "upload-apk",
+      sentence: "Upload the APK",
+      effect: "change" as const,
+      rule: "asks_first" as const,
+      covers: ["cloud.upload"],
+      place,
+    };
+    const requirement = Requirement.parse({
+      id: "cloud",
+      type: "mcp_server",
+      ref: connector.ref,
+      tools: ["upload"],
+    });
+    const manifest = FlowManifest.parse({
+      ...base,
+      id: "example.build-apk",
+      format: "flowdriven-flow/1.2",
+      requirements: [requirement],
+      touches: [touch],
+      steps: [
+        {
+          id: "first",
+          do: "worker",
+          instructions: "First step",
+          uses: ["cloud"],
+          checks: [{ type: "contains", pattern: "done" }],
+        },
+        {
+          id: "upload",
+          title: "Upload APK",
+          do: "worker",
+          instructions: "Upload test",
+          uses: ["cloud"],
+          checks: [{ type: "contains", pattern: "done" }],
+        },
+      ],
+    });
+    const hash = `sha256:${"a".repeat(64)}`;
+    store.putFlow({
+      id: manifest.id,
+      hash,
+      version: manifest.version,
+      manifest,
+      files: {},
+      registeredAt: "2026-11-20T00:00:00Z",
+    });
+    const rule = store.makeRule({
+      flowId: manifest.id,
+      touchId: touch.id,
+      effect: touch.effect,
+      place,
+      createdAt: "2026-11-20T00:00:00Z",
+    });
+    const route = routeRequirement(requirement, { hooks: true, chrome: false, connectors: [fact] }, [
+      connector,
+    ]);
+    if (!route?.routed) throw new Error("Missing route");
+    const project = join(root, "project");
+    mkdirSync(project);
+    const adapter = createClaudeAdapter({
+      claudePath: () => FAKE_CLAUDE_PATH,
+      env: () => ({ HOME: home, PATH: process.env.PATH, TMPDIR: tmpdir() }),
+      controlRoot: join(root, "control"),
+      audit: (kind, runId, detail) =>
+        store.appendAudit({ at: "2026-11-21T00:00:00.000Z", kind, runId, detail }),
+      newId: () => "cc-miss",
+      newSessionId: () => "session-miss",
+      rounds: 20,
+      exitWaitMs: 10000,
+      catalog: [connector],
+      effectCatalog: [
+        {
+          tool: `${connector.prefix}upload`,
+          effect: "change",
+          place: { kind: "folder", fromInput: "folder" },
+        },
+      ],
+      connectors: () => [fact],
+      grants: createGrantBook(store),
+      confirmation: (runId) => ({
+        confirmation: { flowId: manifest.id, hash, onItsOwn: [], touches: [touch] },
+        rules: store.listRules(),
+        earlierNo: earlierNo(store, runId),
+        source: "chat",
+        startedAt: "2026-11-21T00:00:00Z",
+      }),
+      recordRule: (input) => recordRuleUse(store, input),
+    });
+    let next = 0;
+    const engine = createEngine({
+      store,
+      harness: adapter,
+      now: () => new Date("2026-11-21T00:00:00Z"),
+      newId: (prefix) => `${prefix}-${++next}`,
+      routeOf: () => [route],
+    });
+    const run = await engine.startRun(manifest.id, { project });
+    expect(run.state).toBe("waiting_approval");
+    const first = store.listApprovals({ runId: run.id, state: "pending" }).at(0);
+    if (!first) throw new Error("missing first decision");
+    expect((await engine.decide(first.id, "reject")).state).toBe("waiting_approval");
+    expect(readFakeCalls(home)).toContainEqual(
+      expect.objectContaining({ id: "upload-1", hookExit: 2, ran: false }),
+    );
+    expect(store.listApprovals({ runId: run.id, state: "pending" })).toContainEqual(
+      expect.objectContaining({ stepId: "upload" }),
+    );
+    expect(store.listRules().find((item) => item.id === rule.id)?.uses).toBe(0);
+    expect(store.listAudit(run.id).some((item) => item.kind === "call_held")).toBe(true);
+    // Complete this run before starting the next one.
+    const held = store.listApprovals({ runId: run.id, state: "pending" }).at(0);
+    if (!held) throw new Error("missing upload decision");
+    await engine.decide(held.id, "reject");
+    const nextRun = await engine.startRun(manifest.id, { project });
+    const nextFirst = store.listApprovals({ runId: nextRun.id, state: "pending" }).at(0);
+    if (!nextFirst) throw new Error("missing next decision");
+    expect((await engine.decide(nextFirst.id, "approve")).state).toBe("done");
+    expect(readFakeCalls(home)).toContainEqual(
+      expect.objectContaining({ id: "upload-1", hookExit: 0, ran: true }),
+    );
+    expect(store.listRules().find((item) => item.id === rule.id)?.uses).toBe(1);
+    expect(store.listAudit(nextRun.id).some((item) => item.kind === "rule_used")).toBe(true);
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});

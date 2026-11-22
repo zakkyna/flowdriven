@@ -144,7 +144,9 @@ test("beginAnswer commits the decision before it returns", { timeout: 20_000 }, 
   c.g.release("run-1");
   expect((await b.settled).state).toBe("done");
 });
-test("beginDecide approves in the background and rejects at once", { timeout: 20_000 }, async () => {
+test("TC-j24-08 beginDecide continues in the background for either decision", {
+  timeout: 20_000,
+}, async () => {
   for (const decision of ["approve", "reject"] as const) {
     const g = gated();
     const c = await setup([worker("a", [{ type: "user" }]), worker("b")], g.harness);
@@ -155,13 +157,11 @@ test("beginDecide approves in the background and rejects at once", { timeout: 20
     const ap = c.store.listApprovals({ state: "pending" }).at(0);
     if (!ap) throw new Error("Missing approval");
     const b = c.engine.beginDecide(ap.id, decision);
-    expect(b.run.state).toBe(decision === "approve" ? "running" : "failed");
-    if (decision === "approve") {
-      expect(g.calls).toHaveLength(1);
-      await vi.waitFor(() => expect(g.calls).toHaveLength(2));
-      g.release("run-1");
-    }
-    expect((await b.settled).state).toBe(decision === "approve" ? "done" : "failed");
+    expect(b.run.state).toBe("running");
+    expect(g.calls).toHaveLength(1);
+    await vi.waitFor(() => expect(g.calls).toHaveLength(2));
+    g.release("run-1");
+    expect((await b.settled).state).toBe("done");
   }
 });
 test("beginResume returns the run in checking and settles when the walk ends", {

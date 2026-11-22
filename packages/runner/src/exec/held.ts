@@ -1,9 +1,17 @@
 import { domainToASCII } from "node:url";
-import type { Requirement, Value } from "@flowdriven/sdk";
+import {
+  type LeafStep,
+  type LoopStep,
+  parseExpression,
+  type Requirement,
+  references,
+  templateExpressions,
+  type Value,
+} from "@flowdriven/sdk";
 import { visible } from "../claude/text.ts";
 import { catalogEntry } from "../connectors/catalog.ts";
 import { isCallGrant } from "../connectors/grants.ts";
-import type { Store } from "../storage.ts";
+import type { StepRow, Store } from "../storage.ts";
 
 export const MAX_HOLDS = 3;
 export const MAX_HELD_CHARS = 4000;
@@ -164,4 +172,42 @@ export function labelOf(requirements: Requirement[], requirementId: string): str
     catalogEntry(requirements.find((requirement) => requirement.id === requirementId)?.ref)?.label ??
     "a connector"
   );
+}
+
+export function skippedDependency(
+  step: LeafStep | LoopStep,
+  itemKey: string,
+  rows: StepRow[],
+): StepRow | undefined {
+  const strings = (value: unknown): string[] => {
+    if (typeof value === "string") return [value];
+    if (Array.isArray(value)) return value.flatMap(strings);
+    if (value && typeof value === "object") return Object.values(value).flatMap(strings);
+    return [];
+  };
+  const texts =
+    "for_each" in step
+      ? [step.for_each]
+      : [...("instructions" in step ? [step.instructions] : []), ...strings(step.checks)];
+  const paths = texts.flatMap((text) =>
+    templateExpressions(text).flatMap((source) => references(parseExpression(source))),
+  );
+  if (step.when) paths.push(...references(parseExpression(step.when)));
+  return rows.find((entry) => {
+    if (
+      (entry.itemKey !== "" && entry.itemKey !== itemKey) ||
+      entry.state !== "skipped" ||
+      entry.skipped?.because === "no_picks"
+    )
+      return false;
+    return paths.some((path) => {
+      const rest =
+        path[0] === "steps" && path[1] === entry.stepId
+          ? path.slice(2)
+          : path[0] === entry.stepId
+            ? path.slice(1)
+            : [];
+      return rest.length > 0 && !["status", "passed", "failed", "skipped"].includes(rest[0] ?? "");
+    });
+  });
 }

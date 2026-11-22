@@ -8,6 +8,7 @@ import {
 } from "@flowdriven/sdk";
 import type { ResolvedDeps } from "../engine.ts";
 import type { ItemRow, RunRow } from "../storage.ts";
+import { skippedDependency } from "./held.ts";
 import { runLeaf } from "./leaf.ts";
 import { loopsOverChoice, pickKeysOf } from "./pick-keys.ts";
 import { itemScope } from "./scope.ts";
@@ -123,6 +124,24 @@ export async function runLoop(
     for (const nested of step.steps) {
       const existing = store.getStep(run.id, nested.id, item.key);
       if (existing?.state === "passed" || existing?.state === "skipped") continue;
+      const dependency = skippedDependency(nested, item.key, store.listSteps(run.id));
+      if (dependency) {
+        const prior = manifest.steps
+          .flatMap((candidate) => ("for_each" in candidate ? candidate.steps : [candidate]))
+          .find((candidate) => candidate.id === dependency.stepId);
+        store.upsertStep({
+          runId: run.id,
+          stepId: nested.id,
+          itemKey: item.key,
+          state: "skipped",
+          attempts: [],
+          outputs: {},
+          checks: [],
+          skipped: { because: "needs_skipped_result", stepId: dependency.stepId },
+          note: `Skipped because ${prior?.title ?? dependency.stepId} was not done.`,
+        });
+        continue;
+      }
       const outcome = await runLeaf(nested, {
         deps,
         run,

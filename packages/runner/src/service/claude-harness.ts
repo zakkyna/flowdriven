@@ -24,6 +24,7 @@ import {
   unattendedProviderErrors,
 } from "../router/route.ts";
 import type { HarnessFacts, Routed } from "../router/types.ts";
+import { earlierNo } from "../rules/decisions.ts";
 import { recordRuleUse } from "../rules/standing.ts";
 import { bundledSkill, readSkillFolder, skillSource } from "../skills/skill-folder.ts";
 import type { HarnessStateRow, Store } from "../storage.ts";
@@ -363,6 +364,7 @@ export function createHarnessService(options: {
           touches: manifest.data.touches ?? [],
         },
         source: run.start?.source,
+        earlierNo: earlierNo(options.store, runId),
         startedAt: run.startedAt,
       };
     },

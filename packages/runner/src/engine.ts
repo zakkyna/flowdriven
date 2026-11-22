@@ -12,6 +12,7 @@ import { createGrantBook, digestCall, pickKeyUsable } from "./connectors/grants.
 import { EngineError } from "./errors.ts";
 import { runAsk } from "./exec/ask.ts";
 import { createChain } from "./exec/chain.ts";
+import { skippedDependency } from "./exec/held.ts";
 import { runLeaf } from "./exec/leaf.ts";
 import { runLoop } from "./exec/loop.ts";
 import { ownTextHash } from "./exec/own-text.ts";
@@ -148,52 +149,7 @@ export function createEngine(input: EngineDeps): Engine {
     if (!flow) throw new EngineError("not_found", "Flow not found.");
     return flow;
   };
-  function sweep(flowId?: string) {
-    for (const a of store
-      .listApprovals({ state: "pending" })
-      .filter(
-        (a) =>
-          a.kind !== "ask" &&
-          a.expiresAt <= now().toISOString() &&
-          (flowId === undefined || store.getRun(a.runId)?.flowId === flowId),
-      )
-      .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))) {
-      store.updateApproval(a.id, { state: "expired", resolvedAt: a.expiresAt });
-      const row = store.getStep(a.runId, a.stepId, a.itemKey);
-      if (a.kind === "ask") {
-        if (row && a.onExpiry === "end") {
-          store.upsertStep({
-            ...row,
-            state: "passed",
-            outputs: { choice: [] },
-            note: "nothing picked: the choice expired",
-          });
-          const manifest = flowFor(runById(a.runId)).manifest as FlowManifest;
-          const index = manifest.steps.findIndex((step) => step.id === a.stepId);
-          for (const step of manifest.steps.slice(index + 1)) {
-            if (!store.getStep(a.runId, step.id))
-              store.upsertStep({
-                runId: a.runId,
-                stepId: step.id,
-                itemKey: "",
-                state: "skipped",
-                attempts: [],
-                outputs: {},
-                checks: [],
-                note: "skipped: the run ended at an expired choice",
-              });
-          }
-          store.updateRun(a.runId, { state: "done", endedAt: a.expiresAt });
-        } else {
-          if (row) store.upsertStep({ ...row, state: "failed", note: "The approval expired." });
-          store.updateRun(a.runId, { state: "failed", endedAt: a.expiresAt });
-        }
-        continue;
-      }
-      if (row) store.upsertStep({ ...row, state: "failed", note: "The approval expired after 24 hours." });
-      store.updateRun(a.runId, { state: "failed", endedAt: a.expiresAt });
-    }
-  }
+  function sweep(_flowId?: string) {}
   function blockError(runId: string, error: unknown): RunRow {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 200);
     store.updateRun(runId, { state: "blocked", blockedReason: `Internal error: ${message}` });
@@ -206,6 +162,22 @@ export function createEngine(input: EngineDeps): Engine {
       for (const step of manifest.steps) {
         const row = store.getStep(run.id, step.id);
         if (row?.state === "passed" || row?.state === "skipped") continue;
+        const dependency = skippedDependency(step, "", store.listSteps(run.id));
+        if (dependency) {
+          const previous = manifest.steps.find((candidate) => candidate.id === dependency.stepId);
+          store.upsertStep({
+            runId: run.id,
+            stepId: step.id,
+            itemKey: "",
+            state: "skipped",
+            attempts: [],
+            outputs: {},
+            checks: [],
+            skipped: { because: "needs_skipped_result", stepId: dependency.stepId },
+            note: `Skipped because ${previous?.title ?? dependency.stepId} was not done.`,
+          });
+          continue;
+        }
         if ("for_each" in step) {
           const outcome = await runLoop(step, {
             deps,
@@ -595,7 +567,7 @@ export function createEngine(input: EngineDeps): Engine {
                   : "rejected",
           ...(rule ? { ruleId: rule.id } : {}),
           resolvedAt: at,
-          ...(decision !== "reject" ? { resolvedVia: "window" } : {}),
+          resolvedVia: "window",
           ...(editedCall && edit
             ? { editedText: edit.text, editedSubject: edit.subject, editedDigest: editedCall.digest }
             : {}),
@@ -642,20 +614,34 @@ export function createEngine(input: EngineDeps): Engine {
           store.upsertStep({ ...row, state: "pending" });
           store.updateRun(run.id, { state: "running" });
         } else {
-          store.upsertStep({ ...row, state: "failed", note: "You rejected this call." });
+          store.upsertStep({ ...row, state: "skipped", skipped: { because: "rejected", approvalId: id } });
           if (a.itemKey) {
             const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
-            if (item) store.upsertItem({ ...item, status: "failed" });
+            if (item)
+              store.upsertItem({
+                ...item,
+                status: "skipped",
+                skipped: { because: "rejected", approvalId: id },
+              });
           }
-          store.updateRun(run.id, { state: "failed", endedAt: at });
-          for (const pending of store.listApprovals({ runId: run.id, state: "pending" }))
-            store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
+          store.updateRun(run.id, {
+            state: "running",
+            decisionLines: [
+              ...(store.getRun(run.id)?.decisionLines ?? []),
+              { key: "report.youSaidNo", params: { title: a.summary } },
+            ],
+          });
         }
       });
       const remaining = store
         .listApprovals({ runId: run.id, state: "pending" })
         .filter((item) => item.stepId === a.stepId).length;
-      if (decision !== "reject" && remaining) {
+      if (remaining && decision === "reject") {
+        store.updateRun(run.id, { state: "waiting_approval" });
+        const updated = runById(run.id);
+        return { run: updated, settled: Promise.resolve(updated) };
+      }
+      if (remaining) {
         store.updateRun(run.id, { state: "waiting_approval" });
         const updated = runById(run.id);
         return enqueue(updated, async () => {
@@ -690,9 +676,7 @@ export function createEngine(input: EngineDeps): Engine {
         });
       }
       const updated = runById(run.id);
-      return decision !== "reject"
-        ? enqueue(updated, () => walk(updated))
-        : { run: updated, settled: Promise.resolve(updated) };
+      return enqueue(updated, () => walk(updated));
     }
     if (decision === "edit")
       throw new EngineError("invalid_input", "Only text can be edited.", { reason: "edit_not_allowed" });
@@ -700,7 +684,7 @@ export function createEngine(input: EngineDeps): Engine {
       store.updateApproval(id, {
         state: decision === "approve" ? "approved" : "rejected",
         resolvedAt: at,
-        ...(decision === "approve" ? { resolvedVia: "window" } : {}),
+        resolvedVia: "window",
       });
       store.appendAudit({
         at,
@@ -746,31 +730,34 @@ export function createEngine(input: EngineDeps): Engine {
         store.upsertStep(row);
         store.updateRun(run.id, { state: "running" });
       } else {
-        const attempt = row.attempts.at(-1);
-        if (attempt) attempt.exit = "failed";
-        row.state = "failed";
+        row.state = "skipped";
+        row.skipped = { because: "rejected", approvalId: id };
         store.upsertStep(row);
         if (a.itemKey) {
           const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
-          if (item) store.upsertItem({ ...item, status: "failed" });
+          if (item)
+            store.upsertItem({
+              ...item,
+              status: "skipped",
+              skipped: { because: "rejected", approvalId: id },
+            });
         }
-        store.updateRun(run.id, { state: "failed", endedAt: at });
-        for (const pending of store.listApprovals({ runId: run.id, state: "pending" }))
-          store.updateApproval(pending.id, { state: "expired", resolvedAt: at });
+        store.updateRun(run.id, {
+          state: "running",
+          decisionLines: [
+            ...(store.getRun(run.id)?.decisionLines ?? []),
+            { key: "report.youSaidNo", params: { title: a.summary } },
+          ],
+        });
       }
     });
-    if (
-      decision === "approve" &&
-      store.listApprovals({ runId: run.id, state: "pending" }).some((item) => item.stepId === a.stepId)
-    ) {
+    if (store.listApprovals({ runId: run.id, state: "pending" }).some((item) => item.stepId === a.stepId)) {
       store.updateRun(run.id, { state: "waiting_approval" });
       const updated = runById(run.id);
       return { run: updated, settled: Promise.resolve(updated) };
     }
     const updated = runById(run.id);
-    return decision === "approve"
-      ? enqueue(updated, () => walk(updated))
-      : { run: updated, settled: Promise.resolve(updated) };
+    return enqueue(updated, () => walk(updated));
   }
   return {
     registerFlow(manifest, hash, files = {}) {

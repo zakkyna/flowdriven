@@ -1,5 +1,6 @@
 import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
+import { callGrant, digestCall } from "./connectors/grants.ts";
 import { createEngine } from "./engine.ts";
 import { scriptedHarness } from "./scripted-harness.ts";
 import type { Store } from "./storage.ts";
@@ -114,6 +115,57 @@ test("after a crash only an idempotent step resumes", async () => {
   expect(waiting.store.listAudit(pending.id).some((entry) => entry.kind === "run_interrupted")).toBe(false);
 });
 
+test.each([false, true])(
+  "TC-SR8-06 an approved send with idempotent=%s is interrupted after a crash",
+  async (idempotent) => {
+    const c = await setup(flow([worker("a", idempotent)]), { steps: { a: { exit: "quota" } } });
+    stores.push(c.store);
+    const run = await c.engine.startRun("local.test", { project: "/tmp" });
+    const row = c.store.getStep(run.id, "a");
+    if (!row) throw new Error("missing step");
+    c.store.updateRun(run.id, { state: "running" });
+    c.store.upsertStep({ ...row, state: "running" });
+    const tool = "mcp__claude_ai_Gmail__send_message";
+    const input = {};
+    const digest = digestCall(tool, input);
+    c.store.createApproval({
+      id: "ap-send",
+      kind: "risky_action",
+      runId: run.id,
+      stepId: "a",
+      itemKey: "",
+      summary: "Send",
+      payload: "Send",
+      approves: [callGrant("mail", tool, digest)],
+      onExpiry: "fail",
+      createdAt: run.startedAt,
+      expiresAt: run.startedAt,
+      state: "approved",
+      riskyAction: "send",
+      effect: "send",
+      call: { tool, input },
+    });
+    c.store.putCallGrant({
+      runId: run.id,
+      stepId: "a",
+      itemKey: "",
+      tool,
+      digest,
+      kind: "approve",
+      createdAt: run.startedAt,
+      approvalId: "ap-send",
+    });
+    const harness = scriptedHarness({ steps: { a: { text: "ok" } } });
+    const engine = createEngine({ store: c.store, harness, now: c.clock.now });
+    await engine.recoverAfterCrash();
+    expect(c.store.getRun(run.id)).toMatchObject({
+      state: "interrupted",
+      cause: { code: "crash", params: { step: "a" } },
+    });
+    expect(harness.calls).toEqual([]);
+  },
+);
+
 test("a run stays pinned to the flow version it started with", async () => {
   let blocked = true;
   const c = await setup(flow([worker("a"), worker("b")]), {
@@ -127,4 +179,56 @@ test("a run stays pinned to the flow version it started with", async () => {
   expect((await c.engine.resumeRun(first.id)).state).toBe("done");
   expect((await c.engine.startRun("local.test", { project: "/tmp" })).state).toBe("done");
   expect(c.harness.calls.map((call) => call.stepId)).toEqual(["a", "b", "b", "c"]);
+});
+
+test("TC-SR8-06 a declared delete is not automatically repeated even when idempotent", async () => {
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.delete",
+    name: "Delete",
+    kind: "build",
+    requirements: [{ id: "mail", type: "mcp_server", ref: "connector:gmail", tools: ["trash_message"] }],
+    steps: [{ ...worker("delete", true), uses: ["mail"] }],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const c = await setup(parsed.manifest, { steps: { delete: { exit: "quota" } } });
+  stores.push(c.store);
+  const run = await c.engine.startRun(parsed.manifest.id, { project: "." });
+  const row = c.store.getStep(run.id, "delete");
+  if (!row) throw new Error("missing step");
+  c.store.updateRun(run.id, { state: "running" });
+  c.store.upsertStep({ ...row, state: "running" });
+  const harness = scriptedHarness({ steps: { delete: { text: "ok" } } });
+  const engine = createEngine({ store: c.store, harness, now: c.clock.now });
+  await engine.recoverAfterCrash();
+  expect(c.store.getRun(run.id)).toMatchObject({
+    state: "interrupted",
+    cause: { code: "crash", params: { step: "delete" } },
+  });
+  expect(harness.calls).toEqual([]);
+});
+
+test("TC-SR8-06 an idempotent local write resumes after a crash", async () => {
+  // Pinning case: the idempotent local-work path predates B-05.T3.
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.write",
+    name: "Write",
+    kind: "build",
+    requirements: [{ id: "notes", type: "path", ref: "notes", access: "read_write" }],
+    steps: [{ ...worker("write", true), uses: ["notes"] }],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const c = await setup(parsed.manifest, { steps: { write: { exit: "quota" } } });
+  stores.push(c.store);
+  const run = await c.engine.startRun(parsed.manifest.id, { project: "." });
+  const row = c.store.getStep(run.id, "write");
+  if (!row) throw new Error("missing step");
+  c.store.updateRun(run.id, { state: "running" });
+  c.store.upsertStep({ ...row, state: "running" });
+  const harness = scriptedHarness({ steps: { write: { text: "ok" } } });
+  const engine = createEngine({ store: c.store, harness, now: c.clock.now });
+  await engine.recoverAfterCrash();
+  expect(c.store.getRun(run.id)?.state).toBe("done");
+  expect(harness.calls.map((call) => call.stepId)).toEqual(["write"]);
 });

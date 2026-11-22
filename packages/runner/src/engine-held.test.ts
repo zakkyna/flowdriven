@@ -98,19 +98,37 @@ test("after approve the step is run again by the walk and the run ends done, and
   expect(c.store.findGrant(legacyGrant(c.run.id, "send", "", grant))).toBeDefined();
   expect(c.store.findGrant(legacyGrant(c.run.id, "send", "", grant))?.usedAt).toBeUndefined();
 });
-test("reject: the approval is rejected, the audit has call_rejected, the step is failed with the note You rejected this call., the run is failed, and other pending approvals of the run are expired", async () => {
+test("TC-ENG-12: rejecting a held call skips it and completes the run", async () => {
+  const c = await ready();
+  const result = await c.engine.decide("ap-1", "reject");
+  expect(result.state).toBe("done");
+  expect(c.store.getStep(c.run.id, "send")).toMatchObject({
+    state: "skipped",
+    skipped: { because: "rejected", approvalId: "ap-1" },
+  });
+  expect(c.harness.calls).toHaveLength(0);
+});
+test("TC-ENG-15: a held call still waits after 25 hours", async () => {
+  const c = await ready();
+  c.clock.advance(25 * 3_600_000);
+  await c.engine.sweepExpired();
+  expect(c.store.getApproval("ap-1")?.state).toBe("pending");
+  expect(c.store.getRun(c.run.id)?.state).toBe("waiting_approval");
+  expect(c.harness.calls).toHaveLength(0);
+});
+test("TC-j24-08 reject skips the step and keeps another decision pending", async () => {
   const c = await ready();
   c.store.createApproval({ ...c.approval, id: "ap-2" });
   const result = await c.engine.decide("ap-1", "reject");
-  expect(result).toMatchObject({ state: "failed", endedAt: c.clock.now().toISOString() });
+  expect(result.state).toBe("waiting_approval");
   expect(c.store.getApproval("ap-1")).toMatchObject({
     state: "rejected",
     resolvedAt: c.clock.now().toISOString(),
   });
-  expect(c.store.getApproval("ap-2")?.state).toBe("expired");
+  expect(c.store.getApproval("ap-2")?.state).toBe("pending");
   expect(c.store.getStep(c.run.id, "send")).toMatchObject({
-    state: "failed",
-    note: "You rejected this call.",
+    state: "skipped",
+    skipped: { because: "rejected", approvalId: "ap-1" },
   });
   expect(c.store.listAudit(c.run.id)).toContainEqual(
     expect.objectContaining({
@@ -120,7 +138,7 @@ test("reject: the approval is rejected, the audit has call_rejected, the step is
   );
   expect(c.harness.calls).toHaveLength(0);
 });
-test("reject for a loop item fails that item", async () => {
+test("TC-ENG-14 reject for a loop item skips that item", async () => {
   const c = await ready("j1");
   c.store.upsertItem({
     runId: c.run.id,
@@ -131,15 +149,18 @@ test("reject for a loop item fails that item", async () => {
     status: "running",
   });
   await c.engine.decide("ap-1", "reject");
-  expect(c.store.listItems(c.run.id).at(0)?.status).toBe("failed");
+  expect(c.store.listItems(c.run.id).at(0)).toMatchObject({
+    status: "skipped",
+    skipped: { because: "rejected", approvalId: "ap-1" },
+  });
 });
-test("a second decision and a decision after expiry are refused with the present sentences", async () => {
+test("TC-RUL-04 a second decision is refused and a late approval succeeds", async () => {
   const c = await ready();
   await c.engine.decide("ap-1", "reject");
   expect(() => c.engine.beginDecide("ap-1", "approve")).toThrow("This approval was already decided.");
   const d = await ready();
   d.clock.advance(24 * 3_600_000 + 1);
-  expect(() => d.engine.beginDecide("ap-1", "approve")).toThrow("This approval expired.");
+  expect((await d.engine.decide("ap-1", "approve")).state).toBe("done");
 });
 test("a decision for a run that is not waiting is refused with Run is not waiting for approval.", async () => {
   const c = await ready();
@@ -151,16 +172,14 @@ test("beginDecide on an ask still throws Not a result sign-off.", async () => {
   c.store.updateApproval("ap-1", { kind: "ask" });
   expect(() => c.engine.beginDecide("ap-1", "approve")).toThrow("Not a result sign-off.");
 });
-test("a held call whose approval expires after 24 hours fails the step with The approval expired after 24 hours. and fails the run (sweepExpired)", async () => {
+test("TC-j24-29 a held call remains pending after 24 hours", async () => {
   const c = await ready();
   c.clock.advance(24 * 3_600_000 + 1);
   await c.engine.sweepExpired();
-  expect(c.store.getApproval("ap-1")?.state).toBe("expired");
-  expect(c.store.getStep(c.run.id, "send")).toMatchObject({
-    state: "failed",
-    note: "The approval expired after 24 hours.",
-  });
-  expect(c.store.getRun(c.run.id)?.state).toBe("failed");
+  expect(c.store.getApproval("ap-1")?.state).toBe("pending");
+  expect(c.store.getStep(c.run.id, "send")?.state).toBe("waiting_approval");
+  expect(c.store.getRun(c.run.id)?.state).toBe("waiting_approval");
+  expect(c.harness.calls).toEqual([]);
 });
 test("recoverAfterCrash leaves a run that waits for a held call in waiting_approval with its approval pending", async () => {
   const c = await ready();

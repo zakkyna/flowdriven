@@ -42,3 +42,7 @@ export const restrictedApprovals = {
     });
   },
 };
+
+export function earlierNo(store: Pick<Store, "listApprovals">, runId: string): boolean {
+  return store.listApprovals({ runId }).some((row) => row.state === "rejected");
+}

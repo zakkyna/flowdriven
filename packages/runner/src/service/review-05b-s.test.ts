@@ -94,7 +94,14 @@ test("approvals.resolve approves and rejects a held call through the handler, re
     ).rejects.toMatchObject({ code: "invalid_input", message: 'Unrecognized key: "applyToSimilar"' });
     await c.service.call("approvals.resolve", { approvalId: a.id, decision });
     expect(c.store.getApproval(a.id)?.state).toBe(decision === "approve" ? "approved" : "rejected");
-    if (decision === "reject") expect(c.store.getRun(run.id)?.state).toBe("failed");
+    if (decision === "reject") {
+      // TC-RUL-07
+      expect(c.store.getRun(run.id)?.state).toBe("done");
+      expect(c.store.getStep(run.id, a.stepId, a.itemKey)).toMatchObject({
+        state: "skipped",
+        skipped: { because: "rejected", approvalId: a.id },
+      });
+    }
   }
   const c = await setup();
   const m = manifest([

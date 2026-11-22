@@ -73,7 +73,7 @@ function approval(c: Awaited<ReturnType<typeof ready>>): ApprovalRow {
   if (!row) throw new Error("missing approval");
   return row;
 }
-test("a hold result creates a risky_action approval with the action, the summary, the indented input, grant, expiry and exact call", async () => {
+test("TC-j24-29 a held exact call remains pending beyond 25 hours", async () => {
   const c = await ready();
   const run = await c.start();
   const a = approval(c);
@@ -88,10 +88,18 @@ test("a hold result creates a risky_action approval with the action, the summary
     approves: [grant],
     onExpiry: "fail",
     createdAt: "2026-11-11T09:00:00.000Z",
-    expiresAt: "2026-11-12T09:00:00.000Z",
     state: "pending",
     call: { tool: "delete_draft", input },
   });
+  c.clock.advance(25 * 3_600_000);
+  await c.engine.sweepExpired();
+  expect(c.store.getApproval(a.id)).toMatchObject({
+    state: "pending",
+    call: { tool: "delete_draft", input },
+    approves: [grant],
+  });
+  expect(c.store.getRun(run.id)?.state).toBe("waiting_approval");
+  expect(c.harness.calls).toHaveLength(1);
 });
 test("the step and the run become waiting_approval, the walk halts, and the hold is not kept in row.attempts", async () => {
   const c = await ready();

@@ -192,7 +192,7 @@ test("a step stops at its time limit and the request carries it", async () => {
     vi.useRealTimers();
   }
 });
-test("a user check holds the run, approve completes it, reject fails it", async () => {
+test("TC-j24-08 a user check holds the run and either decision completes it", async () => {
   for (const decision of ["approve", "reject"] as const) {
     const c = await ready([worker({ checks: [{ type: "user" }] })], { steps: { a: { text: "ok" } } });
     const run = await c.start();
@@ -201,28 +201,28 @@ test("a user check holds the run, approve completes it, reject fails it", async 
     expect(ap).toMatchObject({ kind: "result_sign_off", itemKey: "", expiresAt: "2026-11-12T09:00:00.000Z" });
     if (!ap) throw new Error("missing approval");
     const result = await c.engine.decide(ap.id, decision);
-    expect(result.state).toBe(decision === "approve" ? "done" : "failed");
+    expect(result.state).toBe("done");
     if (decision === "reject") {
       expect(result.endedAt).toBeDefined();
       expect(c.engine.listApprovals().at(0)?.state).toBe("rejected");
+      expect(c.store.getStep(run.id, "a")).toMatchObject({
+        state: "skipped",
+        skipped: { because: "rejected", approvalId: ap.id },
+      });
     }
   }
 });
-test("TC-RUL-04 an expired sign-off refuses a later decision with a conflict", async () => {
+test("TC-RUL-04 a sign-off remains answerable after 25 hours", async () => {
   const c = await ready([worker({ checks: [{ type: "user" }] })], { steps: { a: {} } });
   const run = await c.start();
-  c.clock.advance(24 * 3600000 + 1);
+  c.clock.advance(25 * 3600000);
   const view = c.engine.getRun(run.id);
-  expect(view.run.state).toBe("failed");
+  expect(view.run.state).toBe("waiting_approval");
   const ap = view.approvals.at(0);
-  expect(ap).toMatchObject({ state: "expired", resolvedAt: "2026-11-12T09:00:00.000Z" });
-  expect(c.store.getStep(run.id, "a")?.note).toBe("The approval expired after 24 hours.");
+  expect(ap?.state).toBe("pending");
+  expect(c.store.getStep(run.id, "a")?.state).toBe("waiting_approval");
   if (!ap) throw new Error("missing approval");
-  await expect(c.engine.decide(ap.id, "approve")).rejects.toMatchObject({
-    code: "conflict",
-    reason: "decision_expired",
-    message: "This approval expired.",
-  });
+  expect((await c.engine.decide(ap.id, "approve")).state).toBe("done");
 });
 test("a failing readiness hook blocks the run before any step", async () => {
   const c = await ready(
@@ -275,12 +275,13 @@ test("an unknown builtin fails with its reason", async () => {
   expect(c.store.getStep(run.id, "a")).toMatchObject({ state: "failed", note: "unknown builtin" });
 });
 
-test("an ask decision for an unknown id still sweeps expired sign-offs", async () => {
+test("TC-ENG-15 an unknown answer leaves a late sign-off pending", async () => {
   const c = await ready([worker({ checks: [{ type: "user" }] })], { steps: { a: {} } });
   const run = await c.start();
   c.clock.advance(86400001);
   await expect(c.engine.answerAsk("missing", { picks: [] })).rejects.toMatchObject({ code: "not_found" });
-  expect(c.store.getRun(run.id)?.state).toBe("failed");
+  expect(c.store.getRun(run.id)?.state).toBe("waiting_approval");
+  expect(c.store.listApprovals({ runId: run.id }).at(0)?.state).toBe("pending");
 });
 
 test("a sign-off attempt is successful only after approval", async () => {

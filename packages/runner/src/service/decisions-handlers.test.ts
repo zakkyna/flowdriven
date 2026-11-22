@@ -624,3 +624,89 @@ test("TC-j24-47 activity and a chat card refer to the same approved decision", a
     store.close();
   }
 });
+
+test("TC-RUL-04 approvals before and after 24 hours remain valid", async () => {
+  // The stopped third decision is covered by B-05.T7.
+  const store = await openSqliteStore(":memory:");
+  let now = new Date("2026-11-21T23:59:59.999Z");
+  const service = createRunnerService({ store, dataDir: ".", mode: "demo", now: () => now });
+  try {
+    const { digestCall, callGrant } = await import("../connectors/grants.ts");
+    for (const [id, at] of [
+      ["before", "2026-11-21T23:59:59.999Z"],
+      ["after", "2026-11-22T01:00:00Z"],
+    ] as const) {
+      now = new Date(at);
+      const row = pendingDecision(store, { id, createdAt: "2026-11-21T00:00:00Z" });
+      const tool = "mcp__claude_ai_Gmail__reply",
+        input = { body: "Hello" },
+        digest = digestCall(tool, input);
+      store.updateApproval(row.id, {
+        kind: "risky_action",
+        effect: "send",
+        riskyAction: "send",
+        call: { tool, input },
+        approves: [callGrant("mail", tool, digest)],
+      });
+      expect(await service.call("approvals.resolve", { approvalId: id, decision: "approve" })).toMatchObject({
+        decision: { state: "approved" },
+      });
+      expect(
+        store.findGrant({
+          runId: row.runId,
+          stepId: row.stepId,
+          itemKey: "",
+          tool,
+          digest,
+          kind: "approve",
+          createdAt: "",
+        }),
+      ).toMatchObject({ approvalId: id });
+    }
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-RUL-07 reject records the decision and clears the notice in one call", async () => {
+  const store = await openSqliteStore(":memory:");
+  const cleared: string[] = [];
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+    clearNotice: (id) => cleared.push(id),
+  });
+  try {
+    const row = pendingDecision(store, { id: "reject", createdAt: "2026-11-21T00:00:00Z" });
+    store.updateApproval(row.id, {
+      kind: "risky_action",
+      effect: "send",
+      riskyAction: "send",
+      call: { tool: "reply", input: {} },
+    });
+    expect(await service.call("approvals.resolve", { approvalId: row.id, decision: "reject" })).toMatchObject(
+      { decision: { state: "rejected", resolvedVia: "window" } },
+    );
+    expect(store.getStep(row.runId, row.stepId)).toMatchObject({
+      state: "skipped",
+      skipped: { because: "rejected", approvalId: row.id },
+    });
+    expect(store.getRun(row.runId)?.decisionLines).toContainEqual({
+      key: "report.youSaidNo",
+      params: { title: row.summary },
+    });
+    expect(cleared).toEqual([`approval:${row.id}`]);
+    expect(store.listAudit(row.runId)).toContainEqual(
+      expect.objectContaining({
+        kind: "decision_made",
+        detail: expect.objectContaining({ decision: "reject", via: "window" }),
+      }),
+    );
+  } finally {
+    service.stop();
+    store.close();
+  }
+});

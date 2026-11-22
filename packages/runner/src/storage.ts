@@ -126,7 +126,11 @@ export type StepRow = {
   limitMs?: number;
   note?: string;
   noteLine?: Line;
-  skipped?: { because: "no_picks" };
+  skipped?: {
+    because: "no_picks" | "rejected" | "needs_skipped_result";
+    approvalId?: string;
+    stepId?: string;
+  };
   outside?: boolean;
   ruleUses?: { ruleId: string; tool: string; at: string }[];
   ownerApproved?: { output: string; hash: string; approvalId: string; at: string };
@@ -139,6 +143,7 @@ export type ItemRow = {
   item: Value;
   status: "pending" | "running" | "passed" | "failed" | "skipped";
   note?: string;
+  skipped?: { because: "rejected"; approvalId?: string };
 };
 export type ApprovalRow = {
   id: string;

@@ -865,6 +865,7 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 
 | Case | First stated step | Now | Reason |
 |---|---|---|---|
+| j24-29 (scheduled-slot clause) | B-05.T3 | B-12.T7 | The still-running scheduled-slot skip is built in B-12.T7. |
 | j24-46 (standing-rule clause) | B-05.T2 | B-05.T5 | Rule matching and standingRule() are built in T5; T2 checks the run hash and exact grant. |
 | SR1-28 (hook execution and changed call) | B-05.T2 | B-05.T2 | The existing fake-Claude coverage is in `claude/adapter-held.test.ts`; decision state and line are checked in the decision tests. |
 | j24-15 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
@@ -1014,6 +1015,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 | `packages/contracts/src/run.test.ts` | Version 2 `ResolvedVia` includes `expiry` | Version 2 `ResolvedVia` rejects `expiry` and keeps the other values (TC-CON-44) | B-05.T14 |
 | `packages/contracts/src/approval.test.ts`, `packages/fixtures/src/client.test.ts` | Version 2 approval shape includes a deadline and the fixture client expires it | The version 2 shape omits the deadline and rejects `expiry`; the fixture remains pending past 25 hours and can be answered (TC-CON-44; FS-j24.P7) | B-05.T14 |
 | `packages/runner/src/engine-held.test.ts` | A rejection fails the step and the run; the old reason text "This call is too large to show for your approval." | A rejection skips the action and the run goes on; the new reason text (j24-08, j24-41 are in B-05) | B-05.T3, B-05.T1 |
+| `packages/runner/src/review-r2.test.ts` | Reject ends the run as failed and pick grants cease to apply | Reject skips the sign-off, ends the run done, and pick grants still cease to apply (TC-j24-08) | B-05.T3 |
 | `packages/runner/src/engine-loop.test.ts`, `engine-steps.test.ts`, `engine-begin.test.ts`, `claude/review-05b-r.test.ts`, `service/review-05b-s.test.ts` | A rejected call fails the step and the run (a loop item fails the item; `beginDecide` rejects to `failed`; `review-05b-s` expects `failed` after a reject) | A rejected call is skipped and the run goes on, as the flow spec of j24 says (j24-08, j24-29, TC-ENG-12, TC-ENG-14) | B-05.T3 |
 | `packages/contracts/src/version.test.ts` | `CONTRACT_VERSION` is 1 | It is 2, with the version check (j01-11 is in B-01) | B-01.T6 |
 | `packages/contracts/src/operations.test.ts`, `wire.test.ts`, `jitless.test.ts` | The version 1 operation table (and `runner.info` with `contractVersion: 1`), the wire frames and the jitless schemas of version 1 | The version 2 table of 45 live operations and the 12 retired entries (j24-38, j26-04 are in B-01); the version 1 assertions live on in `v1/` | B-01.T4 |

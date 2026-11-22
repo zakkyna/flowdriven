@@ -255,22 +255,22 @@ test(
     );
   },
 );
-test(
-  "reject: the run fails with the step note You rejected this call. and the call never runs",
-  timeout,
-  async () => {
-    const c = await real(
-      [worker("hold", "Hold")],
-      [{ when: "Hold", actions: [invoke(gmail, "delete", "delete_draft"), result] }],
-    );
-    const run = await c.start();
-    expect((await c.engine.decide(pending(c.store).id, "reject")).state).toBe("failed");
-    expect(c.store.getStep(run.id, "hold")?.note).toBe("You rejected this call.");
-    expect(readFakeCalls(c.home)).not.toContainEqual(
-      expect.objectContaining({ kind: "tool", id: "delete", ran: true }),
-    );
-  },
-);
+test("TC-j24-08 reject skips the step and the call never runs", timeout, async () => {
+  const c = await real(
+    [worker("hold", "Hold")],
+    [{ when: "Hold", actions: [invoke(gmail, "delete", "delete_draft"), result] }],
+  );
+  const run = await c.start();
+  const approval = pending(c.store);
+  expect((await c.engine.decide(approval.id, "reject")).state).toBe("done");
+  expect(c.store.getStep(run.id, "hold")).toMatchObject({
+    state: "skipped",
+    skipped: { because: "rejected", approvalId: approval.id },
+  });
+  expect(readFakeCalls(c.home)).not.toContainEqual(
+    expect.objectContaining({ kind: "tool", id: "delete", ran: true }),
+  );
+});
 test(
   "a changed input after the approval is held again: a second approval is created, the first grant stays unused",
   timeout,
