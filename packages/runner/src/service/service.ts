@@ -27,6 +27,7 @@ import {
   createDecisionHandlers,
   createDispatcher,
   createHandlers,
+  createRuleHandlers,
   createSettingsHandlers,
 } from "./handlers.ts";
 import { createKeepAwake } from "./keep-awake.ts";
@@ -233,6 +234,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
   });
   const decisions = createDecisionHandlers(store, engine, weekly, (id) => options.clearNotice?.(id));
   const settings = createSettingsHandlers(store, now);
+  const rules = createRuleHandlers(store, now);
   const runs = createRunHandlers(store, engine, (name) =>
     name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   );
@@ -243,6 +245,8 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     engine,
     call: createDispatcher({
       v2: {
+        "rules.list": rules.list,
+        "rules.revoke": rules.revoke,
         "approvals.list": decisions.list,
         "approvals.resolve": decisions.resolve,
         "approvals.answer": decisions.answer,

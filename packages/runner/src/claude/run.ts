@@ -36,6 +36,7 @@ export type RunInput = {
   pickTools?: string[];
   runId: string;
   stepId: string;
+  ruleTitle?: string;
   itemKey: string;
   attempt: number;
   model: ClaudeModel;
@@ -81,6 +82,7 @@ export type RunDeps = {
   closeWaitMs?: number;
   maxLineBytes: number;
   maxDeniedEntries?: number;
+  recordRule?: (ruleId: string, tool: string, at: string) => void;
   beforeAllow?: () => void;
   register?: (stop: (sentence?: string) => void) => () => void;
 };
@@ -250,6 +252,14 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             tool: held.tool,
             digest: held.digest,
           });
+        }
+        if (decision.allow && decision.by === "rule" && decision.ruleId) {
+          try {
+            if (!deps.recordRule) throw new Error("Rule recording is unavailable.");
+            deps.recordRule(decision.ruleId, decision.tool, new Date(nowMs()).toISOString());
+          } catch {
+            return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
+          }
         }
         if (decision.allow && decision.by === "grant" && decision.grant) {
           try {

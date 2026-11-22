@@ -258,6 +258,17 @@ export function decide(
     effect = entry.effect;
     if (entry.place?.kind === "account")
       catalogPlace = { ...entry.place, label: touch?.place?.label ?? entry.place.value };
+    if (entry.place?.kind === "folder") {
+      const value = input[entry.place.fromInput];
+      if (typeof value === "string") {
+        hiddenAddress = visible(value, Infinity) !== value;
+        catalogPlace = {
+          kind: "folder",
+          value: visible(value, Infinity),
+          label: touch?.place?.label ?? "Folder",
+        };
+      }
+    }
     if (entry.place?.kind === "address") {
       const addresses = entry.place.fromInput.flatMap((key) => {
         const value = input[key];
@@ -341,6 +352,7 @@ export function decide(
   const findRule = () => {
     if (
       touch?.fixedPlace &&
+      !hiddenAddress &&
       policy.flowId &&
       ((touch.list === "on_its_own" && (effect === "local_write" || effect === "run_command")) ||
         (!policy.earlierNo && policy.source !== "tool" && policy.source !== "phone")) &&
@@ -358,6 +370,8 @@ export function decide(
         rules,
         { flowId: policy.flowId, touchId: touch.touchId, effect, place },
         {
+          hash: policy.hash,
+          startedAt: policy.startedAt,
           touches: (policy.touches ?? []).map((item) => ({
             id: item.touchId,
             effect: item.effect,
@@ -370,8 +384,10 @@ export function decide(
     return undefined;
   };
   const ownLocal = touch?.list === "on_its_own" && (effect === "local_write" || effect === "run_command");
-  if (ownLocal && findRule())
-    return allowed(effect === "local_write" ? "declared_write" : "declared_command");
+  if (ownLocal) {
+    const rule = findRule();
+    if (rule) return allowed("rule", rule.id);
+  }
   if (books?.grants && policy.runId && policy.stepId) {
     const grant = matchGrant(books.grants, {
       runId: policy.runId,

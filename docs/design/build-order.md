@@ -987,6 +987,8 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/claude/adapter-limits.test.ts` | Confirmed local work runs through the hook | The same calls run and identify their rules for recording (TC-RUL-12) | B-05.T5 |
+| `packages/runner/src/claude/decide.test.ts` | Local writes and commands matched by rules report declared work | The same allowed calls identify their matching rule for recording (TC-RUL-12) | B-05.T5 |
 | `packages/runner/src/engine-begin.test.ts`, `review-r1.test.ts`, `service/run-process.test.ts` | Ask expiry during sweeps or resume, and the old second-answer error | A choice stays pending through sweeps and a second answer reports conflict (TC-j24-31, TC-RUL-21; FS-j24.P4) | B-05.T2 |
 | `packages/runner/src/service/handlers.test.ts` | A second choice answer is not_allowed | It is a conflict with the original answer source (TC-RUL-21; FS-j24.P4) | B-05.T2 |
 | `packages/runner/src/engine-steps.test.ts` (expired sign-off refusal) | A later answer to an expired decision is not_allowed | The answer is a conflict with decision_expired (TC-RUL-04; FS-j24.A16); the separate removal of expiry stays in T3 | B-05.T2 |

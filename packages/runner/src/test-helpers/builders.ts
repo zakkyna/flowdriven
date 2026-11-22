@@ -1,6 +1,6 @@
 import { callGrant, digestCall } from "../connectors/grants.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
-import type { ApprovalRow, Store } from "../storage.ts";
+import type { ApprovalRow, RuleInput, RuleRow, Store } from "../storage.ts";
 
 export function pendingDecision(store: Store, options: { id: string; createdAt: string }): ApprovalRow {
   const { manifest, files } = demoFlow();
@@ -108,4 +108,15 @@ export function approvedDecision(store: Store, options: { id: string; createdAt:
     approvalId: row.id,
   });
   return row;
+}
+
+export function standingRule(store: Store, input: Partial<RuleInput> = {}): RuleRow {
+  return store.makeRule({
+    flowId: "example.fill-timesheet",
+    touchId: "log-hours",
+    effect: "change",
+    place: { kind: "account", value: "timesheet-account", label: "Timesheet" },
+    sentence: "Log hours",
+    ...input,
+  });
 }

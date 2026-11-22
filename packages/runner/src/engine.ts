@@ -76,7 +76,7 @@ export interface Engine {
   beginAnswer(approvalId: string, answer: { picks: string[] }): Begun;
   beginDecide(
     approvalId: string,
-    decision: "approve" | "reject" | "edit",
+    decision: "approve" | "reject" | "edit" | "always_allow",
     edit?: { text: string; subject?: string },
   ): Begun;
   beginResume(runId: string): Begun;
@@ -456,7 +456,7 @@ export function createEngine(input: EngineDeps): Engine {
   }
   function beginDecide(
     id: string,
-    decision: "approve" | "reject" | "edit",
+    decision: "approve" | "reject" | "edit" | "always_allow",
     edit?: { text: string; subject?: string },
   ): Begun {
     assertRunning();
@@ -475,7 +475,7 @@ export function createEngine(input: EngineDeps): Engine {
     const run = runById(a.runId);
     if (run.state !== "waiting_approval")
       throw new EngineError("not_allowed", "Run is not waiting for approval.");
-    if (decision !== "approve" && decision !== "reject" && decision !== "edit")
+    if (decision !== "approve" && decision !== "reject" && decision !== "edit" && decision !== "always_allow")
       throw new EngineError("invalid_input", "Invalid decision.");
     let editedCall: { tool: string; input: Value; digest: string } | undefined;
     if (decision === "edit") {
@@ -522,10 +522,78 @@ export function createEngine(input: EngineDeps): Engine {
     const row = store.getStep(a.runId, a.stepId, a.itemKey);
     if (!row) throw new EngineError("not_found", "Step not found.");
     const at = now().toISOString();
+    const manifest = flowFor(run).manifest as FlowManifest;
+    const touch =
+      manifest.format === "flowdriven-flow/1.2"
+        ? manifest.touches?.find((t) => t.id === a.touchId)
+        : undefined;
+    if (
+      decision === "always_allow" &&
+      (a.kind !== "risky_action" ||
+        a.effect !== "change" ||
+        !a.fixedPlace ||
+        a.outside ||
+        !a.place ||
+        !["account", "folder"].includes(a.place.kind) ||
+        !touch ||
+        touch.effect !== "change" ||
+        touch.place?.kind !== a.place.kind ||
+        touch.place.value !== a.place.value)
+    )
+      throw new EngineError("not_allowed", "The place is not fixed.", { reason: "place_not_fixed" });
     if (a.kind === "risky_action") {
       store.transaction(() => {
+        const rule =
+          decision === "always_allow" && a.place && touch
+            ? store.makeRule({
+                flowId: run.flowId,
+                touchId: touch.id,
+                effect: "change",
+                place: a.place,
+                sentence: touch.sentence,
+                createdAt: at,
+                createdBy: "always_allow",
+                approvalId: a.id,
+              })
+            : undefined;
+        if (rule) {
+          store.appendAudit({
+            at,
+            kind: "rule_created",
+            runId: run.id,
+            detail: {
+              ruleId: rule.id,
+              flowId: run.flowId,
+              touchId: rule.touchId,
+              effect: rule.effect,
+              placeKind: rule.place.kind,
+              by: "always_allow",
+              runId: run.id,
+              stepId: a.stepId,
+            },
+          });
+          if (a.chatId)
+            store.putMessage({
+              id: deps.newId("message"),
+              chatId: a.chatId,
+              seq: Math.max(0, ...store.listMessages(a.chatId).map((m) => m.seq)) + 1,
+              at,
+              role: "flowdriven",
+              kind: "line",
+              outside: false,
+              line: { key: "chat.alwaysAllowed", params: { flow: manifest.name } },
+            });
+        }
         store.updateApproval(id, {
-          state: decision === "edit" ? "approved_edited" : decision === "approve" ? "approved" : "rejected",
+          state:
+            decision === "always_allow"
+              ? "allowed_always"
+              : decision === "edit"
+                ? "approved_edited"
+                : decision === "approve"
+                  ? "approved"
+                  : "rejected",
+          ...(rule ? { ruleId: rule.id } : {}),
           resolvedAt: at,
           ...(decision !== "reject" ? { resolvedVia: "window" } : {}),
           ...(editedCall && edit
@@ -551,7 +619,7 @@ export function createEngine(input: EngineDeps): Engine {
           }
         store.appendAudit({
           at,
-          kind: decision === "approve" ? "call_approved" : "call_rejected",
+          kind: decision !== "reject" ? "call_approved" : "call_rejected",
           runId: run.id,
           detail: { approvalId: id, stepId: a.stepId, itemKey: a.itemKey, tool: a.call?.tool ?? "" },
         });

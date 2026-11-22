@@ -34,6 +34,7 @@ export type CompiledTouch = {
 export type Policy = {
   flowId?: string;
   hash?: string;
+  startedAt?: string;
   touches?: CompiledTouch[];
   declaredTools?: { tool: string; cover: string }[];
   effectCatalog?: EffectEntry[];
@@ -396,7 +397,7 @@ export function buildPolicy(input: {
     return index(a.path) - index(b.path);
   });
   for (const touch of policy.touches ?? []) {
-    if (touch.place?.kind !== "folder") continue;
+    if (touch.place?.kind !== "folder" || touch.effect === "change") continue;
     const requirement = paths.find((item) => item.type === "path" && item.id === touch.place?.value);
     if (!requirement || requirement.type !== "path") throw new Error("Invalid touch folder");
     const resolved =

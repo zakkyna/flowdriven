@@ -6,6 +6,7 @@ import { describeTemplate, type Touch, type Value } from "@flowdriven/sdk";
 import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
 import type { GrantBook } from "../connectors/grants.ts";
 import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
+import type { EffectEntry } from "../rules/effects.ts";
 import { type LoadedSkill, skillSource } from "../skills/skill-folder.ts";
 import type { Confirmation, ConsentPins, RuleRow } from "../storage.ts";
 import { CONNECTOR_DENY } from "./connector.ts";
@@ -32,9 +33,19 @@ export type ClaudeAdapterOptions = {
         grants?: GrantBook;
         source?: string;
         earlierNo?: boolean;
+        startedAt?: string;
       }
     | undefined;
   rules?: (flowId: string) => RuleRow[];
+  recordRule?: (input: {
+    ruleId: string;
+    runId: string;
+    stepId: string;
+    itemKey: string;
+    tool: string;
+    title: string;
+    at: string;
+  }) => void;
   grantedFolders?: (runId: string) => ConsentPins["folders"] | undefined;
   skillPin?: (runId: string, requirementId: string) => string | undefined;
   home?: string;
@@ -45,6 +56,7 @@ export type ClaudeAdapterOptions = {
   grants?: GrantBook;
   connectors?: () => ConnectorFact[];
   catalog?: ConnectorEntry[];
+  effectCatalog?: EffectEntry[];
   effortModels?: () => { low: string; medium: string; high: string } | undefined;
   nowMs?: () => number;
   claudePath: () => string | undefined;
@@ -77,6 +89,18 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       grants: options.grants,
       onCall,
       nowMs: options.nowMs ?? Date.now,
+      recordRule: (ruleId, tool, at) => {
+        if (!options.recordRule) throw new Error("Rule recording is unavailable.");
+        options.recordRule({
+          ruleId,
+          runId: input.runId,
+          stepId: input.stepId,
+          itemKey: input.itemKey,
+          tool,
+          title: input.ruleTitle ?? input.stepId,
+          at,
+        });
+      },
       env: options.env(),
       controlRoot: options.controlRoot,
       audit: options.audit,
@@ -141,6 +165,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
             {
               runId: req.runId,
               stepId: req.stepId,
+              ruleTitle: req.title,
               itemKey: req.itemKey,
               pickTools: req.pickTools,
               attempt: req.attempt,
@@ -195,6 +220,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   routes: req.routes ?? [],
                   connectors: options.connectors?.() ?? [],
                   catalog,
+                  effectCatalog: options.effectCatalog,
                   project: req.project,
                   itemKey: req.itemKey,
                   home,
@@ -212,6 +238,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                     itemKey: req.itemKey,
                     source: confirmed.source,
                     earlierNo: confirmed.earlierNo,
+                    startedAt: confirmed.startedAt,
                   });
                 workFolder = policy.workFolder;
                 if (skillRequirement) {

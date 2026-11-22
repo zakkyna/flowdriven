@@ -128,6 +128,7 @@ export type StepRow = {
   noteLine?: Line;
   skipped?: { because: "no_picks" };
   outside?: boolean;
+  ruleUses?: { ruleId: string; tool: string; at: string }[];
   ownerApproved?: { output: string; hash: string; approvalId: string; at: string };
 };
 export type ItemRow = {
@@ -152,7 +153,7 @@ export type ApprovalRow = {
   onExpiry: "end" | "fail";
   createdAt: string;
   expiresAt: string;
-  state: ApprovalState | "approved_edited";
+  state: ApprovalState | "approved_edited" | "allowed_always";
   picks?: string[];
   resolvedAt?: string;
   riskyAction?: RiskyAction;
@@ -434,6 +435,7 @@ export interface Store {
   makeRule(input: RuleInput): RuleRow;
   listRules(): RuleRow[];
   revokeRule(id: string, by: string): void;
+  useRule(id: string, at: string): void;
   putCallGrant(row: CallGrant): void;
   findGrant(key: CallGrant): CallGrant | undefined;
   findPickGrant(key: CallGrant): CallGrant | undefined;

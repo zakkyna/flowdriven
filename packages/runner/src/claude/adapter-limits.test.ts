@@ -570,7 +570,11 @@ test("TC-SR1-34 and TC-SR1-35 persist the block and stop later steps", { timeout
 test("TC-SR1-25 confirmed reads, writes and commands run on the fake claude", {
   timeout: 30000,
 }, async () => {
+  const recorded: string[] = [];
   const t = setup(play([]), {
+    recordRule: ({ ruleId }) => {
+      recorded.push(ruleId);
+    },
     confirmation: () => ({
       confirmation: {
         flowId: "example.build-apk",
@@ -674,6 +678,7 @@ test("TC-SR1-25 confirmed reads, writes and commands run on the fake claude", {
     expect.objectContaining({ id: "write", hookExit: 0, ran: true }),
     expect.objectContaining({ id: "build", hookExit: 0, ran: true }),
   ]);
+  expect(recorded).toEqual(["write-rule", "build-rule"]);
   expect(t.audits.find((a) => a.kind === "tool_calls")?.detail).toMatchObject({
     allowed: 3,
     held: 0,

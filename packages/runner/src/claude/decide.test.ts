@@ -387,7 +387,8 @@ test("TC-SR1-01 covers all effect classes and held digests", async () => {
   expect(decide(write, call("Write", { file_path: join(notes, "app.apk"), content: "x" }))).toMatchObject({
     outcome: "run",
     effect: "local_write",
-    by: "declared_write",
+    by: "rule",
+    ruleId: "write-rule",
   });
   const command = {
     ...policy,
@@ -423,7 +424,8 @@ test("TC-SR1-01 covers all effect classes and held digests", async () => {
   expect(decide(command, call("Bash", { command: "flutter build apk" }))).toMatchObject({
     outcome: "run",
     effect: "run_command",
-    by: "declared_command",
+    by: "rule",
+    ruleId: "build-rule",
   });
 });
 

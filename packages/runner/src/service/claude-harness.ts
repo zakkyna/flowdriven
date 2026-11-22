@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type HarnessCard, RunnerError } from "@flowdriven/contracts/v1";
-import type { FlowManifest, Requirement, Value } from "@flowdriven/sdk";
+import type { Requirement, Value } from "@flowdriven/sdk";
+import { FlowManifest } from "@flowdriven/sdk";
 import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapter.ts";
 import type { ConnectorFact } from "../claude/connector-scan.ts";
 import { controlRoot, sweepControlRoot } from "../claude/control.ts";
@@ -23,6 +24,7 @@ import {
   unattendedProviderErrors,
 } from "../router/route.ts";
 import type { HarnessFacts, Routed } from "../router/types.ts";
+import { recordRuleUse } from "../rules/standing.ts";
 import { bundledSkill, readSkillFolder, skillSource } from "../skills/skill-folder.ts";
 import type { HarnessStateRow, Store } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
@@ -346,7 +348,25 @@ export function createHarnessService(options: {
     return queue;
   };
   const adapter = createClaudeAdapter({
-    confirmation: () => undefined,
+    confirmation: (runId) => {
+      const run = options.store.getRun(runId);
+      const flow = run && options.store.getFlow(run.flowId, run.flowHash);
+      const confirmation = run && options.store.getConfirmation(run.flowId);
+      if (!run || !flow || !confirmation) return undefined;
+      const manifest = FlowManifest.safeParse(flow.manifest);
+      if (!manifest.success || manifest.data.format !== "flowdriven-flow/1.2") return undefined;
+      return {
+        confirmation: {
+          flowId: run.flowId,
+          hash: run.flowHash,
+          onItsOwn: confirmation.hash === run.flowHash ? confirmation.onItsOwn : [],
+          touches: manifest.data.touches ?? [],
+        },
+        source: run.start?.source,
+        startedAt: run.startedAt,
+      };
+    },
+    recordRule: (input) => recordRuleUse(options.store, input),
     rules: (flowId) => options.store.listRules().filter((rule) => rule.flowId === flowId),
     claudePath: () => (cache?.scan.detected ? cache.scan.path : undefined),
     env: () => options.env,

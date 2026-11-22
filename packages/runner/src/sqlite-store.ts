@@ -309,6 +309,12 @@ export async function openSqliteStore(
       const next = { ...row, state: "revoked", revokedAt: new Date().toISOString(), revokedBy: by };
       execute("UPDATE standing_rules SET state = ?, data = ? WHERE id = ?", next.state, json(next), id);
     },
+    useRule(id, at) {
+      const row = store.listRules().find((rule) => rule.id === id && rule.state === "active");
+      if (!row) throw new EngineError("not_found", "Rule not found.");
+      const next = { ...row, uses: row.uses + 1, lastUsedAt: at };
+      execute("UPDATE standing_rules SET data = ? WHERE id = ?", json(next), id);
+    },
     putCallGrant(row) {
       execute(
         "INSERT OR IGNORE INTO call_grants VALUES (?, ?, ?, ?, ?, ?)",

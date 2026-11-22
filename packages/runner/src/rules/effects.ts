@@ -15,7 +15,11 @@ export const EFFECT_RANK: Record<Effect, number> = {
 export type EffectEntry = {
   tool: string;
   effect: Effect;
-  place: { kind: "account"; value: string } | { kind: "address"; fromInput: string[] } | undefined;
+  place:
+    | { kind: "account"; value: string }
+    | { kind: "address"; fromInput: string[] }
+    | { kind: "folder"; fromInput: string }
+    | undefined;
 };
 const prefix = "mcp__claude_ai_Gmail__";
 const account = { kind: "account", value: "gmail" } as const;

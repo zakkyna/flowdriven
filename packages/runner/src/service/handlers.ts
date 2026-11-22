@@ -6,6 +6,7 @@ import {
   RUNNER_ERROR_CODES as ROOT_ERROR_CODES,
   RunnerError,
   type RunnerErrorCode,
+  StandingRuleView,
   type OperationInput as V2Input,
   type OperationName as V2Name,
   type OperationOutput as V2Output,
@@ -553,7 +554,19 @@ export function createDecisionHandlers(
         reason: "already_answered",
         params: { via: row.resolvedVia ?? "window" },
       });
-    if (input.decision !== "approve" && input.decision !== "reject" && input.decision !== "edit")
+    if (input.decision === "always_allow") {
+      if (row.effect && ["send", "post", "pay", "delete", "merge"].includes(row.effect))
+        throw new RunnerError("not_allowed", "This action always asks.", { reason: "always_asks" });
+      if (
+        row.kind !== "risky_action" ||
+        row.effect !== "change" ||
+        !row.fixedPlace ||
+        row.outside ||
+        !row.place ||
+        !["account", "folder"].includes(row.place.kind)
+      )
+        throw new RunnerError("not_allowed", "The place is not fixed.", { reason: "place_not_fixed" });
+    } else if (input.decision !== "approve" && input.decision !== "reject" && input.decision !== "edit")
       throw new RunnerError("invalid_input", "Only text can be edited.");
     if (input.decision === "edit") {
       for (const text of [input.editedText, input.editedSubject]) {
@@ -590,4 +603,50 @@ export function createDecisionHandlers(
     return { decision };
   };
   return { list, resolve, answer };
+}
+
+export function createRuleHandlers(store: Store, now: () => Date) {
+  const view = (rule: import("../storage.ts").RuleRow) =>
+    StandingRuleView.parse({
+      id: rule.id,
+      flowId: rule.flowId,
+      touchId: rule.touchId,
+      sentence: rule.sentence,
+      effect: rule.effect,
+      place: rule.place,
+      createdAt: rule.createdAt,
+      createdBy: rule.createdBy,
+      ...(rule.lastUsedAt ? { lastUsedAt: rule.lastUsedAt } : {}),
+    });
+  return {
+    list(input: V2Input<"rules.list">) {
+      return store
+        .listRules()
+        .filter((rule) => rule.state === "active" && (!input.flowId || input.flowId === rule.flowId))
+        .reverse()
+        .map(view);
+    },
+    revoke(input: V2Input<"rules.revoke">) {
+      const rule = store.listRules().find((row) => row.id === input.ruleId);
+      if (!rule) throw new RunnerError("not_found", "Rule not found.");
+      const changed = rule.state === "active";
+      if (changed)
+        store.transaction(() => {
+          store.revokeRule(rule.id, "ask_me_again");
+          store.appendAudit({
+            at: now().toISOString(),
+            kind: "rule_revoked",
+            detail: {
+              ruleId: rule.id,
+              flowId: rule.flowId,
+              touchId: rule.touchId,
+              effect: rule.effect,
+              placeKind: rule.place.kind,
+              by: "ask_me_again",
+            },
+          });
+        });
+      return { rule: view(rule), changed };
+    },
+  };
 }

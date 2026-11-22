@@ -110,7 +110,9 @@ export function approvedCallsOf(
 ): { tool: string; input: Value }[] {
   return store
     .listApprovals({ runId })
-    .filter((row) => row.state === "approved" || row.state === "approved_edited")
+    .filter(
+      (row) => row.state === "approved" || row.state === "approved_edited" || row.state === "allowed_always",
+    )
     .flatMap((row) => {
       const grant = row.approves.at(0);
       if (
