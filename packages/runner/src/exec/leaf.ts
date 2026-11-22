@@ -100,6 +100,9 @@ export async function runLeaf(
   for (let n = 1; n <= attempts; n++) {
     const replan = n === replanAt;
     const ctl = new AbortController();
+    const active = deps.active.get(run.id) ?? new Set<AbortController>();
+    active.add(ctl);
+    deps.active.set(run.id, active);
     row.state = "running";
     if (!ctx.keepWaiting) store.updateRun(run.id, { state: "running" });
     const attempt = { number: n, replan, worker: harness.name, startedAt: now().toISOString() };
@@ -149,6 +152,7 @@ export async function runLeaf(
           }),
           ctl.signal,
         );
+        if (store.getRun(run.id)?.state === "stopped") return "halt";
         if (!plan) {
           row.attempts.pop();
           break;
@@ -212,6 +216,7 @@ export async function runLeaf(
           ctl.signal,
         );
       }
+      if (store.getRun(run.id)?.state === "stopped") return "halt";
       if (result.outside === true) row.outside = true;
       if (result.hold) {
         const hold = result.hold;
@@ -442,7 +447,10 @@ export async function runLeaf(
     } finally {
       ended = true;
       clearTimeout(timer);
+      active.delete(ctl);
+      if (active.size === 0) deps.active.delete(run.id);
     }
+    if (store.getRun(run.id)?.state === "stopped") return "halt";
     Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
     if (timedOut && duration > LONG_STEP_MS && n < attempts) {
       block(LONG_STEP.timedOut(Math.round(duration / 60_000)));

@@ -69,6 +69,7 @@ export type ClaudeAdapterOptions = {
   rounds?: number;
   pollMs?: number;
   graceMs?: number;
+  killGroup?: (pid: number, signal: NodeJS.Signals) => void;
   exitWaitMs?: number;
   closeWaitMs?: number;
   maxLineBytes?: number;
@@ -108,7 +109,8 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       newSessionId: options.newSessionId ?? randomUUID,
       rounds: options.rounds ?? 50,
       pollMs: options.pollMs ?? 25,
-      graceMs: options.graceMs ?? 2000,
+      graceMs: options.graceMs ?? 1000,
+      killGroup: options.killGroup,
       exitWaitMs: options.exitWaitMs ?? 10000,
       closeWaitMs: options.closeWaitMs ?? 8000,
       maxLineBytes: options.maxLineBytes ?? MAX_LINE_BYTES,

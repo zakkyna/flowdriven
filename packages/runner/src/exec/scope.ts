@@ -5,7 +5,7 @@ export function makeScope(run: RunRow, rows: StepRow[], manifest: FlowManifest, 
   const steps = Object.fromEntries(
     manifest.steps.flatMap((step) => {
       const row = rows.find((r) => r.stepId === step.id && r.itemKey === "");
-      if (!row || !["passed", "skipped", "failed"].includes(row.state)) return [];
+      if (!row || (row.state !== "passed" && row.state !== "skipped" && row.state !== "failed")) return [];
       const view = stepView(row.state, row.outputs);
       if (!("for_each" in step) || view === null || typeof view !== "object" || Array.isArray(view))
         return [[step.id, view]];
@@ -39,7 +39,7 @@ export function itemScope(scope: Scope, loop: LoopStep, item: Value, rows: StepR
   const nested = Object.fromEntries(
     loop.steps.flatMap((step) => {
       const row = rows.find((r) => r.stepId === step.id && r.itemKey === key);
-      return row && ["passed", "skipped", "failed"].includes(row.state)
+      return row && (row.state === "passed" || row.state === "skipped" || row.state === "failed")
         ? [[step.id, stepView(row.state, row.outputs)]]
         : [];
     }),

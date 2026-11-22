@@ -416,7 +416,7 @@ export function createHandlers({
   };
 }
 
-export function createSettingsHandlers(store: Store, now: () => Date) {
+export function createSettingsHandlers(store: Store, now: () => Date, clearNotice: (id: string) => void) {
   const get = () => readSettings(store, now());
   return {
     get,
@@ -430,7 +430,25 @@ export function createSettingsHandlers(store: Store, now: () => Date) {
           reason: "limit_not_above",
           params: { limit: before.spendingLimit },
         });
+      const expired =
+        patch.agentPermission === "off" && before.agentPermission !== "off"
+          ? store.listApprovals({ state: "pending" })
+          : [];
       store.transaction(() => {
+        for (const approval of expired) {
+          const at = now().toISOString();
+          store.updateApproval(approval.id, {
+            state: "expired",
+            resolvedVia: "permission_off",
+            resolvedAt: at,
+          });
+          store.appendAudit({
+            at,
+            kind: "decision_expired",
+            runId: approval.runId,
+            detail: { approvalId: approval.id, runId: approval.runId, why: "permission_off" },
+          });
+        }
         for (const key of [
           "language",
           "agentPermission",
@@ -470,6 +488,7 @@ export function createSettingsHandlers(store: Store, now: () => Date) {
           }
         }
       });
+      for (const approval of expired) clearNotice(`approval:${approval.id}`);
       return get();
     },
   };

@@ -78,6 +78,7 @@ export type RunDeps = {
   rounds: number;
   pollMs: number;
   graceMs: number;
+  killGroup?: (pid: number, signal: NodeJS.Signals) => void;
   exitWaitMs: number;
   closeWaitMs?: number;
   maxLineBytes: number;
@@ -501,6 +502,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       cwd: policy.cwd,
       env: childEnv(deps.env),
       graceMs: deps.graceMs,
+      killGroup: deps.killGroup,
     });
     if (child.pid !== undefined) {
       startedAt = nowMs();

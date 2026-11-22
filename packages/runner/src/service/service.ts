@@ -124,6 +124,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     now,
     newId,
     dayOf,
+    clearNotice: (id) => options.clearNotice?.(id),
     harness: wired?.harness ?? harness,
     keepAwake:
       options.keepAwake ??
@@ -233,7 +234,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   });
   const decisions = createDecisionHandlers(store, engine, weekly, (id) => options.clearNotice?.(id));
-  const settings = createSettingsHandlers(store, now);
+  const settings = createSettingsHandlers(store, now, (id) => options.clearNotice?.(id));
   const rules = createRuleHandlers(store, now);
   const runs = createRunHandlers(store, engine, (name) =>
     name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
@@ -255,6 +256,13 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
         "runs.list": runs.list,
         "runs.status": runs.status,
         "runs.report": runs.report,
+        "runs.stop": (input) => {
+          const result = runs.stop(input);
+          if (result.changed)
+            for (const topic of ["runs", "approvals", "chats", "activity"] as const)
+              options.markChanged?.(topic);
+          return result;
+        },
         "settings.get": settings.get,
         "settings.update": settings.update,
         "runner.info": () => ({

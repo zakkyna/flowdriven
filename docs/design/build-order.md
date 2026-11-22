@@ -865,6 +865,9 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 
 | Case | First stated step | Now | Reason |
 |---|---|---|---|
+| j24-34 (scheduled-slot record) | B-05.T7 | B-12.T7 | The missed scheduled-slot record is built with TC-j12-12. |
+| j25-21 (rendered audit sentence) | B-05.T7 | B-19.T6 | The renderer draws the audit sentence from the recorded codes. |
+| j24-33 (rendered stopped words) | B-05.T7 | B-16, B-19 | The renderer draws the stopped words from the run state and cause. |
 | j24-29 (scheduled-slot clause) | B-05.T3 | B-12.T7 | The still-running scheduled-slot skip is built in B-12.T7. |
 | j24-46 (standing-rule clause) | B-05.T2 | B-05.T5 | Rule matching and standingRule() are built in T5; T2 checks the run hash and exact grant. |
 | SR1-28 (hook execution and changed call) | B-05.T2 | B-05.T2 | The existing fake-Claude coverage is in `claude/adapter-held.test.ts`; decision state and line are checked in the decision tests. |
@@ -988,6 +991,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/states.test.ts` | Step states match the version 1 contract | Step states match the version 2 contract, including stopped (TC-ENG-07) | B-05.T7 |
 | `packages/runner/src/service/decisions-handlers.test.ts` | Similar waiting excludes the current decision | Count all pending decisions including this one (TC-j24-21; FS-j24.A8) | B-05.T4 |
 | `packages/runner/src/claude/adapter-limits.test.ts` | Confirmed local work runs through the hook | The same calls run and identify their rules for recording (TC-RUL-12) | B-05.T5 |
 | `packages/runner/src/claude/decide.test.ts` | Local writes and commands matched by rules report declared work | The same allowed calls identify their matching rule for recording (TC-RUL-12) | B-05.T5 |

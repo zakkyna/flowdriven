@@ -1,4 +1,4 @@
-import { RunState } from "@flowdriven/contracts";
+import { RunState, StepRunState } from "@flowdriven/contracts";
 import {
   ApprovalState,
   CheckType,
@@ -6,7 +6,6 @@ import {
   ExitClass,
   RequirementType,
   RiskyAction,
-  StepRunState,
 } from "@flowdriven/contracts/v1";
 import { CHECK_TYPES, REQUIREMENT_TYPES } from "@flowdriven/sdk";
 import { expect, test } from "vitest";
@@ -22,7 +21,7 @@ import {
   STEP_STATES,
 } from "./states.ts";
 
-test("engine and SDK vocabularies equal the contract's", () => {
+test("TC-ENG-07 engine and SDK vocabularies equal the contract's", () => {
   expect([...RUN_STATES]).toEqual(RunState.options);
   expect([...STEP_STATES]).toEqual(StepRunState.options);
   expect([...APPROVAL_STATES]).toEqual(ApprovalState.options);

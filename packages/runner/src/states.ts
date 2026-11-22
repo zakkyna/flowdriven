@@ -29,6 +29,7 @@ export const STEP_STATES = [
   "failed",
   "skipped",
   "interrupted",
+  "stopped",
 ] as const;
 export type StepState = (typeof STEP_STATES)[number];
 export const APPROVAL_STATES = ["pending", "approved", "rejected", "expired"] as const;

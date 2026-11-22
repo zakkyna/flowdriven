@@ -47,6 +47,30 @@ export function createRunHandlers(store: Store, engine: Engine, harnessIdOf: (na
             current,
           );
         }),
+    stop: ({ runId }: OperationInput<"runs.stop">) => {
+      const row = run(runId);
+      const result = [
+        "queued",
+        "checking",
+        "running",
+        "retrying",
+        "waiting_approval",
+        "needs_login",
+      ].includes(row.state)
+        ? engine.stopRun(runId, "person")
+        : { run: row, changed: false };
+      return {
+        changed: result.changed,
+        run: toRunSummary(
+          result.run,
+          result.run.flowName ?? flowNameOf(result.run.flowId) ?? result.run.flowId,
+          undefined,
+          engine.waitingOf(runId).run,
+          runTrigger(result.run, flowNameOf),
+          headHash(result.run),
+        ),
+      };
+    },
     status: ({ runId }: OperationInput<"runs.status">) => {
       const row = run(runId);
       const head = store.getFlowHead(row.flowId);

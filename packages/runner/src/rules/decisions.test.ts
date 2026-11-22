@@ -642,6 +642,16 @@ test("TC-SR1-19 a fake cloud call asks after a rejection and runs by rule in the
       newId: (prefix) => `${prefix}-${++next}`,
       routeOf: () => [route],
     });
+    // TC-SR1-19 scenario C and TC-SR1-20: Stop never executes later rule-eligible work.
+    const stopped = await engine.startRun(manifest.id, { project });
+    const stoppedDecision = store.listApprovals({ runId: stopped.id, state: "pending" }).at(0);
+    if (!stoppedDecision) throw new Error("missing stopped decision");
+    engine.stopRun(stopped.id, "person");
+    expect(store.getRun(stopped.id)?.state).toBe("stopped");
+    expect(store.getApproval(stoppedDecision.id)).toMatchObject({ state: "expired", resolvedVia: "stop" });
+    expect(store.getStep(stopped.id, "upload")).toBeUndefined();
+    expect(store.listRules().find((item) => item.id === rule.id)?.uses).toBe(0);
+    expect(readFakeCalls(home).some((call) => "id" in call && call.id === "upload-1")).toBe(false);
     const run = await engine.startRun(manifest.id, { project });
     expect(run.state).toBe("waiting_approval");
     const first = store.listApprovals({ runId: run.id, state: "pending" }).at(0);
