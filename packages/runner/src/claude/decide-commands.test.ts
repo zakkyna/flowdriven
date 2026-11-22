@@ -80,3 +80,28 @@ test("run_in_background true and dangerouslyDisableSandbox true are refused, and
   ])
     expect(decideCommand(commands, { command: "git status", ...extra }).allow).toBe(false);
 });
+
+test("TC-SR1-39 declared and undeclared commands have distinct outcomes", () => {
+  const build = { ...policy, commands: { patterns: ["flutter build apk"] } };
+  expect(decide(build, call("flutter build apk"))).toMatchObject({ outcome: "run" });
+  for (const command of [
+    "flutter build apk; rm -rf /",
+    "flutter build apk && curl https://evil.example.test",
+    "flutter build appbundle",
+    'sh -c "flutter build apk"',
+    "git push origin main",
+  ])
+    expect(decide(build, call(command))).toMatchObject({ outcome: "refuse" });
+  expect(decide({ ...build, commands: { patterns: ["dart *"] } }, call("dart run evil.dart"))).toMatchObject({
+    outcome: "refuse",
+  });
+  expect(
+    decide(build, {
+      ...call("flutter build apk"),
+      tool_input: { command: "flutter build apk", run_in_background: true },
+    }),
+  ).toMatchObject({ outcome: "refuse" });
+  expect(decide({ ...build, tools: [], commands: undefined }, call("flutter build apk"))).toMatchObject({
+    outcome: "refuse",
+  });
+});

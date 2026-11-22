@@ -8,7 +8,7 @@ const runsAnything = new Set(
   ),
 );
 const interpreters = new Set(
-  "node nodejs python python3 ruby perl php deno bun lua npm pnpm yarn pip pip3 uv poetry gem cargo go brew composer swift awk gawk mawk nawk tclsh rscript".split(
+  "node nodejs python python3 ruby perl php deno bun lua dart npm pnpm yarn pip pip3 uv poetry gem cargo go brew composer swift awk gawk mawk nawk tclsh rscript".split(
     " ",
   ),
 );

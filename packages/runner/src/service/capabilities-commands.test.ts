@@ -36,11 +36,14 @@ test("a used cli_tool that is not routed blocks the allow", async () => {
         files: {},
         registeredAt: "2026-11-12",
       });
-    update(["flutter analyze", "dart format *"]);
+    update(["flutter analyze", "dart format lib"]);
     expect(caps.get(manifest.id).rows[0]).toMatchObject({
-      details: ["flutter analyze", "dart format *"],
+      details: ["flutter analyze", "dart format lib"],
       cost: "Adds about 2,000 tokens to each call of the step that uses it.",
     });
+    update(["flutter analyze", "dart format *"]);
+    expect(caps.get(manifest.id).rows[0]?.details).toEqual([]);
+    expect(caps.get(manifest.id).allowBlocked).toBe(message);
     update(Array.from({ length: 9 }, (_, i) => `flutter test${i}`));
     expect(() => caps.get(manifest.id)).toThrow("This flow declares more than the preview can show.");
   } finally {

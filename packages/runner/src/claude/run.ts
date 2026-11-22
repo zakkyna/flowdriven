@@ -203,12 +203,19 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         if (
           !decision.allow &&
           decision.held &&
+          decision.held.action !== undefined &&
           call !== null &&
           typeof call === "object" &&
           "tool_use_id" in call &&
           typeof call.tool_use_id === "string"
         ) {
-          const held = decision.held;
+          const held: HeldCall = {
+            requirementId: decision.held.requirementId,
+            tool: decision.held.tool,
+            input: decision.held.input,
+            digest: decision.held.digest,
+            action: decision.held.action,
+          };
           pendingStop = { id: call.tool_use_id, outcome: { kind: "hold", held } };
           stopTimer = setTimeout(() => {
             forced = pendingStop?.outcome;
@@ -221,7 +228,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             digest: held.digest,
           });
         }
-        if (decision.allow && decision.effect === "connector" && decision.connector) {
+        if (decision.allow && decision.connector) {
           const grant = decision.connector.grant;
           if (grant?.kind === "call" && !(deps.grants?.use(input.runId, grant.key, input.itemKey) ?? false))
             return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };

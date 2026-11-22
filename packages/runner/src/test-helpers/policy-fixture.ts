@@ -5,8 +5,19 @@ export function makePolicy(
   input: Parameters<typeof buildPolicy>[0],
   overrides: Partial<Policy> = {},
 ): Policy {
+  const defaults = (input.touches ?? [])
+    .filter(
+      (touch) =>
+        ["read", "local_write", "run_command"].includes(touch.effect) && touch.rule !== "not_allowed",
+    )
+    .map((touch) => touch.id);
+  const policy = buildPolicy({ ...input, onItsOwn: [...defaults, ...(input.onItsOwn ?? [])] });
+  const rules = (policy.touches ?? [])
+    .filter((touch) => touch.effect === "change" && touch.list === "on_its_own" && touch.place)
+    .map((touch) => ruleOf(policy.flowId ?? "", touch.touchId, { place: touch.place }));
   return {
-    ...buildPolicy(input),
+    ...policy,
+    ...(input.touches === undefined ? {} : { rules }),
     runId: "run",
     stepId: "step",
     itemKey: "",

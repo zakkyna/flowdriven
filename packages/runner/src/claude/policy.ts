@@ -13,6 +13,7 @@ import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/cat
 import { fold, isExtraRef, resolveExtraFolder } from "../folders/extra.ts";
 import type { Routed } from "../router/types.ts";
 import { EFFECTS, type Effect, type EffectEntry, effectOf } from "../rules/effects.ts";
+import type { RuleRow } from "../storage.ts";
 import type { BrowserPolicy } from "./browser.ts";
 import { COMMAND_STOP, type CommandPolicy } from "./commands.ts";
 import { CONNECTOR_STOP, type ConnectorPolicy } from "./connector.ts";
@@ -34,6 +35,9 @@ export type Policy = {
   flowId?: string;
   hash?: string;
   touches?: CompiledTouch[];
+  declaredTools?: { tool: string; cover: string }[];
+  effectCatalog?: EffectEntry[];
+  rules?: RuleRow[];
   runId?: string;
   stepId?: string;
   itemKey?: string;
@@ -102,14 +106,22 @@ export function buildPolicy(input: {
   };
   if (input.touches !== undefined) {
     const catalog = input.effectCatalog ?? EFFECTS;
+    policy.effectCatalog = catalog;
+    policy.declaredTools = [];
     const declared = input.requirements.flatMap((req) => {
       if (req.type === "mcp_server") {
         const prefix = catalogEntry(req.ref, input.catalog ?? CONNECTORS)?.prefix ?? "";
-        return (req.tools ?? []).map((tool) => ({
-          cover: `${req.id}.${tool}`,
-          entry: effectOf(prefix ? prefix + tool : `${req.id}.${tool}`, catalog),
-          unknown: !catalog.some((entry) => entry.tool === (prefix ? prefix + tool : `${req.id}.${tool}`)),
-        }));
+        return (req.tools ?? []).map((tool) => {
+          const cover = `${req.id}.${tool}`;
+          const identity = prefix ? prefix + tool : `mcp__${req.id}__${tool}`;
+          policy.declaredTools?.push({ tool: identity, cover });
+          if (!prefix) policy.declaredTools?.push({ tool: cover, cover });
+          return {
+            cover: `${req.id}.${tool}`,
+            entry: catalog.find((entry) => entry.tool === identity) ?? effectOf(cover, catalog),
+            unknown: !catalog.some((entry) => entry.tool === identity || entry.tool === cover),
+          };
+        });
       }
       if (req.type === "cli_tool")
         return (req.commands ?? []).map((command) => ({

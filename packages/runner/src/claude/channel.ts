@@ -73,7 +73,7 @@ export function startChannel(options: {
       options.onCall?.({ decision, ...(toolUseId === undefined ? {} : { toolUseId }) });
     } catch {}
   }
-  const deny = (reason: string): Decision => ({ allow: false, tool: "unknown", reason });
+  const deny = (reason: string): Decision => ({ allow: false, outcome: "refuse", tool: "unknown", reason });
   function poll() {
     if (stopped) return;
     let entries: string[];

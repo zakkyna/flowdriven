@@ -37,6 +37,7 @@ test("the five read calls are allowed with their exact inputs, a page flagged on
   ] as const)
     expect(decision(name, input)).toEqual({
       allow: true,
+      outcome: "run",
       tool: CHROME_PREFIX + name,
       ...(effect ? { effect } : {}),
     });
@@ -45,11 +46,13 @@ test("get_page_text with max_chars 500 or 40000 is refused as a part FlowDriven 
   for (const max_chars of [1, 500, 40000, 0, 40001, 1.5, "500"])
     expect(decision("get_page_text", { tabId: 7, max_chars })).toEqual({
       allow: false,
+      outcome: "refuse",
       reason: BROWSER_DENY.part,
       tool: CHROME_PREFIX + "get_page_text",
     });
   expect(decision("get_page_text", { tabId: 7 })).toEqual({
     allow: true,
+    outcome: "run",
     tool: CHROME_PREFIX + "get_page_text",
   });
 });
@@ -75,6 +78,7 @@ test("R3: every other Chrome tool is refused with This step may only read pages.
   ])
     expect(decision(name)).toEqual({
       allow: false,
+      outcome: "refuse",
       reason: BROWSER_DENY.readOnly,
       tool: CHROME_PREFIX + name,
     });
@@ -113,6 +117,7 @@ test("R2: an address must match a template whole: ~abc/../x, an upper-case host,
   ])
     expect(decision("navigate", { url: address, tabId: 7 })).toMatchObject({
       allow: false,
+      outcome: "refuse",
       reason: BROWSER_DENY.address,
     });
 });

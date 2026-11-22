@@ -39,6 +39,6 @@ test("S2 Write of .mcp.j<U+017F>on is protected, because the volume treats it as
   });
   expect({ folds, result }).toEqual({
     folds: true,
-    result: { allow: false, tool: "Write", reason: DENY.protectedPath, target: spelled },
+    result: { allow: false, outcome: "refuse", tool: "Write", reason: DENY.protectedPath, target: spelled },
   });
 });

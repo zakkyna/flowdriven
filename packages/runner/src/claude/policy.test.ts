@@ -192,7 +192,7 @@ test("TC-SR1-04 step words and input claims cannot change a send", () => {
       undefined,
       { calls: 0, granted: () => false },
     );
-    expect(result).toMatchObject({ allow: false, held: { action: "send" } });
+    expect(result).toMatchObject({ allow: false, outcome: "hold", effect: "send", held: { action: "send" } });
   }
 });
 
@@ -249,4 +249,25 @@ test("a compiled folder touch uses its resolved path and confirmation list", () 
       covers: [],
     },
   ]);
+});
+
+test("a confirmation can leave a local write asking first", () => {
+  const o = setup();
+  const input = {
+    ...o,
+    requirements: [path("notes", "read_write")],
+    touches: [
+      {
+        id: "write",
+        sentence: "Write notes",
+        effect: "local_write" as const,
+        rule: "asks_first" as const,
+        place: { kind: "folder" as const, value: "n", label: "Notes" },
+        covers: [],
+      },
+    ],
+    onItsOwn: [],
+  };
+  expect(buildPolicy(input).touches?.[0]?.list).toBe("asks_first");
+  expect(makePolicy(input).touches?.[0]?.list).toBe("on_its_own");
 });

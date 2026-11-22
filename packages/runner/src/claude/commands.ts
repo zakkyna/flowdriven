@@ -38,6 +38,8 @@ export function decideCommand(
   if (!parsed.ok) return { allow: false, reason: COMMAND_DENY.badInput };
   if (!policy || !commandLineAllowed(policy.patterns, parsed.words))
     return { allow: false, reason: COMMAND_DENY.notDeclared };
-  const reason = commandRefusal(parsed.words.join(" "));
+  const matched = policy.patterns.filter((pattern) => commandLineAllowed([pattern], parsed.words));
+  const reason =
+    commandRefusal(parsed.words.join(" ")) ?? matched.map(commandRefusal).find((item) => item !== undefined);
   return reason ? { allow: false, reason } : { allow: true };
 }
