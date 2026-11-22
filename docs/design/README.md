@@ -4,7 +4,7 @@ This folder is the design for building FlowDriven's real app after the clickable
 
 Status: complete design for the V1 build, 2026-11-21. It follows version 9 of the clickable prototype: version 8 plus the language setting, one file per language and the AI agent and model picker. Decisions the owner did not make are recorded as "Decided for V1 (revisable)". The V1 behaviours the owner has not seen in the prototype are listed once, in the PRD's register (`prd.md` section 9.1).
 
-Size: 25 features with 226 requirements (2 of them removed from V1 and kept as ids), 54 quality targets and 13 success measures; 14 flow specs; 1,276 test cases (576 journey, 177 safety, 523 component); 32 build steps in 206 tasks (V1: 26 steps, 179 tasks); 29 V1 behaviours not yet in the prototype (PU-01 to PU-29).
+Size: 25 features; 14 flow specs; 1,301 test cases (586 journey, 182 safety, 533 component); 33 build steps in 212 tasks (V1: 27 steps, 185 tasks); 29 V1 behaviours not yet in the prototype (PU-01 to PU-29).
 
 ## What is where
 
@@ -20,7 +20,7 @@ Size: 25 features with 226 requirements (2 of them removed from V1 and kept as i
 | [test-cases/journeys.md](test-cases/journeys.md) | Test cases for every flow spec | `TC-jNN-*` |
 | [test-cases/safety.md](test-cases/safety.md) | Test cases for every safety rule and the start rule | `TC-SRn-*`, `TC-START-*` |
 | [test-cases/platform.md](test-cases/platform.md) | Test cases for every component | `TC-<COMPONENT>-*` |
-| [build-order.md](build-order.md) | The build steps in order, split into tasks of one Codex call, each with the tests that must fail first, what the owner can try, and the version they belong to | `B-00`..`B-31` |
+| [build-order.md](build-order.md) | The build steps in order, split into tasks of one Codex call, each with the tests that must fail first, what the owner can try, and the version they belong to | `B-00`..`B-32` |
 | [contributing-plan.md](contributing-plan.md) | The contributor guides for people who code by hand and for AI agents (README quickstart, CONTRIBUTING.md, AGENTS.md, docs/translating.md) | - |
 
 ## Reading order

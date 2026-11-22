@@ -113,6 +113,8 @@ Skills screen basics (list and updates, V1 list, V2 updates).
 - **FS-j26.P11** Publish. The tab "Publish" has a flow select, a checklist ("Format is valid", "Scan found no issues", "No private data found"), the audience ("Only me", "People I invite", "Team", "Public") and "Publish". For any audience other than "Only me" a dialog says "Publish <name> to <audience>? Published versions cannot be changed. A fix is a new version." with "Publish" and "Cancel". The service scans (static checks, consistency, pattern rules, an AI reviewer that treats the package as data, reputation) and signs. Memory, history, standing rules and secrets are never in the package (SR-6, spec R18).
 - **FS-j26.P12** Install from a private audience. A private flow asks for an email code sign-in at the service; FlowDriven never sees the mailbox.
 
+- **FS-j26.P13 Shorter menu.** New chat, Search, Flows and Activity always show and Settings stays below. In V1 Skills stays visible and More is absent; once two or more later items can sit behind it, "Show more" / "Show less" toggles them, remembers its window preference, preserves the open screen's selected row while closed, and signals a hidden item needing the person with icon and "Something here needs you". The drawer and keyboard follow F-02.R10.
+
 ## States
 
 | Entity | From -> to | Cause |

@@ -252,7 +252,7 @@ type StartRequest = {                  // starts row (new)
   reason?: "permission_off" | "daily_limit" | "too_old" | "clock_changed" | "question_open" | "still_running"
     | "flow_deleted" | "agent_cannot_be_limited";
   key?: string;                        // idempotency key, unique per flow
-  runId?: RunId;                       // started
+  runId?: RunId;                       // started, or the active run causing a still_running skip
   chatId?: ChatId;                     // asked, needs_confirmation, or the chat of a chat start
   messageId?: MessageId;               // the question or confirm card
   questionId?: QuestionId;             // asked or needs_confirmation
@@ -269,7 +269,7 @@ Keys: `slot:<slot time>` for a schedule slot; `after:<upstream run id>` for "aft
 Rules:
 - `starts.request(flowId, source, context)` (`packages/runner/src/starts/start-rule.ts`, new) writes exactly one row, in the same transaction as what it creates (run, question, card, chat). A second request with the same key returns the first row and creates nothing (FS-j28.A2, FS-j28.A20).
 - A chat-typed start writes a row too, with source `chat`, so the audit and M-07 can count every start.
-- A slot that cannot run is a row with outcome `missed` and its reason; a slot that finds the flow busy or its question open is a row with outcome `skipped`. In V1 Activity shows run rows only: missed and skipped slots stay in `starts` and in the audit log (`start_requested`), and no row, "Run late" mark or "Run it now" offer is built for them (decided for V1, revisable; they go into the prototype first).
+- A slot that cannot run is a row with outcome `missed` and its reason; a slot that finds the flow busy or its question open is a row with outcome `skipped`. In V1 Activity shows run rows only: missed and skipped slots stay in `starts` and in the audit log (`start_requested`), and no separate Activity row, "Run late" mark or "Run it now" offer is built for them. A `still_running` skip records the active run id, so its waiting run page can list the slot.
 - `refused` is for a start the person asked for that cannot run (permission off, daily limit, an agent that cannot be limited); no run is created. A slot that cannot run is `missed`, and with the permission off its reason is `permission_off`.
 
 ### 3.8 Chat (V1)
@@ -328,7 +328,7 @@ type ChatTurn = {
   queuedAt: IsoDateTime; startedAt?: IsoDateTime; endedAt?: IsoDateTime;
   attempts: number;                    // an answer that fails validation is asked for once more; two failures end the turn
   intent?: "answer" | "run" | "run_together" | "run_chain" | "stop" | "status" | "schedule" | "unschedule"
-    | "make_flow" | "make_flow_from_skill" | "improve_flow" | "fill_inputs";   // AD-10
+    | "make_flow" | "make_flow_from_skill" | "improve_flow" | "fill_inputs" | "note_run";   // AD-10
   failure?: "not_understood" | "no_usage" | "spending_limit" | "agent_failed" | "timeout" | "interrupted";
   outsideInContext: boolean;           // SR-5: the turn may only post cards, never start a run
 };
@@ -452,7 +452,8 @@ The `runs`, `steps`, `items` and `seen` tables stay. New fields go into `data`. 
 | `language` | `LanguageCode` | the language of its answer lines and dates | `"en"` |
 | `cause` | `{code: CauseCode, params?}` | why it is `blocked`, `needs_login`, `failed`, `interrupted` or `stopped` (`runner-api.md`, `Cause`) | `crash` for `interrupted`, else `step_failed` when `blockedReason` is set |
 | `needsLoginSince` | IsoDateTime | start of a sign-in wait; after 12 hours the run becomes `blocked` (FS-j25.A5) | none |
-| `decisionLines` | `Line[]` | the honest lines, as codes with the title as a value; the English drawings are "You approved: X.", "Done by your rule: X.", "You said no: X. It was not done." (AD-12) | `[]` |
+| `decisionLines` | `Line[]` | the honest lines, as codes with the title as a value; the English drawings are "You approved: X.", "Done by your rule: X.", "You said no: X. It was not done.", "You approved once: X.", "You asked for another way: <text>." (AD-12) | `[]` |
+| `notes` | `{id, text, at, fromStep?, state, usedAt?, outside}[]` | person-supplied run notes; state is `waiting`, `used` or `not_used`; `fromStep` and `usedAt` appear when used; pasted or outside content retains its mark | `[]` |
 | `result` | `{kind: "chat" or "report", chatId?, messageId?}` | where the answer went | none |
 | `stoppedBy` | `"person"`, `"permission_off"`, `"flow_deleted"` or `"phone"` | who stopped it | none |
 
@@ -461,6 +462,7 @@ Today's fields stay: `flowHash` is the version the run runs (SR-3), `inputs` the
 | Step field | Type | Meaning |
 |---|---|---|
 | `state` | `StepRunState` | adds `stopped` |
+| `attemptLog` | `{attempt, reason, count, evidence, outside}[]` | plain evidence of early stops, reason `repeated_call` or `repeated_error`; no raw event stream |
 | `ruleUses` | `{ruleId, tool, at}[]` | calls that ran by a standing rule; the evidence "Allowed by your rule" |
 | `skipped` | `{because: "rejected" or "no_picks" or "needs_skipped_result", approvalId?, stepId?}` | why a step was skipped, so the report can say it (FS-j24.P2) |
 
@@ -472,7 +474,7 @@ Decisions keep the `approvals` table and today's `ApprovalRow`. New fields go in
 
 | Field | Type | Meaning | Default for a version 6 row |
 |---|---|---|---|
-| `state` | `ApprovalState` | adds `approved_edited` and `allowed_always` | as stored |
+| `state` | `ApprovalState` | adds `approved_edited`, `allowed_always` and `another_way` | as stored |
 | `effect` | `Effect` | the kind of the held action, from FlowDriven's catalog | from `riskyAction`, else none |
 | `touchId` | TouchId | the touch of the flow it belongs to | none |
 | `place` | `Place` | where the call goes, as FlowDriven read it from the call | none |
@@ -481,10 +483,11 @@ Decisions keep the `approvals` table and today's `ApprovalRow`. New fields go in
 | `chatId` | ChatId | the run's chat, for the decision card | none |
 | `resolvedVia` | `"window"`, `"chat"`, `"phone"`, `"rule"`, `"stop"` or `"permission_off"` | what ended it | `"window"` when resolved |
 | `editedSubject`, `editedText`, `editedDigest` | strings | Save and approve | none |
+| `anotherWayText` | string | validated words typed in the window for `another_way`, marked as the person's own | none |
 | `ruleId` | RuleId | `allowed_always`: the rule it made | none |
 
 Rules:
-- In version 7 every held call is kind `risky_action` with an `effect` (for example `change` for a timesheet entry); `riskyAction` stays set for the five risky kinds.
+- A declared held call is `risky_action`; an undeclared held call is `outside_flow` regardless of effect. Both retain the complete held payload and effect. An outside-flow decision has no similar group and cannot create or use a standing rule. Its approval grants the exact call once; each is represented in the report. `riskyAction` stays set for the five risky kinds. Another way stores the validated window-typed words, never an agent or outside-text value.
 - A run decision never expires by time; it waits for an answer, Stop, permission off or flow deletion. Version 7 is already built (B-03): its `expiresAt` column stays, nothing reads it from B-05.T14 on, and the next store version drops it.
 - Two decisions belong to no run and are not rows here: `weekly_limit` (existing, settings key `weekly:<agentId>`) and the spending pause `budget_raise` (new, settings key `spending-pause`). `approvals.list` and Activity show both. Only `settings.update` resolves the spending pause, by raising the limit (SR-9); otherwise it ends when the next local month begins (`spending-pause.expiresAt`). Either way the paused runs continue under the limit, the decision closes with `resolvedVia` `window` or `expiry`, and it never counts as Reject.
 
@@ -514,11 +517,15 @@ New kinds:
 | `schedule_changed` | a schedule is set, changed or removed | `flowId`, `from`, `to`, `by` (`window`, `chat_card`, `save_flow`, `target_deleted`) |
 | `start_requested` | every `START` request | `flowId`, `source`, `outcome`, `reason`, `startId`, `runId` |
 | `run_stopped`, `run_resumed` | Stop; Try again or Sign in and continue | `runId`, `by`, `outcome` |
-| `decision_made` | approve, edit, reject, always allow, answer | `approvalId`, `runId`, `decision`, `via` |
+| `decision_made` | approve, edit, reject, another way, always allow, answer | `approvalId`, `runId`, `decision`, `via`; the linked decision row stores the typed text, not the audit detail |
 | `decision_expired` | Stop, permission off, flow deletion | `approvalId`, `runId`, `why` |
 | `decisions_batch` | Approve all similar | `runId`, `group`, `approvalIds` |
 | `rule_created`, `rule_revoked`, `rule_used` | a standing rule is made, revoked or used | `ruleId`, `flowId`, `touchId`, `effect`, place kind (not the value), `by`, `runId`, `stepId` |
 | `question_asked`, `question_closed` | a waiting question opens; it is answered, cancelled or closed | `questionId`, `flowId`, `chatId`, `kind`, `missing`, `state` |
+| `run_note_added` | note stored for a run | `runId`, `noteId`, `outside` (no text) |
+| `run_note_used` | note first supplied to a step | `runId`, `noteId`, `step` (no text) |
+| `attempt_stuck` | repetition ended an attempt early | `runId`, `step`, `attempt`, `reason`, `count` (no input or result) |
+
 | `run_blocked` | a run becomes `blocked`, `needs_login` or `failed` | `runId`, `state`, `cause` |
 | `caller_refused` | the dispatcher refuses an operation for its caller (`tool` or `phone`, V2) | `operation`, `caller` |
 | `phone_refused` (V2) | the bot module ignores or refuses a phone command | `reason`, link id |
@@ -556,10 +563,10 @@ The person's choices (`language` to `spendingLimit`) change only through the per
 Electron main keeps a small file in Electron's user data folder: `window.json`, written by main only, atomically (a temporary file, then a rename).
 
 ```ts
-type WindowFile = { version: 1; colorMode: "light" | "system" | "dark" };
+type WindowFile = { version: 1; colorMode: "light" | "system" | "dark"; railMoreOpen?: boolean };
 ```
 
-- `colorMode` sets `nativeTheme.themeSource` before the first paint (AD-15). A missing or unreadable file gives `system` ("Auto") (FS-j12.A13). It never goes into the store.
+- `colorMode` sets `nativeTheme.themeSource` before the first paint (AD-15). A missing or unreadable file gives `system` ("Auto") (FS-j12.A13). It never goes into the store. `railMoreOpen` remembers More on this computer; missing or unreadable means closed.
 
 ### 3.20 Agent and model (V1, changed)
 

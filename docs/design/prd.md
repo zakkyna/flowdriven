@@ -136,7 +136,8 @@ Requirements.
 - F-02.R6. Search runs in the runner over chat titles, message text, flow names and summaries with a result limit, and never leaves the Mac.
 - F-02.R7. Below 768 px wide the same parts sit in a drawer: a top bar with Menu, the title and Activity; every route change closes the drawer; a "Close menu" button and a scrim close it. The desktop window's minimum size is 480 by 600 px, so widths from 320 to 479 px (where the menu shows icons only below 400 px) apply only to the browser preview and to layout tests.
 - F-02.R8. "New chat" reuses an empty chat if one exists, so empty chats do not pile up.
-- F-02.R9. The V1 menu is exactly New chat, Search, Flows, Activity, Skills and Settings. The other prototype items (Memory, Marketplace, Phone & bots) appear when their release ships (section 9, Q-01), so other items appear as their releases ship. No item says "Coming later".
+- F-02.R9. New chat, Search, Flows and Activity always show; Settings stays at the bottom. In V1 Skills remains in the main list and there is no More row. Memory, Marketplace and Phone & bots ship later; no item says "Coming later".
+- F-02.R10. Once at least two items would be behind it, a closed-by-default More button says "Show more" and opens Skills, Memory, Marketplace and Phone & bots in that order as they ship; open it says "Show less". Its state is a window preference on this computer. The open screen remains visible and selected when closed. A closed row with an item needing the person shows the needs-you icon and "Something here needs you" as accessible words and tooltip; when open the mark moves to the item. Enter and Space toggle it without moving focus, with `aria-expanded` and `aria-controls`. The drawer follows the same rules and only the chat list scrolls.
 
 Journeys and flow specs: j20 (`flows/j20-run-from-chat.md`) and j12 (`flows/j12-settings.md`). Release: V1 (B-16). Status: In the prototype (version 8); the V1 menu is a subset of the prototype's.
 
@@ -169,7 +170,7 @@ What it is. The person writes which flow to run: one, several at the same time, 
 What the person experiences. "Run Build APK and upload it, then fill my timesheet" gives a plan card "I'll run these one after the other:" with numbered names and "Start" and "Change". Two flows with no order word give "I'll run both at the same time." A run card shows the flow name, a status badge, a track of steps, "Step 2 of 4: Build the APK", and "Stop". When a chain ends: "Both flows finished." and the offer "Do this every time?" with "Yes, every time" and "Only this time".
 
 Requirements.
-- F-04.R1. Intents: `answer`, `run`, `run_together`, `run_chain`, `stop`, `status`, `schedule`, `unschedule`, `make_flow`, `make_flow_from_skill`, `improve_flow`, `fill_inputs`. An answer outside this list, or one that cannot be used, starts nothing and shows "I did not understand that. Try again, or pick one of these." with the starter chips (PU-05).
+- F-04.R1. Intents: `answer`, `run`, `run_together`, `run_chain`, `stop`, `status`, `schedule`, `unschedule`, `make_flow`, `make_flow_from_skill`, `improve_flow`, `fill_inputs`, `note_run`. An answer outside this list, or one that cannot be used, starts nothing and shows "I did not understand that. Try again, or pick one of these." with the starter chips (PU-05).
 - F-04.R2. A flow named without a run word, a question ("is Build APK done?"), a negation and a plain mention each give a card or a status answer, never a run. A flow named alone gives a card "Run <name> now?" with "Run" and "Not now".
 - F-04.R3. Several flows in order become a plan card; the second and later items read "starts when <previous flow> finishes". "Start" starts the first; each next flow starts when the one before finishes `done` and goes through `START`.
 - F-04.R4. Several flows without an order word run at the same time: "I'll run both at the same time." or "I'll run all <n> at the same time."
@@ -181,6 +182,8 @@ Requirements.
 - F-04.R10. After a chain finishes, the chat offers "Do this every time?" with "Yes, every time" and "Only this time". "Yes" sets the schedule `after`; "Only this time" changes nothing. Matching these answers uses whole words only (the prototype matched "Hanya" as "ya": a bug not to repeat).
 - F-04.R11. Runs started from a chat run on that chat's agent and model, and the run card and run page name them, for example "Claude Code · Sonnet 5.5". (In the prototype (version 9).)
 - F-04.R12. A flow runs at most once per request. Two flows set to run after each other stop after one round.
+
+- F-04.R13. A message in a chat with an active run becomes a note for that run, except answers to an open question or form, Stop, status, make/change/schedule requests and explicit requests to run another flow. Prefer a running run over a waiting run, newest within each. The chat says "Noted. <flow> uses this from its next step." in the chat language and the composer says "Add a note for <flow>" in the app language. Stop and "What needs me?" retain their behaviour. The worker receives the note from the next step marked as the person's words, retaining any outside mark; it never starts, approves or changes anything or widens the flow. Undeclared calls ask under F-13.R17.
 
 Journeys and flow specs: j20, `flows/j20-run-from-chat.md`. Release: V1 (B-10, with B-08). Status: In the prototype (version 8); R11 is in the prototype (version 9); R1 (the unusable-answer line), R5 (the failed-chain line) and R9 (permission off, agent cannot be limited) are PU-05, PU-06, PU-07 and PU-26.
 
@@ -215,7 +218,7 @@ What the person experiences. A chat flow posts its answer lines in the chat ("Lo
 Requirements.
 - F-06.R1. `result` is `chat` or `report`. For `chat`, the answer lines (a template filled from inputs and outputs) are posted in the run's chat, or in a new chat for a start outside a chat. A line whose placeholder has no value is dropped.
 - F-06.R2. For `report`, the report stays with the run in Activity and the chat gets "Done. The report is in Activity."
-- F-06.R3. The runner records decision lines as message codes with values, and the renderer words them: "You approved: <title>.", "Done by your rule: <step title>.", and "You said no: <title>. It was not done." Other outcomes add nothing the person did not decide.
+- F-06.R3. The runner records decision lines as message codes with values, and the renderer words them: "You approved: <title>.", "Done by your rule: <step title>.", "You said no: <title>. It was not done.", "You approved once: <title>.", and "You asked for another way: <text>." Other outcomes add nothing the person did not decide.
 - F-06.R4. A step shows as passed only with evidence from a check the agent does not control. A step the agent judged itself is labelled "Judged, not verified".
 - F-06.R5. FlowDriven's own posted lines follow the chat's language: "Done. The report is in Activity.", "<flow> needs a few details.", "<flow> finished, so <next> is next." The runner stores a message code with values and the chat's language; the renderer turns it into words with the language files (F-20.R5). (In the prototype (version 9).)
 - F-06.R6. A report has no token or usage numbers and no run ids. It starts with the flow name and when it started, then "Result".
@@ -338,7 +341,7 @@ Journeys and flow specs: j29 (`flows/j29-flow-from-skill.md`); the Skills screen
 
 What it is. When something risky or a real choice comes up, the run waits and the person decides, in the chat, in Activity, in a notification or on a paired phone. Routine decisions can become a standing rule.
 
-What the person experiences. A decision card with a title, the flow, a summary and a preview (an email shows To, Subject and body), a badge "Needs you", and the buttons "Approve", "Edit" (emails and other text), "Reject", "Approve all similar (N)" and "Always allow for this flow" (only for a repeatable change at a fixed place, such as the timesheet entry or one cloud storage folder upload). Choice items show checkboxes with "Send choice" and "Pick none". Outside text is tagged "Includes text from an email or web page", with hidden characters shown.
+What the person experiences. A decision card with a title, the flow, a summary and a preview (an email shows To, Subject and body), a badge "Needs you", and the buttons "Approve", "Edit" (emails and other text), "Reject", "Another way", "Approve all similar (N)" and "Always allow for this flow" (only for a repeatable change at a fixed place, such as the timesheet entry or one cloud storage folder upload). Choice items show checkboxes with "Send choice" and "Pick none". Outside text is tagged "Includes text from an email or web page", with hidden characters shown; an outside-flow card instead shows its warning and known source.
 
 Requirements.
 - F-13.R1. A held call becomes a decision with state `pending` ("Needs you"). It shows in its chat (when the run started from a chat), in Activity under "Needs you", as a notification with fixed text (F-16.R6) and, in V2, on a paired phone.
@@ -357,6 +360,10 @@ Requirements.
 - F-13.R14. Deciding twice, from two places, counts once: the second answer finds the item already decided and says "Already answered"; an answer to a decision ended by Stop, permission off or deleting the flow says "This decision expired". (PU-16.)
 - F-13.R15. A place with non-ASCII letters (for example a web address) is shown on the decision card in its own letters and also in ASCII, so a look-alike cannot pass as the one the person knows. (PU-24.)
 - F-13.R16. After a Reject, no standing rule applies for the rest of that run; the held call shows the normal decision card.
+- F-13.R17. A call reaching the decision function that the flow did not declare is held as `outside_flow`, including a read. Its full payload and warning "<name> did not say it would do this. If you did not ask for it, something it read, such as an email or a web page, may have asked for it. Approve only if you want it." are shown with "Not in this flow" and "Approve lets it do this once, in this run only." A known source is shown; its outside text remains marked as such. Approve grants only that exact call once; no standing rule, Always allow, Edit or batch applies. Reject skips only that action and the step continues. The report lists each one (FS-j24.P15). The fixed protected list, OS sandbox and scoped config remain in force.
+- F-13.R18. Another way is offered for `risky_action`, `outside_flow` and `result_sign_off`, with a text box; choice and spending-limit cards do not offer it. Only typed window text passing the empty, hidden-character and length checks is accepted. The held call does not run; the agent receives the person's words marked as their own and tries again in the same step, using an attempt. Each new call is decided again. The record and report say "You asked for another way: <text>." Reject asks for no reason (FS-j24.P16).
+
+- F-13.R19. Every waiting decision card in chat, Activity and the run page shows when it was asked, for example "Asked yesterday 07:41".
 
 Journeys and flow specs: j24, `flows/j24-decisions.md`. Release: V1 (B-04, B-05, B-19). Status: In the prototype (version 8); R3's checks, R6's full listing, R14 and R15 are PU-17, PU-18, PU-16 and PU-24. PU-15 was decided by the owner on 2026-11-22: no expiry, which the prototype already shows; no further prototype approval is needed.
 
@@ -373,6 +380,7 @@ Requirements.
 - F-14.R4. A `needs_login` run says in plain words who asked for sign-in and that FlowDriven never passes a sign-in or robot check; it waits up to 12 hours, then it is stuck (`blocked`) with the reason in plain words (PU-20). "Sign in and continue" resumes it.
 - F-14.R5. `blocked` and `interrupted` runs offer "Try again". When the cause is still there, the run page says "Still stuck: <reason>." (PU-21). A `failed` or `stopped` run offers only "Run again" and "Copy report".
 - F-14.R6. A run page shows every step with its state, evidence in plain words and every decision line. The agent's own words are shown as text, never as HTML.
+- F-14.R14. The run page and report list each outside-the-flow decision and its outcome, including "You approved once: <title>." and "You asked for another way: <text>."
 - F-14.R7. "Run again" is shown only while the flow exists. It goes through `START` with source `again` and the same inputs.
 - F-14.R8. "Copy report" opens a dialog with the report as Markdown and a copy button. Nothing is exported without this click. Secrets are masked by a named pattern list (`sk-` keys, `ghp_` tokens, `Bearer` values and the values of `secret_ref` inputs) in the report parts and in the run page's text (PU-23, SR-6).
 - F-14.R9. An unknown run id says "This activity does not exist." with "Go to Activity".
@@ -380,6 +388,10 @@ Requirements.
 - F-14.R11. A run that was running when the app crashed shows `interrupted`. A step that may have half happened (not marked idempotent) is never repeated by itself (SR-8). The run page says "This step may have sent: <title>. Check before you choose Try again." for such a step (PU-22).
 - F-14.R12. Retention: runs are kept for 90 days or the last 50 per flow, whichever is larger. The audit log is not trimmed by this.
 - F-14.R13. In V1 Activity shows run rows only. (Removed from V1: the "Missed", "Skipped" and "Run late" rows and "Run it now"; missed and skipped slots are still recorded as `starts` rows with their outcome and reason and in the audit log; `flows.tryNextRun` takes `{flowId}` only. They go into the prototype first, later.)
+
+- F-14.R15. The run page lists "Your notes" with each note, time and icon plus "Waits for the next step", "Used from step <n>", or "Not used: the run ended first"; the result says "Used your note: <note>." for each used note.
+- F-14.R16. An attempt stops early after the same call, input and result four times or the same error three times. It fails and the next attempt receives one plain note; after the last, `blocked` shows "The agent kept repeating itself." and Try again. Activity and the chat run card show that reason; the run page explains quota protection and lists each attempt. Defaults live in one place; no silence timer replaces the 30-minute attempt limit.
+- F-14.R17. A waiting run page says "This run waits for you." and "It waits until you answer. Nothing is turned down by itself." Its history shows each skipped scheduled start as "<when>: the scheduled start was skipped because this run still waits for you." Activity Earlier keeps run rows only.
 
 Journeys and flow specs: j25, `flows/j25-history-and-problems.md`. Release: V1 (B-19). Status: In the prototype (version 8); R10 is in the prototype (version 9); R4's 12 hours, R5's "Still stuck" line, R8's masking and R11's line are PU-20, PU-21, PU-23 and PU-22.
 
@@ -589,7 +601,7 @@ These are the safety rules in plain words. The binding text is in `docs/design/a
 
 ### SR-1 The one rule
 
-An action runs by itself only when it only reads and sends nothing out, or when you have already allowed that kind of action, to that exact place, for this flow. You allow it by confirming the flow with that action under "Does on its own", or with "Always allow for this flow", which exists only for a repeatable change at a fixed place (for example the timesheet entry). Everything else waits for your yes in FlowDriven. FlowDriven decides which kind an action is. The agent never does. Send, post, pay, delete and merge are never pre-selected as "Does on its own", and in V1 they cannot be moved there or covered by a standing rule.
+An action runs by itself only when it only reads and sends nothing out, or when you have already allowed that kind of action, to that exact place, for this flow. You allow it by confirming the flow with that action under "Does on its own", or with "Always allow for this flow", which exists only for a repeatable change at a fixed place (for example the timesheet entry). Everything else waits for your yes in FlowDriven. An undeclared call that reaches the decision function, including a read, waits for a one-time decision with a plain danger warning; no standing rule or batch can cover it. FlowDriven decides which kind an action is. The agent never does. Send, post, pay, delete and merge are never pre-selected as "Does on its own", and in V1 they cannot be moved there or covered by a standing rule.
 
 ### SR-2 Only you change permissions
 
@@ -786,6 +798,8 @@ What V1 is, in one line each:
 V1 includes the Skills screen and Make a flow from a skill (F-12). V1 also includes the language files, the model picker and the look and feel (F-20, F-21, F-25); they follow versions 6 to 9 of the clickable prototype. The menu bar icon, Open at login and the quit warning are not in V1 (F-22).
 
 ### 9.1 V1 behaviours the owner has not seen in the prototype
+
+The owner saw and approved the outside-the-flow decision and Another way in the clickable prototype on 2026-11-22; they add no PU items.
 
 Each item below is kept in V1 because safety or correctness needs it, and goes into the clickable prototype first, for the owner's approval, before the build step that builds it. Each build step in `build-order.md` names the PU items it needs approved first. Prefer removing an item over keeping it.
 

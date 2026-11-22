@@ -2,7 +2,7 @@
 
 Status: complete for the V1 build, 2026-11-21.
 
-These are the component test cases (523 cases): the parts underneath the journeys (`journeys.md`) and the safety rules (`safety.md`), and the parts no journey reaches. Every case follows `test-plan.md`: layer, file, Given, When, Then, traces, build step, and why it fails first, so it can be written as the failing test of its build task (`build-order.md`). No case uses the network, a real agent or a real account. Time and ids are injected.
+These are the component test cases (533 cases): the parts underneath the journeys (`journeys.md`) and the safety rules (`safety.md`), and the parts no journey reaches. Every case follows `test-plan.md`: layer, file, Given, When, Then, traces, build step, and why it fails first, so it can be written as the failing test of its build task (`build-order.md`). No case uses the network, a real agent or a real account. Time and ids are injected.
 
 Words and lines (owner decision, 2026-11-21): the words live in `apps/desktop/src/i18n/`; the runner never builds a sentence. It emits a message code with values (a `Line`: a key from `packages/contracts/src/line-keys.ts` and its params), and the renderer, or Electron main for a system notification, turns it into words. Where a runner case here quotes a FlowDriven sentence (a chat line, a run page line, a notice), the quoted sentence is only the English drawing of its `Line`: the case asserts the key and the params, and only a renderer (L2) or main-process case asserts the words. Sentences that FlowDriven gives to an agent (a hook reason) are not `Line` values and are asserted as written. V1 ships no font files (system font stack).
 
@@ -10,21 +10,21 @@ V1 scope (owner decisions, 2026-11-21, revisable): the contract has 45 live oper
 
 | Group | Cases |
 |---|---|
-| CON Contracts | 43 |
+| CON Contracts | 46 |
 | SDK Flow format 1.2 | 19 |
 | STO Store version 7 | 38 |
-| ENG Engine | 25 |
-| AST Assistant | 36 |
+| ENG Engine | 27 |
+| AST Assistant | 37 |
 | INP Inputs | 29 |
 | RES Results | 15 |
-| STR Start rule and schedules | 31 |
-| RUL Decisions and standing rules | 27 |
+| STR Start rule and schedules | 32 |
+| RUL Decisions and standing rules | 29 |
 | AGT Agents and models | 40 |
 | SRCH Search | 10 |
 | I18N Words and languages (`apps/desktop/src/i18n`) | 35 |
 | IPC Preload and the IPC layer | 28 |
 | ELE Electron main | 28 |
-| UI Shared renderer parts | 31 |
+| UI Shared renderer parts | 32 |
 | MEM Memory service (V2) | 13 |
 | SKL Skills library (list in V1, updates in V2) | 13 |
 | MKT Marketplace client (V3) | 18 |
@@ -421,7 +421,7 @@ Shared setup used by the L3 cases below.
 - Then: every entry matches the `Line` key pattern and the list has no duplicate; it contains `report.youApproved`, `report.youApprovedEdited`, `report.youSaidNo`, `report.doneByRule`, `chat.itsTime`, `chat.dueAt`, `chat.needsDetails`, `chat.alreadyWaiting`, `chat.chainStopped`, `chat.reportInActivity`, `chat.useTheButtons`, `chat.fillInForm`, `chat.agentChanged`, `chat.modelGone`, `chat.skillUnreadable`, `chat.starting`, `chat.makeFromSkill`, `notice.decisionTitle`, `notice.decisionBody`, `notice.questionTitle`, `notice.questionBody`, `notice.problemTitle`, `notice.problemBody`, `notice.limitTitle`, `notice.limitBody`, `chat.permissionOff`, `chat.agentCannotRunFlow`, `flows.empty`, `chat.nothingWaiting`; it does not contain `decision.askAgainAfterNo`; no entry holds a space or a sentence.
 - Traces: AD-14, F-20
 - Build step: B-06
-- Fails first because: `line-keys.ts` does not exist.
+- Fails first because: the existing B-32 keys do not yet include all runner and notice keys.
 
 ### TC-CON-39 Version 1 of the contract is kept read-only for the old screens
 - Layer: L1
@@ -442,6 +442,16 @@ Shared setup used by the L3 cases below.
 - Traces: AD-12, AD-14, FS-j25.A12
 - Build step: B-01
 - Fails first because: the result message holds finished lines and the export output is `{markdown}`.
+
+### TC-CON-45 Outside decisions and Another way are in the version 2 contract
+- Layer: L1
+- File: packages/contracts/src/approval.test.ts
+- Given: the version 2 schemas and line keys
+- When: valid and invalid decisions, choices and reason codes are parsed
+- Then: `outside_flow` and `another_way` with text round-trip, `report.anotherWay`, `decision.newTry` and `report.didAnotherWay` accept the full 4,000-character text while other Line values retain their 400-character limit; missing, empty, too-long or hidden-character text fails, and unrelated kinds reject the choice; `outside_flow_once`, `another_way_not_allowed`, `text_too_long`, `report.approvedOnce`, `report.anotherWay`, `decision.newTry` and `report.didAnotherWay` exist with the right params.
+- Traces: AD-03, AD-06, AD-07, F-13
+- Build step: B-32
+- Fails first because: the version 2 contract lacks these variants and keys.
 
 ## SDK Flow format 1.2
 
@@ -1324,6 +1334,16 @@ Shared setup: the scripted harness (`packages/runner/src/test-helpers/scripted-h
 - Traces: AD-02, AD-03, runner-api section 14
 - Build step: B-01
 - Fails first because: the dispatcher answers retired names as `unavailable` with the version 1 text and carries no `reason` or `params`.
+
+### TC-ENG-26 Another way retries within the same step and preserves safety
+- Layer: L3
+- File: packages/runner/src/engine-reject.test.ts
+- Given: a held call and a fake agent that records its next prompt, then requests a new risky call
+- When: send another-way text in the window
+- Then: the old call never runs; the same step uses one more attempt, the prompt marks the exact text as the person's own, the new call is held again, and the decision row stores the text, the report has `report.anotherWay` with `{text}`, and the audit records the decision without the text; exhausting attempts stops the step.
+- Traces: FS-j24.P16, SR-1, SR-5, SR-7
+- Build step: B-32
+- Fails first because: the engine cannot resume with another-way text.
 
 ## AST Assistant
 
@@ -2715,6 +2735,26 @@ Shared setup: harness H. In V1 a standing rule and Always allow exist only for a
 - Traces: SR-1, AD-07
 - Build step: B-05
 - Fails first because: the same-run behavior after a rejection is not defined.
+
+### TC-RUL-28 Outside calls cannot be batched or made into rules
+- Layer: L3
+- File: packages/runner/src/service/decisions-handlers.test.ts
+- Given: a pending `outside_flow` decision with a fixed place and a matching rule
+- When: resolve with `always_allow` and `edit`, and resolveSimilar including its id
+- Then: `always_allow` and resolveSimilar return `not_allowed: outside_flow_once`, Edit returns `invalid_input: edit_not_allowed`, no grant or rule is created, no batch member is approved, and every decision stays pending.
+- Traces: FS-j24.P15, SR-1, SR-2
+- Build step: B-32
+- Fails first because: outside-flow eligibility and its reason do not exist.
+
+### TC-RUL-29 Another way validates window text and never grants the held call
+- Layer: L3
+- File: packages/runner/src/service/decisions-handlers.test.ts
+- Given: pending risky and outside decisions and callers window, tool and phone
+- When: send valid text, empty text, hidden characters built with String.fromCodePoint, too-long text and another-way on a choice
+- Then: only valid window text resolves to `another_way`; invalid inputs return `empty_text`, `hidden_characters`, `text_too_long` or `another_way_not_allowed`, and non-window callers are refused; no invalid input changes state or creates a grant.
+- Traces: FS-j24.P16, SR-2, SR-5
+- Build step: B-32
+- Fails first because: another-way input and validation do not exist.
 
 ## AGT Agents and models
 
@@ -5435,6 +5475,60 @@ Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). De
 - Traces: test-plan section 8, build-order section 3
 - Build step: B-00
 - Fails first because: `apps/desktop/src/design-set.test.ts` does not exist.
+
+### TC-CON-46 Note and repetition contract shapes
+- Layer: L1
+- File: packages/contracts/src/operations.test.ts
+- Given: valid and invalid run notes, attempt logs, skipped starts and causes
+- When: validate the version 2 schemas
+- Then: valid note states, provenance, timestamps, stuck_repeating and attempt evidence round-trip; invalid states, missing required provenance and unknown causes fail
+- Traces: AD-20, F-04.R13, F-14.R16
+- Build step: B-32
+- Fails first because: the contract lacks these fields.
+
+
+### TC-ENG-27 Guard thresholds compare call, input and result
+- Layer: L1
+- File: packages/runner/src/exec/stuck.test.ts
+- Given: an attempt stream and the centralized default thresholds
+- When: feed three then four equal call/input/result triples, and separately two then three equal errors; vary each component and start another attempt
+- Then: only the fourth matching triple or third matching error stops early; a changed call, input, result or error does not count as identical, counts are per attempt, and silence never fires a guard
+- Traces: AD-20, T-22
+- Build step: B-32
+- Fails first because: the stream guard does not exist.
+
+
+### TC-AST-37 Note routing preserves other intents
+- Layer: L3
+- File: packages/runner/src/assistant/turn.test.ts
+- Given: a chat with several active and waiting runs and an open question or form
+- When: send a note, question answer, Stop, status, make, change, schedule and an explicit run request for another flow
+- Then: the newest running run receives the note, otherwise the newest waiting run does; each exception follows its existing path and creates no note; no eligible run produces no note
+- Traces: AD-10, FS-j20.P20
+- Build step: B-32
+- Fails first because: the assistant has no note intent.
+
+
+### TC-UI-32 More preserves navigation and attention
+- Layer: L2
+- File: apps/desktop/src/shell/Rail.test.tsx
+- Given: V1 and later menu fixtures in both languages, including a selected hidden screen and an item needing attention
+- When: render V1, then later fixtures; toggle with Enter and Space, reopen the window and render the narrow drawer
+- Then: V1 shows Skills and no More; with two or more hidden items the closed button has Show more, aria-expanded false and the needs-you icon and accessible tooltip, keeps the selected item visible; opening shows ordered items and Show less, marks the item, preserves focus and persists the preference; storage failure defaults closed; only chats scroll and Settings stays below
+- Traces: F-02.R10, FS-j26.P13
+- Build step: B-16
+- Fails first because: the rail has no More behaviour.
+
+
+### TC-STR-32 Skipped scheduled start points to the waiting run
+- Layer: L3
+- File: packages/runner/src/starts/schedules.test.ts
+- Given: a flow with a run waiting for a decision at the next scheduled slot
+- When: fire the slot and read the run detail and Activity
+- Then: exactly one starts row is skipped with still_running, the waiting run id and slot time; the run detail lists it, no run starts and Activity Earlier contains no skipped row
+- Traces: F-13.R5, F-14.R17, FS-j25.P16
+- Build step: B-12
+- Fails first because: the skipped row is not linked to the waiting run.
 
 ## Writer's calls, shell and later components
 

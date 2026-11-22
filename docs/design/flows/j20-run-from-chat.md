@@ -81,6 +81,8 @@ P11 depends on version 9; the others do not.
 - **FS-j20.P15 Pasted or dropped text.** Text the person pastes or drops into the composer is outside text (`chats.send {pasted: true}`): the turn that holds it never starts a run by itself and shows the card "Run <flow> now?" like P13 (SR-5). Decided for V1, revisable; Not in the prototype yet.
 - **FS-j20.P16 The empty app.** (PU-04; Not in the prototype yet; it goes into the prototype first.) With no flows yet, the empty chat shows the heading and the composer and two starter chips, "Make a new flow" and "What needs me?", and no chip names a flow. "What needs me?" answers "Nothing is waiting for you." (`chat.nothingWaiting`). A typed request to run a flow that does not exist is answered with a short line and the chip "Make a new flow"; nothing starts. The Flows screen shows "No flows yet" with "Make a new flow" (FS-j21.P14).
 
+- **FS-j20.P20 Notes during a run.** A message becomes `note_run` for the chat's running run, else its waiting run, newest within each; F-04.R13 lists the exceptions. The chat confirms "Noted. <flow> uses this from its next step." and the composer says "Add a note for <flow>". The next step gets the person's words with any outside mark intact; the run page lists waiting, used and unused notes. A note grants nothing and an undeclared action asks (FS-j24.P15); Stop and "What needs me?" keep working.
+
 ## States
 
 | Entity | From -> to | Cause |

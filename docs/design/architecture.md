@@ -102,6 +102,7 @@ These rules bind every document and build step; others cite them by id. Each giv
 ### SR-1 The one rule
 
 **SR-1 The one rule.** An action runs by itself only when it only reads and sends nothing out, or when the person has already allowed that kind of action, to that exact place, for this flow: by confirming the flow with that action under "Does on its own", or, for a repeatable `change` at a fixed place, with "Always allow for this flow". Everything else waits for the person's yes in FlowDriven. FlowDriven decides which kind an action is; the agent never does.
+- An undeclared call reaching `decide`, including a read, is held as `outside_flow` before any standing rule. Its exact one-time grant is the only way it may run; protected targets and scoped limits remain locked.
 - Reads include reading local files in the flow's folders, reading an account through a declared read tool, and reading web pages that match the flow's declared addresses.
 - Writing files inside the flow's declared folders and running the flow's declared commands inside the agent's sandbox count as allowed by the confirmation, because the confirm dialog lists them under "Does on its own".
 - Risky kinds (send, post, pay, delete, merge) always ask in V1. A draft lists them under "Asks you first"; the person cannot move one to "Does on its own"; `flows.confirm` refuses it there with `not_allowed`, reason `always_asks`; no standing rule can exist for one. Standing rules exist only for `local_write`, `run_command` and `change`.
@@ -109,7 +110,7 @@ These rules bind every document and build step; others cite them by id. Each giv
 
 Enforced by: `decide` in `claude/decide.ts`, made agent neutral, the one decision point (section 6.1), with the effect catalog `rules/effects.ts` (new), the policy from `buildPolicy`, and grants and standing rules (`rules/standing.ts` (new)) read at each call. Enforcement points: the Claude Code `PreToolUse` hook (`claude/hook-script.ts`, `claude/channel.ts`, fail closed), start proof and tripwire (`claude/stream.ts`), Codex per tier (AD-09), later the gateway. `proposeLists` never pre-selects a risky kind; `flows.confirm` refuses a risky kind in `onItsOwn` (`not_allowed`, `always_asks`) and an on-its-own touch that needs an exact place and has none; `canAlwaysAllow` is true only for a pending `risky_action` decision whose effect is `change` with a fixed place, from the window (section 6.4).
 
-Still a gap: commands run with the person's rights and no OS sandbox until the sandbox spike (section 16, item 1); meanwhile a command's effect is its touch's, raised by `classifyCommand`, the refuse lists of `router/commands-route.ts` stay, and a command labelled local that reaches the network is not caught. The catalog knows only Gmail. Codex's read scope is unknown until its research and spike 2 (sections 8.3 and 16): a Codex step may read more than the flow's folders, so the declared-folders read limit holds for Claude Code only. A rule-covered `change` at a fixed place can still run in a step that read outside text; its place is fixed and the run page shows what it did.
+Still a gap: commands run with the person's rights and no OS sandbox until the sandbox spike (section 16, item 1); meanwhile a command's effect is its touch's, raised by `classifyCommand`, the fixed protected list stays; an undeclared command reaching the decision function asks first, and a command labelled local that reaches the network is not caught. The catalog knows only Gmail. Codex's read scope is unknown until its research and spike 2 (sections 8.3 and 16): a Codex step may read more than the flow's folders, so the declared-folders read limit holds for Claude Code only. A rule-covered `change` at a fixed place can still run in a step that read outside text; its place is fixed and the run page shows what it did.
 
 ### SR-2 Only the person changes permissions
 
@@ -228,7 +229,7 @@ Each decision gives context, decision, alternatives, consequences and the code i
 ### AD-06 One decision function for SR-1
 
 - Context. `decide(policy, call)` already decides every Claude Code tool call; command patterns are refused by growing lists. The owner prefers one general rule.
-- Decision. `decide` grows into the single decision point; its policy is compiled from the confirmed flow version (requirements, touches and their placement), active standing rules and one-time grants. Order: refuse what is not declared -> classify the effect with FlowDriven's catalog (unknown tools count as `change`) -> run `read` -> run declared `local_write` and `run_command` -> run an exact one-time grant -> run an exact standing rule -> otherwise hold (section 6.1). Enforcement points: the Claude Code pre-tool hook (as built, fails closed); Codex per tier (AD-09); later the FlowDriven gateway (a local MCP server) for proxied account tools; the agent's own OS sandbox for commands, replacing the refuse lists over time (they stay as a refinement). Gmail's "label to Trash or Spam is a delete" stays as the kind of special case the general rule cannot see.
+- Decision. `decide` grows into the single decision point; its policy is compiled from the confirmed flow version (requirements, touches and their placement), active standing rules and one-time grants. Order: fail closed on malformed requests and refuse fixed protected targets -> use an exact one-time grant -> classify the effect with FlowDriven's catalog (unknown tools count as `change`) -> hold an undeclared call as `outside_flow` -> run declared `read` -> run declared `local_write` and `run_command` -> run an exact standing rule -> otherwise hold (section 6.1). Enforcement points: the Claude Code pre-tool hook (as built, fails closed); Codex per tier (AD-09); later the FlowDriven gateway (a local MCP server) for proxied account tools; the agent's own OS sandbox for commands, with the fixed protected list retained. Gmail's "label to Trash or Spam is a delete" stays as the kind of special case the general rule cannot see.
 - Alternatives. Agent-declared effects trust steerable output; asking for every write is too many questions.
 - Consequences. One effect table to review; "Ask me again" applies at once. Decided for V1 (revisable): this change follows the clickable prototype the owner approved; each task that makes it is a safety-core change with one independent security review before its pull request leaves draft.
 - Code. `claude/decide.ts` (agent-neutral `ToolCall`; hook shape checks move to `claude/channel.ts`), `claude/policy.ts`, `connectors/catalog.ts`; new `rules/effects.ts`, `rules/standing.ts`.
@@ -237,9 +238,10 @@ Each decision gives context, decision, alternatives, consequences and the code i
 
 - Context. Rejecting fails the step and run today. Owner decisions: "Always allow for this flow" (2026-11-19; V1 keeps it exactly as the prototype has it, for a repeatable `change` at a fixed place only, 2026-11-21); Reject and Stop need no dialog (2026-11-18).
 - Decision. A held call becomes a decision shown in its chat (when started from one), in Activity "Needs you", as a notification with fixed text, and on a paired phone (V2). Approve writes a one-time grant bound to run, step, item, tool and exact input digest; Edit (text only) approves the edited text as `approved_edited`, its grant bound to the edited digest; Always allow (offered only for a repeatable `change` at a fixed place) also writes a standing rule `{flow, touch, effect, place}`. Reject skips that action and the run goes on ("You said no: X. It was not done."), a change from today's engine that follows the approved clickable prototype, with one independent security review. A run decision waits without a time limit; Stop, permission off or flow deletion ends it as `expired` (PU-15, PU-16). Confirm creates rules for every non-read touch left under "Does on its own"; only `local_write`, `run_command` and `change` can be there. "Ask me again" revokes at once. A changed flow keeps a rule only if a touch with the same id, effect and place exists. "Approve all similar" covers one group of `send` or `post` decisions in one run, after a dialog that lists every item in full (every recipient, the subject and the whole text) before anything is approved (PU-18). After a Reject no standing rule applies for the rest of that run; the held call shows the normal decision card. Rules are made only in the desktop window.
+- Another way is offered for `risky_action`, `outside_flow` and `result_sign_off`: only validated text typed in the window is accepted; the held call does not run, and the agent receives the words marked as the person's own in a new attempt of the same step. Attempts count, and each new call passes through AD-06. The decision record and report say "You asked for another way: <text>." The audit records the decision and its id without the text. An outside-flow Reject skips only the action and the step continues. No reason box is shown.
 - Alternatives. Rules per tool name are too wide; failing the run punishes saying no; standing rules for send, post, pay, delete and merge (not in V1: they need destination-level places and a step-level rule for outside text, with their own review).
 - Consequences. Canonical places (6.4), an engine skip path (6.5); two answers count once; no standing rule exists for a risky kind.
-- Code. `engine.ts` (`beginDecide`), `exec/held.ts`, `exec/ask.ts`, `connectors/grants.ts`; new `rules/decisions.ts`, `rules/standing.ts`; `service/handlers.ts`.
+- Code. `engine.ts` (`beginDecide`, same-step another-way retry and attempt limit), `exec/held.ts` (outside-flow hold and exact grant), `exec/ask.ts`, `connectors/grants.ts`; new `rules/decisions.ts`, `rules/standing.ts`; `service/handlers.ts`.
 
 ### AD-08 Agents behind one AgentAdapter port
 
@@ -260,10 +262,18 @@ Each decision gives context, decision, alternatives, consequences and the code i
 ### AD-10 The assistant: the agent understands, FlowDriven decides
 
 - Context. The prototype matched keywords; the real app reads sentences with the agent (the prototype brief, "Inputs, results, proactive schedules, flows from skills, and every feature shown").
-- Decision. Each chat turn is one agent call with no tools and a JSON schema (`--json-schema` exists), on the chat's agent and model, with a compact context: flows with names and inputs, remembered answers (with their outside marks), what runs and what needs the person, the last turns up to 12 turns or 24,000 characters. The answer is an intent (`answer`, `run`, `run_together`, `run_chain`, `stop`, `status`, `schedule`, `unschedule`, `make_flow`, `make_flow_from_skill`, `improve_flow`, `fill_inputs`) plus the reply text and its language, which FlowDriven validates against its own state and turns into messages and cards. The agent never starts anything; FlowDriven never starts a run the person did not ask for (questions, negations and plain mentions give a card). SR-5 applies to the context.
+- Decision. Each chat turn is one agent call with no tools and a JSON schema (`--json-schema` exists), on the chat's agent and model, with a compact context: flows with names and inputs, remembered answers (with their outside marks), what runs and what needs the person, the last turns up to 12 turns or 24,000 characters. The answer is an intent (`answer`, `run`, `run_together`, `run_chain`, `stop`, `status`, `schedule`, `unschedule`, `make_flow`, `make_flow_from_skill`, `improve_flow`, `fill_inputs`, `note_run`) plus the reply text and its language, which FlowDriven validates against its own state and turns into messages and cards. The agent never starts anything; FlowDriven never starts a run the person did not ask for (questions, negations and plain mentions give a card). SR-5 applies to the context.
 - Alternatives. Keyword rules are brittle; a chat agent with tools could act.
 - Consequences. A direct start needs an explicit run of one flow, a clean context, a confirmed flow and valid inputs; else a card (6.8). If the chat's agent cannot be limited for the flow, nothing starts and the reply is `chat.agentCannotRunFlow` (PU-26).
 - Code. New `assistant/turn.ts`, `assistant/intents.ts`, `assistant/cards.ts`, `assistant/context.ts`, `test-helpers/fake-brain.ts`; `claude/adapter.ts`, `claude/prompt.ts`.
+
+- Note intent. `note_run` is validated against the chat's active runs and the exceptions in F-04.R13; it stores a note, never a start or approval. Typed words are the person's own, while pasted or outside output portions retain `outside: true` through storage and the worker context (AD-16). The engine supplies notes beginning with the next step without changing the confirmed flow or scope; every call still passes AD-06.
+
+### AD-20 Stuck guard
+
+- Decision. Per attempt, observe agent events: four identical call/input/result triples or three identical errors end the attempt as failed. Keep both defaults in one place. The next attempt receives one plain note of the repetition; after the last, block with `stuck_repeating` and permit Try again under normal recovery rules. Record each early stop without raw event contents in audit; the run report retains plain attempt evidence. No silence timer; the existing 30-minute attempt limit remains.
+- Consequences. This protects quota without treating a silent long build as stuck. Calls still pass the decision function; the guard grants nothing.
+- Code. `exec/stuck.ts`, `claude/run.ts`, `engine.ts`, `report.ts`.
 
 ### AD-11 Inputs
 
@@ -400,7 +410,7 @@ Dependencies point one way: `apps/desktop` -> `contracts`, `fixtures`; `runner` 
 
 | Module | Status | Responsibility |
 |---|---|---|
-| `engine.ts`, `states.ts`, `exec/*`, `checks/*`, `report.ts`, store files | Kept, changed | Walk, holds, checks, recovery; adds the skip path, `stopped`, `needs_login`, one model per run; store version 7 |
+| `engine.ts`, `states.ts`, `exec/*`, `checks/*`, `report.ts`, store files | Kept, changed | Walk, outside-flow holds, checks, recovery; skip only the outside action on Reject, retry Another way in the same step, report each outside decision; `stopped`, `needs_login`, one model per run; store version 7 |
 | `claude/*`, `connectors/*`, `router/*`, `folders/extra.ts`, `skills/skill-folder.ts` | Kept, changed | The port, agent-neutral `decide.ts`, compiled touches, `chat`; catalog with effects |
 | `keeper/*`, `triggers/*`, `notify/policy.ts`, `service/*` | Kept, changed | Money gate, chat turns first; fires through `START`; version 2 notices and handlers |
 | `assistant/` (`turn.ts`, `intents.ts`, `cards.ts`, `context.ts`) | New | Chat turns, intents, cards, context and taint |
@@ -441,13 +451,17 @@ The V1 menu is New chat, Search, Flows, Activity, Skills and Settings; other ite
 | Order | Test | Result | Audit |
 |---|---|---|---|
 | 0 | Shape, session id or structured-output check fails (as built) | Deny | `tool_denied` |
-| 1 | Tool, folder, address or command not declared for the step, or the call matches a "Never does" touch | Deny with "This step does not declare the tool X."; the agent goes on | `tool_denied` |
+| 1 | Fixed protected target | Refuse; protected targets remain the agents' sign-in files, FlowDriven's own data and control folders, the keychain, and permission-bypass flags | `tool_denied` |
+| 1a | Exact one-time grant for this run, step, item, tool and input digest | Store its use, then allow once | `grant_used` |
+| 1b | Tool, folder, address or command not declared for the step, or a "Never does" touch, when the call can reach this function | Hold as `outside_flow`, regardless of effect; no rule or batch | `call_held` |
 | 2 | Classify effect and place with FlowDriven's catalog (6.2); unknown tools are `change` with an unknown place | - | - |
 | 3 | `read` inside the declared scope | Allow | counted in `tool_calls`; `page_read`, `connector_call` |
 | 4 | `local_write` in a declared writable folder or `run_command` matching a declared line, whose touch is under "Does on its own" (its confirmation rule is active) | Allow | counted in `tool_calls`; `command_run` |
-| 5 | One-time grant for this run, step, item, tool and exact input digest | Store its use, then allow once | `grant_used` |
+| 5 | Reserved for the grant check in row 1a | - | - |
 | 6 | Active standing rule for this flow, touch, effect and exact place; not after a Reject in this run, never in a run another AI tool started (section 15) | Allow | `rule_used`, the step's `ruleUses` |
 | 7 | Anything else | Hold: deny with "FlowDriven is holding this call until the person approves it", stop the step, create a decision | `call_held` |
+
+The OS sandbox and scoped config lock out their targets, including folders outside the project and undeclared servers, before a call reaches a decision. A one-time outside grant covers only the exact approved call; a different or repeated call asks again.
 
 The hook fails closed (no answer in time, NF-13; unreadable request; reused `tool_use_id`; any error). The start proof and the tripwire stay as built.
 
@@ -503,7 +517,7 @@ A decision gets `fixedPlace: true` only when its touch declares a place literal 
 
 ### 6.5 Reject skips an action
 
-When the call was held, the agent's process already ended, so the agent is told nothing and is not asked to work around the refusal. On Reject the decision becomes `rejected` with no grant (audit `decision_made`); the step or loop item that held ends `skipped` (`because: "rejected"`) with "You said no: <step title>. It was not done."; other loop items go on; a later step whose instructions, `when` or checks refer to the skipped outputs (found with the expression `references`, as `exec/outside.ts` does) is skipped (`needs_skipped_result`); no standing rule applies for the rest of the run, and the held call shows the normal decision card (section 15); the run returns to `running`. A rejection never stops a chain. A rejected result sign-off skips its step or item the same way. This path in `engine.ts` `beginDecide` follows the approved clickable prototype and gets one independent security review (AD-07).
+For `outside_flow`, Reject skips only the action and the step continues; Another way retries in the same step with the typed person's words, never the held call. Otherwise, when the call was held, the agent's process already ended, so the agent is told nothing and is not asked to work around the refusal. On Reject the decision becomes `rejected` with no grant (audit `decision_made`); the step or loop item that held ends `skipped` (`because: "rejected"`) with "You said no: <step title>. It was not done."; other loop items go on; a later step whose instructions, `when` or checks refer to the skipped outputs (found with the expression `references`, as `exec/outside.ts` does) is skipped (`needs_skipped_result`); no standing rule applies for the rest of the run, and the held call shows the normal decision card (section 15); the run returns to `running`. A rejection never stops a chain. A rejected result sign-off skips its step or item the same way. This path in `engine.ts` `beginDecide` follows the approved clickable prototype and gets one independent security review (AD-07).
 
 ### 6.6 Decisions wait for an answer
 
@@ -853,11 +867,11 @@ The engine and checks, the store, the Claude Code adapter with hook channel, sta
 | Area | Change |
 |---|---|
 | Contracts, SDK, store | Version 2; format 1.2 with touch checks; version 7 |
-| `claude/decide.ts`, `claude/policy.ts` | Agent-neutral decision, compiled touches, books read per call |
+| `claude/decide.ts`, `claude/policy.ts` | Agent-neutral decision, compiled touches, books read per call; in-scope undeclared calls hold as `outside_flow`, including reads; exact grant only, no rules |
 | `engine.ts`, `exec/recovery.ts` | Reject skips, `stopped`, `needs_login`, one model per run, `beginStart` only from `starts/start-rule.ts`; risky steps never resume by themselves |
 | `harness.ts`, `claude/adapter.ts`, `service/claude-harness.ts` | The port and `chat`; the gate moves to `agents/registry.ts`; `agentPermission` replaces per-agent consent |
 | `triggers/service.ts`, `service/trigger-wiring.ts` | Fires through `starts.request`; reads `schedules`; zone injected |
-| `notify/policy.ts`, `notifier.ts`, `report.ts`, `service/handlers.ts`, `service/args.ts` | Notices as `Line` values that main draws, `notice_clear`; report lines and export parts as codes; version 2 handlers; `--languages` |
+| `notify/policy.ts`, `notifier.ts`, `report.ts`, `service/handlers.ts`, `service/args.ts` | Notices as `Line` values that main draws, `notice_clear`; each outside decision and Another way as report lines; window-only typed Another way and outside-flow rule and batch rejection in version 2 handlers; `--languages` |
 | Renderer, Electron main | Rebuilt chat first; runner at launch, color mode, the `window` API |
 
 ### 13.3 Unrouted and frozen

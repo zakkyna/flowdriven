@@ -10,19 +10,19 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 |---|---|
 | j01 | 32 |
 | j12 | 38 |
-| j20 | 62 |
+| j20 | 67 |
 | j21 | 41 |
 | j22 | 33 |
 | j23 | 29 |
-| j24 | 52 |
-| j25 | 43 |
+| j24 | 53 |
+| j25 | 47 |
 | j26 | 53 |
 | j27 | 34 |
 | j28 | 51 |
 | j29 | 30 |
 | j30 | 38 |
 | j31 | 40 |
-| Total | 576 |
+| Total | 586 |
 
 ## j01 First launch and agent set up
 
@@ -1341,6 +1341,58 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - Build step: B-08
 - Fails first because: an unknown flow id gives only the general not-understood line and no Make a new flow chip.
 
+### TC-j20-63 Chat decision cards show outside warnings and Another way
+- Layer: L2
+- File: apps/desktop/src/screens/chat/DecisionCard.test.tsx
+- Given: pending risky, outside-flow, result-sign-off, choice and spending-limit decisions in a chat, in both languages
+- When: open Another way, type, re-render, cancel and choose Reject
+- Then: the outside card shows its full payload, warning, known source and one-time words, with three non-primary buttons and no Edit, rule or batch; the risky card offers the labelled box, Send and Cancel, preserves the draft, Enter sends and Shift+Enter inserts a line; result sign-off has Another way; a choice shows Send choice and Pick none and calls `approvals.answer`, while choice and limit cards have no Another way; Reject makes one call and opens no dialog or reason box.
+- Traces: FS-j24.P15, FS-j24.P16, F-13
+- Build step: B-17
+- Fails first because: the chat card lacks the new controls and warning.
+
+### TC-j20-64 A note goes to the next step
+- Layer: L3
+- File: packages/runner/src/assistant/turn.test.ts
+- Given: a chat with a running and a waiting run, and a fake worker paused in a step
+- When: send a plain note, then finish the step and inspect the next step and run
+- Then: the newest running run alone stores the note, the reply says "Noted. <flow> uses this from its next step.", the current step receives nothing, the next receives it marked as the person's words, and its state, fromStep and usedAt are recorded; a run ending first marks it not_used
+- Traces: FS-j20.P20, F-04.R13
+- Build step: B-32
+- Fails first because: note_run does not exist.
+
+
+### TC-j20-65 The composer identifies a note
+- Layer: L2
+- File: apps/desktop/src/screens/chat/Composer.test.tsx
+- Given: a chat with an active flow in each supported language
+- When: render and send a note, then request Stop and "What needs me?"
+- Then: the placeholder names the flow in the app language, the confirmation uses the chat language, and Stop and status retain their normal controls and results
+- Traces: FS-j20.P20, F-04.R13
+- Build step: B-17
+- Fails first because: the composer has no note state.
+
+
+### TC-j20-66 Waiting decision shows when asked
+- Layer: L2
+- File: apps/desktop/src/screens/chat/DecisionCard.test.tsx
+- Given: a pending decision created yesterday at 07:41
+- When: render its chat card
+- Then: it says "Asked yesterday 07:41" in the app language and retains all decision controls
+- Traces: F-13.R19, FS-j25.P16
+- Build step: B-17
+- Fails first because: the card does not show the asked time.
+
+### TC-j20-67 A repeating run card explains the problem
+- Layer: L2
+- File: apps/desktop/src/screens/chat/RunCard.test.tsx
+- Given: a chat run blocked with cause stuck_repeating
+- When: render its run card
+- Then: the card shows the stuck state with icon and "The agent kept repeating itself."
+- Traces: FS-j25.P16, F-14.R16
+- Build step: B-17
+- Fails first because: the run card lacks the repetition reason.
+
 ## j21 Run from the Flows list
 
 ### TC-j20-62 A chat turn on Codex is one agent call in the workspace-write sandbox
@@ -2459,7 +2511,7 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 ### TC-j24-05 The grant is one-time and exact (near-miss table)
 - Layer: L1
 - File: packages/runner/src/claude/decide.test.ts
-- Given: a policy compiled from the confirmed flow (as TC-j24-48); a one-time grant G for REPLY-SAM in run R, step `reply`, made by the test builder `makeGrant(call)`. Each row below is a second call evaluated with `decide(policy, call, grants)`:
+- Given: a policy compiled from the confirmed flow; a one-time grant G for REPLY-SAM in run R, step `reply`, made by the test builder `makeGrant(call)`. Each row below is a second call evaluated with `decide(policy, call, grants)`:
 
   | Row | Attempt | Expected |
   |---|---|---|
@@ -2595,16 +2647,16 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
   | 3 | same place, tool classified `send` (`mcp__claude_ai_Gmail__send_message`) | hold |
   | 4 | same call in flow `example.weekly-supplier-report` | hold |
   | 5 | same call after the rule is `revoked` | hold |
-  | 6 | same call with a touch id not declared in the confirmed flow | refuse |
+  | 6 | same call with a touch id not declared in the confirmed flow | hold `outside_flow` |
   | 7 | a `read` call (`search_threads`) with no rule | run |
   | 8 | a declared `local_write` inside the flow's folder | run |
   | 9 | an unknown tool `mystery.tool` | hold (counts as `change`) |
   | 10 | a rule row with effect `send` written by hand into the store (a state V1 never creates) and a matching `send` call | hold (a rule of a risky kind is never applied) |
 
-- Then: each row is as shown; `hold` rows carry the held-call fields (tool, input, digest, action) and `run (by rule)` carries the rule id.
+- Then: each row is as shown; `hold` rows carry the held-call fields (tool, input, digest, action) and `run (by rule)` carries the rule id; row 6 carries the exact digest and never matches a rule.
 - Traces: FS-j24.A12, FS-j24.E14, F-13, SR-1
-- Build step: B-04
-- Fails first because: `decide` does not know standing rules or the run, hold and refuse results of AD-06.
+- Build step: B-32
+- Fails first because: the existing decision function refuses this undeclared call instead of holding it as `outside_flow`.
 
 ### TC-j24-16 "Ask me again" revokes at once and the next action asks
 - Layer: L3
@@ -2853,12 +2905,12 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 ### TC-j24-39 Everything about a decision is in the audit log in plain words
 - Layer: L3
 - File: packages/runner/src/rules/decisions.test.ts
-- Given: runs with held calls: one approved, one rejected, one ended by Stop, one by rule, one refused (a call the flow never declared), one rule revoked; the body of one held call holds `String.fromCodePoint(0x200B)` and a fake token `"sk-" + "y".repeat(24)` in the chat text.
+- Given: runs with held calls: one approved, one rejected, one ended by Stop, one by rule, one undeclared call held as `outside_flow` and approved once, one rule revoked; the body of one held call holds `String.fromCodePoint(0x200B)` and a fake token `"sk-" + "y".repeat(24)` in the chat text.
 - When: `audit.list {runId}` and `runs.report` are read for each run.
-- Then: the log has records for each of: call held, approved, rejected, expired, done by rule, refused, rule revoked, each with a plain-words detail (for example "You approved: Send reply to Sam Example.", "Stopped before you answered: ...", "Refused: this flow does not declare the tool ..."); the hidden character appears as "[U+200B hidden character]"; the fake token appears nowhere in the log; the report's decision lines carry the same words.
+- Then: the log has records for each of: call held, approved, rejected, expired, done by rule, outside-flow hold and approval once, rule revoked, each with a plain-words detail (for example "You approved: Send reply to Sam Example.", "Stopped before you answered: ...", "You approved once: <title>."); the hidden character appears as "[U+200B hidden character]"; the fake token appears nowhere in the log; the report's decision lines carry the same words.
 - Traces: FS-j24.A21, F-13, SR-7, SR-6
-- Build step: B-05
-- Fails first because: the v2 decision events are not audited in words.
+- Build step: B-32
+- Fails first because: the existing decision function refuses this undeclared call instead of holding it as `outside_flow`.
 
 ### TC-j24-40 The honest decision lines
 - Layer: L1
@@ -2945,10 +2997,10 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - File: packages/runner/src/claude/decide.test.ts
 - Given: a policy compiled from a confirmed flow; one-time grant G (exact digest) for call C1; no standing rule.
 - When: `decide(policy, call)` is evaluated for these calls.
-- Then: a `read` call (`search_threads`) -> run; a declared `local_write` in the flow folder -> run; a declared `run_command` in the sandbox folder -> run; call C1 (grant G exact) -> run, and a second evaluation of C1 -> hold (grant used); a `send` with no grant and no rule -> hold with `{tool, input, digest, action: "send"}`; a `delete` -> hold; a `change` with a fixed place and no rule or grant -> hold; an undeclared tool -> refuse with the reason "This step does not declare the tool <name>"; a tool not in the catalog -> hold (counts as `change`); the decision never reads the agent's own claim about the kind of the call.
+- Then: a `read` call (`search_threads`) -> run; a declared `local_write` in the flow folder -> run; a declared `run_command` in the sandbox folder -> run; call C1 (grant G exact) -> run, and a second evaluation of C1 -> hold (grant used); a `send` with no grant and no rule -> hold with `{tool, input, digest, action: "send"}`; a `delete` -> hold; a `change` with a fixed place and no rule or grant -> hold; an undeclared tool within scope -> hold as `outside_flow` with exact tool, input, effect and digest; a tool not in the catalog -> hold (counts as `change`); the decision never reads the agent's own claim about the kind of the call.
 - Traces: FS-j24.S3, FS-j24.A3, F-13, SR-1
-- Build step: B-04
-- Fails first because: `decide` has no grant-or-rule order and no catalog classification.
+- Build step: B-32
+- Fails first because: the existing decision function refuses this undeclared call instead of holding it as `outside_flow`.
 
 ### TC-j24-49 A risky kind in `onItsOwn` is refused with `always_asks` and the flow stays unconfirmed
 - Layer: L3
@@ -2989,6 +3041,16 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - Traces: FS-j24.P14, T-05, F-13
 - Build step: B-19
 - Fails first because: the card shows the place once and a look-alike address passes as the known one.
+
+### TC-j24-53 Activity shows the outside and Another way cards
+- Layer: L2
+- File: apps/desktop/src/screens/activity/DecisionCard.test.tsx
+- Given: pending risky, outside and result-sign-off decisions, plus a choice and spending limit, in both languages
+- When: render and open Another way, re-render and submit typed text
+- Then: the full payload, warning, source and one-time words appear; outside has no Edit, rule, batch or primary button; the text box retains its draft, validates empty input, sends on Enter and inserts a line on Shift+Enter; only one box is open; result sign-off offers Another way; choice shows Send choice and Pick none; choice and limit offer no Another way and Reject opens no reason box.
+- Traces: FS-j24.P15, FS-j24.P16, F-13
+- Build step: B-19
+- Fails first because: Activity lacks these decision controls.
 
 ## j25 History and problems
 
@@ -3438,6 +3500,48 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - Traces: FS-j25.P4, SR-4, SR-7
 - Build step: B-07
 - Fails first because: no cause code `limits_not_applied` is recorded on the run.
+
+### TC-j25-44 Run page shows decisions and honest new lines
+- Layer: L2
+- File: apps/desktop/src/screens/activity/RunPage.test.tsx
+- Given: a run with an outside decision and an another-way record in both languages
+- When: render, open Another way and inspect the report
+- Then: the same warning, full payload, source, one-time words and non-primary controls appear as in Activity; no rule or batch is offered; each outside decision is listed and the report draws `report.approvedOnce` and `report.anotherWay` with their exact values.
+- Traces: FS-j24.P15, FS-j24.P16, F-14
+- Build step: B-19
+- Fails first because: the run page lacks these decision and report lines.
+
+### TC-j25-45 The run page explains repetition and notes
+- Layer: L2
+- File: apps/desktop/src/screens/activity/RunPage.test.tsx
+- Given: a blocked repeating run with two early attempt records and waiting, used and unused notes
+- When: open the page and choose Try again
+- Then: the page says "The agent kept repeating itself." and the quota explanation, lists both attempt numbers, counts and evidence, shows each note, time and icon plus its precise state, and calls runs.resume once
+- Traces: FS-j25.P16, F-14.R15, F-14.R16
+- Build step: B-19
+- Fails first because: the page lacks the new details.
+
+
+### TC-j25-46 Waiting cards and skipped history
+- Layer: L2
+- File: apps/desktop/src/screens/activity/ActivityScreen.test.tsx
+- Given: a decision asked yesterday and a waiting run with a skipped scheduled start today
+- When: render Activity
+- Then: the decision card shows "Asked yesterday 07:41" and Earlier contains runs only
+- Traces: FS-j25.P16, F-13.R19, F-14.R17
+- Build step: B-19
+- Fails first because: the waiting and skipped lines are missing.
+
+
+### TC-j25-47 Waiting run history shows skipped slots
+- Layer: L2
+- File: apps/desktop/src/screens/activity/RunPage.test.tsx
+- Given: a waiting run with a decision asked yesterday at 07:41 and a scheduled start skipped today at 07:30
+- When: render the run page
+- Then: the card shows "Asked yesterday 07:41"; the page says "This run waits for you." and "It waits until you answer. Nothing is turned down by itself." and its history says "Today 07:30: the scheduled start was skipped because this run still waits for you."
+- Traces: FS-j25.P16, F-13.R19, F-14.R17
+- Build step: B-19
+- Fails first because: the run page has no waiting and skipped history lines.
 
 ## j26 Memory, Phone & bots, Marketplace (and Skills screen basics)
 

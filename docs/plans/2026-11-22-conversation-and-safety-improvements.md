@@ -11,6 +11,9 @@ The owner answered these in this session, in plain words. Decisions 2 and 3 chan
 3. **Reject skips the action; "Another way" is a third choice with a text box.** Owner: "jika menolak ya skip saja ... sebaiknya ada pilihan opsi lain dari setuju, tolak, opsi lain (dengan kotak deskripsi)". Reject keeps the B-05.T3 rule: the action is skipped and the run goes on. Another way gives the agent the person's words, and the agent tries again in the same step. Every new call goes through the decision function again.
 4. **Notes while a run runs, in V1.** A message to a running flow becomes a note for that run. It is used from the run's next step and shown on the run page. A note cannot widen what the run may touch: anything new asks (decision 2).
 5. **The build resumes as soon as T1 has landed.** T1 removes the 24-hour rule, which B-05 would otherwise build. After that, planned tasks go on. The new build tasks wait until the owner approves the prototype.
+6. **The prototype is approved, and V1 uses its look and font.** Owner, after trying prototype versions 10 and 11: "Oke buatkan versi 1 dengan UI yang bagus keren wow dan AI savvy". Asked about the font: "Plus Jakarta Sans". The download was approved with "ya unduh".
+   - The variable font file and its OFL license come from the official Google Fonts repository. Their SHA-256 values are in `.workflow/scratch/fonts/SOURCE.txt`.
+   - They wait outside the tree until the hidden-character scan accepts `.ttf` files. That change is to `tools/checks/`, which is Ask first.
 
 ## Chair's calls (owner may override)
 
@@ -54,13 +57,20 @@ Gate for every task: `pnpm format`, then `pnpm check`.
   - If the version 2 contract carries `expiresAt`, T1 adds a contract task to B-05 that drops it, because a contract change is its own task.
   - Section 6 coverage of `build-order.md` must still hold.
   - Executor: Codex.
-- [ ] **P1 Prototype update (separate session, prototype repository).** Started 2026-11-22 in session `prototype-p1`.
+- [x] **P1 Prototype update (separate session, prototype repository).** Started 2026-11-22 in session `prototype-p1`.
+  Done by: Claude Opus 5.5 (session prototype-p1), 2026-11-22. Evidence: prototype versions 10 (brief 26) and 11 (brief 27, the shorter menu) were published with every prototype gate passing. The owner approved both in chat (decision 6).
   - j24: Approve, Reject and Another way; the card for an action outside the flow, with its words; no expiry.
   - j20: a note during a run.
   - j25: the stuck line.
   - Gate: the prototype's own checks.
   - The owner tries it and approves it in `reviews`.
-- [ ] **T2 Step B-32 in the design set (after P1 is approved).**
+- [x] **T2 Step B-32 in the design set (after P1 is approved).**
+  Done by: Codex gpt-6.1-terra (two parts), 2026-11-22. Evidence: pnpm check.
+  Chair review, 2026-11-22:
+  - The order numbers in build-order.md that the new rows shifted were corrected.
+  - B-32 is placed at Order 14 for T1 to T4, which need only B-05, and at Order 26 for T5, which needs B-08 and B-10, rather than after B-19.
+  - The screen work of T7 went into the unbuilt B-16, B-17 and B-19 tasks instead of a task of its own, so nothing is built twice. The shorter menu of prototype version 11 is in B-16.
+  - The plan tasks map to the build: T3 is B-32.T2, T4 is B-32.T3, T6 is B-32.T4, T5 is B-32.T5, and B-32.T1 is their contract.
   - A B-32 section in `build-order.md`, placed after B-19 in the V1 order, holding T3 to T7.
   - New cases in `docs/design/test-cases/` (journeys and safety), and the coverage table.
   - The spec words for decisions 2 to 4 and the stuck guard in the PRD, architecture (AD-06), data-model and threat-model.

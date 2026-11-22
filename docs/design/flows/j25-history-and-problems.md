@@ -75,6 +75,8 @@ Activity keeps every run. When a run is stuck, the cause is written in plain wor
 
 - **FS-j25.P11** Agent and model on the run page. Version 9 of the prototype already shows the agent and model the run used ("Claude Code · Sonnet 5.5") on the page and the run card. New in the real app: the agent and model are the ones recorded when the run really started (see `j31-agent-and-model.md`), not a sample.
 
+- **FS-j25.P16 Repetition and waiting history.** After four identical calls with identical inputs and results or three identical errors, an attempt fails early. The next attempt gets one plain note; after the last, `blocked` says "The agent kept repeating itself." The page explains "FlowDriven stopped each attempt early, so your AI agent's quota was not wasted.", lists each attempt and offers Try again. A waiting run says "This run waits for you." and "It waits until you answer. Nothing is turned down by itself." Its history lists "<when>: the scheduled start was skipped because this run still waits for you." Each waiting decision says when asked; Activity Earlier retains run rows only. The page also lists "Your notes" and their waiting, used or not-used states (FS-j20.P20).
+
 ## States
 
 | Entity | From -> to | Cause |

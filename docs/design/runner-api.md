@@ -107,9 +107,9 @@ type RunState = "queued" | "checking" | "running" | "waiting_approval" | "needs_
   | "blocked" | "interrupted" | "stopped" | "done" | "failed";           // v2 adds needs_login and stopped
 type StepRunState = "pending" | "running" | "retrying" | "waiting_approval" | "passed" | "failed"
   | "skipped" | "interrupted" | "stopped";                               // v2 adds stopped
-type ApprovalState = "pending" | "approved" | "approved_edited" | "rejected" | "expired" | "allowed_always";
-type ApprovalDecision = "approve" | "edit" | "reject" | "always_allow";   // v2 adds always_allow
-type ApprovalKind = "risky_action" | "flow_sign_off" | "result_sign_off" | "budget_raise"
+type ApprovalState = "pending" | "approved" | "approved_edited" | "rejected" | "expired" | "allowed_always" | "another_way";
+type ApprovalDecision = "approve" | "edit" | "reject" | "always_allow" | "another_way";   // v2 adds always_allow
+type ApprovalKind = "outside_flow" | "risky_action" | "flow_sign_off" | "result_sign_off" | "budget_raise"
   | "requirement_addition" | "ask" | "weekly_limit";                     // unchanged
 type ResolvedVia = "window" | "chat" | "phone" | "rule" | "stop" | "permission_off";
 type FlowState = "new" | "changed" | "confirmed";
@@ -118,7 +118,7 @@ type TouchRule = "runs_alone" | "asks_first" | "not_allowed";
 type Effect = "read" | "local_write" | "run_command" | "change" | "send" | "post" | "pay" | "delete" | "merge";
 type RuleEffect = "local_write" | "run_command" | "change";   // the only effects a standing rule may have in V1
 type Place = { kind: "account" | "folder" | "address" | "site" | "command" | "repo"; value: string; label: string };   // a rule's place kind: change -> account or folder, local_write -> folder, run_command -> command
-type Line = { key: string; params?: Record<string, string | number> };  // key ^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9_]*)+$, at most 100; values at most 400
+type Line = { key: string; params?: Record<string, string | number> };  // key ^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9_]*)+$, at most 100; values at most 400 except `report.anotherWay`, `decision.newTry` and `report.didAnotherWay` text, at most 4000
 type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 type ScheduleSpec =                                  // input
@@ -145,7 +145,7 @@ type StartOutcome =
 type CauseCode =
   | "agent_signed_out" | "site_sign_in" | "permission_off" | "agent_not_set_up" | "usage_limit" | "spending_limit"
   | "checks_failing" | "requirement_missing" | "flow_not_confirmed" | "limits_not_applied" | "crash"
-  | "step_failed" | "stopped" | "flow_deleted" | "agent_cannot_be_limited" | "daily_limit" | "cost_not_reported" | "internal_error";
+  | "step_failed" | "stuck_repeating" | "stopped" | "flow_deleted" | "agent_cannot_be_limited" | "daily_limit" | "cost_not_reported" | "internal_error";
 type Cause = { code: CauseCode; params?: Record<string, string> };   // params: agent, site, step, tries, until, missing, flow
 
 type InputProblem = "empty" | "unreadable" | "zero" | "too_long" | "too_long_text" | "out_of_range"
@@ -237,6 +237,9 @@ type RunSummary = {
 };
 type RunDetail = RunSummary & {
   // kept from version 1: inputs, steps, approvalIds, outputs, usage, calls, estimatedCostUsd, report, blockedReason
+  notes: { id: string; text: string; at: IsoDateTime; fromStep?: number; state: "waiting" | "used" | "not_used"; usedAt?: IsoDateTime; outside: boolean }[];
+  skippedStarts: { at: IsoDateTime; runId: RunId }[]; // scheduled starts skipped because this run still waited
+  attemptLog: { step: number; attempt: number; reason: "repeated_call" | "repeated_error"; count: number; evidence: string; outside: boolean }[];
   decisionLines: Line[];                         // the honest lines (AD-12)
   answer?: { lines: string[]; chatId?: ChatId; messageId?: MessageId };
   costLine: { kind: "plan" } | { kind: "amount"; usd: number } | { kind: "none" };   // "Included in your plan"
@@ -251,6 +254,8 @@ type RunReport = {                               // changed: version 1's saveOff
 };
 ```
 
+`stuck_repeating` draws "The agent kept repeating itself." and offers Try again. Attempt evidence and note text use the safe renderer and retain outside marks. Skipped starts come from `starts` rows with `skipped` / `still_running`, linked to the waiting run; Activity Earlier still contains only runs.
+
 The screens never show `usage`, `calls` or token numbers (FS-j25.A2); the fields stay for tests and diagnostics.
 
 ### 4.3 Decisions
@@ -264,19 +269,19 @@ type Approval = {
   editable: boolean;                             // email and text payloads only
   outside?: boolean;
   riskyAction?: RiskyAction;                     // send, post, pay, delete, merge
-  effect?: Effect;                               // required for risky_action in v2
+  effect?: Effect;                               // required for risky_action and outside_flow in v2
   place?: Place; fixedPlace?: boolean;
   canAlwaysAllow: boolean;                       // true only for a pending risky_action whose effect is `change` with a fixed place not taken from outside text, and the caller is the window; always false for send, post, pay, delete and merge
   similarGroup?: string; similarWaiting?: number;   // "Approve all similar (N)"
   stepWaiting: number;                           // other pending decisions of the same step
-  createdAt: IsoDateTime;
+  createdAt: IsoDateTime;                       // asked time shown on pending cards
   resolvedAt?: IsoDateTime; resolvedVia?: ResolvedVia;
-  picks?: string[]; editedSubject?: string; editedText?: string;
+  picks?: string[]; editedSubject?: string; editedText?: string; anotherWayText?: string;
   chatId?: ChatId; ruleId?: RuleId;
 };
 ```
 
-Refinements: `ask` exactly when the payload is `choice` (as today); `risky_action` needs `effect`, and `riskyAction` exactly when `effect` is one of the five risky kinds; `weekly_limit` and `budget_raise` have a text payload and no run, step or item. The runner creates `ask`, `result_sign_off`, `risky_action`, `weekly_limit` and `budget_raise`; `flow_sign_off` and `requirement_addition` stay in the enum and are never created (a flow change goes through Improve with chat).
+Refinements: `outside_flow` requires an effect and full held payload, has `canAlwaysAllow: false`, no similar group and no Edit; it is approved only once. `anotherWayText` is present only for the `another_way` resolution. `ask` exactly when the payload is `choice` (as today); `risky_action` needs `effect`, and `riskyAction` exactly when `effect` is one of the five risky kinds; `weekly_limit` and `budget_raise` have a text payload and no run, step or item. The runner creates `ask`, `result_sign_off`, `risky_action`, `outside_flow`, `weekly_limit` and `budget_raise`; `flow_sign_off` and `requirement_addition` stay in the enum and are never created (a flow change goes through Improve with chat).
 
 ### 4.4 Chats
 
@@ -564,9 +569,13 @@ type SettingsPatch = {
   1. Stores the person's message and clears `composerText`. The first person message sets the title (first 40 characters); the chat moves to the top.
   2. With an open form card in the chat: posts a line (English: "Please fill in the form above, then choose Start.") and runs no turn (`form_open`).
   3. With the chat's agent not `ready`: posts an `agent_needed` card and runs no turn (`not_ready`, FS-j20.E1).
-  4. Otherwise queues one turn (one at a time per chat). The turn is one agent call with no tools and a JSON schema, on the chat's agent and model, with the compact context (at most 12 turns or 24,000 characters) and the standing instruction to answer in the person's language (AD-10, FS-j30.P5). FlowDriven validates the intent against its own state, then posts the reply, lines and cards. A turn whose context holds outside text (outside messages or `pasted`) only posts cards (SR-5). The chat language changes when the turn reports a registered code for typed text (not for `fromChip`).
+  4. Otherwise queues one turn (one at a time per chat). The turn is one agent call with no tools and a JSON schema, on the chat's agent and model, with the compact context (at most 12 turns or 24,000 characters) and the standing instruction to answer in the person's language (AD-10, FS-j30.P5). FlowDriven validates the intent against its own state, then posts the reply, lines and cards. A turn whose context holds outside text (outside messages or `pasted`) only posts cards (SR-5), except `note_run` may store the message as inert data with its outside mark: it starts, approves and changes nothing. The chat language changes when the turn reports a registered code for typed text (not for `fromChip`).
   5. An invalid answer is asked for once more; two failures post a `turn_failed` card (English: "I did not understand that. ...") and audit `chat_turn_failed`.
 - Tests first: with the fake brain answering `run` for a confirmed flow with nothing missing, exactly one brain call happens with `tools` empty and a schema, and one run starts with source `chat`; with the brain answering `run` for a flow named alone, a question or a negation, an `ask_run` card is posted and no run starts (FS-j20.A5); with outside text in the context, `run` gives an `ask_run` card (FS-j20.A6); with the permission off nothing is stored; two quick sends give two queued turns answered in order; a context over 24,000 characters is cut to the newest turns.
+
+`note_run` is an intent of `chats.send`, not a new operation: it reuses the existing message, paste mark and ordered turn, the smaller contract change. Validate the target and exceptions in F-04.R13 against runner state; store the note on the run and post `chat.noteAdded` ("Noted. <flow> uses this from its next step."). On the next step supply it as the person's words with its outside mark, record `fromStep` and `usedAt`, and emit `report.usedNote`; an ended run marks unused notes `not_used`. Audit `run_note_added` and `run_note_used` without note text. Never change scope or bypass the decision function. `runs` and `chats` topics update.
+
+For `stuck_repeating`, `runs.resume` starts a fresh attempt at the stuck step on the run's recorded agent and model, subject to normal safety and permission checks; an unchanged environmental cause may cause it to block again.
 
 #### `chats.act` (new)
 
@@ -709,14 +718,15 @@ type SettingsPatch = {
 
 #### `approvals.resolve` (changed)
 
-- Input: `{approvalId; decision: ApprovalDecision; editedText?: string (1..4000); editedSubject?: string (1..300)}`; `editedText` exactly when `decision` is `edit`.
+- Input: `{approvalId; decision: ApprovalDecision; editedText?: string (1..4000); editedSubject?: string (1..300); anotherWayText?: string (1..4000)}`; `editedText` exactly when `decision` is `edit`; `anotherWayText` exactly when `decision` is `another_way`.
 - Output: `{decision: Approval; stepWaiting: number; ruleId?: RuleId}`.
-- Errors: `not_found`; `conflict: already_answered` (params `via`), `decision_expired` (after Stop, permission off or flow deletion); `invalid_input: edit_not_allowed`, `empty_text`, `hidden_characters`; `not_allowed: place_not_fixed`, `always_asks` (`always_allow` on a decision of effect `send`, `post`, `pay`, `delete` or `merge`), `raise_in_settings` (a `budget_raise` decision), `phone_no_rules` (V2).
+- Errors: `not_found`; `conflict: already_answered` (params `via`), `decision_expired` (after Stop, permission off or flow deletion); `invalid_input: edit_not_allowed`, `empty_text`, `hidden_characters`; `invalid_input: another_way_not_allowed`, `text_too_long`; `not_allowed: outside_flow_once` (`always_allow` for `outside_flow`), `place_not_fixed`, `always_asks` (`always_allow` on a decision of effect `send`, `post`, `pay`, `delete` or `merge`), `raise_in_settings` (a `budget_raise` decision), `phone_no_rules` (V2).
 - Topics: writes `approvals`, `runs`, `rules`, `chats`, `activity`. Person only (the phone: restricted).
 - Does (AD-07):
-  - `approve`: a one-time grant for the run, step, item, tool and exact digest; state `approved`; the step re-runs and the call is made once, exactly as written; decision line `report.youApproved` (English: "You approved: <title>.")
-  - `edit` (email and text payloads only; recipients never change): state `approved_edited`; the grant is bound to the digest of the edited call; decision line `report.youApprovedEdited` (English: "You approved your edited version: <title>.")
-  - `reject`: state `rejected`; the action is skipped, the step is `skipped`, later steps that needed its result are skipped and listed, and the run goes on; decision line `report.youSaidNo` (English: "You said no: <title>. It was not done."). No dialog. For the rest of that run no standing rule applies, and a held call of the run shows the normal decision card.
+  - `approve`: a one-time grant for the run, step, item, tool and exact digest; state `approved`; the step re-runs and the call is made once, exactly as written; decision line `report.youApproved` (English: "You approved: <title>."); for `outside_flow`, use `report.approvedOnce` with `{title}` ("You approved once: <title>.")
+  - `edit` (email and text payloads only, never `outside_flow`; recipients never change): state `approved_edited`; the grant is bound to the digest of the edited call; decision line `report.youApprovedEdited` (English: "You approved your edited version: <title>.")
+  - `another_way` (window only, `risky_action`, `outside_flow` or `result_sign_off`): validate the window-typed text for empty, hidden characters and length; make no grant, record the text as the person's own, retry in the same step counting an attempt, and decide each new call again. Record `report.anotherWay` with `{text}` ("You asked for another way: <text>."); a new decision carries `decision.newTry` with `{text}` ("New try, after your words: <text>"); when an outside retry succeeds, `report.didAnotherWay` with `{text}` draws "Did it another way, as you asked: <text>." The audit records the decision id and choice without text.
+  - `reject`: state `rejected`; the action is skipped, the step is `skipped` except for `outside_flow` where the step continues, later steps that needed its result are skipped and listed, and the run goes on; decision line `report.youSaidNo` (English: "You said no: <title>. It was not done."). No dialog. For the rest of that run no standing rule applies, and a held call of the run shows the normal decision card.
   - `always_allow` (window only; only for a pending `risky_action` decision whose effect is `change`, at a fixed place not taken from outside text): approves as `approve` and writes a standing rule `{flow, touch, effect, place}`; state `allowed_always`; decision line `report.youApproved`. A decision of effect `send`, `post`, `pay`, `delete` or `merge` gives `not_allowed: always_asks`; a place that is not fixed gives `place_not_fixed`.
   - Every decision clears its notice (`notice_clear`), audits `decision_made`, and, when the step has no more pending decisions, lets the run continue.
 - Tests first: an approved grant allows one exact call and holds the same call with another input (FS-j20.A14); a second resolve gives `conflict: already_answered` with `via: "window"`; after Stop, permission off or flow deletion `approve` gives `decision_expired`; `edit` with text built from `String.fromCodePoint(0x202e)` gives `hidden_characters`; `edit` of a `diff` payload gives `edit_not_allowed`; `reject` leaves the run `running` and the step `skipped` (FS-j24.A6); `always_allow` on a `change` whose place came from the run gives `place_not_fixed`; `always_allow` on a `send` reply, even with an address that is fixed, gives `always_asks` and writes no rule.
@@ -732,7 +742,7 @@ type SettingsPatch = {
 
 - Input: `{runId; group: string (1..100); approvalIds: DecisionId[] (2..50)}`: the items the dialog listed.
 - Output: `{decisions: Approval[]}`.
-- Errors: `not_found`; `conflict: list_changed` (params: the current ids); `not_allowed: kind_not_batchable`.
+- Errors: `not_found`; `conflict: list_changed` (params: the current ids); `not_allowed: kind_not_batchable`, `outside_flow_once` if any selected decision is `outside_flow` (nothing is approved).
 - Does: approves exactly those pending decisions of that run and group, each with its own grant bound to its own exact input (FS-j24.P3), when the pending set of the group equals `approvalIds`; otherwise approves nothing. Only `risky_action` decisions with `riskyAction` `send` or `post`, one run only. The renderer's dialog lists every item in full before it calls this: every recipient, the subject and the whole text (renderer test L2: the dialog shows each held payload in full, and the button calls nothing until the dialog is open). Audit `decisions_batch` and one `decision_made` each.
 - Tests first: three pending replies approved by their three ids give three grants with three digests; a fourth reply that arrived after the dialog opened gives `list_changed` and approves nothing; a batch of `delete` decisions gives `kind_not_batchable`.
 
@@ -1201,7 +1211,7 @@ Shared dispatcher tests (`service/handlers.test.ts`): an unknown name answers -3
 - `flows.start` accepts only `flows` and `again` from the window; `chat` starts happen inside `chats.act`, and the runner sets every other source.
 - `approvals.resolveSimilar` carries the ids the dialog listed, so a changed list approves nothing (FS-j24.P3).
 - `approvals.resolve` adds `editedSubject` next to `editedText`, because Edit changes an email's subject and body (FS-j24.P1).
-- Every held call is kind `risky_action` with an `effect`, so the timesheet entry (`change`) needs no new kind.
+- Declared held calls are `risky_action`; undeclared calls reaching the decision function are `outside_flow`, with an effect even for reads.
 - The spending pause is one synthetic `budget_raise` decision with no run, resolved only by raising the limit in Settings.
 - New operations beyond the owner's list: `chats.setComposer` (the per-chat composer text of F-03.R1 survives a restart) and the V2 `skills.keepCurrent` ("Keep current version", FS-j26.S14).
 - The window API is `getPrefs`, `setColorMode`, `openLink` (AD-16: links open only through main's check) and `quit` (the mismatch screen); `WindowPrefs` is `{colorMode, platform}`.
