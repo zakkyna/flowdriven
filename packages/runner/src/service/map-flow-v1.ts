@@ -1,0 +1,251 @@
+import {
+  DEFAULT_KEEPER,
+  FlowDetail,
+  FlowManifest,
+  FlowSummary,
+  isReady,
+  ReadinessReport,
+  Settings,
+} from "@flowdriven/contracts/v1";
+import {
+  type Check,
+  type LeafStep,
+  type Requirement,
+  FlowManifest as SdkManifest,
+  type Step,
+} from "@flowdriven/sdk";
+import { catalogEntry } from "../connectors/catalog.ts";
+import { isExtraRef } from "../folders/extra.ts";
+import { UNOFFICIAL_SENTENCE } from "../router/route.ts";
+import type { FlowRow, RunRow, StepRow } from "../storage.ts";
+import { coreVersion, triggerSummary } from "./map-flow.ts";
+import { connectorReadiness } from "./readiness-connector.ts";
+import { WEB_FIX, webReadiness } from "./readiness-web.ts";
+
+export function v1RunState(state: RunRow["state"]): Exclude<RunRow["state"], "needs_login" | "stopped"> {
+  return state === "needs_login" ? "blocked" : state === "stopped" ? "failed" : state;
+}
+export function describeCheck(check: Check): string {
+  switch (check.type) {
+    case "command":
+      return `Runs ${[check.cmd, ...check.args].join(" ")}`.trim();
+    case "files":
+      return `Files exist: ${check.paths.join(", ")}`;
+    case "schema":
+      return `Matches ${check.file}`;
+    case "contains":
+      return `Contains ${(check.patterns ?? [check.pattern ?? ""]).join(", ")}`;
+    case "not_contains":
+      return `Does not contain ${(check.patterns ?? [check.pattern ?? ""]).join(", ")}`;
+    case "judge":
+      return `A reviewer approves it (${check.rubric})`;
+    case "user":
+      return "You approve the result";
+    case "probe":
+      return `${check.tool} answers`;
+  }
+}
+function leaf(step: LeafStep) {
+  return {
+    ...step,
+    title: step.title ?? step.id,
+    instructions: "instructions" in step ? step.instructions : step.do === "ask" ? step.ask.question : "",
+    checks:
+      step.do === "ask"
+        ? []
+        : step.checks.map((check) => ({
+            type: check.type,
+            required: check.required,
+            summary: check.summary ?? describeCheck(check),
+            ...("of" in check && check.of !== undefined ? { of: check.of } : {}),
+            ...(check.type === "command" ? { cmd: check.cmd, args: check.args } : {}),
+          })),
+  };
+}
+function stepModel(step: Step) {
+  if ("do" in step) return leaf(step);
+  return {
+    id: step.id,
+    title: step.title ?? step.id,
+    do: "loop" as const,
+    instructions: "",
+    when: step.when,
+    uses: [],
+    outputs: [],
+    checks: [],
+    retry: 0,
+    loop: {
+      for_each: step.for_each,
+      as: step.as,
+      key: step.key,
+      max: step.max,
+      on_item_fail: step.on_item_fail,
+      steps: step.steps.map(leaf),
+    },
+  };
+}
+export function toFlowManifest(manifest: SdkManifest): FlowManifest {
+  return FlowManifest.parse({
+    ...manifest,
+    version: coreVersion(manifest.version),
+    requirements: manifest.requirements.map((r) => ({ ...r, ref: r.ref ?? r.id, routes: r.routes ?? [] })),
+    defaults: {
+      ...manifest.defaults,
+      worker: manifest.defaults.worker === undefined ? undefined : { prefer: [manifest.defaults.worker] },
+    },
+    inputs: manifest.inputs.map((input) => {
+      const { default: value, ...rest } = input;
+      return typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean" ||
+        (Array.isArray(value) && value.every((v) => typeof v === "string"))
+        ? { ...rest, default: value }
+        : rest;
+    }),
+    params: Object.fromEntries(
+      Object.entries(manifest.params).map(([key, param]) => {
+        const { default: value, ...rest } = param;
+        return [
+          key,
+          typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+            ? { ...rest, default: value }
+            : rest,
+        ];
+      }),
+    ),
+    triggers: manifest.triggers.map((t) => ({ kind: t.kind, summary: triggerSummary(t) })),
+    steps: manifest.steps.map(stepModel),
+  });
+}
+function manifestOf(row: FlowRow): SdkManifest {
+  return SdkManifest.parse(row.manifest);
+}
+export function toFlowSummary(row: FlowRow, runs: RunRow[]): FlowSummary {
+  const m = manifestOf(row);
+  const last = runs
+    .filter((r) => r.flowId === row.id)
+    .reduce<RunRow | undefined>((a, b) => (!a || b.startedAt >= a.startedAt ? b : a), undefined);
+  return FlowSummary.parse({
+    id: m.id,
+    name: m.name,
+    summary: m.summary,
+    version: coreVersion(m.version),
+    kind: m.kind,
+    saved: true,
+    signOff: { state: "approved", version: coreVersion(m.version) },
+    stepCount: m.steps.length,
+    lastRun: last && { runId: last.id, state: v1RunState(last.state), startedAt: last.startedAt },
+  });
+}
+export function toFlowDetail(row: FlowRow, runs: RunRow[], lastRunSteps: StepRow[]): FlowDetail {
+  const m = manifestOf(row);
+  const summary = toFlowSummary(row, runs);
+  const all = m.steps.flatMap((s) => ("do" in s ? [s] : s.steps));
+  return FlowDetail.parse({
+    manifest: toFlowManifest(m),
+    hash: row.hash,
+    saved: true,
+    signOff: summary.signOff,
+    playback: {
+      goal: m.summary || m.name,
+      touches: m.requirements.map((r) => r.ref ?? r.id),
+      asksApprovalFor: all.flatMap((s) => [
+        ...(s.do === "ask" ? [s.ask.question] : []),
+        ...(s.checks.some((c) => c.type === "user") ? [`Approving the result of "${s.title ?? s.id}"`] : []),
+      ]),
+    },
+    conversation: [],
+    canUndo: false,
+    stepStatus: Object.fromEntries(
+      m.steps.map((s) => [
+        s.id,
+        lastRunSteps.find((r) => r.stepId === s.id && r.itemKey === "" && r.runId === summary.lastRun?.runId)
+          ?.state ?? "pending",
+      ]),
+    ),
+  });
+}
+export type LocalChecks = Record<
+  "skill" | "command" | "folder",
+  (req: Requirement) => {
+    state: "ok" | "missing" | "needs_login";
+    detail: string;
+  }
+>;
+export function toReadinessReport(
+  row: FlowRow,
+  checkedAt: string,
+  web?: { chromeFlag: boolean; hostFile: boolean },
+  connectors?: { name: string; url: string; status: string }[],
+  local?: LocalChecks,
+): ReadinessReport {
+  const m = manifestOf(row);
+  const items = m.requirements.map((r) => {
+    const entry =
+      r.type === "mcp_server" && (r.connect === undefined || r.connect === "native")
+        ? catalogEntry(r.ref)
+        : undefined;
+    const connector = entry && connectors !== undefined ? connectorReadiness(entry, connectors) : undefined;
+    const checked =
+      local &&
+      (r.type === "skill"
+        ? local.skill(r)
+        : r.type === "cli_tool"
+          ? local.command(r)
+          : r.type === "path" && isExtraRef(r.ref)
+            ? local.folder(r)
+            : undefined);
+    return {
+      requirementId: r.id,
+      name: r.ref ?? r.id,
+      type: r.type,
+      why: r.why,
+      required: r.required,
+      sensitive: r.sensitive,
+      state: "unchecked" as const,
+      detail: "Not checked yet. Checking requirements arrives with the readiness engine.",
+      route: { via: "FlowDriven", risk: "official" as const },
+      autoInstall: "guided" as const,
+      guide: { steps: ["Nothing to do yet."], commands: [], verified: false },
+      checkedAt,
+      ...(checked
+        ? {
+            ...checked,
+            ...(checked.state !== "ok"
+              ? { guide: { steps: [checked.detail], commands: [], verified: false } }
+              : {}),
+          }
+        : {}),
+      ...(connector && entry
+        ? {
+            ...connector,
+            route: { via: `${entry.label} connector in Claude Code`, risk: "official" as const },
+            ...(connector.state !== "ok"
+              ? { guide: { steps: [connector.detail], commands: [], verified: false } }
+              : {}),
+          }
+        : {}),
+      ...(web && r.type === "web" && r.mode === "read" && r.session === "own"
+        ? {
+            ...webReadiness(web),
+            route: {
+              via: "Claude in Chrome inside Claude Code",
+              risk: "unofficial" as const,
+              note: UNOFFICIAL_SENTENCE,
+            },
+            guide: { steps: [WEB_FIX], commands: ["claude --chrome"], verified: false },
+          }
+        : {}),
+    };
+  });
+  return ReadinessReport.parse({ flowId: m.id, flowName: m.name, checkedAt, ready: isReady(items), items });
+}
+export function defaultSettings(now: string): Settings {
+  return Settings.parse({
+    brain: { main: null, subscriptionOrder: [], apiKeyOrder: [] },
+    backends: [],
+    budget: { month: now.slice(0, 7), capUsd: 0, perRunCapUsd: null, spentUsd: 0 },
+    offerSaveOneTime: true,
+    keeper: DEFAULT_KEEPER,
+  });
+}

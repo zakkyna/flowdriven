@@ -991,6 +991,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/service/map-flow.test.ts`, `readiness-connector.test.ts`, `readiness-local.test.ts`, `review-02b-a2.test.ts` | Version 1 mapper and readiness assertions | Keep the same assertions using the extracted version 1 mapper; add version 2 mapping coverage (TC-STO-36) | B-05.T9 |
 | `packages/runner/src/states.test.ts` | Step states match the version 1 contract | Step states match the version 2 contract, including stopped (TC-ENG-07) | B-05.T7 |
 | `packages/runner/src/service/decisions-handlers.test.ts` | Similar waiting excludes the current decision | Count all pending decisions including this one (TC-j24-21; FS-j24.A8) | B-05.T4 |
 | `packages/runner/src/claude/adapter-limits.test.ts` | Confirmed local work runs through the hook | The same calls run and identify their rules for recording (TC-RUL-12) | B-05.T5 |

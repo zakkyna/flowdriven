@@ -14,7 +14,8 @@ import { reportLines, sumUsage } from "../report.ts";
 import type { AuditEntry, RunRow, StepRow } from "../storage.ts";
 import { triggerWords } from "../triggers/rules.ts";
 import { toApproval } from "./map-approval.ts";
-import { coreVersion, v1RunState } from "./map-flow.ts";
+import { coreVersion } from "./map-flow.ts";
+import { v1RunState } from "./map-flow-v1.ts";
 export function blockedCalls(
   audit: AuditEntry[],
   stepId: string,

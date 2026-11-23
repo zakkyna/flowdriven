@@ -1,3 +1,4 @@
+import { FlowManifest, type Touch } from "@flowdriven/sdk";
 import { callGrant, digestCall } from "../connectors/grants.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import type { ApprovalRow, RuleInput, RuleRow, Store } from "../storage.ts";
@@ -119,4 +120,29 @@ export function standingRule(store: Store, input: Partial<RuleInput> = {}): Rule
     sentence: "Log hours",
     ...input,
   });
+}
+
+export function flowWithRules(store: Store, touches: Touch[], extra: Record<string, unknown> = {}) {
+  const at = "2026-11-23T00:00:00.000Z";
+  const hash = `sha256:${"a".repeat(64)}`;
+  const base = demoFlow();
+  const manifest = FlowManifest.parse({ ...base.manifest, format: "flowdriven-flow/1.2", touches, ...extra });
+  store.putFlow({
+    id: manifest.id,
+    hash,
+    version: manifest.version,
+    manifest,
+    files: base.files,
+    registeredAt: at,
+  });
+  store.putFlowHead({
+    id: manifest.id,
+    name: manifest.name,
+    summary: manifest.summary,
+    headHash: hash,
+    createdAt: at,
+    updatedAt: at,
+    origin: { kind: "chat", chatId: "chat-1", draftId: "draft-1" },
+  });
+  return { manifest, hash };
 }

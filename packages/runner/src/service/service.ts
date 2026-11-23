@@ -22,6 +22,7 @@ import { createCapabilities } from "./capabilities.ts";
 import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
+import { createFlowHandlers } from "./flows.ts";
 import {
   type Caller,
   createDecisionHandlers,
@@ -246,6 +247,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     engine,
     call: createDispatcher({
       v2: {
+        "flows.confirm": createFlowHandlers(store, now).confirm,
         "rules.list": rules.list,
         "rules.revoke": rules.revoke,
         "approvals.list": decisions.list,

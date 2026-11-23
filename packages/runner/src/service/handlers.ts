@@ -37,7 +37,7 @@ import { ALLOW_FIRST } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
 import { toDecision } from "./map-decision.ts";
-import { type LocalChecks, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow.ts";
+import { type LocalChecks, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow-v1.ts";
 import { toQueueView } from "./map-queue.ts";
 import { runTrigger, toRunSummary } from "./map-run-v1.ts";
 import { toTriggerStatus } from "./map-trigger.ts";

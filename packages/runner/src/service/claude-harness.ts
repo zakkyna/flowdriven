@@ -412,7 +412,13 @@ export function createHarnessService(options: {
       )
         return undefined;
       const run = options.store.getRun(req.runId);
-      const consent = run && options.store.getCapabilityConsent(run.flowId);
+      const flow = run && options.store.getFlow(run.flowId, run.flowHash);
+      const manifest = flow && FlowManifest.safeParse(flow.manifest);
+      const consent =
+        run &&
+        (manifest?.success && manifest.data.format === "flowdriven-flow/1.2"
+          ? options.store.getConfirmation(run.flowId)
+          : options.store.getCapabilityConsent(run.flowId));
       if (!run || consent?.hash !== run.flowHash) return ALLOW_FIRST;
       if (folders.some((folder) => !Object.hasOwn(consent.pins?.folders ?? {}, folder.id)))
         return ALLOW_FIRST;

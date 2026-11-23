@@ -6,7 +6,7 @@ import { CONNECTORS } from "../connectors/catalog.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { FlowRow, Store } from "../storage.ts";
 import { FAKE_CLAUDE_PATH, makeFakeHome } from "../test-helpers/fake-claude-script.ts";
-import { toReadinessReport } from "./map-flow.ts";
+import { toReadinessReport } from "./map-flow-v1.ts";
 import { connectorReadiness } from "./readiness-connector.ts";
 import { createRunnerService, type RunnerService } from "./service.ts";
 

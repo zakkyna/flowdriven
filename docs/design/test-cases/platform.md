@@ -2651,7 +2651,7 @@ Shared setup: harness H. In V1 a standing rule and Always allow exist only for a
 - File: packages/runner/src/service/flows-handlers.test.ts (new)
 - Given: rule R1 on `log-hours` (change, `timesheet-account`) of version `H1`; four new versions of the flow: `H2` same touch; `H3` with the place `other-account`; `H4` with the touch removed; `H5` same touch but the person leaves it out of `onItsOwn` at confirm.
 - When: each version is confirmed in turn (R1 is re-made when needed) with `onItsOwn: ["log-hours"]` where the touch exists.
-- Then: `H2`: `rules.kept` holds R1; `H3`: R1 is `revoked` with `revokedBy: "flow_changed"` and `ended` holds it; `H4`: revoked `flow_changed`; `H5`: revoked `moved_to_asks_first`; `FlowDetail.changes` and the audit `flow_changed` list kept and ended rules.
+- Then: `H2`: `rules.kept` holds R1; `H3`: R1 is `revoked` with `revokedBy: "flow_changed"` and `ended` holds it; `H4`: revoked `flow_changed`; `H5`: revoked `moved_to_asks_first`; the `flows.confirm` output (`rules.kept`, `rules.ended`) and the audit `flow_changed` list kept and ended rules, while `FlowDetail.changes` lists only changed steps or touches (FS-j23.P5: the dialog has no lines about standing rules).
 - Traces: AD-07, FS-j24.A14, FS-j23.A8
 - Build step: B-05
 - Fails first because: no rule revocation on re-confirm exists.

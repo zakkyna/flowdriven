@@ -17,7 +17,7 @@ import { scriptedHarness } from "../scripted-harness.ts";
 import { bundledSkill, readSkillFolder } from "../skills/skill-folder.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
-import { toReadinessReport } from "./map-flow.ts";
+import { toReadinessReport } from "./map-flow-v1.ts";
 import { createRunnerService, type RunnerService } from "./service.ts";
 
 const paths = vi.hoisted(() => ({ home: "" }));
