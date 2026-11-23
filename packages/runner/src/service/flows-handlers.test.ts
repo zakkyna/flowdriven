@@ -375,7 +375,7 @@ test("TC-j24-18 confirmed rules reach a fake Claude run", { timeout: 20000 }, as
     await x.service.call("flows.confirm", { ...x.input, onItsOwn: ["label"] });
     await hs.start().settled;
     await hs.rescan();
-    hs.setConsent(CLAUDE_ID, "given");
+    x.store.putSetting("agentPermission", "on");
     const requirement = x.manifest.requirements[0];
     if (!requirement) throw new Error("Missing requirement");
     const route = routeRequirement(requirement, { hooks: true, chrome: false, connectors: [connector] });
@@ -586,26 +586,44 @@ test("TC-SR3-12 legacy confirmations produce the migrated flow states", async ()
 });
 
 test("TC-j12-36 settings leave confirmed flow state and hash unchanged", async () => {
-  const { exampleAgentProfile } = await import("../test-helpers/agent-profiles.ts");
+  const { mkdirSync, rmSync, symlinkSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { AGENT_PROFILES } = await import("../test-helpers/agent-profiles.ts");
+  const { makeFakeHome } = await import("../test-helpers/fake-claude-script.ts");
+  const { FAKE_CODEX_PATH, writeFakeCodexScript } = await import("../test-helpers/fake-codex-script.ts");
+  const home = makeFakeHome();
+  const bin = join(home, "bin");
+  mkdirSync(bin);
+  symlinkSync(FAKE_CODEX_PATH, join(bin, "codex"));
+  writeFakeCodexScript(home, { profile: AGENT_PROFILES.codex, signedIn: true });
   const x = await setup([]);
+  const service = createRunnerService({
+    store: x.store,
+    dataDir: home,
+    mode: "demo",
+    env: { HOME: home, PATH: `${bin}:${process.env.PATH}` },
+    agents: { extraDirs: [], codexPath: join(bin, "codex") },
+  });
   try {
-    await x.service.call("flows.confirm", x.input);
+    await service.call("flows.confirm", x.input);
     for (const patch of [
-      { mainAgent: { agent: "codex", model: exampleAgentProfile.models[0] } },
-      { mainAgent: { agent: "codex", model: exampleAgentProfile.models[1] } },
+      { mainAgent: { agent: "codex", model: AGENT_PROFILES.codex.models[0] } },
+      { mainAgent: { agent: "codex", model: AGENT_PROFILES.codex.models[1] } },
       { spendingLimit: 50 },
       { busyFallback: true },
     ]) {
-      await x.service.call("settings.update", { patch });
-      expect(await x.service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
+      await service.call("settings.update", { patch });
+      expect(await service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
         hash,
         summary: { state: "confirmed" },
       });
-      expect(await x.service.call("flows.list", {})).toMatchObject([{ state: "confirmed" }]);
+      expect(await service.call("flows.list", {})).toMatchObject([{ state: "confirmed" }]);
     }
   } finally {
+    service.stop();
     x.service.stop();
     x.store.close();
+    rmSync(home, { recursive: true, force: true });
   }
 });
 

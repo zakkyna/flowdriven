@@ -85,7 +85,7 @@ async function liveRig(options: { keeper?: Partial<KeeperSettings> } = {}) {
   const keeper = captured.keeper;
   if (!config || !keeper) throw new Error("Keeper was not created");
   await service.start().settled;
-  await service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+  await service.call("settings.update", { patch: { agentPermission: "on" } });
   let count = 0;
   async function runAsk(text: string, result?: { text: string; usage?: ResultAction["usage"] }) {
     const marker = `R19-MARKER-${++count}`;

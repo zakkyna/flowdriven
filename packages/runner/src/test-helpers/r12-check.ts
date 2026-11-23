@@ -39,7 +39,12 @@ try {
   const card = cards.find((c) => c.id === "claude-code");
   if (!card?.detected || card.login !== "logged_in")
     throw new Error("Claude Code was not found or is not signed in.");
-  await client.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+  await (
+    client.call as unknown as (
+      name: "settings.update",
+      input: { patch: { agentPermission: "on" } },
+    ) => Promise<unknown>
+  )("settings.update", { patch: { agentPermission: "on" } });
   const imported = await client.call("flows.import", { path: flowDir });
   if (!imported.flow) throw new Error("Could not import the check flow.");
   const run = await client.call("flows.run", { flowId: "local.claude-code-check" });

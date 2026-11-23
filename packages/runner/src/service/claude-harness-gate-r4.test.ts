@@ -38,7 +38,7 @@ const base = {
   scan,
   finished: true,
   fileExists: () => true,
-  consent: "given" as const,
+  permission: "on" as const,
   facts,
   allowed: true,
 };

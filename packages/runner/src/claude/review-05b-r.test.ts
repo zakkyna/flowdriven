@@ -361,7 +361,7 @@ test("a step that asks for a Gmail tool with no class is blocked at the gate or 
     },
     finished: true,
     fileExists: () => true,
-    consent: "given",
+    permission: "on",
     allowed: true,
     facts: { ...c.facts, connectors: [fact] },
     manifest: c.m,

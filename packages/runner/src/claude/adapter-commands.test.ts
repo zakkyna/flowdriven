@@ -118,7 +118,7 @@ test("the gate passes a step with a routed cli_tool, and Bash in a step without 
       scan,
       finished: true,
       fileExists: () => true,
-      consent: "given",
+      permission: "on",
       manifest,
       facts: { hooks: true, chrome: false },
       allowed: true,

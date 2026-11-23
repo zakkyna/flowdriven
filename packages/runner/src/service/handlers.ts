@@ -51,7 +51,7 @@ export type HandlerContext = {
   projectDir: string;
   now: () => Date;
   harnessIdOf: (workerName: string) => string;
-  harnesses?: Pick<HarnessService, "list" | "rescan" | "setConsent">;
+  harnesses?: Pick<HarnessService, "list" | "rescan">;
   keeper?: Keeper;
   weekly?: ReturnType<typeof createWeekly>;
   capabilities?: ReturnType<typeof createCapabilities>;
@@ -85,7 +85,7 @@ export function createDispatcher({
       audit("caller_refused", { operation: name, caller });
       throw new RunnerError("not_allowed", "Caller is not allowed.", { reason: "caller_not_allowed" });
     }
-    if (name === "flows.build" || name === "flows.update")
+    if (name === "flows.build" || name === "flows.update" || name === "harnesses.setConsent")
       throw new RunnerError("unavailable", "Operation retired.", { reason: "retired" });
     const v2Handler = (v2[rootKey] ??
       (rootKey === "activity.summary" ? legacy["activity.summary"] : undefined)) as
@@ -177,6 +177,7 @@ export function createHandlers({
   | "runner.info"
   | "settings.get"
   | "settings.update"
+  | "harnesses.setConsent"
   | "audit.list"
   | "runs.list"
   | "runs.status"
@@ -373,10 +374,6 @@ export function createHandlers({
       harnesses
         ? harnesses.rescan().then((cards) => cards.map(withQuota))
         : unavailable("Looking for harnesses arrives with the harness adapters."),
-    "harnesses.setConsent": ({ harnessId, consent }) =>
-      harnesses
-        ? withQuota(harnesses.setConsent(harnessId, consent))
-        : unavailable("Harness consent arrives with the harness adapters."),
     "queue.list": queue,
     "queue.move": ({ runId }) => {
       run(runId);
@@ -416,6 +413,7 @@ export function createSettingsHandlers(
   now: () => Date,
   clearNotice: (id: string) => void,
   languages: readonly string[] = ["en"],
+  engine?: Engine,
 ) {
   const get = () => readSettings(store, now(), languages);
   return {
@@ -491,6 +489,18 @@ export function createSettingsHandlers(
         }
       });
       for (const approval of expired) clearNotice(`approval:${approval.id}`);
+      if (patch.agentPermission === "off" && engine) {
+        for (const run of store.listRuns()) {
+          if (
+            ["queued", "checking", "running", "retrying", "waiting_approval", "needs_login"].includes(
+              run.state,
+            )
+          ) {
+            engine.stopRun(run.id, "person");
+            store.updateRun(run.id, { stoppedBy: "permission_off", cause: { code: "permission_off" } });
+          }
+        }
+      }
       return get();
     },
   };

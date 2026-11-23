@@ -194,11 +194,7 @@ test("the six not-built operations answer unavailable with their sentences", asy
       "Installing a requirement arrives with the readiness engine.",
     ],
     ["harnesses.rescan", {}, "Looking for harnesses arrives with the harness adapters."],
-    [
-      "harnesses.setConsent",
-      { harnessId: "x", consent: "given" },
-      "Harness consent arrives with the harness adapters.",
-    ],
+    ["harnesses.setConsent", { harnessId: "x", consent: "given" }, "Operation retired."],
   ] as const;
   for (const [name, input, message] of cases)
     await expect(s.call(name, input)).rejects.toMatchObject({ code: "unavailable", message });
@@ -442,10 +438,10 @@ test("TC-SR2-02 retired operations refuse tool and phone but reach window handle
     }
     await expect(dispatch(name, input, "window")).rejects.toMatchObject({
       code: "unavailable",
-      reason: "internal_error",
+      reason: name === "harnesses.setConsent" ? "retired" : "internal_error",
     });
   }
-  expect(reached).toHaveBeenCalledTimes(3);
+  expect(reached).toHaveBeenCalledTimes(2);
 });
 
 test("TC-AGT-32 runner.info reports live, demo and sample modes", async () => {

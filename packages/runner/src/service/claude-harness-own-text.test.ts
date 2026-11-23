@@ -46,7 +46,7 @@ async function setup(changed: boolean, readsJob: boolean) {
   const hs = createHarnessService({ ...common, projectDir: project });
   services.push(hs);
   await hs.start().settled;
-  hs.setConsent(CLAUDE_ID, "given");
+  store.putSetting("agentPermission", "on");
   const service = createRunnerService({ ...common, mode: "live" });
   services.push(service);
   await service.start().settled;

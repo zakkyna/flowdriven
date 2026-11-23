@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type HarnessCard, RunnerError } from "@flowdriven/contracts/v1";
+import type { HarnessCard } from "@flowdriven/contracts/v1";
 import type { Requirement, Value } from "@flowdriven/sdk";
 import { FlowManifest } from "@flowdriven/sdk";
 import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapter.ts";
@@ -89,7 +89,7 @@ export function harnessGate(input: {
   scan: ClaudeScan | undefined;
   finished: boolean;
   fileExists: (path: string) => boolean;
-  consent: "not_given" | "given" | "revoked";
+  permission: "unset" | "on" | "off";
 }): string | undefined {
   const { scan } = input;
   let reason: string | undefined;
@@ -100,7 +100,7 @@ export function harnessGate(input: {
   else if (scan.missingFlags.length) reason = GATE.tooOld;
   else if (scan.login === "logged_out") reason = GATE.signedOut;
   else if (scan.login !== "logged_in") reason = GATE.unknownLogin;
-  else if (input.consent !== "given") reason = GATE.noConsent;
+  else if (input.permission !== "on") reason = GATE.noConsent;
   return reason;
 }
 export function gate(
@@ -264,7 +264,6 @@ export type HarnessService = {
   start(): { settled: Promise<void> };
   list(): HarnessCard[];
   rescan(): Promise<HarnessCard[]>;
-  setConsent(harnessId: string, consent: "given" | "revoked"): HarnessCard;
   facts(): HarnessFacts;
   readiness(
     manifest: FlowManifest,
@@ -432,7 +431,7 @@ export function createHarnessService(options: {
         scan: cache?.scan,
         finished,
         fileExists: existsSync,
-        consent: state()?.consent ?? "not_given",
+        permission: options.store.getSetting("agentPermission") === "on" ? "on" : "off",
       }),
   });
   return {
@@ -447,24 +446,6 @@ export function createHarnessService(options: {
     async rescan() {
       await scan(true);
       return list();
-    },
-    setConsent(id, consent) {
-      if (id !== CLAUDE_ID) throw new RunnerError("not_found", `There is no harness ${id}.`);
-      if (consent === "given" && !cache?.scan.detected)
-        throw new RunnerError("not_allowed", "This harness is not detected.");
-      options.store.putHarnessState({
-        ...state(),
-        id: CLAUDE_ID,
-        consent,
-        consentAt: options.now().toISOString(),
-      });
-      if (consent === "revoked") adapter.interrupt(GATE.noConsent);
-      options.store.appendAudit({
-        at: options.now().toISOString(),
-        kind: "harness_consent",
-        detail: { harnessId: id, consent },
-      });
-      return list()[0] as HarnessCard;
     },
     facts: () =>
       harnessFacts(
@@ -504,7 +485,7 @@ export function createHarnessService(options: {
         scan: cache?.scan,
         finished,
         fileExists: existsSync,
-        consent: state()?.consent ?? "not_given",
+        permission: options.store.getSetting("agentPermission") === "on" ? "on" : "off",
         manifest,
         facts: harnessFacts(
           cache?.scan,

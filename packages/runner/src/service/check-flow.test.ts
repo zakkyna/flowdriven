@@ -57,7 +57,7 @@ test("the gate lets it through for a ready Claude Code", () => {
       },
       finished: true,
       fileExists: () => true,
-      consent: "given",
+      permission: "on",
       manifest: loadFlowFolder(dir).manifest,
     }),
   ).toEqual({ ready: true });

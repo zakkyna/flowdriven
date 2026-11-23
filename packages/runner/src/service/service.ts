@@ -267,7 +267,13 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   });
   const decisions = createDecisionHandlers(store, engine, weekly, (id) => options.clearNotice?.(id));
-  const settings = createSettingsHandlers(store, now, (id) => options.clearNotice?.(id), options.languages);
+  const settings = createSettingsHandlers(
+    store,
+    now,
+    (id) => options.clearNotice?.(id),
+    options.languages,
+    engine,
+  );
   const rules = createRuleHandlers(store, now);
   const runs = createRunHandlers(store, engine, (name) =>
     name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
@@ -323,7 +329,16 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
           return result;
         },
         "settings.get": settings.get,
-        "settings.update": settings.update,
+        "settings.update": async (input) => {
+          if (input.patch.mainAgent) {
+            const models = await registry.models(input.patch.mainAgent.agent);
+            if (models.error)
+              throw new RunnerError("not_allowed", "Agent is not ready.", { reason: "agent_not_ready" });
+            if (!models.list.some((model) => model.id === input.patch.mainAgent?.model))
+              throw new RunnerError("invalid_input", "Unknown model.", { reason: "model_unknown" });
+          }
+          return settings.update(input);
+        },
         "runner.info": () => ({
           contractVersion: CONTRACT_VERSION,
           appVersion,

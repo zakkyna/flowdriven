@@ -1006,6 +1006,10 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/claude/adapter-commands.test.ts`, `claude/review-05b-r.test.ts`, `service/check-flow.test.ts`, `service/flows-handlers.test.ts`, `service/review-03-a1.test.ts`, `service/review-03-s7.test.ts` | Per-agent consent enables the existing gate and its tests | The one agent permission enables the same gate; turning it off is stored even when the agent is missing (TC-SR8-04, FS-j31.E2) | B-07.T4 |
+| `packages/runner/src/review-04-r.test.ts` | Withholding agent consent blocks trigger runs and produces notices | A missing agent blocks the same runs and notices; restoring it permits a run, with permission on (TC-SR8-04, FS-j31.E2) | B-07.T4 |
+| `packages/runner/src/engine-stop.test.ts` (TC-j24-34) | Turning permission off expires a decision but leaves runs active | The decision expires and both waiting and running runs stop with `permission_off` (TC-SR8-04) | B-07.T4 |
+| `packages/runner/src/service/flows-handlers.test.ts` (TC-j12-36) | Main agent changes accepted an arbitrary model without readiness validation | The same confirmation and hash assertions use a ready fake Codex and its listed models (TC-AGT-29) | B-07.T4 |
 | `packages/runner/src/claude/hook-post.test.ts`, `packages/runner/src/claude/hook-script.test.ts` | Worker settings contained hooks only | Worker settings also disable auto-memory, preserving all hooks (TC-AGT-41) | B-07.T3 |
 | `packages/runner/src/claude/decide-commands.test.ts` | Protected program names in argument words can be held | Protected program names are refused in every word (TC-SR1-39) | B-32.T7 |
 | `apps/desktop/src/i18n/i18n.test.ts` (TC-j30-21, TC-I18N-30) | Real tree has no Line keys supplied | Real tree counts LINE_KEYS as used (TC-I18N-32), retaining the existing findings and Indonesian checks | B-06.T7 |

@@ -56,7 +56,7 @@ async function setup() {
   });
   services.push(hs);
   await hs.start().settled;
-  hs.setConsent(CLAUDE_ID, "given");
+  store.putSetting("agentPermission", "on");
   const hash = `sha256:${"a".repeat(64)}`;
   store.putFlow({
     id: manifest.id,

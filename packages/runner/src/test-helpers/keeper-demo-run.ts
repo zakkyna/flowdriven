@@ -50,7 +50,7 @@ export async function runKeeperDemo(o: { releaseFile: string }): Promise<string[
       ],
     });
     await service.start().settled;
-    await service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+    await service.call("settings.update", { patch: { agentPermission: "on" } });
     await service.call("settings.update", { patch: { keeper: { ceiling: 1 } } });
     for (const [name, marker] of [
       ["alpha", "ALPHA"],

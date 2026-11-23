@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, test, vi } from "vitest";
 import { createRunnerService } from "../service/service.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
+import { AGENT_PROFILES } from "../test-helpers/agent-profiles.ts";
 import {
   FAKE_CLAUDE_PATH,
   FAKE_HELP,
@@ -10,6 +11,7 @@ import {
   readFakeCalls,
   writeFakeScript,
 } from "../test-helpers/fake-claude-script.ts";
+import { FAKE_CODEX_PATH, writeFakeCodexScript } from "../test-helpers/fake-codex-script.ts";
 
 async function fixture(installed = false) {
   const home = makeFakeHome();
@@ -176,6 +178,12 @@ test("TC-j01-25 a status refresh cannot make an unsupported agent ready", async 
       { state: "unknown", problem: { code: "too_old" } },
       { state: "not_installed" },
     ]);
+    await expect(
+      f.service.call("settings.update", {
+        patch: { mainAgent: { agent: "claude-code", model: "sonnet-5.5" } },
+      }),
+    ).rejects.toMatchObject({ code: "not_allowed", reason: "agent_not_ready" });
+    expect(await f.service.call("settings.get", {})).toMatchObject({ mainAgent: null });
     const before = f.topics.length;
     f.advance(61000);
     await f.service.call("agents.list", {});
@@ -184,6 +192,36 @@ test("TC-j01-25 a status refresh cannot make an unsupported agent ready", async 
       { state: "unknown", problem: { code: "too_old" } },
       { state: "not_installed" },
     ]);
+  } finally {
+    f.close();
+  }
+});
+
+test("TC-AGT-29 main agent requires a ready agent and a listed model", async () => {
+  const f = await fixture(true);
+  try {
+    symlinkSync(FAKE_CODEX_PATH, join(f.bin, "codex"));
+    writeFakeCodexScript(f.home, { profile: AGENT_PROFILES.codex, signedIn: false });
+    await f.service.call("agents.rescan", {});
+    await expect(
+      f.service.call("settings.update", { patch: { mainAgent: { agent: "codex", model: "gpt-6.1-terra" } } }),
+    ).rejects.toMatchObject({ code: "not_allowed", reason: "agent_not_ready" });
+    writeFakeCodexScript(f.home, { profile: AGENT_PROFILES.codex, signedIn: true });
+    await f.service.call("agents.rescan", {});
+    await expect(
+      f.service.call("settings.update", { patch: { mainAgent: { agent: "codex", model: "gpt-6.1-nova" } } }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "model_unknown" });
+    expect(
+      await f.service.call("settings.update", {
+        patch: { mainAgent: { agent: "claude-code", model: "opus-5.5" } },
+      }),
+    ).toMatchObject({ mainAgent: { agent: "claude-code", model: "opus-5.5" } });
+    expect(await f.service.call("settings.get", {})).toMatchObject({
+      mainAgent: { agent: "claude-code", model: "opus-5.5" },
+    });
+    await expect(f.service.call("settings.update", { patch: { busyFallback: "yes" } })).rejects.toMatchObject(
+      { code: "invalid_input" },
+    );
   } finally {
     f.close();
   }

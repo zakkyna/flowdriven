@@ -108,7 +108,7 @@ export async function runConnectorDemo(
     script([]);
     await service.start().settled;
     await service.call("harnesses.rescan", {});
-    await service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+    await service.call("settings.update", { patch: { agentPermission: "on" } });
     const project = join(dataDir, "project");
     mkdirSync(project, { recursive: true });
     const start = async (name: string, steps: unknown[], plays: FakePlay[], browser = false) => {

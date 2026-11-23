@@ -95,7 +95,7 @@ test("TC-ENG-08 flow deletion stops blocked and interrupted runs", async () => {
   }
 });
 
-test("TC-j24-34 permission off expires the decision without stopping its run", async () => {
+test("TC-j24-34 TC-SR8-04 permission off expires the decision and stops both runs", async () => {
   const store = await openSqliteStore(":memory:");
   const cleared: string[] = [];
   const service = createRunnerService({
@@ -112,8 +112,14 @@ test("TC-j24-34 permission off expires the decision without stopping its run", a
     store.updateApproval(running.id, { state: "approved", resolvedVia: "window" });
     await service.call("settings.update", { patch: { agentPermission: "off" } });
     expect(store.getApproval(decision.id)).toMatchObject({ state: "expired", resolvedVia: "permission_off" });
-    expect(store.getRun(decision.runId)?.state).toBe("waiting_approval");
-    expect(store.getRun(running.runId)?.state).toBe("running");
+    expect(store.getRun(decision.runId)).toMatchObject({
+      state: "stopped",
+      cause: { code: "permission_off" },
+    });
+    expect(store.getRun(running.runId)).toMatchObject({
+      state: "stopped",
+      cause: { code: "permission_off" },
+    });
     expect(
       store
         .listAudit()

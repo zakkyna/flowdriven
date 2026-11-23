@@ -51,7 +51,7 @@ const base = {
   },
   finished: true,
   fileExists: () => true,
-  consent: "given" as const,
+  permission: "on" as const,
 };
 const homes: string[] = [];
 const stores: Store[] = [];
@@ -123,7 +123,7 @@ async function setup() {
   services.push(hs);
   await hs.start().settled;
   await hs.rescan();
-  hs.setConsent(CLAUDE_ID, "given");
+  store.putSetting("agentPermission", "on");
   const m = manifest();
   const hash = `sha256:${"a".repeat(64)}`;
   store.createRun({

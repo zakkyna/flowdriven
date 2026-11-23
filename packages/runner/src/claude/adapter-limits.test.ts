@@ -1040,3 +1040,77 @@ test("TC-SR1-48 an outside Bash grant runs once and the repeated call is held", 
     store.close();
   }
 });
+
+test.each([
+  ["TC-j25-43", { permissionMode: "acceptEdits" }],
+  ["TC-j31-33", { tools: ["Read", "Glob", "Grep", "WebFetch"] }],
+])("%s failed start proof records the cause and audit", { timeout: 20_000 }, async (_id, init) => {
+  const t = setup({ when: "", init, actions: [write("/never-written"), { do: "result" }] });
+  const result = await t.adapter.runStep(t.request);
+  expect(result).toMatchObject({
+    exit: "failed",
+    block: LIMITS_NOT_APPLIED,
+    cause: { code: "limits_not_applied", params: { agent: "Claude Code" } },
+  });
+  expect(t.audits).toContainEqual(expect.objectContaining({ kind: "limits_not_applied" }));
+  expect(readFakeCalls(t.home).filter((call) => call.kind === "tool" && call.ran)).toHaveLength(0);
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.proof",
+    name: "Proof",
+    kind: "build",
+    steps: ["s", "later"].map((id) => ({
+      id,
+      do: "worker",
+      instructions: "Work",
+      checks: [{ type: "contains", pattern: "ok" }],
+    })),
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const c = await setupEngine(parsed.manifest, {});
+  try {
+    const engine = createEngine({ store: c.store, harness: t.adapter, now: c.clock.now });
+    const run = await engine.startRun(parsed.manifest.id, { project: t.project });
+    expect(run).toMatchObject({
+      state: "blocked",
+      cause: { code: "limits_not_applied", params: { agent: "Claude Code" } },
+    });
+    expect(c.store.getStep(run.id, "later")).toBeUndefined();
+    expect(readFakeCalls(t.home).filter((call) => call.kind === "tool" && call.ran)).toHaveLength(0);
+  } finally {
+    c.store.close();
+  }
+});
+
+test.each([
+  ["extra tool", { tools: ["Read", "Glob", "Grep", "WebFetch"] }],
+  ["missing tool", { tools: ["Read", "Glob"] }],
+  ["extra server", { mcp_servers: [{ name: "evil", status: "connected" }] }],
+  ["skill", { skills: ["x"] }],
+  ["command", { slash_commands: ["/review"] }],
+  ["bypass", { permissionMode: "bypassPermissions" }],
+  ["accept edits", { permissionMode: "acceptEdits" }],
+  ["session", { session_id: "other" }],
+])("TC-SR4-11 blocks %s", { timeout: 20_000 }, async (_label, init) => {
+  const t = setup({ when: "", init, actions: [write("/never-written"), { do: "result" }] });
+  expect(await t.adapter.runStep(t.request)).toMatchObject({
+    cause: { code: "limits_not_applied", params: { agent: "Claude Code" } },
+  });
+  expect(t.audits).toContainEqual(expect.objectContaining({ kind: "limits_not_applied" }));
+  expect(readFakeCalls(t.home).filter((call) => call.kind === "tool" && call.ran)).toHaveLength(0);
+});
+
+test("TC-SR4-11 blocks a missing start hook", { timeout: 20_000 }, async () => {
+  const t = setup({ when: "", startHook: false, actions: [write("/never-written"), { do: "result" }] });
+  expect(await t.adapter.runStep(t.request)).toMatchObject({
+    cause: { code: "limits_not_applied", params: { agent: "Claude Code" } },
+  });
+  expect(t.audits).toContainEqual(expect.objectContaining({ kind: "limits_not_applied" }));
+  expect(readFakeCalls(t.home).filter((call) => call.kind === "tool" && call.ran)).toHaveLength(0);
+});
+
+test("TC-SR4-11 accepts a matching start proof", { timeout: 20_000 }, async () => {
+  const t = setup(play([{ do: "result" }]));
+  expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "ok" });
+  expect(t.audits.some((audit) => audit.kind === "limits_not_applied")).toBe(false);
+});

@@ -39,7 +39,7 @@ test("the gate passes a flow with a granted folder after the allow and asks for 
     },
     finished: true,
     fileExists: () => true,
-    consent: "given" as const,
+    permission: "on" as const,
     facts: { hooks: true, chrome: false },
     manifest,
   };
@@ -68,7 +68,7 @@ test("after Withdraw the next attempt of a step with a granted folder is refused
   });
   services.push(hs);
   await hs.start().settled;
-  hs.setConsent(CLAUDE_ID, "given");
+  store.putSetting("agentPermission", "on");
   const hash = `sha256:${"a".repeat(64)}`;
   store.putFlow({
     id: manifest.id,

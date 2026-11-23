@@ -107,7 +107,7 @@ export async function runTriggerDemo(): Promise<string[]> {
       service.engine.registerFlow(flow, DEMO_HASH, {});
     }
     await service.start().settled;
-    await service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+    await service.call("settings.update", { patch: { agentPermission: "on" } });
     const hourly = TriggerStatus.parse(
       await service.call("triggers.setEnabled", {
         flowId: "local.hourly",

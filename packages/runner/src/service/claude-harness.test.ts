@@ -104,7 +104,7 @@ test("the gate gives its sentences in order", () => {
     scan,
     finished: true,
     fileExists: () => true,
-    consent: "given" as const,
+    permission: "on" as const,
     manifest: manifest(),
   };
   const cases = [
@@ -136,8 +136,8 @@ test("the gate gives its sentences in order", () => {
       { scan: { ...scan, login: "unknown" } },
       "FlowDriven could not tell whether Claude Code is signed in. Scan again.",
     ],
-    [{ consent: "not_given" }, "Give FlowDriven consent to run Claude Code on the Harnesses screen first."],
-    [{ consent: "revoked" }, "Give FlowDriven consent to run Claude Code on the Harnesses screen first."],
+    [{ permission: "unset" }, "Give FlowDriven consent to run Claude Code on the Harnesses screen first."],
+    [{ permission: "off" }, "Give FlowDriven consent to run Claude Code on the Harnesses screen first."],
   ] satisfies [Partial<Parameters<typeof gate>[0]>, string][];
   for (const [change, reason] of cases)
     expect(gate({ ...base, ...change })).toEqual({ ready: false, reason });
@@ -165,7 +165,7 @@ test("the gate blocks what it cannot enforce, then what is marked sensitive, and
     scan,
     finished: true,
     fileExists: () => true,
-    consent: "given" as const,
+    permission: "on" as const,
   };
   const flow = manifest(
     [
@@ -350,47 +350,26 @@ test("the stored scan shows the card at once after a restart, and the gate and t
   expect(readFakeCalls(h).filter((c) => c.kind === "call" && c.args.includes("-p"))).toEqual([]);
   direct.stop();
 });
-test("setConsent stores given and revoked with the time, audits it, and refuses an unknown harness and one that is not detected", {
-  timeout: 20_000,
-}, async () => {
-  const h = home(),
-    dataDir = temp(),
+test("the one permission is stored and audited even when Claude Code is not detected", async () => {
+  const dataDir = temp(),
     s = await store();
-  const hs = createHarnessService({
-    store: s,
-    dataDir,
-    projectDir: dataDir,
-    env: env(h),
-    claudePath: FAKE_CLAUDE_PATH,
-    now,
-    newId: ids(),
-  });
-  await hs.start().settled;
-  for (const consent of ["given", "revoked"] as const) {
-    expect(hs.setConsent(CLAUDE_ID, consent).consent).toBe(consent);
-    expect(s.getHarnessState(CLAUDE_ID)).toMatchObject({ consent, consentAt: now().toISOString() });
+  const service = createRunnerService({ store: s, dataDir, mode: "demo", now });
+  services.push(service);
+  for (const permission of ["on", "off"] as const) {
+    expect(await service.call("settings.update", { patch: { agentPermission: permission } })).toMatchObject({
+      agentPermission: permission,
+    });
+    expect(s.getSetting("agentPermission")).toBe(permission);
+    expect(s.listAudit()).toContainEqual(
+      expect.objectContaining({
+        kind: "permission_changed",
+        detail: expect.objectContaining({ to: permission, source: "window" }),
+      }),
+    );
   }
-  expect(s.listAudit()).toContainEqual(
-    expect.objectContaining({ kind: "harness_consent", detail: { harnessId: CLAUDE_ID, consent: "given" } }),
-  );
-  expect(() => hs.setConsent("x", "given")).toThrowError(
-    expect.objectContaining({ code: "not_found", message: "There is no harness x." }),
-  );
-  hs.stop();
-  const missing = createHarnessService({
-    store: s,
-    dataDir,
-    projectDir: dataDir,
-    env: env(h),
-    claudePath: join(dataDir, "missing"),
-    now,
-    newId: ids(),
-  });
-  await missing.start().settled;
-  expect(() => missing.setConsent(CLAUDE_ID, "given")).toThrowError(
-    expect.objectContaining({ code: "not_allowed", message: "This harness is not detected." }),
-  );
-  missing.stop();
+  await expect(
+    service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "given" }),
+  ).rejects.toMatchObject({ code: "unavailable", reason: "retired" });
 });
 test("end to end in live mode: blocked for lack of consent, then given and the step passes on the fake", {
   timeout: 20_000,
@@ -434,7 +413,7 @@ test("end to end in live mode: blocked for lack of consent, then given and the s
   expect(s.getRun(run.id)?.blockedReason).toBe(
     "Give FlowDriven consent to run Claude Code on the Harnesses screen first.",
   );
-  await service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "given" });
+  await service.call("settings.update", { patch: { agentPermission: "on" } });
   await service.call("runs.resume", { runId: run.id });
   await until(() => (s.getRun(run.id)?.state === "done" ? true : undefined));
   expect(readFakeCalls(h)).toContainEqual(
@@ -458,7 +437,7 @@ test("service.stop() ends a running step as interrupted", { timeout: 20_000 }, a
   });
   services.push(service);
   await service.start().settled;
-  await service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "given" });
+  await service.call("settings.update", { patch: { agentPermission: "on" } });
   const m = manifest();
   service.engine.registerFlow(m, DEMO_HASH, {});
   const run = (await service.call("flows.run", { flowId: m.id })) as { id: string };
@@ -486,17 +465,17 @@ test("a revoke stops a step that is running and blocks the run with the consent 
   });
   services.push(service);
   await service.start().settled;
-  await service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "given" });
+  await service.call("settings.update", { patch: { agentPermission: "on" } });
   const m = manifest();
   service.engine.registerFlow(m, DEMO_HASH, {});
   const run = (await service.call("flows.run", { flowId: m.id })) as { id: string };
   const call = await until(() => readFakeCalls(h).find((c) => c.kind === "call" && c.args.includes("-p")));
   if (call.kind !== "call") throw Error("Missing call");
-  await service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "revoked" });
+  await service.call("settings.update", { patch: { agentPermission: "off" } });
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      until(() => (s.getRun(run.id)?.state === "blocked" ? true : undefined)),
+      until(() => (s.getRun(run.id)?.state === "stopped" ? true : undefined)),
       new Promise<never>((_, reject) => {
         timeout = setTimeout(() => reject(new Error("Revocation took more than five seconds")), 5000);
       }),
@@ -504,7 +483,20 @@ test("a revoke stops a step that is running and blocks the run with the consent 
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
   }
-  expect(s.getRun(run.id)?.blockedReason).toBe(GATE.noConsent);
+  expect(s.getRun(run.id)).toMatchObject({
+    state: "stopped",
+    stoppedBy: "permission_off",
+    cause: { code: "permission_off" },
+  });
+  await until(() => {
+    try {
+      process.kill(call.pid, 0);
+      return undefined;
+    } catch {
+      return true;
+    }
+  });
+  await until(() => (readdirSync(join(dataDir, "control")).length === 0 ? true : undefined));
   expect(() => process.kill(call.pid, 0)).toThrow();
   expect(readdirSync(join(dataDir, "control"))).toEqual([]);
 });
@@ -516,7 +508,7 @@ test("a flow with a command check is blocked until the install preview exists", 
     scan,
     finished: true,
     fileExists: () => true,
-    consent: "given" as const,
+    permission: "on" as const,
   };
   const agent = {
     id: "agent",
