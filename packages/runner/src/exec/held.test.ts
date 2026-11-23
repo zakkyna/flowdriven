@@ -96,3 +96,18 @@ test("TC-SR1-12 blocks a domain that cannot be converted", () => {
     heldPayload({ to: ["sam@bad domain.test"], subject: "Hi", body: "Hi" }, "mcp__gmail__reply"),
   ).toBeUndefined();
 });
+
+test.each(["mcp__gmail__forward", "mcp__gmail__reply"])(
+  "TC-SR1-12 generic %s shows named recipient ASCII",
+  (tool) => {
+    const address = `Sam <sam@b${String.fromCodePoint(0xfc)}cher.example.test>`;
+    expect(heldPayload({ to: address, subject: "Hi", body: "Hi", threadId: "t" }, tool)).toContain(
+      "sam@xn--bcher-kva.example.test",
+    );
+  },
+);
+test("TC-SR1-12 generic recipient with invalid domain is blocked", () => {
+  expect(
+    heldPayload({ to: "Sam <sam@bad domain.test>", threadId: "t" }, "mcp__gmail__forward"),
+  ).toBeUndefined();
+});

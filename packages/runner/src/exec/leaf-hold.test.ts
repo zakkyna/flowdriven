@@ -582,3 +582,27 @@ test("TC-j24-41 too many recipients block without a decision", async () => {
   });
   expect(run.state).toBe("blocked");
 });
+
+test("TC-j24-41 a recipient place exceeding the contract limit blocks without a decision", async () => {
+  const input = { to: ["sam@example.test"], subject: "Hi", body: "Hi" };
+  const c = await ready({
+    steps: {
+      send: {
+        hold: {
+          ...hold,
+          tool: "mcp__gmail__send_message",
+          action: "send",
+          effect: "send",
+          input,
+          place: { kind: "address", value: "x".repeat(4001), label: "recipient" },
+        },
+      },
+    },
+  });
+  const run = await c.start();
+  expect(c.store.listApprovals()).toEqual([]);
+  expect(c.store.getStep(run.id, "send")?.note).toBe(
+    "FlowDriven could not show the whole text, so it did not ask.",
+  );
+  expect(run.state).toBe("blocked");
+});

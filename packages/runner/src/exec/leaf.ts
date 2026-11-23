@@ -14,7 +14,8 @@ import { callGrant } from "../connectors/grants.ts";
 import type { ResolvedDeps } from "../engine.ts";
 import type { StepResult } from "../harness.ts";
 import { validChoicePayload } from "../service/choice-payload.ts";
-import type { RunRow, StepRow } from "../storage.ts";
+import { toDecision } from "../service/map-decision.ts";
+import type { ApprovalRow, RunRow, StepRow } from "../storage.ts";
 import {
   anotherWayOf,
   approvedCallsOf,
@@ -249,13 +250,26 @@ export async function runLeaf(
       if (store.getRun(run.id)?.state === "stopped") return "halt";
       if (result.outside === true) row.outside = true;
       if (stuck !== undefined) {
+        if (result.hold)
+          store.appendAudit({
+            at: now().toISOString(),
+            kind: "call_held",
+            runId: run.id,
+            detail: {
+              tool: result.hold.tool,
+              ...((result.hold.effect ?? result.hold.action)
+                ? { effect: result.hold.effect ?? result.hold.action ?? "change" }
+                : {}),
+              digest: result.hold.digest,
+            },
+          });
         failure = stuck.note;
       } else if (result.hold) {
         const hold = result.hold;
         const payload = heldPayload(hold.input, hold.tool);
         const hiddenCharacters = [
           ...new Set(
-            (JSON.stringify(hold.input).match(/\p{Cf}/gu) ?? []).map(
+            (JSON.stringify(hold.input).match(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu) ?? []).map(
               (char) =>
                 `[U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")} hidden character]`,
             ),
@@ -274,21 +288,6 @@ export async function runLeaf(
               ...(hiddenCharacters.length ? { hiddenCharacters } : {}),
             },
           });
-        if (
-          payload === undefined ||
-          !validChoicePayload(typeof payload === "string" ? { kind: "text", text: payload } : payload)
-        ) {
-          Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
-          row.noteLine = { key: "hold.tooLarge" };
-          store.transaction(() => {
-            block(HOLD_TEXT.tooLarge);
-            store.updateRun(run.id, {
-              cause: { code: "step_failed", params: { step: step.title ?? step.id } },
-            });
-            auditHold();
-          });
-          return "failed";
-        }
         const recipients =
           payload &&
           typeof payload === "object" &&
@@ -301,10 +300,72 @@ export async function runLeaf(
           /(?:^|__)reply$/.test(hold.tool) && recipients && recipients.length <= 150
             ? `Send reply to ${recipients}?`
             : undefined;
+        const summary = hold.outsideFlow
+          ? `${visible(step.title ?? step.id, 80)}: ${visible(hold.tool, 60)}${run.requirements.some((req) => req.id === hold.requirementId) ? ` on ${labelOf(run.requirements, hold.requirementId)}` : ""}`
+          : (replyTitle ??
+            visible(
+              `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
+              200,
+            ));
         const grant =
           hold.outsideFlow && !hold.tool.startsWith("mcp__")
             ? `${hold.tool}#${hold.digest}`
             : callGrant(hold.requirementId, hold.tool, hold.digest);
+        const createdAt = now().toISOString();
+        const approvalId = newId("ap");
+        const chatId = store.getRun(run.id)?.start?.chatId;
+        const candidate: ApprovalRow = {
+          id: approvalId,
+          ...(chatId ? { chatId } : {}),
+          ...(!hold.outsideFlow && hold.touchId && (hold.effect === "send" || hold.effect === "post")
+            ? { similarGroup: `${hold.effect}:${run.flowId}:${hold.touchId}` }
+            : {}),
+          kind: hold.outsideFlow ? "outside_flow" : "risky_action",
+          ...(hold.action === undefined ? {} : { riskyAction: hold.action }),
+          ...(hold.effect === undefined ? {} : { effect: hold.effect }),
+          ...(hold.touchId === undefined ? {} : { touchId: hold.touchId }),
+          ...(hold.place === undefined ? {} : { place: hold.place }),
+          ...(hold.fixedPlace === undefined ? {} : { fixedPlace: hold.fixedPlace }),
+          runId: run.id,
+          stepId: step.id,
+          itemKey,
+          summary,
+          payload: payload ?? null,
+          call: { tool: hold.tool, input: hold.input },
+          approves: [grant],
+          onExpiry: "fail",
+          createdAt,
+          expiresAt: new Date(Date.parse(createdAt) + 86400000).toISOString(),
+          state: "pending",
+          ...(row.outside === true ? { outside: true } : {}),
+          ...(anotherWayText === undefined
+            ? {}
+            : { newTry: { key: "decision.newTry", params: { text: anotherWayText } } }),
+        };
+        let validDecision = false;
+        if (
+          payload !== undefined &&
+          validChoicePayload(typeof payload === "string" ? { kind: "text", text: payload } : payload)
+        ) {
+          try {
+            toDecision(candidate, run, store);
+            validDecision = true;
+          } catch {
+            /* A decision the contract cannot show must not be created. */
+          }
+        }
+        if (!validDecision) {
+          Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+          row.noteLine = { key: "hold.tooLarge" };
+          store.transaction(() => {
+            block(HOLD_TEXT.tooLarge);
+            store.updateRun(run.id, {
+              cause: { code: "step_failed", params: { step: step.title ?? step.id } },
+            });
+            auditHold();
+          });
+          return "failed";
+        }
         const holds = store
           .listApprovals({ runId: run.id })
           .filter(
@@ -333,43 +394,7 @@ export async function runLeaf(
           row.state = "waiting_approval";
           save();
           if (!pending) {
-            const createdAt = now().toISOString();
-            const approvalId = newId("ap");
-            const chatId = store.getRun(run.id)?.start?.chatId;
-            store.createApproval({
-              id: approvalId,
-              ...(chatId ? { chatId } : {}),
-              ...(!hold.outsideFlow && hold.touchId && (hold.effect === "send" || hold.effect === "post")
-                ? { similarGroup: `${hold.effect}:${run.flowId}:${hold.touchId}` }
-                : {}),
-              kind: hold.outsideFlow ? "outside_flow" : "risky_action",
-              ...(hold.action === undefined ? {} : { riskyAction: hold.action }),
-              ...(hold.effect === undefined ? {} : { effect: hold.effect }),
-              ...(hold.touchId === undefined ? {} : { touchId: hold.touchId }),
-              ...(hold.place === undefined ? {} : { place: hold.place }),
-              ...(hold.fixedPlace === undefined ? {} : { fixedPlace: hold.fixedPlace }),
-              runId: run.id,
-              stepId: step.id,
-              itemKey,
-              summary: hold.outsideFlow
-                ? `${visible(step.title ?? step.id, 80)}: ${visible(hold.tool, 60)}${run.requirements.some((req) => req.id === hold.requirementId) ? ` on ${labelOf(run.requirements, hold.requirementId)}` : ""}`
-                : (replyTitle ??
-                  visible(
-                    `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
-                    200,
-                  )),
-              payload,
-              call: { tool: hold.tool, input: hold.input },
-              approves: [grant],
-              onExpiry: "fail",
-              createdAt,
-              expiresAt: new Date(Date.parse(createdAt) + 86400000).toISOString(),
-              state: "pending",
-              ...(row.outside === true ? { outside: true } : {}),
-              ...(anotherWayText === undefined
-                ? {}
-                : { newTry: { key: "decision.newTry", params: { text: anotherWayText } } }),
-            });
+            store.createApproval(candidate);
             auditHold(approvalId);
             if (chatId) {
               const card = { type: "decision", state: "open" as const, approvalId };

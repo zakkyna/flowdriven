@@ -346,7 +346,7 @@ type Agent = {
   billing: "per_use" | "plan" | "unknown";
   models?: Model[]; defaultModel?: ModelId;      // when ready
   usage?: { status: "ok" | "warning" | "limited" | "unknown"; fiveHour?: number; sevenDay?: number; resetsAt?: IsoDateTime };   // V1 Settings shows no usage rows and no "plan limits apply" note; the field serves the usage-limit wait reason
-  capability: { tier: "enforced" | "folder_limited" | "label_only"; accountTools: boolean };   // AD-09
+  capability: { tier: "enforced" | "folder_limited" | "label_only"; accountTools: boolean; memoryGap?: "memory_on" | "own_instruction_files" };   // AD-09; memoryGap: what a flow run cannot leave out (plan decision 7)
   setUp?: { phase: "installing" | "waiting_login"; since: IsoDateTime };
   problem?: { code: "install_failed" | "sign_in_timeout" | "too_old" | "unreadable"; detail?: string };
 };

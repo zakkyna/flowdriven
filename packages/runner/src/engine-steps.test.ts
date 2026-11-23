@@ -589,3 +589,37 @@ test("TC-SR9-14 Try again runs every call through decide again and does not reus
     expect.objectContaining({ kind: "tool", id: "w3", name: "WebFetch", ran: false }),
   );
 });
+
+test("TC-SR9-14 a stuck attempt records its held call", async () => {
+  const held = {
+    requirementId: "host",
+    tool: "publish",
+    input: { text: "Hi" },
+    digest: "digest",
+    action: "post" as const,
+    effect: "post" as const,
+  };
+  const c = await ready([worker({ retry: 0 })], {
+    steps: {
+      a: {
+        hold: held,
+        events: Array.from({ length: 4 }, () => ({
+          tool: "Read",
+          input: {},
+          resultDigest: sha256("result"),
+        })),
+      },
+    },
+  });
+  c.harness.runStep = async (req) => {
+    for (let i = 0; i < 4; i++) req.onEvent?.({ tool: "Read", input: {}, resultDigest: sha256("result") });
+    return { exit: "ok", text: "", outputs: {}, hold: held };
+  };
+  const run = await c.start();
+  expect(
+    c.store
+      .listAudit(run.id)
+      .filter((entry) => entry.kind === "call_held")
+      .map((entry) => entry.detail),
+  ).toEqual([{ tool: "publish", effect: "post", digest: "digest" }]);
+});

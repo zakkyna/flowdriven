@@ -3,7 +3,7 @@ export function visible(text: string, max: number): string {
   for (const character of text) {
     const point = character.codePointAt(0);
     const piece =
-      /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(character) && point !== undefined
+      /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u.test(character) && point !== undefined
         ? `<U+${point.toString(16).toUpperCase().padStart(4, "0")}>`
         : character;
     if (result.length + piece.length > max) break;

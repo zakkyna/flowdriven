@@ -251,10 +251,10 @@ test("TC-SR1-39 command data paths and nested shell sources stay protected", () 
     expect(decide(p, call(command)), command).toMatchObject({ outcome: "refuse" });
 });
 
-test("TC-SR1-39 ordinary argument words do not become commands", () => {
+test("TC-SR1-39 protected programs in argument words are refused", () => {
   const p = { ...policy, touches: [] };
   for (const command of ["echo claude", "echo sh", "printf source", "echo cd"])
-    expect(decide(p, call(command)), command).toMatchObject({ outcome: "hold", held: { outsideFlow: true } });
+    expect(decide(p, call(command)), command).toMatchObject({ outcome: "refuse" });
 });
 
 test("TC-SR1-39 an outside-text step refuses even an undeclared command", () => {
@@ -262,4 +262,24 @@ test("TC-SR1-39 an outside-text step refuses even an undeclared command", () => 
     outcome: "refuse",
     reason: "A step that reads outside text cannot run commands. Run them in a step of their own.",
   });
+});
+
+const longS = String.fromCodePoint(0x17f);
+test.each([
+  `/usr/bin/${longS}ecurity find-generic-password -w`,
+  `cat /Users/x/.claude.j${longS}on`,
+  "=security find-generic-password -w",
+  "=claude -p hi",
+  "bash -c -- 'cat /Users/x/.codex/auth.json'",
+  `sh -c -x 'cat .gi""t/config'`,
+  "dd of=.git/hooks/pre-commit",
+  "nice -n 5 claude -p hi",
+  "env FOO=1 security find-generic-password",
+])("TC-SR1-39 refuses protected command %s", (command) => {
+  expect(decide({ ...policy, touches: [] }, call(command))).toMatchObject({ outcome: "refuse" });
+});
+
+test("TC-SR1-39 rejects non-ASCII shell whitespace inside a word", () => {
+  const command = `echo${String.fromCodePoint(0xa0)}safe`;
+  expect(decide({ ...policy, touches: [] }, call(command))).toMatchObject({ outcome: "refuse" });
 });

@@ -101,7 +101,7 @@ export function unsafeShellLine(
       continue;
     }
     if (c === "$" || c === "`" || (quote === undefined && "{*?[~".includes(c))) return true;
-    if (quote === undefined && /\s/.test(c)) {
+    if (quote === undefined && /[ \t\r\n]/.test(c)) {
       flush();
       if (c === "\n") tokens.push(";");
       continue;
@@ -134,15 +134,11 @@ export function unsafeShellLine(
   );
   const separators = new Set([";", "&&", "||", "|", "&", "(", ")"]);
   const redirections = new Set(["<", ">", ">>", "<>", ">|", ">&", "&>"]);
-  let command = true;
-  let wrapped = false;
   let redirect = false;
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i] ?? "";
     if (separators.has(token)) {
       if (redirect) return true;
-      command = true;
-      wrapped = false;
       continue;
     }
     if (redirections.has(token)) {
@@ -150,14 +146,16 @@ export function unsafeShellLine(
       redirect = true;
       continue;
     }
-    const lower = token.toLowerCase();
-    const parts = lower.split("/");
+    if (/[^\x20-\x7e]/.test(token) || token.startsWith("=")) return true;
+    const lower = token.normalize("NFKC").toUpperCase().toLowerCase();
+    const parts = lower.split(/[/=,:@]/);
     const last = parts.at(-1) ?? "";
     if (
       parts.some((part) =>
-        [".git", ".claude", ".mcp.json", ".claude.json", ".codex", "keychains", ".."].includes(part),
+        [".git", ".claude", ".mcp.json", ".claude.json", ".codex", "keychains", "security", ".."].includes(
+          part,
+        ),
       ) ||
-      last === "security" ||
       REFUSED_FLAGS.some((flag) => lower === flag || lower.startsWith(`${flag}=`)) ||
       lower === "--full-auto" ||
       /dangerously|danger-full-access|bypasspermissions/.test(lower)
@@ -178,21 +176,7 @@ export function unsafeShellLine(
         if (scope.roots.some(within) && !(scope.projectRoot && within(scope.projectRoot))) return true;
       }
     }
-    if (redirect) {
-      redirect = false;
-      continue;
-    }
-    const wrapper = new Set(
-      "env xargs nohup timeout nice time exec command sudo doas stdbuf setsid".split(" "),
-    );
-    const isCommand = command || wrapped;
-    if (isCommand && (agents.has(last) || ["source", ".", "cd", "pushd", "popd"].includes(last))) return true;
-    if (command && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) continue;
-    if (command) {
-      wrapped = wrapper.has(last);
-      command = false;
-    }
-    if (!isCommand) continue;
+    if (agents.has(last) || ["source", ".", "cd", "pushd", "popd"].includes(last)) return true;
     if (last === "eval") {
       if (unsafeShellLine(tokens.slice(i + 1).join(" "), scope, depth + 1)) return true;
     }
@@ -201,13 +185,20 @@ export function unsafeShellLine(
       for (let j = i + 1; j < tokens.length && !separators.has(tokens[j] ?? ""); j++) {
         const flag = tokens[j] ?? "";
         if (/^-([a-z]*c[a-z]*)$/i.test(flag)) {
-          script = tokens[j + 1];
+          for (let k = j + 1; k < tokens.length && !separators.has(tokens[k] ?? ""); k++) {
+            const part = tokens[k] ?? "";
+            if (!part.startsWith("-")) {
+              script = part;
+              break;
+            }
+          }
           break;
         }
         if (!flag.startsWith("-")) break;
       }
       if (script === undefined || unsafeShellLine(script, scope, depth + 1)) return true;
     }
+    if (redirect) redirect = false;
   }
   return redirect;
 }
