@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -11,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
-import type { StepRequest } from "../harness.ts";
+import type { StepEvent, StepRequest } from "../harness.ts";
 import {
   FAKE_CLAUDE_PATH,
   type FakeAction,
@@ -318,4 +319,99 @@ test("judge retries marker collisions and fails closed after three", { timeout: 
     "FlowDriven could not mark the judge's data.",
   );
   expect(collision).toHaveBeenCalledTimes(3);
+});
+
+test("forwards onEvent from runStep to runClaude, pairing tool_use and tool_result with sha256 digest and sanitized errors", {
+  timeout: 20_000,
+}, async () => {
+  const t = setup([]);
+  const cwd = join(t.project, "notes");
+  mkdirSync(cwd);
+  writeFileSync(join(cwd, "note.txt"), "KIWI");
+  const bel = String.fromCodePoint(0x0007);
+  const rawErrText = `ERR:${bel}${"x".repeat(130)}\nsecond line`;
+  writeFakeScript(t.home, {
+    plays: [
+      {
+        when: "",
+        actions: [
+          { do: "tool", id: "t1", name: "Read", input: { file_path: join(cwd, "note.txt") }, result: "KIWI" },
+          {
+            do: "raw",
+            line: JSON.stringify({
+              type: "assistant",
+              message: {
+                content: [{ type: "tool_use", id: "t2", name: "Bash", input: { command: "fail" } }],
+              },
+            }),
+          },
+          {
+            do: "raw",
+            line: JSON.stringify({
+              type: "user",
+              message: {
+                content: [
+                  {
+                    type: "tool_result",
+                    tool_use_id: "t2",
+                    is_error: true,
+                    content: [{ type: "text", text: rawErrText }],
+                  },
+                ],
+              },
+            }),
+          },
+          { do: "result", result: "done" },
+        ],
+      },
+    ],
+  });
+  t.request.uses = ["notes"];
+  t.request.requirements = [note()];
+  const events: StepEvent[] = [];
+  t.request.onEvent = (event) => {
+    events.push(event);
+  };
+  const { call: _call, ...result } = await t.adapter.runStep(t.request);
+  expect(result).toEqual({ exit: "ok", text: "done", outputs: {} });
+  expect(events).toHaveLength(2);
+  expect(events[0]).toEqual({
+    tool: "Read",
+    input: { file_path: join(cwd, "note.txt") },
+    resultDigest: createHash("sha256").update("KIWI").digest("hex"),
+  });
+  expect(Object.hasOwn(events[0] ?? {}, "error")).toBe(false);
+  expect(events[1]).toEqual({
+    tool: "Bash",
+    input: { command: "fail" },
+    resultDigest: createHash("sha256").update(rawErrText).digest("hex"),
+    error: `ERR:${"x".repeat(116)}`,
+  });
+
+  const ctl = new AbortController();
+  const abortedEvents: StepEvent[] = [];
+  writeFakeScript(t.home, {
+    plays: [
+      {
+        when: "",
+        actions: [
+          { do: "tool", id: "t1", name: "Read", input: { file_path: join(cwd, "note.txt") }, result: "KIWI" },
+          { do: "pause", ms: 2000 },
+          { do: "tool", id: "t2", name: "Read", input: { file_path: join(cwd, "note.txt") }, result: "KIWI" },
+          { do: "result", result: "done" },
+        ],
+      },
+    ],
+  });
+  const abortedResult = await t.adapter.runStep({
+    ...t.request,
+    signal: ctl.signal,
+    onEvent: (event) => {
+      abortedEvents.push(event);
+      ctl.abort();
+    },
+  });
+  expect(abortedResult).toMatchObject({ exit: "failed", text: "The step was aborted.", outputs: {} });
+  expect(abortedEvents).toHaveLength(1);
+  expect(readdirSync(t.controlRoot)).toEqual([]);
 });

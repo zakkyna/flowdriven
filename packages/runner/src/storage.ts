@@ -44,6 +44,7 @@ type Cause = {
     | "limits_not_applied"
     | "crash"
     | "step_failed"
+    | "stuck_repeating"
     | "stopped"
     | "flow_deleted"
     | "agent_cannot_be_limited"
@@ -116,12 +117,20 @@ export type RunRow = {
   result?: { kind: "chat" | "report"; chatId?: string; messageId?: string };
   stoppedBy?: "person" | "permission_off" | "flow_deleted" | "phone";
 };
+export type AttemptLogEntry = {
+  attempt: number;
+  reason: "repeated_call" | "repeated_error";
+  count: number;
+  evidence: string;
+  outside: boolean;
+};
 export type StepRow = {
   runId: string;
   stepId: string;
   itemKey: string;
   state: StepState;
   attempts: Attempt[];
+  attemptLog?: AttemptLogEntry[];
   outputs: Record<string, Value>;
   checks: CheckOutcome[];
   limitMs?: number;

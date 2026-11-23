@@ -28,6 +28,7 @@ import { limits } from "./limits.ts";
 import { stepTakesOutsideText } from "./outside.ts";
 import { OWN_TEXT, ownTextHash, ownTextRefusal } from "./own-text.ts";
 import { loopsOverChoice } from "./pick-keys.ts";
+import { createStuckGuard, type StuckTrigger } from "./stuck.ts";
 import { raceAbort } from "./timeout.ts";
 
 export const LONG_STEP_MS = 30 * 60 * 1000;
@@ -107,9 +108,15 @@ export async function runLeaf(
   row.limitMs = duration;
   const failures: string[] = [];
   const start = 1 + row.attempts.filter((a) => a.anotherWay).length;
+  let lastStuck = false;
   for (let n = start; n <= attempts; n++) {
     const replan = n === replanAt;
     const ctl = new AbortController();
+    const attemptCtl = new AbortController();
+    const forwardAbort = () => attemptCtl.abort();
+    ctl.signal.addEventListener("abort", forwardAbort, { once: true });
+    const guard = createStuckGuard();
+    let stuck: StuckTrigger | undefined;
     const active = deps.active.get(run.id) ?? new Set<AbortController>();
     active.add(ctl);
     deps.active.set(run.id, active);
@@ -214,6 +221,13 @@ export async function runLeaf(
               row.outside = true;
               save();
             },
+            onEvent: (event) => {
+              if (stuck !== undefined) return;
+              const trigger = guard.observe(event);
+              if (!trigger) return;
+              stuck = trigger;
+              attemptCtl.abort();
+            },
             ...(mediumAt !== undefined && n >= mediumAt
               ? { effort: "medium" as const }
               : step.worker?.effort === undefined
@@ -225,14 +239,16 @@ export async function runLeaf(
             pauseLimit,
             ...(duration > LONG_STEP_MS && deps.keepAwake ? { onStart: deps.keepAwake } : {}),
             maxDurationMs: duration,
-            signal: ctl.signal,
+            signal: attemptCtl.signal,
           }),
           ctl.signal,
         );
       }
       if (store.getRun(run.id)?.state === "stopped") return "halt";
       if (result.outside === true) row.outside = true;
-      if (result.hold) {
+      if (stuck !== undefined) {
+        failure = stuck.note;
+      } else if (result.hold) {
         const hold = result.hold;
         const payload = heldPayload(hold.input, hold.tool);
         const hiddenCharacters = [
@@ -522,15 +538,58 @@ export async function runLeaf(
         }
       }
     } catch (e) {
-      failure = timedOut ? "time limit exceeded" : e instanceof Error ? e.message : "worker failed";
+      failure =
+        stuck !== undefined
+          ? stuck.note
+          : timedOut
+            ? "time limit exceeded"
+            : e instanceof Error
+              ? e.message
+              : "worker failed";
     } finally {
       ended = true;
       clearTimeout(timer);
+      ctl.signal.removeEventListener("abort", forwardAbort);
       active.delete(ctl);
       if (active.size === 0) deps.active.delete(run.id);
     }
     if (store.getRun(run.id)?.state === "stopped") return "halt";
-    Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
+    const endedAt = now().toISOString();
+    Object.assign(attempt, { endedAt, exit: "failed" });
+    lastStuck = stuck !== undefined;
+    if (stuck !== undefined) {
+      const triggered = stuck;
+      failures.push(failure);
+      row.state = "retrying";
+      row.note = failure;
+      row.attemptLog = [
+        ...(row.attemptLog ?? []),
+        {
+          attempt: n,
+          reason: triggered.reason,
+          count: triggered.count,
+          evidence: triggered.evidence,
+          outside: triggered.outside,
+        },
+      ];
+      store.transaction(() => {
+        save();
+        store.appendAudit({
+          at: endedAt,
+          kind: "attempt_stuck",
+          runId: run.id,
+          detail: {
+            runId: run.id,
+            step: step.id,
+            attempt: n,
+            reason: triggered.reason,
+            count: triggered.count,
+          },
+        });
+        if (!ctx.keepWaiting) store.updateRun(run.id, { state: "retrying" });
+      });
+      continue;
+    }
     if (timedOut && duration > LONG_STEP_MS && n < attempts) {
       block(LONG_STEP.timedOut(Math.round(duration / 60_000)));
       return "failed";
@@ -540,6 +599,23 @@ export async function runLeaf(
     row.note = failure;
     save();
     if (!ctx.keepWaiting) store.updateRun(run.id, { state: "retrying" });
+  }
+  if (lastStuck) {
+    const cause = { code: "stuck_repeating" as const };
+    const reason = "The agent kept repeating itself.";
+    store.transaction(() => {
+      row.state = "failed";
+      row.note = reason;
+      save();
+      store.updateRun(run.id, { state: "blocked", blockedReason: reason, cause });
+      store.appendAudit({
+        at: now().toISOString(),
+        kind: "run_blocked",
+        runId: run.id,
+        detail: { runId: run.id, state: "blocked", cause },
+      });
+    });
+    return "failed";
   }
   block(
     `Blocked at step "${step.title ?? step.id}": checks still failing after ${row.attempts.length} attempts.`,

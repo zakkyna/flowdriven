@@ -38,6 +38,12 @@ export class HarnessCallError extends Error {
     this.call = call;
   }
 }
+export type StepEvent = {
+  tool: string;
+  input: Value;
+  resultDigest: string;
+  error?: string;
+};
 export type StepRequest = {
   pickTools?: string[];
   runId: string;
@@ -57,6 +63,7 @@ export type StepRequest = {
   anotherWay?: { text: string };
   takesOutside?: boolean;
   onOutside?: () => void;
+  onEvent?: (event: StepEvent) => void;
   effort?: "low" | "medium" | "high";
   skill?: string;
   outputs: { id: string; type: string }[];

@@ -7,6 +7,7 @@ import type {
   ProbeRequest,
   ProbeResult,
   ReplanRequest,
+  StepEvent,
   StepRequest,
 } from "./harness.ts";
 import type { ExitClass } from "./states.ts";
@@ -14,6 +15,7 @@ export type Reply = {
   exit?: ExitClass;
   text?: string;
   outputs?: Record<string, Value>;
+  events?: StepEvent[];
   hang?: boolean;
   site?: string;
   block?: string;
@@ -59,6 +61,11 @@ export function scriptedHarness(script: Script): ScriptedHarness {
       const held = reply.hold;
       if (held && req.rejectedCalls?.some((row) => row.tool === held.tool && row.digest === held.digest))
         reply = { ...reply, hold: undefined };
+      for (const event of reply.events ?? []) {
+        if (req.signal.aborted) break;
+        req.onEvent?.(event);
+      }
+      if (reply.events?.length && req.signal.aborted) throw new DOMException("Aborted", "AbortError");
       if (reply.hang)
         await new Promise<never>((_resolve, reject) => {
           const abort = () => reject(new DOMException("Aborted", "AbortError"));

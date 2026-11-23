@@ -183,6 +183,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                 outside = true;
                 req.onOutside?.();
               },
+              ...(req.onEvent === undefined ? {} : { onEvent: req.onEvent }),
               books: {
                 grants: confirmed?.grants ?? options.grants,
                 earlierNo: () => options.confirmation?.(req.runId)?.earlierNo ?? false,

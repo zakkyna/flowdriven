@@ -1,7 +1,8 @@
 import type { Value } from "@flowdriven/sdk";
 import type { GrantBook } from "../connectors/grants.ts";
 import { isCallGrant } from "../connectors/grants.ts";
-import type { CallInfo, HeldCall, RateLimit } from "../harness.ts";
+import { cleanErrorLine, digestResult } from "../exec/stuck.ts";
+import type { CallInfo, HeldCall, RateLimit, StepEvent } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
 import { BROWSER_DENY, CHROME_PREFIX, closeSentence } from "./browser.ts";
 import { decidePost, POST_TEXT, type PostResult, postLine, STOP } from "./browser-post.ts";
@@ -32,6 +33,24 @@ import {
 import { visible } from "./text.ts";
 export const MAX_DENIED_ENTRIES = 50;
 const MAX_PAGE_ROWS = 50;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toolResultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const part of content) {
+      if (typeof part === "string") parts.push(part);
+      else if (isRecord(part) && typeof part.text === "string") parts.push(part.text);
+      else if (part !== undefined) parts.push(JSON.stringify(part));
+    }
+    return parts.join("\n");
+  }
+  return content === undefined ? "" : JSON.stringify(content);
+}
 export type RunInput = {
   pickTools?: string[];
   runId: string;
@@ -46,6 +65,7 @@ export type RunInput = {
   browser?: boolean;
   connectorPrefix?: string;
   onOutside?: () => void;
+  onEvent?: (event: StepEvent) => void;
   books?: { grants?: GrantBook; rules?: () => import("../storage.ts").RuleRow[]; earlierNo?: () => boolean };
   makePolicy: (control: { root: string; cwd: string }, sessionId: string) => Policy;
   makePrompt: (policy: Policy) => string;
@@ -551,6 +571,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       channel.allowedIds,
       policy.browser || policy.connector ? { ids: channel.chromeIds, posted: channel.posted } : undefined,
     );
+    const pendingTools = new Map<string, { tool: string; input: Value }>();
     let first = true;
     let startEvents = 0;
     let auth = false;
@@ -575,6 +596,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         return;
       }
       for (const line of read.lines) {
+        if (forced || interrupted) break;
         if (line.trim() === "") continue;
         const event = parseEvent(line);
         if (first) {
@@ -647,6 +669,36 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           forced = pendingStop.outcome;
           child?.kill();
           break;
+        }
+        if (!abort && input.onEvent && isRecord(event.message) && Array.isArray(event.message.content)) {
+          for (const block of event.message.content as unknown[]) {
+            if (abort || forced || interrupted) break;
+            if (!isRecord(block)) continue;
+            if (
+              event.type === "assistant" &&
+              block.type === "tool_use" &&
+              typeof block.id === "string" &&
+              typeof block.name === "string"
+            ) {
+              pendingTools.set(block.id, { tool: block.name, input: (block.input ?? {}) as Value });
+            } else if (
+              event.type === "user" &&
+              block.type === "tool_result" &&
+              typeof block.tool_use_id === "string"
+            ) {
+              const started = pendingTools.get(block.tool_use_id);
+              if (!started) continue;
+              pendingTools.delete(block.tool_use_id);
+              const text = toolResultText(block.content);
+              const error = block.is_error === true ? cleanErrorLine(text) : undefined;
+              input.onEvent({
+                tool: started.tool,
+                input: started.input,
+                resultDigest: digestResult(text),
+                ...(error === undefined ? {} : { error }),
+              });
+            }
+          }
         }
         auth ||= isAuthFailure(event);
         quota ||= isRateLimited(event);

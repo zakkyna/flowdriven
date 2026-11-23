@@ -1,10 +1,23 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { RunDetail } from "@flowdriven/contracts";
 import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
+import { createClaudeAdapter } from "./claude/adapter.ts";
+import { createGrantBook } from "./connectors/grants.ts";
+import { createEngine } from "./engine.ts";
+import { toRunDetail } from "./service/map-run.ts";
+import { openSqliteStore } from "./sqlite-store.ts";
 import type { Store } from "./storage.ts";
 import { setup } from "./test-helpers/engine.ts";
+import {
+  FAKE_CLAUDE_PATH,
+  makeFakeHome,
+  readFakeCalls,
+  writeFakeScript,
+} from "./test-helpers/fake-claude-script.ts";
 
 const stores: Store[] = [];
 const folders: string[] = [];
@@ -300,4 +313,279 @@ test("rejects undeclared inputs", async () => {
     c.engine.startRun("local.test", { project: "/tmp", inputs: { unexpected: "x" } }),
   ).rejects.toMatchObject({ code: "invalid_input" });
   expect(c.engine.listRuns()).toEqual([]);
+});
+
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+
+test("TC-SR9-14 repeated calls and errors consume attempts, send one plain retry note, block with stuck_repeating, and Try again resumes", async () => {
+  // Refusing Try again with permission_off moves to B-19.T2 (TC-j12-38 covers a blocked run).
+  const bel = String.fromCodePoint(0x0007);
+  const rlo = String.fromCodePoint(0x202e);
+  const c = await ready(
+    [
+      worker({ id: "prep" }),
+      worker({
+        id: "work",
+        retry: 1,
+        limits: { max_attempts: 2 },
+        checks: [{ type: "contains", pattern: "ok" }],
+      }),
+    ],
+    {
+      steps: {
+        prep: { text: "ok" },
+        work: [
+          {
+            events: Array.from({ length: 5 }, () => ({
+              tool: "Read",
+              input: { file_path: "SECRET_IN" },
+              resultDigest: sha256("SECRET_OUT"),
+            })),
+            text: "ok",
+          },
+          {
+            events: Array.from({ length: 3 }, () => ({
+              tool: "Bash",
+              input: { command: "SECRET_CMD" },
+              resultDigest: sha256("err"),
+              error: `ERR_ONE${bel}${rlo}\nSECRET_LINE2`,
+            })),
+            text: "ok",
+          },
+          { text: "ok" },
+        ],
+      },
+    },
+  );
+  const blocked = await c.start();
+  expect(blocked).toMatchObject({
+    state: "blocked",
+    cause: { code: "stuck_repeating" },
+    blockedReason: "The agent kept repeating itself.",
+  });
+  const stepRow = c.store.getStep(blocked.id, "work");
+  expect(stepRow?.attempts).toHaveLength(2);
+  expect(stepRow?.attempts.every((a) => a.exit === "failed")).toBe(true);
+  const workCalls = c.harness.calls.filter((call) => call.stepId === "work");
+  expect(workCalls).toHaveLength(2);
+  expect(workCalls.at(0)?.lastFailure).toBeUndefined();
+  expect(workCalls.at(1)?.lastFailure).toBe(
+    "The last attempt repeated the same call 4 times. Try a different way.",
+  );
+  expect(workCalls.at(1)?.lastFailure).not.toContain("Read");
+  expect(workCalls.at(1)?.lastFailure).not.toContain("SECRET_IN");
+  expect(workCalls.at(1)?.lastFailure).not.toContain("SECRET_OUT");
+
+  const audit = c.store.listAudit(blocked.id);
+  const stuckAudit = audit.filter((entry) => entry.kind === "attempt_stuck");
+  expect(stuckAudit.map((entry) => entry.detail)).toEqual([
+    { runId: blocked.id, step: "work", attempt: 1, reason: "repeated_call", count: 4 },
+    { runId: blocked.id, step: "work", attempt: 2, reason: "repeated_error", count: 3 },
+  ]);
+  const auditJson = JSON.stringify(audit);
+  for (const secret of ["SECRET_IN", "SECRET_OUT", "SECRET_CMD", "ERR_ONE", "SECRET_LINE2"])
+    expect(auditJson).not.toContain(secret);
+
+  const detail = RunDetail.parse(toRunDetail(c.engine.getRun(blocked.id), () => "scripted"));
+  expect(detail.cause).toEqual({ code: "stuck_repeating" });
+  expect(detail.canTryAgain).toBe(true);
+  expect(detail.attemptLog).toEqual([
+    { step: 2, attempt: 1, reason: "repeated_call", count: 4, evidence: "Read", outside: false },
+    { step: 2, attempt: 2, reason: "repeated_error", count: 3, evidence: "ERR_ONE", outside: true },
+  ]);
+
+  const resumed = await c.engine.beginResume(blocked.id).settled;
+  expect(resumed.state).toBe("done");
+  expect(resumed.cause).toBeUndefined();
+  expect(c.harness.calls.filter((call) => call.stepId === "prep")).toHaveLength(1);
+  const resumedWorkCalls = c.harness.calls.filter((call) => call.stepId === "work");
+  expect(resumedWorkCalls).toHaveLength(3);
+  expect(resumedWorkCalls.at(2)?.attempt).toBe(1);
+  expect(resumedWorkCalls.at(2)?.lastFailure).toBeUndefined();
+});
+
+test("TC-SR9-14 silence alone never ends an attempt and the 30-minute limit remains", async () => {
+  vi.useFakeTimers();
+  try {
+    const c = await ready([worker({ retry: 0, limits: { max_attempts: 1 } })], {
+      steps: { a: { hang: true } },
+    });
+    const pending = c.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(c.harness.calls).toHaveLength(1);
+    expect(c.harness.calls.at(0)?.maxDurationMs).toBe(1_800_000);
+    await vi.advanceTimersByTimeAsync(1_799_999);
+    const runId = c.engine.listRuns().at(0)?.id;
+    if (!runId) throw new Error("missing run");
+    expect(c.store.getRun(runId)?.state).toBe("running");
+    expect(c.store.listAudit(runId).some((entry) => entry.kind === "attempt_stuck")).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const run = await pending;
+    expect(run.state).toBe("blocked");
+    expect(run.cause?.code).not.toBe("stuck_repeating");
+    expect(c.store.getStep(run.id, "a")?.note).toBe("time limit exceeded");
+    expect(c.store.listAudit(run.id).some((entry) => entry.kind === "attempt_stuck")).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("TC-SR9-14 Try again runs every call through decide again and does not reuse a spent grant", {
+  timeout: 20_000,
+}, async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven-sr9-")));
+  folders.push(root);
+  const project = join(root, "project");
+  const notesDir = join(project, "notes");
+  mkdirSync(notesDir, { recursive: true });
+  const noteFile = join(notesDir, "note.txt");
+  writeFileSync(noteFile, "KIWI");
+
+  const webInput = { url: "https://example.test/one" };
+  const home = makeFakeHome({
+    plays: [
+      {
+        when: "",
+        actions: [
+          { do: "tool", id: "w1", name: "WebFetch", input: webInput },
+          { do: "result", result: "done" },
+        ],
+      },
+    ],
+  });
+  folders.push(home);
+
+  const store = await openSqliteStore(":memory:");
+  stores.push(store);
+  let seq = 0;
+  let clockMs = Date.parse("2026-11-23T00:00:00Z");
+  const now = () => {
+    clockMs += 1000;
+    return new Date(clockMs);
+  };
+  const newId = (prefix: string) => `${prefix}-${++seq}`;
+
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.2",
+    id: "local.stuck-grant",
+    name: "Stuck Grant",
+    kind: "build",
+    requirements: [{ id: "notes", type: "path", ref: "notes", access: "read" }],
+    touches: [
+      {
+        id: "read-notes",
+        sentence: "Read notes",
+        effect: "read",
+        rule: "asks_first",
+        covers: [],
+        place: { kind: "folder", value: "notes", label: "Notes" },
+      },
+    ],
+    steps: [
+      {
+        id: "work",
+        title: "Work",
+        do: "worker",
+        instructions: "Work",
+        uses: ["notes"],
+        retry: 0,
+        limits: { max_attempts: 1 },
+        checks: [{ type: "contains", pattern: "done" }],
+      },
+    ],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const hash = `sha256:${"a".repeat(64)}`;
+
+  const adapter = createClaudeAdapter({
+    claudePath: () => FAKE_CLAUDE_PATH,
+    env: () => ({ HOME: home, PATH: process.env.PATH, TMPDIR: tmpdir() }),
+    controlRoot: join(root, "control"),
+    audit: (kind, runId, detail) => store.appendAudit({ at: now().toISOString(), kind, runId, detail }),
+    newId,
+    newSessionId: () => `session-${++seq}`,
+    rounds: 20,
+    exitWaitMs: 10_000,
+    grants: createGrantBook(store),
+    confirmation: (runId) => {
+      const run = store.getRun(runId);
+      const confirmation = run && store.getConfirmation(run.flowId);
+      if (!run || !confirmation) return undefined;
+      return {
+        confirmation: {
+          flowId: run.flowId,
+          hash: run.flowHash,
+          onItsOwn: confirmation.onItsOwn,
+          touches: parsed.manifest.format === "flowdriven-flow/1.2" ? (parsed.manifest.touches ?? []) : [],
+        },
+        rules: store.listRules().filter((r) => r.flowId === run.flowId),
+        source: "window",
+        earlierNo: false,
+        startedAt: run.startedAt,
+      };
+    },
+  });
+
+  const engine = createEngine({ store, harness: adapter, now, newId });
+  engine.registerFlow(parsed.manifest, hash);
+  store.putConfirmation({
+    flowId: parsed.manifest.id,
+    hash,
+    at: now().toISOString(),
+    by: "confirm_dialog",
+    onItsOwn: ["read-notes"],
+    pins: { skills: {}, folders: {} },
+  });
+
+  const heldRun = await engine.startRun(parsed.manifest.id, { project });
+  expect(heldRun.state).toBe("waiting_approval");
+  const ap1 = store.listApprovals({ runId: heldRun.id, state: "pending" }).at(0);
+  if (!ap1) throw new Error("missing first approval");
+  expect(ap1.kind).toBe("outside_flow");
+
+  writeFakeScript(home, {
+    plays: [
+      {
+        when: "",
+        actions: [
+          { do: "tool", id: "w2", name: "WebFetch", input: webInput },
+          { do: "tool", id: "r1", name: "Read", input: { file_path: noteFile }, result: "KIWI" },
+          { do: "tool", id: "r2", name: "Read", input: { file_path: noteFile }, result: "KIWI" },
+          { do: "tool", id: "r3", name: "Read", input: { file_path: noteFile }, result: "KIWI" },
+          { do: "tool", id: "r4", name: "Read", input: { file_path: noteFile }, result: "KIWI" },
+          { do: "pause", ms: 2000 },
+          { do: "result", result: "done" },
+        ],
+      },
+    ],
+  });
+  const stuckRun = await engine.beginDecide(ap1.id, "approve").settled;
+  expect(stuckRun).toMatchObject({ state: "blocked", cause: { code: "stuck_repeating" } });
+  expect(store.listAudit(heldRun.id)).toContainEqual(
+    expect.objectContaining({
+      kind: "attempt_stuck",
+      detail: { runId: heldRun.id, step: "work", attempt: 1, reason: "repeated_call", count: 4 },
+    }),
+  );
+
+  writeFakeScript(home, {
+    plays: [
+      {
+        when: "",
+        actions: [
+          { do: "tool", id: "w3", name: "WebFetch", input: webInput },
+          { do: "result", result: "done" },
+        ],
+      },
+    ],
+  });
+  const resumed = await engine.beginResume(heldRun.id).settled;
+  expect(resumed.state).toBe("waiting_approval");
+  const ap2 = store.listApprovals({ runId: heldRun.id, state: "pending" }).at(0);
+  expect(ap2).toBeDefined();
+  expect(ap2?.id).not.toBe(ap1.id);
+  expect(ap2?.kind).toBe("outside_flow");
+  expect(readFakeCalls(home)).toContainEqual(
+    expect.objectContaining({ kind: "tool", id: "w3", name: "WebFetch", ran: false }),
+  );
 });

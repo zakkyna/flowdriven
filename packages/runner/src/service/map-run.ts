@@ -247,6 +247,23 @@ export function toRunDetail(
   });
   const billedRows = usageRows.filter((row) => row.billing !== "plan");
   const billedCost = billedRows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0);
+  const attemptLog: RunDetail["attemptLog"] = [];
+  for (const [index, step] of manifest.steps.entries()) {
+    const position = index + 1;
+    if ("do" in step) {
+      const row = view.steps.find((r) => r.stepId === step.id && r.itemKey === "");
+      for (const entry of row?.attemptLog ?? []) attemptLog.push({ step: position, ...entry });
+      continue;
+    }
+    for (const item of view.items
+      .filter((i) => i.loopId === step.id && i.note !== "skipped: duplicate key")
+      .toSorted((a, b) => a.position - b.position)) {
+      for (const nested of step.steps) {
+        const row = view.steps.find((r) => r.stepId === nested.id && r.itemKey === item.key);
+        for (const entry of row?.attemptLog ?? []) attemptLog.push({ step: position, ...entry });
+      }
+    }
+  }
   return RunDetail.parse({
     ...toRunSummary(
       run,
@@ -261,7 +278,7 @@ export function toRunDetail(
     steps,
     notes: [],
     skippedStarts: [],
-    attemptLog: [],
+    attemptLog,
     approvalIds: view.approvals.map((a) => a.id),
     outputs,
     usage: harnesses,

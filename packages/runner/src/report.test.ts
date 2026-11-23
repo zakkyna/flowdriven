@@ -1,7 +1,9 @@
+import { RunDetail } from "@flowdriven/contracts";
 import { expect, test, vi } from "vitest";
 import { demoFlow } from "./demo/demo-flow.ts";
 import type { RunView } from "./engine.ts";
 import { renderRunReport, reportLines } from "./report.ts";
+import { toRunDetail } from "./service/map-run.ts";
 import type { RunState } from "./states.ts";
 import type { CheckOutcome, StepRow, UsageEventRow } from "./storage.ts";
 
@@ -312,4 +314,103 @@ test("TC-ENG-26 another way decision and outside retry appear in runs.report and
     service.stop();
     store.close();
   }
+});
+
+test("TC-SR9-14 report retains escaped attempt evidence and maps top-level and loop attemptLog", () => {
+  const rlo = String.fromCodePoint(0x202e);
+  const iso = "2026-11-23T00:00:00.000Z";
+  const base = view({ state: "blocked", blockedReason: "The agent kept repeating itself." });
+  const stuckView: RunView = {
+    ...base,
+    run: {
+      ...base.run,
+      flowHash: `sha256:${"a".repeat(64)}`,
+      startedAt: iso,
+      cause: { code: "stuck_repeating" },
+    },
+    steps: [
+      ...base.steps.map((s) => ({
+        ...s,
+        attempts: s.attempts.map((a) => ({ ...a, startedAt: iso })),
+        ...(s.stepId === "alerts"
+          ? {
+              attemptLog: [
+                { attempt: 1, reason: "repeated_call" as const, count: 4, evidence: "Read", outside: false },
+              ],
+            }
+          : {}),
+      })),
+      {
+        runId: "run-1",
+        stepId: "rough",
+        itemKey: "j1",
+        state: "failed",
+        attempts: [{ number: 1, replan: false, worker: "Scripted harness", startedAt: iso, exit: "failed" }],
+        outputs: {},
+        checks: [],
+        attemptLog: [
+          {
+            attempt: 1,
+            reason: "repeated_error",
+            count: 3,
+            evidence: `err|pipe*${rlo}`,
+            outside: true,
+          },
+        ],
+      },
+    ],
+    items: [
+      {
+        runId: "run-1",
+        loopId: "review",
+        key: "j1",
+        position: 0,
+        item: { title: "Job one" },
+        status: "failed",
+      },
+      {
+        runId: "run-1",
+        loopId: "review",
+        key: "j1",
+        position: 1,
+        item: {},
+        status: "skipped",
+        note: "skipped: duplicate key",
+      },
+    ],
+    audit: [
+      {
+        at: "2026-11-23T00:00:00.000Z",
+        kind: "attempt_stuck",
+        runId: "run-1",
+        detail: { runId: "run-1", step: "alerts", attempt: 1, reason: "repeated_call", count: 4 },
+      },
+    ],
+  };
+
+  expect(reportLines(stuckView)[2]).toBe("Blocked: The agent kept repeating itself.");
+  const md = renderRunReport(stuckView);
+  expect(md).toContain("- alerts attempt 1 repeated\\_call (4): Read");
+  expect(md).toContain("- rough@j1 attempt 1 repeated\\_error (3): err\\|pipe\\*<U+202E>");
+  expect(md).not.toContain(rlo);
+  const evidenceAt = md.indexOf("### Evidence");
+  const itemsAt = md.indexOf("## Items: review");
+  expect(evidenceAt).toBeGreaterThan(-1);
+  expect(md.indexOf("- alerts attempt 1")).toBeGreaterThan(evidenceAt);
+  expect(md.indexOf("- alerts attempt 1")).toBeLessThan(itemsAt);
+
+  const detail = RunDetail.parse(toRunDetail(stuckView, () => "scripted"));
+  expect(detail.cause).toEqual({ code: "stuck_repeating" });
+  expect(detail.canTryAgain).toBe(true);
+  expect(detail.attemptLog).toEqual([
+    { step: 1, attempt: 1, reason: "repeated_call", count: 4, evidence: "Read", outside: false },
+    {
+      step: 2,
+      attempt: 1,
+      reason: "repeated_error",
+      count: 3,
+      evidence: `err|pipe*${rlo}`,
+      outside: true,
+    },
+  ]);
 });

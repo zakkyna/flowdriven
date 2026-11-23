@@ -252,7 +252,7 @@ export function createEngine(input: EngineDeps): Engine {
         store.updateRun(run.id, { state: "blocked", blockedReason: ready.reason ?? "Not ready." });
         return runById(run.id);
       }
-      store.updateRun(run.id, { state: "running" });
+      store.updateRun(run.id, { state: "running", cause: undefined });
       return await walk(runById(run.id));
     } catch (error) {
       return blockError(run.id, error);

@@ -876,6 +876,7 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 | j24-15 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
 | j24-39 | B-05 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T6 |
 | SR1-49 (chain proceeds) | B-32.T6 | B-10.T3 | chain continuation is covered by an outside-flow Reject row in TC-j24-10 |
+| SR9-14 (permission off on Try again) | B-32.T4 | B-19.T2 | refusing Try again when permission is off is covered by TC-j12-38 on a blocked run |
 | j24-48 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
 | SR1-02 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
 | SR1-06 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
