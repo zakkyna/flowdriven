@@ -13,6 +13,7 @@ import { visible } from "../claude/text.ts";
 import { callGrant } from "../connectors/grants.ts";
 import type { ResolvedDeps } from "../engine.ts";
 import type { StepResult } from "../harness.ts";
+import { validChoicePayload } from "../service/choice-payload.ts";
 import type { RunRow, StepRow } from "../storage.ts";
 import {
   anotherWayOf,
@@ -272,7 +273,10 @@ export async function runLeaf(
               ...(hiddenCharacters.length ? { hiddenCharacters } : {}),
             },
           });
-        if (payload === undefined) {
+        if (
+          payload === undefined ||
+          !validChoicePayload(typeof payload === "string" ? { kind: "text", text: payload } : payload)
+        ) {
           Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
           row.noteLine = { key: "hold.tooLarge" };
           store.transaction(() => {

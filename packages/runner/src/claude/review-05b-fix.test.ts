@@ -253,8 +253,8 @@ test("TC-j24-04 approving a held reply runs the exact call once on fake Claude",
   }
 });
 
-test("TC-j24-01 one held reply appears in Activity, chat and a fixed notice", timeout, async () => {
-  const input = { to: "Sam Example", subject: "Re: Invoice", body: "Thanks." };
+test("TC-j24-01 TC-SR1-12 one held reply appears in Activity, chat and a fixed notice", timeout, async () => {
+  const input = { to: "Sam Example <sam@example.test>", subject: "Re: Invoice", body: "Thanks." };
   const c = await real(
     [worker("send", "Send")],
     [{ when: "Send", actions: [invoke("reply", "reply", input), result] }],
@@ -308,7 +308,7 @@ test("TC-j24-01 one held reply appears in Activity, chat and a fixed notice", ti
         id: a.id,
         kind: "risky_action",
         riskyAction: "send",
-        summary: "Send reply to Sam Example?",
+        summary: "Send reply to Sam Example <sam@example.test>?",
         canAlwaysAllow: false,
       }),
     ]);

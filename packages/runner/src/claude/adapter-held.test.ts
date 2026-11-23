@@ -139,7 +139,17 @@ async function setup(actions: FakeAction[], withGrants = true, confirmed = false
   };
   const script = (next: FakeAction[]) =>
     writeFakeScript(home, { connectors, plays: [{ when: "Held test", actions: next }] });
-  return { root, home, dbPath, store, audits, request, script, adapter: createClaudeAdapter(options) };
+  return {
+    root,
+    home,
+    dbPath,
+    store,
+    audits,
+    request,
+    script,
+    options,
+    adapter: createClaudeAdapter(options),
+  };
 }
 const timeout = { timeout: 20_000 };
 const expectedHold = (name = "delete_draft", input = { id: "d1" }, action = "delete") => ({
@@ -474,6 +484,92 @@ test("TC-SR1-06 grant use records its approval, digest and effect", timeout, asy
       detail: expect.objectContaining({ approvalId: "ap-1", tool: name, digest, effect: "send" }),
     }),
   );
+  expect(readFakeCalls(t.home)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: "tool", id: "a", ran: true }),
+      expect.objectContaining({ kind: "tool", id: "b", ran: false }),
+    ]),
+  );
+});
+
+test("TC-RUL-26 a Reject during a fake Claude session holds the next rule call", timeout, async () => {
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const { earlierNo } = await import("../rules/decisions.ts");
+  const t = await setup([
+    tool("a", "label_thread", { threadId: "t1", add: ["Invoices"] }),
+    tool("b", "label_thread", { threadId: "t2", add: ["Invoices"] }),
+    done,
+  ]);
+  const decision = pendingDecision(t.store, { id: "other-item", createdAt: "2026-11-22T00:00:00.000Z" });
+  const place = { kind: "account" as const, value: "gmail", label: "Gmail" };
+  const rule = {
+    id: "rule",
+    flowId: "mail",
+    touchId: "label",
+    effect: "change" as const,
+    place,
+    state: "active" as const,
+    createdAt: "2026-11-22T00:00:00.000Z",
+    createdBy: "confirm" as const,
+    sentence: "Label",
+    uses: 0,
+  };
+  const labelFact = { ...fact, tools: [...fact.tools, { name: "label_thread", readOnly: false }] };
+  writeFakeScript(t.home, {
+    connectors: { [gmail.name]: { url: fact.url, id: fact.id, tools: labelFact.tools } },
+    plays: [
+      {
+        when: "Held test",
+        actions: [
+          tool("a", "label_thread", { threadId: "t1", add: ["Invoices"] }),
+          tool("b", "label_thread", { threadId: "t2", add: ["Invoices"] }),
+          done,
+        ],
+      },
+    ],
+  });
+  const labelRequirement = Requirement.parse({ ...requirement, tools: ["label_thread"] });
+  const labelRoute = routeRequirement(labelRequirement, {
+    hooks: true,
+    chrome: false,
+    connectors: [labelFact],
+  });
+  if (!labelRoute?.routed) throw new Error("Missing label route");
+  const confirmation = {
+    flowId: "mail",
+    hash: "hash",
+    onItsOwn: ["label"],
+    touches: [
+      {
+        id: "label",
+        sentence: "Label",
+        effect: "change" as const,
+        rule: "runs_alone" as const,
+        place,
+        covers: ["gmail.label_thread"],
+      },
+    ],
+  };
+  const adapter = createClaudeAdapter({
+    ...t.options,
+    connectors: () => [labelFact],
+    confirmation: () => ({
+      confirmation,
+      rules: [rule],
+      source: "chat",
+      earlierNo: earlierNo(t.store, decision.runId),
+    }),
+    recordRule: () => {},
+    afterAllow: () => t.store.updateApproval(decision.id, { state: "rejected" }),
+  });
+  expect(
+    await adapter.runStep({
+      ...t.request,
+      runId: decision.runId,
+      requirements: [labelRequirement],
+      routes: [labelRoute],
+    }),
+  ).toMatchObject({ hold: { tool: gmail.prefix + "label_thread" } });
   expect(readFakeCalls(t.home)).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ kind: "tool", id: "a", ran: true }),

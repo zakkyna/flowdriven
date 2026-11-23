@@ -56,13 +56,64 @@ export function heldPayload(input: Value, tool?: string): Value | undefined {
           : Array.isArray(value) && value.every((v) => typeof v === "string")
             ? value.map((v) => markHeld(v as string))
             : undefined;
-      const addresses = (value: Value | undefined) => {
+      const addresses = (value: Value | undefined): string[] | undefined => {
         const items = typeof value === "string" ? [value] : value;
         if (!Array.isArray(items) || !items.every((v) => typeof v === "string")) return undefined;
-        return items.map((v: string) => {
-          const ascii = asciiAddress(v);
-          return markHeld(v) + (ascii !== v.toLowerCase() ? ` (${markHeld(ascii)})` : "");
-        });
+        const result: string[] = [];
+        for (const item of items as string[]) {
+          let start = 0;
+          let quoted = false;
+          let escaped = false;
+          let angle = false;
+          let comments = 0;
+          const parts: string[] = [];
+          for (let i = 0; i < item.length; i++) {
+            const char = item[i];
+            if (escaped) {
+              escaped = false;
+              continue;
+            }
+            if (char === "\\" && (quoted || comments > 0)) {
+              escaped = true;
+              continue;
+            }
+            if (char === '"' && comments === 0) quoted = !quoted;
+            else if (!quoted && char === "(") comments++;
+            else if (!quoted && char === ")") {
+              if (!comments) return undefined;
+              comments--;
+            } else if (!quoted && !comments && char === "<") {
+              if (angle) return undefined;
+              angle = true;
+            } else if (!quoted && !comments && char === ">") {
+              if (!angle) return undefined;
+              angle = false;
+            } else if (!quoted && !comments && !angle && char === ",") {
+              parts.push(item.slice(start, i));
+              start = i + 1;
+            }
+          }
+          if (quoted || escaped || angle || comments) return undefined;
+          parts.push(item.slice(start));
+          for (const part of parts) {
+            const display = part.trim();
+            const match = display.match(/<([^<>]+)>\s*$/);
+            const address = (match ? match[1] : display)?.trim();
+            if (!address) return undefined;
+            const at = address.lastIndexOf("@");
+            if (at < 1 || at === address.length - 1) return undefined;
+            const domain = domainToASCII(
+              address
+                .slice(at + 1)
+                .trim()
+                .toLowerCase(),
+            );
+            if (!domain) return undefined;
+            const ascii = `${address.slice(0, at).toLowerCase()}@${domain}`;
+            result.push(markHeld(display) + (ascii !== address.toLowerCase() ? ` (${markHeld(ascii)})` : ""));
+          }
+        }
+        return result;
       };
       const to = addresses(input.to);
       const cc = input.cc === undefined ? undefined : addresses(input.cc);

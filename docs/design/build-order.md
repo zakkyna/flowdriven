@@ -997,6 +997,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/claude/review-05b-fix.test.ts` (TC-j24-01) | A reply recipient without an address is shown as a decision | A named RFC 5322 recipient is shown in full (TC-SR1-12) | B-05.T19 |
 | `packages/runner/src/service/flows-handlers.test.ts`, `service/map-flow.test.ts` (TC-STO-36) | Chat-origin rows without an app-saved version place changes under Does on its own | Such rows place changes under Asks you first (TC-SR2-08; architecture 6.3) | B-05.T18 |
 | `packages/contracts/src/operations-v2.test.ts` | RunDetail fixture without notes, skipped starts and attempt log | Required empty arrays in the fixture (TC-CON-46) | B-32.T1 |
 | `packages/contracts/src/run.test.ts` (TC-CON-12, TC-CON-26) | Earlier approval enums and RunDetail fixture | Adds Another way and required empty run arrays (TC-CON-45, TC-CON-46) | B-32.T1 |

@@ -69,3 +69,30 @@ for (const tool of ["mcp__claude_ai_Gmail__send_message", "mcp__gmail__reply"]) 
     });
   }
 }
+
+test("TC-SR1-12 shows ASCII for a named recipient", () => {
+  const address = `sam@b${String.fromCodePoint(0xfc)}cher.example.test`;
+  expect(
+    heldPayload({ to: [`Sam <${address}>`], subject: "Hi", body: "Hi" }, "mcp__gmail__reply"),
+  ).toMatchObject({ to: [`Sam <${address}> (sam@xn--bcher-kva.example.test)`] });
+});
+
+test("TC-SR1-12 splits recipients and shows each ASCII form", () => {
+  const address = `b@b${String.fromCodePoint(0xfc)}cher.example.test`;
+  expect(
+    heldPayload({ to: [`a@x.test, ${address}`], subject: "Hi", body: "Hi" }, "mcp__gmail__reply"),
+  ).toMatchObject({ to: ["a@x.test", `${address} (b@xn--bcher-kva.example.test)`] });
+});
+
+test("TC-SR1-12 trims a recipient before domain conversion", () => {
+  const address = `sam@b${String.fromCodePoint(0xfc)}cher.example.test`;
+  expect(heldPayload({ to: [` ${address} `], subject: "Hi", body: "Hi" }, "mcp__gmail__reply")).toMatchObject(
+    { to: [`${address} (sam@xn--bcher-kva.example.test)`] },
+  );
+});
+
+test("TC-SR1-12 blocks a domain that cannot be converted", () => {
+  expect(
+    heldPayload({ to: ["sam@bad domain.test"], subject: "Hi", body: "Hi" }, "mcp__gmail__reply"),
+  ).toBeUndefined();
+});

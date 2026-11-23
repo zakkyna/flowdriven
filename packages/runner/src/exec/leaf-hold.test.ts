@@ -566,3 +566,19 @@ test("TC-SR1-12 held email summary and payload show ASCII recipient", async () =
   expect(approval(c).summary).toContain("sam@xn--bcher-kva.example.test");
   expect(approval(c).payload).toMatchObject({ to: [`${address} (sam@xn--bcher-kva.example.test)`] });
 });
+
+test("TC-j24-41 too many recipients block without a decision", async () => {
+  const input = {
+    to: Array.from({ length: 51 }, (_, i) => `user${i}@example.test`),
+    subject: "Hi",
+    body: "Hi",
+  };
+  const c = await ready({ steps: { send: { hold: { ...hold, tool: "mcp__gmail__reply", input } } } });
+  const run = await c.start();
+  expect(c.store.listApprovals()).toEqual([]);
+  expect(c.store.getStep(run.id, "send")).toMatchObject({
+    state: "failed",
+    note: "FlowDriven could not show the whole text, so it did not ask.",
+  });
+  expect(run.state).toBe("blocked");
+});
