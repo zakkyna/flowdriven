@@ -163,6 +163,7 @@ test("the fixed replacement line is exactly postLine(POST_TEXT.unchecked)", () =
 test("the settings with browser add exactly one PostToolUse entry with the matcher and the post command, and the settings without it are byte-identical to the present ones", () => {
   const dir = "/tmp/a b/$x`";
   const original = {
+    autoMemoryEnabled: false, // TC-AGT-41
     hooks: {
       SessionStart: [
         { hooks: [{ type: "command", command: `/bin/sh '${dir}/hook.sh' start || exit 2`, timeout: 120 }] },
@@ -180,6 +181,7 @@ test("the settings with browser add exactly one PostToolUse entry with the match
   expect(postCommand(dir)).toBe(`/bin/sh '${dir}/hook.sh' post || exit 2`);
   expect(() => postCommand("/tmp/'")).toThrow("The control folder path is not safe.");
   expect(JSON.parse(settingsJson(dir, { browser: true }))).toEqual({
+    autoMemoryEnabled: false,
     hooks: {
       ...original.hooks,
       PostToolUse: [

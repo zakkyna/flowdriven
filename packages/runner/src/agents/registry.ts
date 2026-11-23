@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { REQUIRED_FLAGS } from "../claude/args.ts";
+import { claudeMemoryGap, REQUIRED_FLAGS } from "../claude/args.ts";
 import { childEnv } from "../claude/env.ts";
 import { runCapture } from "../claude/run-capture.ts";
 import type { Store } from "../storage.ts";
@@ -257,7 +257,11 @@ export function createAgentRegistry(options: RegistryOptions) {
         capability:
           entry.id === "codex"
             ? { tier: "label_only" as const, accountTools: false }
-            : { tier: "enforced" as const, accountTools: true },
+            : {
+                tier: "enforced" as const,
+                accountTools: true,
+                memoryGap: claudeMemoryGap(entry.memoryOff),
+              },
         ...(row?.problem
           ? {
               problem: {

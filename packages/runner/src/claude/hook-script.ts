@@ -1,4 +1,5 @@
 import { isAbsolute } from "node:path";
+import { CLAUDE_MEMORY_OFF, workerSettings } from "./args.ts";
 import { POST_TEXT, postLine } from "./browser-post.ts";
 
 export const HOOK_TIMEOUT_SECONDS = 120;
@@ -113,26 +114,29 @@ export function settingsJson(
     hooks: [{ type: "command", command: postCommand(controlDir), timeout: HOOK_TIMEOUT_SECONDS }],
   }));
   return `${JSON.stringify(
-    {
-      hooks: {
-        SessionStart: [
-          {
-            hooks: [
-              { type: "command", command: hookCommand(controlDir, true), timeout: HOOK_TIMEOUT_SECONDS },
-            ],
-          },
-        ],
-        PreToolUse: [
-          {
-            matcher: "*",
-            hooks: [
-              { type: "command", command: hookCommand(controlDir, false), timeout: HOOK_TIMEOUT_SECONDS },
-            ],
-          },
-        ],
-        ...(postEntries.length > 0 ? { PostToolUse: postEntries } : {}),
+    workerSettings(
+      {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                { type: "command", command: hookCommand(controlDir, true), timeout: HOOK_TIMEOUT_SECONDS },
+              ],
+            },
+          ],
+          PreToolUse: [
+            {
+              matcher: "*",
+              hooks: [
+                { type: "command", command: hookCommand(controlDir, false), timeout: HOOK_TIMEOUT_SECONDS },
+              ],
+            },
+          ],
+          ...(postEntries.length > 0 ? { PostToolUse: postEntries } : {}),
+        },
       },
-    },
+      CLAUDE_MEMORY_OFF,
+    ),
     null,
     2,
   )}\n`;

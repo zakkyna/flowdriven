@@ -231,6 +231,7 @@ test("the settings quote the path, hold only the two hooks and refuse an unsafe 
   const json = settingsJson(dir);
   expect(json.endsWith("\n")).toBe(true);
   expect(JSON.parse(json)).toEqual({
+    autoMemoryEnabled: false, // TC-AGT-41
     hooks: {
       SessionStart: [{ hooks: [{ type: "command", command: start, timeout: 120 }] }],
       PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: pre, timeout: 120 }] }],

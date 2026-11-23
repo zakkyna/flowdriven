@@ -1006,6 +1006,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/claude/hook-post.test.ts`, `packages/runner/src/claude/hook-script.test.ts` | Worker settings contained hooks only | Worker settings also disable auto-memory, preserving all hooks (TC-AGT-41) | B-07.T3 |
 | `packages/runner/src/claude/decide-commands.test.ts` | Protected program names in argument words can be held | Protected program names are refused in every word (TC-SR1-39) | B-32.T7 |
 | `apps/desktop/src/i18n/i18n.test.ts` (TC-j30-21, TC-I18N-30) | Real tree has no Line keys supplied | Real tree counts LINE_KEYS as used (TC-I18N-32), retaining the existing findings and Indonesian checks | B-06.T7 |
 | `apps/desktop/electron/notifier.test.ts` | Notices use plain strings and inbox or builder routes | Notices use fixed Lines, language and version 2 routes (TC-j30-26, TC-ELE-18, TC-ELE-21, TC-ELE-23), preserving validation and notification assertions | B-06.T7 |

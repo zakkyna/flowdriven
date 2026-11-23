@@ -1,6 +1,7 @@
 export type AgentId = "claude-code" | "codex";
 export type AgentCommand = { program: string; args: string[] };
 export type CatalogEntry = {
+  memoryOff?: MemoryOff;
   id: AgentId;
   name: string;
   maker: string;
@@ -26,6 +27,7 @@ export type CatalogEntry = {
 export const AGENT_CATALOG: CatalogEntry[] = [
   {
     id: "claude-code",
+    memoryOff: CLAUDE_MEMORY_OFF,
     name: "Claude Code",
     maker: "Anthropic",
     binary: "claude",
@@ -67,3 +69,5 @@ export const AGENT_CATALOG: CatalogEntry[] = [
     },
   },
 ];
+
+import { CLAUDE_MEMORY_OFF, type MemoryOff } from "../claude/args.ts";
