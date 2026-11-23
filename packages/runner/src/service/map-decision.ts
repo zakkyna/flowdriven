@@ -55,7 +55,7 @@ export function toDecision(row: ApprovalRow, run: RunRow, store: Store): Approva
     place: row.place,
     fixedPlace: row.fixedPlace,
     chatId: row.chatId,
-    similarGroup: row.similarGroup,
+    ...(row.similarGroup ? { similarGroup: row.similarGroup } : {}),
     resolvedVia: row.resolvedVia,
     editedSubject: row.editedSubject,
     editedText: row.editedText,

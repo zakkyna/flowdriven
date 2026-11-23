@@ -235,3 +235,122 @@ test("TC-SR8-06 Quit during a send-capable step records the crash warning", asyn
   expect(run).toMatchObject({ state: "interrupted", cause: { code: "crash", params: { step: "send" } } });
   expect(c.store.getStep(run.id, "send")?.state).toBe("interrupted");
 });
+
+test("TC-SR1-27 outside-flow holds create a decision and one audit record", async () => {
+  const tool = "mcp__claude_ai_Gmail__forward";
+  const input = { to: ["x@example.test"], threadId: "thread-sam" };
+  const digest = digestCall(tool, input);
+  const c = await setup(manifest, {
+    steps: {
+      send: {
+        hold: {
+          requirementId: "gmail",
+          tool,
+          input,
+          digest,
+          action: "send",
+          effect: "send",
+          outsideFlow: true,
+          touchId: "never",
+        },
+      },
+    },
+  });
+  stores.push(c.store);
+  const run = await c.engine.startRun(manifest.id, { project: "/tmp" });
+  expect(run.state).toBe("waiting_approval");
+  const row = c.store.listApprovals({ runId: run.id }).at(0);
+  expect(row).toMatchObject({ kind: "outside_flow", effect: "send", call: { tool, input } });
+  expect(row?.similarGroup).toBeUndefined();
+  expect(c.store.listAudit(run.id).filter((a) => a.kind === "call_held")).toMatchObject([
+    { detail: { approvalId: row?.id, tool, effect: "send", digest } },
+  ]);
+  if (!row) throw new Error("Missing approval");
+  const { createRunnerService } = await import("./service/service.ts");
+  const service = createRunnerService({ store: c.store, mode: "demo", dataDir: ".", now: c.clock.now });
+  try {
+    const listed = await service.call("approvals.list", { runId: run.id });
+    expect(listed).toMatchObject([
+      { id: row.id, kind: "outside_flow", effect: "send", canAlwaysAllow: false, editable: false },
+    ]);
+    expect((listed as Array<Record<string, unknown>>)[0]).not.toHaveProperty("similarGroup");
+  } finally {
+    service.stop();
+  }
+});
+
+test.each(["tooLarge", "tooMany"] as const)(
+  "TC-SR1-27 %s records a blocked hold without an approval id",
+  async (branch) => {
+    const tool = "WebFetch";
+    const input = { url: branch === "tooLarge" ? "x".repeat(5000) : "https://example.test" };
+    const digest = digestCall(tool, input);
+    let store: Store;
+    const c = await setup(manifest, {
+      steps: {
+        send: (req) => {
+          if (branch === "tooMany")
+            for (let i = 0; i < 3; i++)
+              store.createApproval({
+                id: `old-${i}`,
+                kind: "outside_flow",
+                runId: req.runId,
+                stepId: req.stepId,
+                itemKey: req.itemKey,
+                summary: "Old",
+                payload: "Old",
+                approves: [`other#${i}`],
+                onExpiry: "fail",
+                createdAt: "2026-11-11T09:00:00.000Z",
+                expiresAt: "2026-11-12T09:00:00.000Z",
+                state: "rejected",
+                effect: "change",
+              });
+          return { hold: { requirementId: tool, tool, input, digest, effect: "change", outsideFlow: true } };
+        },
+      },
+    });
+    store = c.store;
+    stores.push(store);
+    const run = await c.engine.startRun(manifest.id, { project: "/tmp" });
+    expect(run.state).toBe("blocked");
+    const records = store.listAudit(run.id).filter((row) => row.kind === "call_held");
+    expect(records).toMatchObject([{ detail: { tool, effect: "change", digest } }]);
+    expect(records[0]?.detail).not.toHaveProperty("approvalId");
+  },
+);
+
+test("TC-SR1-27 reusing a pending hold writes no duplicate audit", async () => {
+  const tool = "WebFetch";
+  const input = { url: "https://example.test" };
+  const digest = digestCall(tool, input);
+  let store: Store;
+  const c = await setup(manifest, {
+    steps: {
+      send: (req) => {
+        store.createApproval({
+          id: "existing",
+          kind: "outside_flow",
+          runId: req.runId,
+          stepId: req.stepId,
+          itemKey: req.itemKey,
+          summary: "Old",
+          payload: "Old",
+          approves: [`${tool}#${digest}`],
+          onExpiry: "fail",
+          createdAt: "2026-11-11T09:00:00.000Z",
+          expiresAt: "2026-11-12T09:00:00.000Z",
+          state: "pending",
+          effect: "change",
+        });
+        return { hold: { requirementId: tool, tool, input, digest, effect: "change", outsideFlow: true } };
+      },
+    },
+  });
+  store = c.store;
+  stores.push(store);
+  const run = await c.engine.startRun(manifest.id, { project: "/tmp" });
+  expect(run.state).toBe("waiting_approval");
+  expect(store.listApprovals({ runId: run.id })).toHaveLength(1);
+  expect(store.listAudit(run.id).filter((row) => row.kind === "call_held")).toEqual([]);
+});

@@ -717,7 +717,7 @@ test("TC-SR1-25 confirmed reads, writes and commands run on the fake claude", {
   }
 });
 
-test("TC-SR1-27 an undeclared tool is refused without a hold", { timeout: 20000 }, async () => {
+test("TC-SR1-27 an undeclared tool is held outside the flow", { timeout: 20000 }, async () => {
   const gmail = CONNECTORS[0];
   if (!gmail) throw Error("Missing Gmail");
   const fact = {
@@ -779,20 +779,11 @@ test("TC-SR1-27 an undeclared tool is refused without a hold", { timeout: 20000 
     ],
   });
   const result = await t.adapter.runStep(t.request);
-  expect(result.hold).toBeUndefined();
+  expect(result.hold).toMatchObject({ outsideFlow: true, effect: "send" });
   expect(readFakeCalls(t.home)).toContainEqual(
     expect.objectContaining({ kind: "tool", id: "forward", hookExit: 2, ran: false }),
   );
-  expect(t.audits).toContainEqual(
-    expect.objectContaining({
-      kind: "tool_denied",
-      detail: expect.objectContaining({
-        tool: `${gmail.prefix}forward`,
-        reason: `This step does not declare the tool ${gmail.prefix}forward.`,
-      }),
-    }),
-  );
-  expect(t.audits.find((a) => a.kind === "tool_calls")?.detail).toMatchObject({ held: 0, refused: 1 });
+  expect(t.audits.find((a) => a.kind === "tool_calls")?.detail).toMatchObject({ held: 1, refused: 0 });
   const manifest = parseManifest({
     format: "flowdriven-flow/1.1",
     id: "local.mail",
@@ -819,8 +810,25 @@ test("TC-SR1-27 an undeclared tool is refused without a hold", { timeout: 20000 
       routeOf: () => [route],
     });
     const run = await engine.startRun(manifest.manifest.id, { project: t.project });
-    expect(run.state).toBe("done");
-    expect(c.store.listApprovals({ runId: run.id })).toEqual([]);
+    expect(run.state).toBe("waiting_approval");
+    const approvals = c.store.listApprovals({ runId: run.id });
+    expect(approvals).toMatchObject([
+      {
+        kind: "outside_flow",
+        effect: "send",
+        call: { tool: `${gmail.prefix}forward`, input: { to: ["x@example.test"], threadId: "thread-sam" } },
+      },
+    ]);
+    expect(c.store.listAudit(run.id)).toContainEqual(
+      expect.objectContaining({
+        kind: "call_held",
+        detail: expect.objectContaining({
+          approvalId: approvals[0]?.id,
+          tool: `${gmail.prefix}forward`,
+          effect: "send",
+        }),
+      }),
+    );
   } finally {
     c.store.close();
   }

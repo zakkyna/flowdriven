@@ -147,7 +147,7 @@ export type ItemRow = {
 };
 export type ApprovalRow = {
   id: string;
-  kind: "ask" | "result_sign_off" | "risky_action";
+  kind: "ask" | "result_sign_off" | "risky_action" | "outside_flow";
   runId: string;
   stepId: string;
   itemKey: string;

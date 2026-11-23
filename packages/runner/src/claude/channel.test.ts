@@ -181,7 +181,18 @@ test("TC-SR1-33 reused ids and wrong sessions do not reach grants or rules", {
     addDirs: [],
     schema: false,
     sessionId: "session-1",
-    touches: [],
+    // TC-SR1-02: a read is declared by its folder touch.
+    touches: [
+      {
+        touchId: "read",
+        effect: "read" as const,
+        matcher: "folder" as const,
+        place: { kind: "folder" as const, value: dir.cwd, label: "Folder" },
+        fixedPlace: true,
+        list: "on_its_own" as const,
+        covers: [],
+      },
+    ],
   };
   start(dir, (call) => decide(policy, call, undefined, undefined, { grants, rules }), onCall);
   for (const [name, id, session] of [

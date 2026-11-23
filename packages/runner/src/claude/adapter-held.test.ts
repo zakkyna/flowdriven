@@ -181,21 +181,16 @@ test(
   },
 );
 test(
-  "the audit has call_held with the digest and counts the hold, and no later action of the play runs a tool",
+  "TC-SR1-27 the adapter returns the exact held call, counts it, and stops later tools",
   timeout,
   async () => {
     const t = await setup([tool("a"), tool("b", "search_threads"), done]);
-    await t.adapter.runStep(t.request);
-    expect(t.audits).toContainEqual({
-      kind: "call_held",
-      detail: {
-        stepId: "s",
-        itemKey: "j1",
-        attempt: 1,
-        requirementId: "gmail",
-        tool: "delete_draft",
-        digest: digestCall("delete_draft", { id: "d1" }),
-      },
+    const result = await t.adapter.runStep(t.request);
+    expect(result.hold).toMatchObject({
+      requirementId: "gmail",
+      tool: "delete_draft",
+      input: { id: "d1" },
+      digest: digestCall("delete_draft", { id: "d1" }),
     });
     expect(t.audits).toContainEqual(
       expect.objectContaining({
@@ -411,12 +406,6 @@ test("TC-SR1-26 a held reply carries effect and fixed place through the fake hoo
   expect(readFakeCalls(t.home)).toContainEqual(
     expect.objectContaining({ kind: "tool", id: "tu-1", hookExit: 2, ran: false }),
   );
-  expect(t.audits).toContainEqual(
-    expect.objectContaining({
-      kind: "call_held",
-      detail: expect.objectContaining({ digest: expect.any(String) }),
-    }),
-  );
   const parsed = parseManifest({
     format: "flowdriven-flow/1.1",
     id: "local.mail",
@@ -444,10 +433,51 @@ test("TC-SR1-26 a held reply carries effect and fixed place through the fake hoo
     });
     const run = await engine.startRun(parsed.manifest.id, { project: t.request.project });
     expect(run.state).toBe("waiting_approval");
+    expect(c.store.listAudit(run.id)).toContainEqual(
+      expect.objectContaining({
+        kind: "call_held",
+        detail: expect.objectContaining({
+          digest: expect.any(String),
+          tool: gmail.prefix + "reply",
+          effect: "send",
+          approvalId: expect.any(String),
+        }),
+      }),
+    );
     expect(c.store.listApprovals({ runId: run.id })).toEqual([
       expect.objectContaining({ kind: "risky_action", state: "pending", effect: "send", fixedPlace: false }),
     ]);
   } finally {
     c.store.close();
   }
+});
+
+test("TC-SR1-06 grant use records its approval, digest and effect", timeout, async () => {
+  const input = { threadId: "thread-sam", body: "Thanks" };
+  const name = gmail.prefix + "reply";
+  const digest = digestCall(name, input);
+  const t = await setup([tool("a", "reply", input), tool("b", "reply", input), done], true, true);
+  t.store.putCallGrant({
+    runId: "r1",
+    stepId: "s",
+    itemKey: "j1",
+    tool: name,
+    digest,
+    kind: "approve",
+    createdAt: "2026-11-22",
+    approvalId: "ap-1",
+  });
+  expect(await t.adapter.runStep(t.request)).toMatchObject({ hold: { tool: name, digest, effect: "send" } });
+  expect(t.audits).toContainEqual(
+    expect.objectContaining({
+      kind: "grant_used",
+      detail: expect.objectContaining({ approvalId: "ap-1", tool: name, digest, effect: "send" }),
+    }),
+  );
+  expect(readFakeCalls(t.home)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: "tool", id: "a", ran: true }),
+      expect.objectContaining({ kind: "tool", id: "b", ran: false }),
+    ]),
+  );
 });

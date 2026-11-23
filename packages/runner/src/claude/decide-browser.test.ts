@@ -227,3 +227,75 @@ test("TC-SR5-14 only typed, bounded template addresses count as pages", () => {
     expect(result).toMatchObject({ allow: false, reason: BROWSER_DENY.address });
   expect(results.filter((result) => result.allow && result.effect === "page")).toHaveLength(1);
 });
+
+test("TC-SR5-14 a same-host address outside the template is held", () => {
+  const input = { url: "https://www.upwork.com/jobs/~bad", tabId: 7 };
+  expect(decide({ ...policy, touches: [] }, call("navigate", input), state)).toMatchObject({
+    outcome: "hold",
+    held: { outsideFlow: true, tool: CHROME_PREFIX + "navigate", input },
+  });
+});
+
+test("TC-SR5-14 approved page text is accepted only for its exact address", async () => {
+  const { decidePost } = await import("./browser-post.ts");
+  const address = "https://www.upwork.com/jobs/~bad";
+  const post = {
+    hook_event_name: "PostToolUse",
+    session_id: "s1",
+    tool_use_id: "x",
+    tool_name: CHROME_PREFIX + "get_page_text",
+    tool_input: { tabId: 7 },
+    tool_response: [{ type: "text", text: `Title: Job\nURL: ${address}\nSource element: body\n---\nHello` }],
+  };
+  if (!policy.browser) throw new Error("Missing browser");
+  expect(decidePost(policy.browser, "s1", post, address)).toMatchObject({ kind: "pass" });
+});
+
+test("TC-SR5-14 an approved navigate runs once within page limits", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const name = CHROME_PREFIX + "navigate";
+  const input = { url: "https://www.upwork.com/jobs/~bad", tabId: 7 };
+  const grant = {
+    runId: "run",
+    stepId: "step",
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  let used = false;
+  const grants = { findGrant: () => (used ? undefined : grant) };
+  const p = { ...policy, touches: [], runId: "run", stepId: "step" };
+  expect(decide(p, call("navigate", input), state, undefined, { grants })).toMatchObject({
+    outcome: "run",
+    by: "grant",
+    effect: "page",
+  });
+  expect(
+    decide(p, call("navigate", input), { ...state, counts: { run: 3, day: 0 } }, undefined, { grants }),
+  ).toMatchObject({ outcome: "refuse", reason: BROWSER_DENY.runLimit });
+  used = true;
+  expect(decide(p, call("navigate", input), state, undefined, { grants })).toMatchObject({
+    outcome: "hold",
+    held: { outsideFlow: true, digest: grant.digest },
+  });
+  expect(decide(p, call("navigate", { ...input, url: "https://evil.example.test/x" }), state)).toMatchObject({
+    outcome: "refuse",
+    reason: BROWSER_DENY.address,
+  });
+});
+
+test("TC-SR5-14 addresses with a port or user part stay refused", () => {
+  for (const address of [
+    "https://www.upwork.com:443/jobs/~bad",
+    "https://www.upwork.com:444/jobs/~bad",
+    "https://user@www.upwork.com/jobs/~bad",
+    "http://www.upwork.com/jobs/~bad",
+    "not a url",
+  ])
+    expect(
+      decide({ ...policy, touches: [] }, call("navigate", { url: address, tabId: 7 }), state),
+      address,
+    ).toMatchObject({ outcome: "refuse", reason: BROWSER_DENY.address });
+});

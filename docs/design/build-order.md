@@ -883,7 +883,7 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 | SR5-11 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
 | SR7-01 | B-05 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T6 |
 | SR7-04 | B-04 | B-32 | the approved outside-flow behaviour replaces the refusal; the equally strict case belongs to B-32.T2 |
-| SR5-14 | B-04 | B-32 | out-of-template addresses on a scoped server now hold; undeclared servers remain locked |
+| SR5-14 | B-04 | B-32 | Out-of-template addresses on a scoped server hold; undeclared servers remain locked. The approved-page read and count are also tested through the fake adapter in `claude/adapter-browser.test.ts`. |
 | SR1-26 (`canAlwaysAllow`) | B-04 | B-05 | the eligibility field is built in B-05.T6; B-04.T6 checks the held effect and fixed place |
 | SR5-11 (second held call) | B-04 | B-04 | a hold ends the attempt, so the send and delete are checked in separate plays |
 | SR7-04 (second held call and test file) | B-04 | B-04 | a hold ends the attempt, so the count uses one held send after the reads and refusals; the case uses `claude/review-r15-injection.test.ts` for the shared fake Gmail setup |
@@ -1010,6 +1010,8 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 | `packages/runner/src/claude/decide-browser.test.ts` | A URL outside a declared template is refused | An in-scope URL outside the template holds as `outside_flow`; an undeclared server stays locked, and links are never followed automatically (FS-j24.P15) | B-32.T2 |
 | `packages/runner/src/claude/decide-commands.test.ts` | An undeclared in-scope command is refused | It holds as `outside_flow`; the protected and scoped command locks stay checked (FS-j24.P15) | B-32.T2 |
 | `packages/runner/src/claude/adapter-limits.test.ts`, `review-r15-injection.test.ts` | Undeclared calls are refused and audited as denied | The call is held, recorded and does not run; injected content keeps its outside mark (FS-j24.P15) | B-32.T2 |
+| `packages/runner/src/claude/adapter-held.test.ts`, `packages/runner/src/engine-held.test.ts` | The adapter audits a held call before a decision exists | The adapter returns the exact held call and counts it; the leaf records its digest and approval id atomically with the decision or its blocked outcome (TC-SR1-27, TC-SR7-04) | B-32.T2 |
+| `packages/runner/src/claude/channel.test.ts` | A folder alone declares the read in the reused-id and wrong-session test | The read has its matching folder touch; the same reused-id, wrong-session and no-book-lookup assertions remain (TC-SR1-02, TC-SR1-33) | B-32.T2 |
 | `packages/runner/src/rules/decisions.test.ts`, `report.test.ts` | An undeclared call is refused in audit and report | Each outside hold and one-time decision is recorded with equally strict audit and report checks (FS-j24.P15) | B-32.T2 |
 | `packages/runner/src/engine-held.test.ts` | Held call expires after 24 hours and fails the run | At and after 24 hours it remains pending, no call runs, and Stop refuses a later answer (TC-j24-29, TC-j24-30; FS-j24.P7) | B-05.T3 |
 | `packages/runner/src/engine-steps.test.ts` | Result sign-off has a 24-hour deadline and expiry fails the run; reads sweep sign-offs | Sign-off remains pending past 25 hours, the run waits and no action runs until answered (TC-ENG-15; FS-j24.P7) | B-05.T3 |

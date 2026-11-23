@@ -4,6 +4,7 @@ import type { ExitClass, RiskyAction } from "./states.ts";
 import type { ModelUsage } from "./storage.ts";
 export type LimitWindow = { utilization?: number; resetsAt?: number; status?: string };
 export type HeldCall = {
+  outsideFlow?: true;
   requirementId: string;
   tool: string;
   input: Value;

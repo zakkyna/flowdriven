@@ -221,12 +221,27 @@ export async function runLeaf(
       if (result.hold) {
         const hold = result.hold;
         const payload = heldPayload(hold.input, hold.tool);
+        const auditHold = (approvalId?: string) =>
+          store.appendAudit({
+            at: now().toISOString(),
+            kind: "call_held",
+            runId: run.id,
+            detail: {
+              ...(approvalId ? { approvalId } : {}),
+              tool: hold.tool,
+              ...((hold.effect ?? hold.action) ? { effect: hold.effect ?? hold.action ?? "change" } : {}),
+              digest: hold.digest,
+            },
+          });
         if (payload === undefined) {
           Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
           row.noteLine = { key: "hold.tooLarge" };
-          block(HOLD_TEXT.tooLarge);
-          store.updateRun(run.id, {
-            cause: { code: "step_failed", params: { step: step.title ?? step.id } },
+          store.transaction(() => {
+            block(HOLD_TEXT.tooLarge);
+            store.updateRun(run.id, {
+              cause: { code: "step_failed", params: { step: step.title ?? step.id } },
+            });
+            auditHold();
           });
           return "failed";
         }
@@ -242,19 +257,30 @@ export async function runLeaf(
           /(?:^|__)reply$/.test(hold.tool) && recipients && recipients.length <= 150
             ? `Send reply to ${recipients}?`
             : undefined;
-        const grant = callGrant(hold.requirementId, hold.tool, hold.digest);
+        const grant =
+          hold.outsideFlow && !hold.tool.startsWith("mcp__")
+            ? `${hold.tool}#${hold.digest}`
+            : callGrant(hold.requirementId, hold.tool, hold.digest);
         const holds = store
           .listApprovals({ runId: run.id })
-          .filter((a) => a.kind === "risky_action" && a.stepId === step.id && a.itemKey === itemKey);
+          .filter(
+            (a) =>
+              (a.kind === "risky_action" || a.kind === "outside_flow") &&
+              a.stepId === step.id &&
+              a.itemKey === itemKey,
+          );
         const pending = holds.find(
           (a) => a.state === "pending" && a.approves.length === 1 && a.approves.at(0) === grant,
         );
         if (!pending && holds.length >= MAX_HOLDS) {
           Object.assign(attempt, { endedAt: now().toISOString(), exit: "failed" });
           row.noteLine = { key: "hold.tooMany" };
-          block(HOLD_TEXT.tooMany);
-          store.updateRun(run.id, {
-            cause: { code: "step_failed", params: { step: step.title ?? step.id } },
+          store.transaction(() => {
+            block(HOLD_TEXT.tooMany);
+            store.updateRun(run.id, {
+              cause: { code: "step_failed", params: { step: step.title ?? step.id } },
+            });
+            auditHold();
           });
           return "failed";
         }
@@ -269,10 +295,10 @@ export async function runLeaf(
             store.createApproval({
               id: approvalId,
               ...(chatId ? { chatId } : {}),
-              ...(hold.touchId && (hold.effect === "send" || hold.effect === "post")
+              ...(!hold.outsideFlow && hold.touchId && (hold.effect === "send" || hold.effect === "post")
                 ? { similarGroup: `${hold.effect}:${run.flowId}:${hold.touchId}` }
                 : {}),
-              kind: "risky_action",
+              kind: hold.outsideFlow ? "outside_flow" : "risky_action",
               ...(hold.action === undefined ? {} : { riskyAction: hold.action }),
               ...(hold.effect === undefined ? {} : { effect: hold.effect }),
               ...(hold.touchId === undefined ? {} : { touchId: hold.touchId }),
@@ -281,12 +307,13 @@ export async function runLeaf(
               runId: run.id,
               stepId: step.id,
               itemKey,
-              summary:
-                replyTitle ??
-                visible(
-                  `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
-                  200,
-                ),
+              summary: hold.outsideFlow
+                ? `${visible(step.title ?? step.id, 80)}: ${visible(hold.tool, 60)}${run.requirements.some((req) => req.id === hold.requirementId) ? ` on ${labelOf(run.requirements, hold.requirementId)}` : ""}`
+                : (replyTitle ??
+                  visible(
+                    `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
+                    200,
+                  )),
               payload,
               call: { tool: hold.tool, input: hold.input },
               approves: [grant],
@@ -296,6 +323,7 @@ export async function runLeaf(
               state: "pending",
               ...(row.outside === true ? { outside: true } : {}),
             });
+            auditHold(approvalId);
             if (chatId) {
               const card = { type: "decision", state: "open" as const, approvalId };
               store.putMessage({

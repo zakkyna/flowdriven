@@ -109,6 +109,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let result: ResultInfo | undefined;
   const counts = { allowed: 0, held: 0, refused: 0 };
+  const approvedPages = new Map<number, string>();
   let notListed = 0;
   const limits: RateLimit[] = [];
   const nowMs = deps.nowMs ?? Date.now;
@@ -233,6 +234,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           typeof call.tool_use_id === "string"
         ) {
           const held: HeldCall = {
+            ...(decision.held.outsideFlow ? { outsideFlow: true as const } : {}),
             requirementId: decision.held.requirementId,
             tool: decision.held.tool,
             input: decision.held.input,
@@ -252,12 +254,6 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             forced = pendingStop?.outcome;
             child?.kill();
           }, deps.exitWaitMs);
-          audit("call_held", {
-            ...detail,
-            requirementId: held.requirementId,
-            tool: held.tool,
-            digest: held.digest,
-          });
         }
         if (decision.allow && decision.by === "rule" && decision.ruleId) {
           try {
@@ -270,7 +266,14 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         if (decision.allow && decision.by === "grant" && decision.grant) {
           try {
             (input.books?.grants ?? deps.grants)?.useGrant(decision.grant, new Date(nowMs()).toISOString());
-            audit("grant_used", { ...detail, tool: decision.grant.tool, grant: "call" });
+            audit("grant_used", {
+              ...detail,
+              tool: decision.grant.tool,
+              grant: "call",
+              ...(decision.grant.approvalId ? { approvalId: decision.grant.approvalId } : {}),
+              digest: decision.grant.digest,
+              ...(decision.effect ? { effect: decision.effect } : {}),
+            });
           } catch {
             return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
           }
@@ -318,6 +321,21 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           typeof call.tool_input.command === "string"
         )
           audit("command_run", { ...detail, command: visible(call.tool_input.command, 300) });
+        if (
+          decision.allow &&
+          decision.by === "grant" &&
+          decision.effect === "page" &&
+          call !== null &&
+          typeof call === "object" &&
+          "tool_input" in call &&
+          call.tool_input !== null &&
+          typeof call.tool_input === "object" &&
+          "tabId" in call.tool_input &&
+          typeof call.tool_input.tabId === "number" &&
+          "url" in call.tool_input &&
+          typeof call.tool_input.url === "string"
+        )
+          approvedPages.set(call.tool_input.tabId, call.tool_input.url);
         if (decision.allow && decision.effect === "page" && policy.browser && deps.pages && attempt) {
           deps.pages.take(input.runId, policy.browser.requirementId);
           attempt.takePage();
@@ -347,7 +365,21 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           connectorPosts.set(call.tool_use_id, connectorResult);
           return { text: connectorResult.text, line: postLine(connectorResult.text) };
         }
-        const r = policy.browser ? decidePost(policy.browser, sessionId, call) : undefined;
+        const tabId =
+          call !== null &&
+          typeof call === "object" &&
+          "tool_name" in call &&
+          call.tool_name === `${CHROME_PREFIX}get_page_text` &&
+          "tool_input" in call &&
+          call.tool_input !== null &&
+          typeof call.tool_input === "object" &&
+          "tabId" in call.tool_input &&
+          typeof call.tool_input.tabId === "number"
+            ? call.tool_input.tabId
+            : undefined;
+        const approvedAddress = tabId === undefined ? undefined : approvedPages.get(tabId);
+        if (tabId !== undefined) approvedPages.delete(tabId);
+        const r = policy.browser ? decidePost(policy.browser, sessionId, call, approvedAddress) : undefined;
         if (
           !r ||
           call === null ||

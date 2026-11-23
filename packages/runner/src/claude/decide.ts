@@ -9,8 +9,14 @@ import { EFFECT_RANK, EFFECTS, type Effect, effectOf } from "../rules/effects.ts
 import { matchRule } from "../rules/standing.ts";
 import type { CallGrant, RuleRow, Store } from "../storage.ts";
 import { BROWSER_DENY, type BrowserState, CHROME_PREFIX, decideBrowser } from "./browser.ts";
-import { decideCommand } from "./commands.ts";
-import { type ConnectorAllow, type ConnectorState, decideConnector } from "./connector.ts";
+import { COMMAND_DENY, COMMAND_STOP, decideCommand } from "./commands.ts";
+import {
+  CONNECTOR_DENY,
+  type ConnectorAllow,
+  type ConnectorState,
+  decideConnector,
+  MAX_CONNECTOR_CALLS,
+} from "./connector.ts";
 import { hasParentPart, isInside, resolveDeep } from "./paths.ts";
 import type { Policy } from "./policy.ts";
 import { protectedPath } from "./protected.ts";
@@ -95,11 +101,22 @@ function decideLegacy(
   }
   // Bash goes through the command rule only in a step that declares commands; in any other step it
   // is refused below as an undeclared tool, with the same sentence as before.
-  if (call.tool_name === "Bash" && policy.tools.includes("Bash")) {
-    const result = decideCommand(policy.commands, call.tool_input);
+  if (call.tool_name === "Bash" && (policy.tools.includes("Bash") || policy.touches !== undefined)) {
+    if (policy.noCommands) return deny(COMMAND_STOP.outside);
+    const result = decideCommand(
+      policy.commands,
+      call.tool_input,
+      policy.touches === undefined
+        ? undefined
+        : { roots: policy.protectedRoots ?? [], projectRoot: policy.projectRoot },
+    );
     return result.allow ? { allow: true, tool } : deny(result.reason);
   }
-  if (!policy.tools.includes(call.tool_name)) return deny(`This step does not declare the tool ${tool}.`);
+  if (
+    !policy.tools.includes(call.tool_name) &&
+    !(policy.touches !== undefined && ["Read", "Write", "Edit", "Glob", "Grep"].includes(call.tool_name))
+  )
+    return deny(`This step does not declare the tool ${tool}.`);
   const name = call.tool_name;
   if (!["Read", "Write", "Edit", "Glob", "Grep"].includes(name)) return deny(DENY.badRequest);
   const input = call.tool_input;
@@ -126,10 +143,27 @@ function decideLegacy(
   if (hasParentPart(raw)) return deny(DENY.badPath, target);
   const resolved = resolveDeep(raw);
   if (resolved === undefined) return deny(DENY.badPath, target);
+  if (policy.touches !== undefined) {
+    if (protectedPath(raw) || protectedPath(resolved)) return deny(DENY.protectedPath, target);
+    if (policy.projectRoot && !isInside(policy.projectRoot, resolved)) return deny(DENY.outside, target);
+    if (search && typeof input[patternKey] === "string") {
+      const glob = input[patternKey] as string;
+      if (
+        glob.split("/").some((part) => /[*?[{]/.test(part) && /(?:^|[{,])\./.test(part)) ||
+        glob.split(/[/{},]/).some(protectedPath)
+      )
+        return deny(DENY.protectedPath, target);
+    }
+  }
   const containing = policy.folders.filter((folder) => isInside(folder.path, resolved));
-  if (containing.length === 0) return deny(DENY.outside, target);
+  if (
+    containing.length === 0 &&
+    !(policy.touches !== undefined && policy.projectRoot && isInside(policy.projectRoot, resolved))
+  )
+    return deny(DENY.outside, target);
   const write = name === "Write" || name === "Edit";
-  if (write && !containing.some((folder) => folder.write)) return deny(DENY.readOnly, target);
+  if (write && !containing.some((folder) => folder.write) && policy.touches === undefined)
+    return deny(DENY.readOnly, target);
   if (write && (protectedPath(raw) || protectedPath(resolved))) return deny(DENY.protectedPath, target);
   return { allow: true, tool, ...(target === undefined ? {} : { target: target.slice(0, 300) }) };
 }
@@ -217,18 +251,107 @@ export function decide(
     declared !== undefined ||
     connector !== undefined ||
     (policy.tools.includes(name) && policy.touches.some((touch) => touch.covers.includes(cover)));
+  try {
+    const encoded = JSON.stringify(input);
+    if (
+      !encoded ||
+      ((connector || !["Read", "Write", "Edit", "Glob", "Grep", "Bash"].includes(name)) &&
+        Buffer.byteLength(encoded) > 16000)
+    )
+      return refuse(CONNECTOR_DENY.tooLarge);
+  } catch {
+    return refuse(CONNECTOR_DENY.tooLarge);
+  }
+  const exactGrant = () =>
+    books?.grants && policy.runId && policy.stepId
+      ? matchGrant(books.grants, {
+          runId: policy.runId,
+          stepId: policy.stepId,
+          itemKey: policy.itemKey ?? "",
+          tool: name,
+          digest: digestCall(name, input as Value),
+        })
+      : undefined;
+  if (name.startsWith(CHROME_PREFIX)) {
+    if (base.allow) return { ...base, outcome: "run" };
+    if (base.reason !== BROWSER_DENY.address || !policy.browser || typeof input.url !== "string")
+      return { ...base, outcome: "refuse" };
+    let url: URL;
+    try {
+      url = new URL(input.url);
+    } catch {
+      return { ...base, outcome: "refuse" };
+    }
+    const authority = /^https:\/\/([^/?#]*)/i.exec(input.url)?.[1];
+    if (
+      !authority ||
+      authority.includes("@") ||
+      /:\d*$/.test(authority) ||
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.port ||
+      !policy.browser.templates.some((template) => template.host === url.hostname)
+    )
+      return { ...base, outcome: "refuse" };
+    const browserState = state ?? {
+      counts: { run: Infinity, day: Infinity },
+      tabs: new Set<number>(),
+      opened: Infinity,
+    };
+    const grant = exactGrant();
+    if (grant) {
+      if (
+        !Number.isSafeInteger(browserState.counts.run) ||
+        browserState.counts.run < 0 ||
+        browserState.counts.run >= policy.browser.perRun
+      )
+        return refuse(BROWSER_DENY.runLimit);
+      if (
+        !Number.isSafeInteger(browserState.counts.day) ||
+        browserState.counts.day < 0 ||
+        browserState.counts.day >= policy.browser.perDay
+      )
+        return refuse(BROWSER_DENY.dayLimit);
+      return { allow: true, outcome: "run", tool: base.tool, effect: "page", by: "grant", grant };
+    }
+    const copy = JSON.parse(JSON.stringify(input)) as Value;
+    return {
+      allow: false,
+      outcome: "hold",
+      tool: base.tool,
+      reason: "FlowDriven is holding this call until the owner approves it.",
+      effect: "read",
+      held: {
+        requirementId: policy.browser.requirementId,
+        tool: name,
+        input: copy,
+        digest: digestCall(name, copy),
+        effect: "read",
+        fixedPlace: false,
+        outsideFlow: true,
+      },
+    };
+  }
+  if (name === "StructuredOutput")
+    return base.allow ? { ...base, outcome: "run" } : { ...base, outcome: "refuse" };
+  const undeclaredReason = !base.allow && base.reason.startsWith("This step does not declare the tool ");
+  const commandOutside =
+    name === "Bash" &&
+    !base.allow &&
+    base.reason !== COMMAND_DENY.badInput &&
+    base.reason !== COMMAND_STOP.outside;
   if (
     !base.allow &&
     !base.held &&
-    !(
-      external &&
-      !connector &&
-      (base.reason === DENY.badRequest || base.reason.startsWith("This step does not declare the tool "))
-    )
+    !undeclaredReason &&
+    !commandOutside &&
+    !((external || policy.tools.includes(name)) && base.reason === DENY.badRequest)
   )
     return { ...base, outcome: "refuse" };
-  if (name === "StructuredOutput" || name.startsWith(CHROME_PREFIX))
-    return base.allow ? { ...base, outcome: "run" } : { ...base, outcome: "refuse" };
+  if (connector && (connectorState?.calls ?? Infinity) >= MAX_CONNECTOR_CALLS)
+    return refuse(CONNECTOR_DENY.tooMany);
+  const grant = exactGrant();
   let touch = policy.touches.find((item) => item.covers.includes(cover));
   let effect: Effect;
   let catalogPlace: NonNullable<import("./policy.ts").CompiledTouch["place"]> | undefined;
@@ -310,13 +433,21 @@ export function decide(
         resolved !== undefined &&
         isInside(item.place.value, resolved),
     );
-    if (matches.some((item) => item.list === "never"))
-      return refuse(`This step does not declare the tool ${visible(name, 60)}.`);
+    if (matches.some((item) => item.list === "never")) touch = matches.find((item) => item.list === "never");
     matches.sort((a, b) => (b.place?.value.length ?? 0) - (a.place?.value.length ?? 0));
-    touch = matches.find((item) => item.list !== "on_its_own") ?? matches[0];
+    touch =
+      matches.find((item) => item.list === "never") ??
+      matches.find((item) => item.list !== "on_its_own") ??
+      matches[0];
   }
-  if (touch?.list === "never") return refuse(`This step does not declare the tool ${visible(name, 60)}.`);
-  if (external && !touch) return refuse(`This step does not declare the tool ${visible(name, 60)}.`);
+  const outsideFlow =
+    touch?.list === "never" ||
+    !touch ||
+    commandOutside ||
+    ((name === "Write" || name === "Edit") &&
+      !policy.folders.some(
+        (folder) => folder.write && isInside(folder.path, resolveDeep(String(input.file_path)) ?? ""),
+      ));
   const allowed = (
     by: "read" | "declared_write" | "declared_command" | "rule" | "grant",
     ruleId?: string,
@@ -347,7 +478,8 @@ export function decide(
         }
       : {}),
   });
-  if (effect === "read") return allowed("read");
+  if (grant) return allowed("grant", undefined, grant);
+  if (effect === "read" && !outsideFlow) return allowed("read");
   const place = external ? catalogPlace : touch?.place;
   const findRule = () => {
     if (
@@ -386,22 +518,12 @@ export function decide(
     return undefined;
   };
   const ownLocal = touch?.list === "on_its_own" && (effect === "local_write" || effect === "run_command");
-  if (ownLocal) {
+  if (ownLocal && !outsideFlow) {
     const rule = findRule();
     if (rule) return allowed("rule", rule.id);
   }
-  if (books?.grants && policy.runId && policy.stepId) {
-    const grant = matchGrant(books.grants, {
-      runId: policy.runId,
-      stepId: policy.stepId,
-      itemKey: policy.itemKey ?? "",
-      tool: name,
-      digest: digestCall(name, input as Value),
-    });
-    if (grant) return allowed("grant", undefined, grant);
-  }
   if (base.allow && base.connector?.grant?.kind === "pick") return allowed("grant");
-  if (!ownLocal) {
+  if (!ownLocal && !outsideFlow) {
     const rule = findRule();
     if (rule) return allowed("rule", rule.id);
   }
@@ -417,7 +539,8 @@ export function decide(
     ? (effect as HeldCall["action"])
     : undefined;
   const held: Held = {
-    requirementId: connector?.requirementId ?? cover.split(".")[0] ?? "",
+    requirementId: connector?.requirementId ?? (name.startsWith("mcp__") ? cover.split(".")[0] : name) ?? "",
+    ...(outsideFlow ? { outsideFlow: true as const } : {}),
     tool: name,
     input: copy,
     digest: digestCall(name, copy),

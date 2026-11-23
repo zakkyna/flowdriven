@@ -32,6 +32,9 @@ export type CompiledTouch = {
   covers: string[];
 };
 export type Policy = {
+  projectRoot?: string;
+  protectedRoots?: string[];
+  noCommands?: true;
   flowId?: string;
   hash?: string;
   startedAt?: string;
@@ -106,6 +109,10 @@ export function buildPolicy(input: {
     sessionId: input.sessionId,
   };
   if (input.touches !== undefined) {
+    policy.projectRoot = resolveDeep(input.project);
+    const root = resolveDeep(input.controlRoot);
+    if (root) policy.protectedRoots = [root, dirname(root)];
+    if (input.takesOutside === true) policy.noCommands = true;
     const catalog = input.effectCatalog ?? EFFECTS;
     policy.effectCatalog = catalog;
     policy.declaredTools = [];

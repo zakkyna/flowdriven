@@ -286,18 +286,38 @@ test("TC-j24-15 exact standing rule runs", () => {
   ).toMatchObject({ outcome: "run", effect: "change", by: "rule", ruleId: "rule" });
 });
 test("TC-SR1-01 classifies a declared read", () => {
-  expect(decide({ ...policy, touches: [] }, call("Read", { file_path: join(notes, "a") }))).toMatchObject({
+  expect(
+    decide(
+      {
+        ...policy,
+        touches: [
+          {
+            touchId: "read",
+            effect: "read",
+            matcher: "folder",
+            place: { kind: "folder", value: notes, label: "Notes" },
+            fixedPlace: true,
+            list: "on_its_own",
+            covers: [],
+          },
+        ],
+      },
+      call("Read", { file_path: join(notes, "a") }),
+    ),
+  ).toMatchObject({
     outcome: "run",
     effect: "read",
     by: "read",
   });
 });
-test("TC-SR1-02 refuses an undeclared tool", () => {
+test("TC-SR1-02 holds an undeclared tool", () => {
   expect(decide({ ...policy, touches: [] }, call("WebFetch"))).toMatchObject({
-    outcome: "refuse",
-    reason: "This step does not declare the tool WebFetch.",
+    outcome: "hold",
+    effect: "change",
+    held: { tool: "WebFetch", input: {}, outsideFlow: true },
   });
 });
+
 test("TC-SR1-03 holds an unknown declared tool as change", () => {
   const p = {
     ...policy,
@@ -429,23 +449,27 @@ test("TC-SR1-01 covers all effect classes and held digests", async () => {
   });
 });
 
-test("TC-SR1-02 every undeclared tool is refused without a held call", () => {
-  const p = { ...policy, tools: [], touches: [] };
-  for (const name of [
-    "mcp__claude_ai_Gmail__get_thread",
-    "mcp__claude_ai_Gmail__forward",
-    "WebFetch",
-    "Bash",
-    "Read",
-    "mcp__other_server__anything",
-  ]) {
-    const result = decide(p, call(name, { file_path: "/etc/hosts", command: "ls" }));
-    expect(result).toMatchObject({
-      outcome: "refuse",
-      reason: `This step does not declare the tool ${name}.`,
+test("TC-SR1-02 in-scope undeclared tools hold and protected paths refuse", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const p = { ...policy, touches: [], projectRoot: project };
+  for (const [name, input, effect] of [
+    ["mcp__claude_ai_Gmail__get_thread", {}, "read"],
+    ["mcp__claude_ai_Gmail__forward", {}, "send"],
+    ["WebFetch", {}, "change"],
+    ["Bash", { command: "ls" }, "run_command"],
+    ["Read", { file_path: join(project, "new") }, "read"],
+    ["mcp__other_server__anything", {}, "change"],
+  ] as const) {
+    expect(decide(p, call(name, input))).toMatchObject({
+      outcome: "hold",
+      effect,
+      held: { outsideFlow: true, tool: name, input, digest: digestCall(name, input) },
     });
-    if (!result.allow) expect(result.held).toBeUndefined();
   }
+  expect(decide(p, call("Read", { file_path: "/etc/hosts" }))).toMatchObject({
+    outcome: "refuse",
+    reason: DENY.outside,
+  });
 });
 
 test("TC-j24-15 rule near misses, revoked rules, and risky rules hold", () => {
@@ -509,7 +533,11 @@ test("TC-j24-15 rule near misses, revoked rules, and risky rules hold", () => {
     { ...p, source: "tool" },
   ])
     expect(decide(mismatch, call(name, { hours: 8 }))).toMatchObject({ outcome: "hold", effect: "change" });
-  expect(decide({ ...p, touches: [] }, call(name, {}))).toMatchObject({ outcome: "refuse" });
+  expect(decide({ ...p, touches: [] }, call(name, {}))).toMatchObject({
+    outcome: "hold",
+    effect: "change",
+    held: { tool: name, input: {}, outsideFlow: true },
+  });
   const send = {
     ...p,
     effectCatalog: [{ tool: name, effect: "send" as const, place: undefined }],
@@ -987,7 +1015,7 @@ test("TC-j24-48 a granted call runs in the decision table", async () => {
     decide(p, call(name, input), undefined, undefined, { grants: { findGrant: () => grant } }),
   ).toMatchObject({ outcome: "run", by: "grant" });
 });
-test("TC-SR1-06 declaration is checked before a grant", async () => {
+test("TC-SR1-06 an exact grant precedes the outside hold", async () => {
   const { digestCall } = await import("../connectors/grants.ts");
   const { name, input, p } = grantCase();
   const grant = {
@@ -1008,8 +1036,8 @@ test("TC-SR1-06 declaration is checked before a grant", async () => {
   };
   expect(
     decide({ ...p, tools: [], touches: [] }, call(name, input), undefined, undefined, { grants }),
-  ).toMatchObject({ outcome: "refuse" });
-  expect(lookups).toBe(0);
+  ).toMatchObject({ outcome: "run", by: "grant" });
+  expect(lookups).toBe(1);
   expect(decide(p, call(name, input), undefined, undefined, { grants })).toMatchObject({
     outcome: "run",
     by: "grant",
@@ -1259,7 +1287,7 @@ test.each([false, true])("TC-SR1-01 nested Never folder wins in either order (%s
       { ...policy, touches: reverse ? [child, parent] : [parent, child] },
       call("Write", { file_path: join(notes, "private", "a") }),
     ),
-  ).toMatchObject({ outcome: "refuse" });
+  ).toMatchObject({ outcome: "hold", held: { outsideFlow: true, touchId: "child" } });
 });
 test("TC-SR1-01 uncovered write holds", () => {
   expect(decide({ ...policy, touches: [] }, call("Write", { file_path: join(notes, "a") }))).toMatchObject({
@@ -1334,3 +1362,131 @@ test.each([0x202e, 0x200b])(
     ).toMatchObject({ outcome: "hold", held: { place: { value: escaped }, fixedPlace: false } });
   },
 );
+
+test("TC-SR1-02 holds an undeclared in-scope tool", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const name = "WebFetch";
+  const input = { url: "https://example.test/" };
+  expect(decide({ ...policy, touches: [] }, call(name, input))).toMatchObject({
+    outcome: "hold",
+    effect: "change",
+    held: { outsideFlow: true, tool: name, input, digest: digestCall(name, input) },
+  });
+});
+
+test("TC-SR1-06 an exact grant precedes the outside-flow hold", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const name = "WebFetch";
+  const input = { url: "https://example.test/" };
+  const grant = {
+    runId: "run-1",
+    stepId: "step-1",
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  const p = { ...policy, touches: [], runId: grant.runId, stepId: grant.stepId };
+  let used = false;
+  const grants = { findGrant: () => (used ? undefined : grant) };
+  expect(decide(p, call(name, input), undefined, undefined, { grants })).toMatchObject({
+    outcome: "run",
+    by: "grant",
+  });
+  used = true;
+  expect(decide(p, call(name, input), undefined, undefined, { grants })).toMatchObject({
+    outcome: "hold",
+    held: { outsideFlow: true, digest: grant.digest },
+  });
+});
+
+test.each(["TC-j24-15", "TC-j24-48"])(
+  "%s holds an undeclared Gmail forward with its exact input",
+  async () => {
+    const { digestCall } = await import("../connectors/grants.ts");
+    const name = "mcp__claude_ai_Gmail__forward";
+    const input = { threadId: "thread-sam", to: ["x@example.test"] };
+    const p = {
+      ...policy,
+      touches: [],
+      effectCatalog: [{ tool: name, effect: "send" as const, place: undefined }],
+    };
+    expect(decide(p, call(name, input))).toMatchObject({
+      outcome: "hold",
+      effect: "send",
+      held: { outsideFlow: true, tool: name, input, digest: digestCall(name, input) },
+    });
+  },
+);
+
+test("TC-SR1-02 protected project paths and escaping symlinks remain refused", () => {
+  const p = { ...policy, projectRoot: project, touches: [] };
+  mkdirSync(join(project, ".git"));
+  symlinkSync(join(project, ".git"), join(project, "git-link"));
+  for (const [name, input] of [
+    ["Write", { file_path: join(project, ".claude/settings.json") }],
+    ["Read", { file_path: join(project, ".git/config") }],
+    ["Read", { file_path: join(project, "git-link/config") }],
+    ["Read", { file_path: join(notes, "link/secret") }],
+    ["Grep", { path: project, glob: ".git/**" }],
+    ...[".claude/*", ".{g}it/**", ".gi[t]/*", ".cl*/*", "{.g,.c}it/*"].map(
+      (pattern) => ["Glob", { path: project, pattern }] as const,
+    ),
+  ] as const)
+    expect(decide(p, call(name, input))).toMatchObject({ outcome: "refuse" });
+});
+
+test("TC-SR1-06 exact grants precede Never and undeclared write holds", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const forward = "mcp__claude_ai_Gmail__forward";
+  const never = {
+    touchId: "never",
+    effect: "send" as const,
+    matcher: "exact" as const,
+    fixedPlace: false,
+    list: "never" as const,
+    covers: ["gmail.forward"],
+  };
+  for (const [name, input, touches] of [
+    [forward, { to: "x@example.test" }, [never]],
+    ["Write", { file_path: join(project, "new.txt"), content: "hello" }, []],
+  ] as const) {
+    const grant = {
+      runId: "run",
+      stepId: "step",
+      itemKey: "",
+      tool: name,
+      digest: digestCall(name, input),
+      kind: "approve" as const,
+      createdAt: "2026-11-22",
+    };
+    let used = false;
+    const grants = { findGrant: () => (used ? undefined : grant) };
+    const p = { ...policy, projectRoot: project, touches: [...touches], runId: "run", stepId: "step" };
+    expect(decide(p, call(name, input), undefined, undefined, { grants })).toMatchObject({
+      outcome: "run",
+      by: "grant",
+    });
+    used = true;
+    expect(decide(p, call(name, input), undefined, undefined, { grants })).toMatchObject({
+      outcome: "hold",
+      held: { outsideFlow: true, digest: grant.digest },
+    });
+  }
+});
+
+test("TC-SR1-06 protected paths are refused before grant lookup", () => {
+  let lookups = 0;
+  const p = { ...policy, touches: [], projectRoot: project, runId: "run", stepId: "step" };
+  const grants = {
+    findGrant: () => {
+      lookups++;
+      return undefined;
+    },
+  };
+  expect(
+    decide(p, call("Read", { file_path: join(project, ".git/config") }), undefined, undefined, { grants }),
+  ).toMatchObject({ outcome: "refuse", reason: DENY.protectedPath });
+  expect(lookups).toBe(0);
+});
