@@ -4,7 +4,7 @@ import { existsSync, lstatSync, mkdtempSync, readFileSync, rmdirSync, statSync }
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Notice } from "@flowdriven/contracts";
-import { CONTRACT_VERSION, operations, type RunnerTopic } from "@flowdriven/contracts";
+import { CONTRACT_VERSION, operations, RunnerError, type RunnerTopic } from "@flowdriven/contracts";
 import { createAgentRegistry, type RegistryOptions } from "../agents/registry.ts";
 import { STOP } from "../claude/browser-post.ts";
 import { visible } from "../claude/text.ts";
@@ -281,6 +281,16 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     call: createDispatcher({
       v2: {
         "agents.list": async () => mapAgents(await registry.list()),
+        "agents.models": async ({ agentId }) => {
+          const result = await registry.models(agentId);
+          if (result.error)
+            throw new RunnerError(
+              result.error === "agent_unknown" ? "not_found" : "not_allowed",
+              "Agent models unavailable.",
+              { reason: result.error },
+            );
+          return result.list;
+        },
         "agents.rescan": async () => {
           const result = await registry.rescan();
           return { ...result, agents: mapAgents(result.agents) };

@@ -45,6 +45,7 @@ export type StepEvent = {
   error?: string;
 };
 export type StepRequest = {
+  model?: string;
   pickTools?: string[];
   runId: string;
   stepId: string;
@@ -96,6 +97,7 @@ export type ReplanRequest = {
   signal: AbortSignal;
 };
 export type JudgeRequest = {
+  model?: string;
   runId: string;
   stepId: string;
   itemKey?: string;

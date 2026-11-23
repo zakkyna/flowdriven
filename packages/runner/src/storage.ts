@@ -364,6 +364,11 @@ export type AgentRow = {
   stateAt: string;
   version?: string;
   billing: "plan" | "per_use" | "unknown";
+  models?: {
+    list: import("./agents/catalog.ts").CatalogEntry["models"][string];
+    at: string;
+    source: "agent" | "catalog";
+  };
   problem?: {
     code: "install_failed" | "sign_in_timeout" | "too_old" | "unreadable";
     at: string;

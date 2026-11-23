@@ -15,6 +15,7 @@ export function mapAgents(agents: LocalAgent[]): Agent[] {
     canSetUp: agent.canSetUp,
     ...(agent.installCommand === undefined ? {} : { installCommand: agent.installCommand }),
     billing: agent.billing,
+    ...(agent.models === undefined ? {} : { models: agent.models, defaultModel: agent.defaultModel }),
     capability: agent.capability,
     ...(agent.problem === undefined ? {} : { problem: agent.problem }),
   }));

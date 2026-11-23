@@ -8,6 +8,7 @@ export type CatalogEntry = {
   install: AgentCommand;
   signIn: AgentCommand;
   status: AgentCommand;
+  modelsCommand?: AgentCommand | null;
   risk: "gray" | "official";
   noteKey: string;
   accountKey: string;
@@ -31,6 +32,7 @@ export const AGENT_CATALOG: CatalogEntry[] = [
     install: { program: "npm", args: ["install", "-g", "@anthropic-ai/claude-code"] },
     signIn: { program: "claude", args: ["auth", "login"] },
     status: { program: "claude", args: ["auth", "status", "--json"] },
+    modelsCommand: null,
     risk: "gray",
     noteKey: "agents.riskGray",
     accountKey: "agents.accountClaude",
@@ -51,6 +53,7 @@ export const AGENT_CATALOG: CatalogEntry[] = [
     install: { program: "npm", args: ["install", "-g", "@openai/codex"] },
     signIn: { program: "codex", args: ["login"] },
     status: { program: "codex", args: ["login", "status"] },
+    modelsCommand: null,
     risk: "official",
     noteKey: "agents.riskOfficial",
     accountKey: "agents.accountCodex",

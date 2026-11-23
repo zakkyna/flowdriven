@@ -5,6 +5,7 @@ import { childEnv } from "../claude/env.ts";
 import { runCapture } from "../claude/run-capture.ts";
 import type { Store } from "../storage.ts";
 import { AGENT_CATALOG, type AgentId, type CatalogEntry } from "./catalog.ts";
+import { loadModels } from "./models.ts";
 
 export { AGENT_CATALOG } from "./catalog.ts";
 
@@ -201,8 +202,15 @@ export function createAgentRegistry(options: RegistryOptions) {
           tooOld: result.problem?.code === "too_old",
         });
         const old = options.store.getHarnessState(entry.id);
+        const models =
+          result.state === "ready" && result.version
+            ? !full && old?.models
+              ? old.models
+              : { ...(await loadModels(entry, result.version, options)), at: options.now().toISOString() }
+            : undefined;
         options.store.putHarnessState({
           ...old,
+          models,
           id: entry.id,
           state: result.state,
           stateAt: options.now().toISOString(),
@@ -243,6 +251,9 @@ export function createAgentRegistry(options: RegistryOptions) {
         canSetUp,
         ...(canSetUp ? { installCommand: [entry.install.program, ...entry.install.args].join(" ") } : {}),
         billing: row?.billing ?? "unknown",
+        ...(state === "ready" && row?.models?.list.length
+          ? { models: row.models.list, defaultModel: row.models.list.find((m) => m.isDefault)?.id }
+          : {}),
         capability:
           entry.id === "codex"
             ? { tier: "label_only" as const, accountTools: false }
@@ -262,6 +273,13 @@ export function createAgentRegistry(options: RegistryOptions) {
       if (!loaded) await refresh(true);
       else if (options.now().getTime() - refreshedAt >= 60000) void refresh(false);
       return cards();
+    },
+    async models(id: string) {
+      if (!catalog.some((entry) => entry.id === id)) return { error: "agent_unknown" as const };
+      if (!loaded) await refresh(true);
+      const row = options.store.getHarnessState(id);
+      if (row?.state !== "ready" || !row.models?.list.length) return { error: "agent_not_ready" as const };
+      return { list: row.models.list };
     },
     async rescan() {
       if (pending) await pending;
