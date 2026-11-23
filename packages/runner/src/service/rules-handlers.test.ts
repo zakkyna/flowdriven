@@ -58,3 +58,23 @@ test("TC-RUL-14 lists active rules and filters by flow", async () => {
     store.close();
   }
 });
+
+test("TC-RUL-24 permission changes keep rules and deleting a flow revokes them", async () => {
+  const store = await openSqliteStore(":memory:");
+  const { flowWithRules } = await import("../test-helpers/builders.ts");
+  const { createRunnerService } = await import("./service.ts");
+  const { manifest } = flowWithRules(store, []);
+  const service = createRunnerService({ store, dataDir: ".", mode: "demo" });
+  try {
+    const rule = standingRule(store, { flowId: manifest.id });
+    await service.call("settings.update", { patch: { agentPermission: "off" } });
+    await service.call("settings.update", { patch: { agentPermission: "on" } });
+    expect(store.listRules()[0]).toMatchObject({ id: rule.id, state: "active" });
+    await service.call("flows.delete", { flowId: manifest.id });
+    expect(store.listRules()[0]).toMatchObject({ state: "revoked", revokedBy: "flow_deleted" });
+    expect(await service.call("rules.list", {})).toEqual([]);
+  } finally {
+    service.stop();
+    store.close();
+  }
+});

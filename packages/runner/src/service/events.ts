@@ -35,6 +35,7 @@ export function wrapStore(store: Store, mark: (topic: RunnerTopic) => void): Sto
     putFlowHead: ["flows", "skills"],
     addVersion: ["flows", "skills"],
     putConfirmation: ["flows", "activity"],
+    deleteConfirmation: ["flows", "activity"],
     confirmFlow: ["flows", "activity", "rules"],
     makeRule: ["rules", "flows"],
     revokeRule: ["rules", "flows"],

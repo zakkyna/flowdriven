@@ -610,6 +610,9 @@ export async function openSqliteStore(
         json(row),
       );
     },
+    deleteConfirmation(flowId) {
+      execute("DELETE FROM confirmations WHERE flow_id = ?", flowId);
+    },
     confirmFlow({ confirmation, rules }) {
       store.transaction(() => {
         for (const existing of store.listRules()) {

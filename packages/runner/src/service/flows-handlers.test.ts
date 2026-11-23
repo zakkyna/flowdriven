@@ -18,10 +18,20 @@ const account = { kind: "account" as const, value: "timesheet-account", label: "
 const folder = { kind: "folder" as const, value: "/Notes", label: "Notes" };
 const command = { kind: "command" as const, value: "git status", label: "Git" };
 
-async function setup(touches: Touch[], extra: Record<string, unknown> = {}) {
+async function setup(
+  touches: Touch[],
+  extra: Record<string, unknown> = {},
+  markChanged?: (topic: import("@flowdriven/contracts").RunnerTopic) => void,
+) {
   const store = await openSqliteStore(":memory:");
   const { manifest } = flowWithRules(store, touches, extra);
-  const service = createRunnerService({ store, dataDir: ".", mode: "demo", now: () => new Date(at) });
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date(at),
+    markChanged,
+  });
   return { store, service, manifest, input: { flowId: manifest.id, hash, onItsOwn: [] as string[] } };
 }
 
@@ -777,5 +787,238 @@ test("TC-SR1-47 risky planted rules never appear as allowed", async () => {
     service.stop();
     store.close();
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("TC-SR8-11 refuses active runs and stops queued and paused runs", async () => {
+  const x = await setup([touch("log", "change", account)]);
+  try {
+    await x.service.call("flows.confirm", { ...x.input, onItsOwn: ["log"] });
+    const states = [
+      "checking",
+      "running",
+      "retrying",
+      "waiting_approval",
+      "queued",
+      "needs_login",
+      "blocked",
+      "interrupted",
+    ] as const;
+    for (const state of states)
+      x.store.createRun({
+        id: state,
+        flowId: x.manifest.id,
+        flowHash: hash,
+        flowVersion: x.manifest.version,
+        state,
+        project: ".",
+        inputs: {},
+        params: {},
+        requirements: [],
+        startedAt: at,
+      });
+    for (const state of states.slice(0, 4)) {
+      await expect(x.service.call("flows.delete", { flowId: x.manifest.id })).rejects.toMatchObject({
+        code: "conflict",
+        reason: "flow_running",
+      });
+      x.store.updateRun(state, { state: "done" });
+    }
+    expect(await x.service.call("flows.delete", { flowId: x.manifest.id })).toEqual({
+      deleted: true,
+      schedulesTurnedOff: [],
+    });
+    for (const state of states.slice(4))
+      expect(x.store.getRun(state)).toMatchObject({ state: "stopped", stoppedBy: "flow_deleted" });
+    expect(x.store.listRules()[0]).toMatchObject({ state: "revoked", revokedBy: "flow_deleted" });
+  } finally {
+    x.service.stop();
+    x.store.close();
+  }
+});
+
+test("TC-STO-34 deletion is atomic and preserves past runs", async () => {
+  const topics: string[] = [];
+  const x = await setup([touch("log", "change", account)], {}, (topic) => topics.push(topic));
+  try {
+    await x.service.call("flows.confirm", { ...x.input, onItsOwn: ["log"] });
+    for (const state of ["running", "queued", "needs_login", "done"] as const)
+      x.store.createRun({
+        id: state,
+        flowId: x.manifest.id,
+        flowHash: hash,
+        flowVersion: x.manifest.version,
+        flowName: x.manifest.name,
+        state,
+        project: ".",
+        inputs: {},
+        params: {},
+        requirements: [],
+        startedAt: at,
+      });
+    x.store.createApproval({
+      id: "decision",
+      kind: "result_sign_off",
+      runId: "needs_login",
+      stepId: "step",
+      itemKey: "",
+      summary: "Review",
+      payload: "Review",
+      approves: [],
+      onExpiry: "end",
+      createdAt: at,
+      expiresAt: at,
+      state: "pending",
+    });
+    x.store.putRemembered({
+      flowId: x.manifest.id,
+      inputId: "input",
+      kind: "remember",
+      value: { type: "text", value: "answer" },
+      outside: false,
+      savedAt: at,
+      runId: "done",
+    });
+    const schedule = {
+      whenItsTime: "ask" as const,
+      setAt: at,
+      setBy: "window" as const,
+      confirmedHash: hash,
+    };
+    x.store.putSchedule({ ...schedule, flowId: x.manifest.id, type: "daily", time: "17:00" });
+    x.store.putSchedule({
+      ...schedule,
+      flowId: "example.follower",
+      type: "after",
+      afterFlowId: x.manifest.id,
+    });
+    x.store.putChat({
+      id: "chat",
+      title: "Chat",
+      titleSource: "flowdriven",
+      createdAt: at,
+      updatedAt: at,
+      from: "flowdriven",
+      language: "en",
+      languageSource: "app",
+      agent: "claude-code",
+      model: "default",
+      agentSource: "main_default",
+    });
+    x.store.putQuestion({
+      id: "question",
+      flowId: x.manifest.id,
+      chatId: "chat",
+      messageId: "message",
+      kind: "inputs",
+      state: "open",
+      createdAt: at,
+      updatedAt: at,
+      source: "schedule",
+      proactive: true,
+      flowHash: hash,
+      given: {},
+      missing: [],
+      pendingStart: { startId: "start", source: "schedule", request: {} },
+    });
+    const before = {
+      head: x.store.getFlowHead(x.manifest.id),
+      audit: x.store.listAudit(),
+      rules: x.store.listRules(),
+      schedules: x.store.listSchedules(),
+    };
+    await expect(x.service.call("flows.delete", { flowId: x.manifest.id })).rejects.toMatchObject({
+      code: "conflict",
+      reason: "flow_running",
+    });
+    expect({
+      head: x.store.getFlowHead(x.manifest.id),
+      audit: x.store.listAudit(),
+      rules: x.store.listRules(),
+      schedules: x.store.listSchedules(),
+    }).toEqual(before);
+    x.store.updateRun("running", { state: "done" });
+    expect(await x.service.call("flows.delete", { flowId: x.manifest.id })).toEqual({
+      deleted: true,
+      schedulesTurnedOff: ["example.follower"],
+    });
+    expect(topics).toEqual(
+      expect.arrayContaining(["flows", "rules", "runs", "approvals", "chats", "activity", "skills"]),
+    );
+    const oldHead = x.store.getFlowHead(x.manifest.id);
+    if (!oldHead) throw new Error("Missing tombstone");
+    expect(oldHead.deletedAt).toBe(at);
+    const { deletedAt: _deletedAt, ...liveHead } = oldHead;
+    x.store.putFlowHead({ ...liveHead, id: "local.reused-name" });
+    expect(x.store.getConfirmation(x.manifest.id)).toBeUndefined();
+    expect(x.store.listRemembered(x.manifest.id)).toEqual([]);
+    expect(x.store.listSchedules()).toEqual([]);
+    expect(x.store.listRules()[0]).toMatchObject({ state: "revoked", revokedBy: "flow_deleted" });
+    expect(x.store.listQuestions()[0]).toMatchObject({ state: "closed", closedReason: "flow_deleted" });
+    for (const id of ["queued", "needs_login"])
+      expect(x.store.getRun(id)).toMatchObject({ state: "stopped", stoppedBy: "flow_deleted" });
+    expect(x.store.getApproval("decision")?.state).toBe("expired");
+    expect(x.store.getRun("done")?.state).toBe("done");
+    expect(await x.service.call("runs.list", {})).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "done", flowName: x.manifest.name })]),
+    );
+    await expect(x.service.call("flows.get", { flowId: x.manifest.id })).rejects.toMatchObject({
+      code: "not_found",
+      reason: "flow_deleted",
+    });
+    expect(x.store.listAudit()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "flow_deleted" }),
+        expect.objectContaining({
+          kind: "schedule_changed",
+          detail: {
+            flowId: "example.follower",
+            from: `after ${x.manifest.id}`,
+            to: "manual",
+            by: "target_deleted",
+          },
+        }),
+        expect.objectContaining({
+          kind: "decision_expired",
+          detail: { approvalId: "decision", runId: "needs_login", why: "flow_deleted" },
+        }),
+      ]),
+    );
+  } finally {
+    x.service.stop();
+    x.store.close();
+  }
+});
+
+test("TC-STO-34 a failed deletion rolls back every write", async () => {
+  let fail = false;
+  const store = await openSqliteStore(":memory:", {
+    afterWrite: (table) => {
+      if (fail && table === "audit_log") throw new Error("injected failure");
+    },
+  });
+  const { manifest } = flowWithRules(store, [touch("log", "change", account)]);
+  const service = createRunnerService({ store, dataDir: ".", mode: "demo", now: () => new Date(at) });
+  try {
+    await service.call("flows.confirm", { flowId: manifest.id, hash, onItsOwn: ["log"] });
+    const before = {
+      head: store.getFlowHead(manifest.id),
+      confirmation: store.getConfirmation(manifest.id),
+      rules: store.listRules(),
+      audit: store.listAudit(),
+    };
+    fail = true;
+    await expect(service.call("flows.delete", { flowId: manifest.id })).rejects.toMatchObject({
+      code: "unavailable",
+    });
+    expect({
+      head: store.getFlowHead(manifest.id),
+      confirmation: store.getConfirmation(manifest.id),
+      rules: store.listRules(),
+      audit: store.listAudit().filter((entry) => entry.kind !== "internal_error"),
+    }).toEqual(before);
+  } finally {
+    service.stop();
+    store.close();
   }
 });

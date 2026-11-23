@@ -474,6 +474,7 @@ export interface Store {
   saveFlow(draftId: string): { flowId: string; hash: string; at: string };
   getConfirmation(id: string): Confirmation | undefined;
   putConfirmation(row: Confirmation): void;
+  deleteConfirmation(flowId: string): void;
   confirmFlow(input: { confirmation: Confirmation; rules: RuleInput[] }): void;
   schemaVersion(): number;
   getCapabilityConsent(flowId: string): CapabilityConsentRow | undefined;

@@ -23,6 +23,7 @@ import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
 import { createFlowHandlers } from "./flows.ts";
+import { createFlowDeleteHandler } from "./flows-delete.ts";
 import { createFlowReadHandlers } from "./flows-import.ts";
 import {
   type Caller,
@@ -253,6 +254,12 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
         "flows.get": flowReads.get,
         "flows.import": flowReads.import,
         "flows.confirm": createFlowHandlers(store, now).confirm,
+        "flows.delete": (input) => {
+          const result = createFlowDeleteHandler(store, engine, now)(input);
+          for (const topic of ["flows", "rules", "runs", "approvals", "chats", "activity", "skills"] as const)
+            options.markChanged?.(topic);
+          return result;
+        },
         "rules.list": rules.list,
         "rules.revoke": rules.revoke,
         "approvals.list": decisions.list,

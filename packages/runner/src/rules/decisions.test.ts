@@ -1240,3 +1240,43 @@ test("TC-SR8-07 used grant precedes allow and a crash requires a new decision", 
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("TC-j24-30 flow deletion expires action and choice decisions", async () => {
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const { createRunnerService } = await import("../service/service.ts");
+  const store = await openSqliteStore(":memory:");
+  const action = pendingDecision(store, { id: "deleted-action", createdAt: "2026-11-23T00:00:00.000Z" });
+  store.updateRun(action.runId, { state: "needs_login" });
+  store.updateApproval(action.id, {
+    kind: "risky_action",
+    effect: "change",
+    call: { tool: "log", input: {} },
+  });
+  store.createApproval({ ...action, id: "deleted-choice", kind: "ask" });
+  const service = createRunnerService({ store, dataDir: ".", mode: "demo" });
+  try {
+    const run = store.getRun(action.runId);
+    if (!run) throw new Error("Missing run");
+    await service.call("flows.delete", { flowId: run.flowId });
+    await expect(
+      service.call("approvals.resolve", { approvalId: action.id, decision: "approve" }),
+    ).rejects.toMatchObject({ code: "conflict", reason: "decision_expired" });
+    await expect(
+      service.call("approvals.answer", { approvalId: "deleted-choice", picks: [] }),
+    ).rejects.toMatchObject({ code: "conflict", reason: "decision_expired" });
+    expect(
+      store.findGrant({
+        runId: action.runId,
+        stepId: action.stepId,
+        itemKey: action.itemKey,
+        tool: "log",
+        digest: digestCall("log", {}),
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toBeUndefined();
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
