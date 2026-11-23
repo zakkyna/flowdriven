@@ -2,9 +2,14 @@ import { Settings, type Settings as SettingsValue } from "@flowdriven/contracts"
 import type { Store } from "../storage.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 
-export function readSettings(store: Store, now: Date): SettingsValue {
+export function appLanguage(store: Store, registered: readonly string[]): string {
+  const value = store.getSetting("language");
+  return typeof value === "string" && registered.includes(value) ? value : "en";
+}
+
+export function readSettings(store: Store, now: Date, registered: readonly string[] = ["en"]): SettingsValue {
   const value = {
-    language: store.getSetting("language") ?? "en",
+    language: appLanguage(store, registered),
     agentPermission: store.getSetting("agentPermission") ?? "unset",
     mainAgent: store.getSetting("mainAgent") ?? null,
     busyFallback: store.getSetting("busyFallback") ?? false,

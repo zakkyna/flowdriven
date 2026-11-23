@@ -6,7 +6,12 @@ import { createClock, createIdGenerator } from "./clock.ts";
 
 export async function createServiceHarness(
   testFolder: string,
-  options: { caller?: "window" | "tool" | "phone"; instant?: string; zone?: string } = {},
+  options: {
+    caller?: "window" | "tool" | "phone";
+    instant?: string;
+    zone?: string;
+    languages?: readonly string[];
+  } = {},
 ) {
   const dataDir = await mkdtemp(join(testFolder, "runner-"));
   try {
@@ -14,7 +19,14 @@ export async function createServiceHarness(
     try {
       const clock = createClock(options.instant ?? "2026-11-19T10:00:00.000Z", options.zone);
       const newId = createIdGenerator();
-      const service = createRunnerService({ store, dataDir, mode: "demo", now: clock.now, newId });
+      const service = createRunnerService({
+        store,
+        dataDir,
+        mode: "demo",
+        languages: options.languages ?? ["en", "id"],
+        now: clock.now,
+        newId,
+      });
       try {
         await service.start().settled;
       } catch (error) {

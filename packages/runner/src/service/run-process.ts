@@ -14,6 +14,7 @@ export const EXIT = { ok: 0, crash: 1, usage: 2, locked: 3, protocol: 4 } as con
 export type RunProcessOptions = {
   dataDir: string;
   demo: boolean;
+  languages?: readonly string[];
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream;
   errors: (line: string) => void;
@@ -95,6 +96,7 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
       store: wrapStore(store, emitter.mark),
       markChanged: emitter.mark,
       dataDir: dir,
+      languages: options.languages,
       mode: options.demo ? "demo" : "live",
       now: options.now,
       newId: options.newId,

@@ -867,6 +867,9 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 
 | Case | First stated step | Now | Reason |
 |---|---|---|---|
+| j30-35 (refused start) | B-06.T6 | B-24.T4 | Covered by TC-j20-46 after a language change. |
+| j30-36 (next scheduled start) | B-06.T6 | B-13.T2 | Covered by TC-SR3-07 after a language change. |
+| I18N-33 (turn language) | B-06.T6 | B-08 | Covered by TC-AST-18 when chat turns exist. |
 | j30-21, I18N-30 (LINE_KEYS coverage) | B-06.T5 | B-06.T7 | The real-tree check receives LINE_KEYS in T7, per the T5 pre-check decision. |
 | j24-34 (scheduled-slot record) | B-05.T7 | B-12.T7 | The missed scheduled-slot record is built with TC-j12-12. |
 | j25-21 (rendered audit sentence) | B-05.T7 | B-19.T6 | The renderer draws the audit sentence from the recorded codes. |
@@ -998,6 +1001,8 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/service/args.test.ts` | Default options and usage omit languages | Default and usage include languages (TC-AGT-40); existing error checks remain | B-06.T6 |
+| `packages/runner/src/service/handlers.test.ts` (TC-j12-32) | The service accepts Indonesian without an explicit list | The service is started with the registered list (TC-AGT-30), retaining restart assertions | B-06.T6 |
 | `apps/desktop/src/i18n/i18n.test.ts` (TC-I18N-18) | Placeholder differences alone are reported | Unknown placeholders are also reported (TC-I18N-27), retaining each mismatch assertion | B-06.T5 |
 | `packages/runner/src/claude/review-05b-fix.test.ts` (TC-j24-01) | A reply recipient without an address is shown as a decision | A named RFC 5322 recipient is shown in full (TC-SR1-12) | B-05.T19 |
 | `packages/runner/src/service/flows-handlers.test.ts`, `service/map-flow.test.ts` (TC-STO-36) | Chat-origin rows without an app-saved version place changes under Does on its own | Such rows place changes under Asks you first (TC-SR2-08; architecture 6.3) | B-05.T18 |

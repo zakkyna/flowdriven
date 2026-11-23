@@ -3,6 +3,7 @@ import { createNoticePolicy, type NoticeEvent } from "../notify/policy.ts";
 import type { RunState } from "../states.ts";
 import type { ApprovalRow, Store } from "../storage.ts";
 import type { FloodEvent, PausedEvent } from "../triggers/service.ts";
+import { appLanguage } from "./settings.ts";
 
 type Weekly = { percent: number; resetsAtMs: number };
 type Hooks = {
@@ -67,15 +68,13 @@ export function observeStore(store: Store, hooks: Hooks): Store {
 }
 export function createNotifier(o: {
   store: Store;
+  languages?: readonly string[];
   now: () => Date;
   send: (notice: Notice) => void;
 }): Hooks & { onFlood(event: FloodEvent): void; onPaused(event: PausedEvent): void } {
   const policy = createNoticePolicy({
     nowMs: () => o.now().getTime(),
-    language: () => {
-      const value = o.store.getSetting("language");
-      return typeof value === "string" ? value : "en";
-    },
+    language: () => appLanguage(o.store, o.languages ?? ["en"]),
   });
   function send(event: NoticeEvent) {
     try {

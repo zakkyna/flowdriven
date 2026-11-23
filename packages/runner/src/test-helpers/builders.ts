@@ -163,3 +163,23 @@ export function flowWithRules(store: Store, touches: Touch[], extra: Record<stri
   });
   return { manifest, hash };
 }
+
+export function seedSampleFlow(store: Store, id: "example.fill-timesheet" | "example.build-apk") {
+  const { manifest, hash } = flowWithRules(store, [], {
+    id,
+    name: id === "example.fill-timesheet" ? "Fill timesheet" : "Build APK",
+  });
+  const at = "2026-11-23T00:00:00.000Z";
+  store.confirmFlow({
+    confirmation: {
+      flowId: id,
+      hash,
+      at,
+      by: "confirm_dialog",
+      onItsOwn: [],
+      pins: { skills: {}, folders: {} },
+    },
+    rules: [],
+  });
+  return { manifest, hash };
+}

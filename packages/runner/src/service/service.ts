@@ -44,6 +44,7 @@ import { createWeekly } from "./weekly-limit.ts";
 
 export type ServiceOptions = {
   store: Store;
+  languages?: readonly string[];
   /** Keeps the Mac awake during a long step; tests pass their own so no real caffeinate runs. */
   keepAwake?: (pid: number) => void;
   dataDir: string;
@@ -75,7 +76,12 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
   const now = options.now ?? (() => new Date());
   const dayOf = options.triggers?.dayOf ?? localDay;
   let triggers: TriggerService;
-  const notifier = createNotifier({ store: options.store, now, send: (notice) => options.notify?.(notice) });
+  const notifier = createNotifier({
+    store: options.store,
+    languages: options.languages,
+    now,
+    send: (notice) => options.notify?.(notice),
+  });
   const store = observeStore(options.store, {
     onApproval: notifier.onApproval,
     onWeekly: notifier.onWeekly,
@@ -237,7 +243,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   });
   const decisions = createDecisionHandlers(store, engine, weekly, (id) => options.clearNotice?.(id));
-  const settings = createSettingsHandlers(store, now, (id) => options.clearNotice?.(id));
+  const settings = createSettingsHandlers(store, now, (id) => options.clearNotice?.(id), options.languages);
   const rules = createRuleHandlers(store, now);
   const runs = createRunHandlers(store, engine, (name) =>
     name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),

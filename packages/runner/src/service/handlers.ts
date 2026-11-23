@@ -411,12 +411,19 @@ export function createHandlers({
   };
 }
 
-export function createSettingsHandlers(store: Store, now: () => Date, clearNotice: (id: string) => void) {
-  const get = () => readSettings(store, now());
+export function createSettingsHandlers(
+  store: Store,
+  now: () => Date,
+  clearNotice: (id: string) => void,
+  languages: readonly string[] = ["en"],
+) {
+  const get = () => readSettings(store, now(), languages);
   return {
     get,
     update: ({ patch }: { patch: SettingsPatch }) => {
       const before = get();
+      if (patch.language !== undefined && !languages.includes(patch.language))
+        throw new RunnerError("invalid_input", "Unknown language.", { reason: "language_unknown" });
       if (
         patch.spendingLimit !== undefined &&
         Math.round(patch.spendingLimit * 100) / 100 <= before.spendingLimit

@@ -471,7 +471,8 @@ test("TC-j12-32 settings defaults and choices survive a restart", async () => {
   const dataDir = dir();
   const path = join(dataDir, "store.sqlite");
   const store = await openSqliteStore(path);
-  const make = (s: Store) => createRunnerService({ store: s, dataDir, mode: "demo", now: fixed });
+  const make = (s: Store) =>
+    createRunnerService({ store: s, dataDir, mode: "demo", now: fixed, languages: ["en", "id"] });
   const first = make(store);
   await first.start().settled;
   expect(await first.call("settings.get", {})).toMatchObject({
