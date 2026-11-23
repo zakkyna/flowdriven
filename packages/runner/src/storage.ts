@@ -369,6 +369,7 @@ export type AgentRow = {
     at: string;
     source: "agent" | "catalog";
   };
+  setUp?: { phase: "installing" | "waiting_login"; startedAt: string; pollUntil: string };
   problem?: {
     code: "install_failed" | "sign_in_timeout" | "too_old" | "unreadable";
     at: string;

@@ -104,7 +104,7 @@ test("readiness.check through the service after a rescan reports the Gmail row o
   services.push(service);
   await service.start().settled;
   service.engine.registerFlow(manifest, row.hash);
-  await service.call("harnesses.rescan", {});
+  await service.call("agents.rescan", {});
   const report = ReadinessReport.parse(await service.call("readiness.check", { flowId: manifest.id }));
   expect(report.items.at(0)).toMatchObject({
     state: "ok",

@@ -35,10 +35,13 @@ function kill(pid: number) {
   } catch {}
 }
 try {
-  const cards = await client.call("harnesses.rescan", {});
-  const card = cards.find((c) => c.id === "claude-code");
-  if (!card?.detected || card.login !== "logged_in")
-    throw new Error("Claude Code was not found or is not signed in.");
+  const callAgents = client.call as unknown as (
+    name: "agents.rescan",
+    input: object,
+  ) => Promise<{ agents: { id: string; state: string }[] }>;
+  const { agents } = await callAgents("agents.rescan", {});
+  const card = agents.find((c) => c.id === "claude-code");
+  if (card?.state !== "ready") throw new Error("Claude Code was not found or is not signed in.");
   await (
     client.call as unknown as (
       name: "settings.update",

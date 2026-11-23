@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdirSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { mkdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { createRunnerService } from "../service/service.ts";
@@ -27,8 +27,10 @@ async function fixture(installed = false, loggedIn = false, noInstall = false) {
   const children: (EventEmitter & { stderr: EventEmitter; kill: () => boolean })[] = [];
   const timers: (() => void)[] = [];
   const opened: string[] = [];
+  let ms = Date.parse("2026-11-23T00:00:00Z");
   const service = createRunnerService({
     store,
+    now: () => new Date(ms),
     dataDir: home,
     mode: "demo",
     env: {
@@ -82,6 +84,9 @@ async function fixture(installed = false, loggedIn = false, noInstall = false) {
   });
   return {
     home,
+    advance(n: number) {
+      ms += n;
+    },
     bin,
     store,
     calls,
@@ -311,5 +316,205 @@ test("TC-SR6-07 setup never opens agent credential files", async () => {
     expect(f.opened).toEqual([]);
   } finally {
     f.close();
+  }
+});
+
+test("TC-j01-23 TC-AGT-07 sign-in timeout stops polling and can restart", async () => {
+  const f = await fixture(true);
+  try {
+    await f.list();
+    await f.setup();
+    f.advance(599000);
+    expect(f.store.getHarnessState("claude-code")?.state).toBe("waiting_login");
+    f.advance(1000);
+    const count = readFakeCalls(f.home).length;
+    f.timers[0]?.();
+    expect(f.store.getHarnessState("claude-code")).toMatchObject({
+      state: "needs_login",
+      problem: { code: "sign_in_timeout" },
+    });
+    expect(f.timers).toHaveLength(0);
+    f.advance(60000);
+    expect(readFakeCalls(f.home)).toHaveLength(count);
+    expect(f.store.listAudit()).toContainEqual(
+      expect.objectContaining({
+        kind: "agent_setup",
+        detail: { agentId: "claude-code", phase: "sign_in_timeout" },
+      }),
+    );
+    expect(await f.service.call("agents.signIn", { agentId: "claude-code" })).toMatchObject({
+      state: "waiting_login",
+    });
+    f.loggedIn();
+    f.timers[0]?.();
+    await expect.poll(() => f.store.getHarnessState("claude-code")?.state).toBe("ready");
+  } finally {
+    f.close();
+  }
+});
+
+test("TC-AGT-10 sign in requires no permission and refuses duplicate and missing agents", async () => {
+  const f = await fixture(true);
+  try {
+    await f.list();
+    expect(await f.service.call("agents.signIn", { agentId: "claude-code" })).toMatchObject({
+      state: "waiting_login",
+    });
+    expect(f.store.getSetting("agentPermission") ?? "unset").toBe("unset");
+    expect(f.store.listAudit()).toContainEqual(expect.objectContaining({ kind: "agent_sign_in" }));
+    await expect(f.service.call("agents.signIn", { agentId: "claude-code" })).rejects.toMatchObject({
+      code: "conflict",
+      reason: "setup_running",
+    });
+    await expect(f.service.call("agents.signIn", { agentId: "codex" })).rejects.toMatchObject({
+      code: "not_allowed",
+      reason: "agent_not_installed",
+    });
+    expect(f.opened).toEqual([]);
+    f.loggedIn();
+    f.timers[0]?.();
+    await expect.poll(() => f.store.getHarnessState("claude-code")?.state).toBe("ready");
+  } finally {
+    f.close();
+  }
+});
+
+test("TC-j01-27 TC-AGT-12 restart clears stale setup without restarting installation", async () => {
+  const f = await fixture();
+  try {
+    await f.list();
+    await f.setup();
+    expect(f.store.getHarnessState("claude-code")).toHaveProperty("setUp.phase", "installing");
+    f.service.stop();
+    const next = createRunnerService({
+      store: f.store,
+      dataDir: f.home,
+      mode: "demo",
+      env: { HOME: f.home, PATH: `${f.bin}:${process.env.PATH}` },
+      agents: {
+        extraDirs: [],
+        claudePath: join(f.bin, "claude"),
+        codexPath: join(f.bin, "codex"),
+        spawnInstall: () => {
+          throw new Error("install restarted");
+        },
+      },
+    });
+    try {
+      expect(await next.call("agents.list", {})).toMatchObject([
+        { state: "not_installed" },
+        { state: "not_installed" },
+      ]);
+      expect(f.store.getHarnessState("claude-code")?.setUp).toBeUndefined();
+      expect(f.store.getSetting("agentPermission")).toBe("on");
+    } finally {
+      next.stop();
+    }
+  } finally {
+    f.close();
+  }
+});
+
+test("TC-j01-09 setup detects sign-in with status and never reads credentials", async () => {
+  const f = await fixture(true);
+  try {
+    mkdirSync(join(f.home, ".claude"), { recursive: true });
+    const secret = "fake-token-" + "0123456789abcdef";
+    writeFileSync(join(f.home, ".claude", "credentials.json"), secret);
+    await f.list();
+    await f.setup();
+    f.loggedIn();
+    f.timers[0]?.();
+    await expect.poll(() => f.store.getHarnessState("claude-code")?.state).toBe("ready");
+    const listed = await f.list();
+    expect(f.opened).not.toContain(join(f.home, ".claude", "credentials.json"));
+    expect(
+      JSON.stringify([listed, f.store.getHarnessState("claude-code"), f.store.listAudit()]),
+    ).not.toContain(secret);
+    expect(
+      readFakeCalls(f.home).every(
+        (call) =>
+          call.kind === "call" && ["--version", "--help", "auth status --json"].includes(call.args.join(" ")),
+      ),
+    ).toBe(true);
+    await expect(
+      f.service.call("agents.setUp", { agentId: "claude-code", extra: true }),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+  } finally {
+    f.close();
+  }
+});
+
+test("TC-j01-28 setup records permission and install with window source", async () => {
+  const f = await fixture();
+  try {
+    await f.list();
+    await f.setup();
+    expect(f.store.listAudit()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          at: "2026-11-23T00:00:00.000Z",
+          kind: "permission_changed",
+          detail: { from: "unset", to: "on", source: "window" },
+        }),
+        expect.objectContaining({
+          at: "2026-11-23T00:00:00.000Z",
+          kind: "agent_setup",
+          detail: { agentId: "claude-code", phase: "installing" },
+        }),
+      ]),
+    );
+    expect(f.store.getSetting("agentPermission")).toBe("on");
+    await expect(f.service.call("agents.setUp", { agentId: "codex" }, "tool")).rejects.toMatchObject({
+      code: "not_allowed",
+      reason: "caller_not_allowed",
+    });
+    expect(f.calls).toHaveLength(1);
+  } finally {
+    f.close();
+  }
+});
+
+test("TC-j01-27 restart detects a present agent as ready or signed out", async () => {
+  for (const loggedIn of [true, false]) {
+    const f = await fixture();
+    try {
+      await f.list();
+      await f.setup();
+      f.service.stop();
+      f.install();
+      writeFakeScript(f.home, { auth: { loggedIn } });
+      let installs = 0;
+      const next = createRunnerService({
+        store: f.store,
+        dataDir: f.home,
+        mode: "demo",
+        env: { HOME: f.home, PATH: `${f.bin}:${process.env.PATH}` },
+        agents: {
+          extraDirs: [],
+          claudePath: join(f.bin, "claude"),
+          codexPath: join(f.bin, "codex"),
+          spawnInstall: () => {
+            installs++;
+            throw new Error("unexpected install");
+          },
+        },
+      });
+      try {
+        await next.start().settled;
+        expect(await next.call("agents.list", {})).toMatchObject([
+          { state: loggedIn ? "ready" : "needs_login" },
+          { state: "not_installed" },
+        ]);
+        expect(f.store.getHarnessState("claude-code")?.setUp).toBeUndefined();
+        expect(f.store.getSetting("agentPermission")).toBe("on");
+        expect(((await next.call("settings.get", {})) as { mainAgent: unknown }).mainAgent).toBeNull();
+        expect(installs).toBe(0);
+      } finally {
+        next.stop();
+      }
+    } finally {
+      f.close();
+    }
   }
 });

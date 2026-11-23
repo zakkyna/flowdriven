@@ -207,9 +207,11 @@ export function createAgentRegistry(options: RegistryOptions) {
               ? old.models
               : { ...(await loadModels(entry, result.version, options)), at: options.now().toISOString() }
             : undefined;
+        if (stopped) return;
         options.store.putHarnessState({
           ...old,
           models,
+          setUp: undefined,
           id: entry.id,
           state: result.state,
           stateAt: options.now().toISOString(),
@@ -277,7 +279,7 @@ export function createAgentRegistry(options: RegistryOptions) {
     async list() {
       if (!loaded) await refresh(true);
       else if (options.now().getTime() - refreshedAt >= 60000) void refresh(false);
-      return cards();
+      return stopped ? [] : cards();
     },
     async models(id: string) {
       if (!catalog.some((entry) => entry.id === id)) return { error: "agent_unknown" as const };
@@ -288,8 +290,22 @@ export function createAgentRegistry(options: RegistryOptions) {
     },
     async rescan() {
       if (pending) await pending;
+      const before = new Map(
+        catalog.map((entry) => [entry.id, options.store.getHarnessState(entry.id)?.state]),
+      );
       await refresh(true);
-      return { agents: cards(), found: [] as AgentId[] };
+      const agents = cards();
+      const found = agents
+        .filter((agent) => {
+          const previous = before.get(agent.id);
+          return (
+            (previous === "not_installed" || previous === "unknown") &&
+            agent.state !== "not_installed" &&
+            known.get(agent.id)?.path !== undefined
+          );
+        })
+        .map((agent) => agent.id);
+      return { agents, found };
     },
     stop() {
       stopped = true;

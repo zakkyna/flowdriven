@@ -191,3 +191,30 @@ test("TC-AGT-04 Codex version and status use its catalog command", async () => {
     f.close();
   }
 });
+
+test("TC-AGT-11 scan again finds only newly installed agents", async () => {
+  const f = await fixture();
+  try {
+    expect(await f.service.call("agents.rescan", {})).toMatchObject({ found: [] });
+    symlinkSync(FAKE_CODEX_PATH, join(f.home, "bin", "codex"));
+    writeFakeCodexScript(f.home, { profile: AGENT_PROFILES.codex, signedIn: true });
+    expect(await f.service.call("agents.rescan", {})).toMatchObject({ found: ["codex"] });
+    expect(await f.service.call("agents.rescan", {})).toMatchObject({ found: [] });
+    expect(f.topics).toContain("agents");
+  } finally {
+    f.close();
+  }
+});
+
+test("TC-AGT-11 an unknown installed agent is found on scan", async () => {
+  const f = await fixture();
+  try {
+    writeFakeScript(f.home, { auth: { raw: "invalid" } });
+    await f.service.call("agents.list", {});
+    expect(f.store.getHarnessState("claude-code")?.state).toBe("unknown");
+    writeFakeScript(f.home, { auth: { loggedIn: true } });
+    expect(await f.service.call("agents.rescan", {})).toMatchObject({ found: ["claude-code"] });
+  } finally {
+    f.close();
+  }
+});

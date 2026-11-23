@@ -1007,6 +1007,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/service/handlers.test.ts`, `service/claude-harness.test.ts`, `service/run-process.test.ts`, `service/readiness-connector.test.ts`, `service/usage-summary.test.ts`, `test-helpers/m1-demo-run.ts`, `test-helpers/connector-demo-run.ts`, `test-helpers/r12-check.ts` | Legacy harness list and rescan expose cards and trigger inventory | Retire those operations and use agent detection and rescan for inventory (TC-AGT-11, FS-j01.P2); usage remains in usage summary | B-07.T6 |
 | `packages/runner/src/agents/registry.test.ts` (TC-AGT-01) | Both shipped catalog entries have safe install commands | Preserve those assertions while the catalog type permits a missing command (TC-AGT-09) | B-07.T5 |
 | `packages/runner/src/claude/adapter-commands.test.ts`, `claude/review-05b-r.test.ts`, `service/check-flow.test.ts`, `service/flows-handlers.test.ts`, `service/review-03-a1.test.ts`, `service/review-03-s7.test.ts` | Per-agent consent enables the existing gate and its tests | The one agent permission enables the same gate; turning it off is stored even when the agent is missing (TC-SR8-04, FS-j31.E2) | B-07.T4 |
 | `packages/runner/src/review-04-r.test.ts` | Withholding agent consent blocks trigger runs and produces notices | A missing agent blocks the same runs and notices; restoring it permits a run, with permission on (TC-SR8-04, FS-j31.E2) | B-07.T4 |

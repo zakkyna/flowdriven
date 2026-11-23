@@ -204,7 +204,7 @@ export async function runM1Demo(): Promise<string[]> {
   });
   try {
     await service.start().settled;
-    await service.call("harnesses.rescan", {});
+    await service.call("agents.rescan", {});
     await service.call("settings.update", { patch: { agentPermission: "on" } });
     const flow = loadFlowFolder(M1_FLOW_DIR);
     service.engine.registerFlow(

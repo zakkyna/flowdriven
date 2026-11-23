@@ -191,8 +191,11 @@ test("runProcess in live mode takes its environment and claudePath", { timeout: 
     claudePath: FAKE_CLAUDE_PATH,
   });
   active.push({ input, done });
-  await client.call("harnesses.rescan", {});
-  expect((await client.call("harnesses.list", {})).at(0)?.version).toBe("2.1.318");
+  const callAgents = client.call as unknown as (
+    name: "agents.rescan",
+    input: object,
+  ) => Promise<{ agents: { version?: string }[] }>;
+  expect((await callAgents("agents.rescan", {})).agents.at(0)?.version).toBe("2.1.318");
 });
 
 test("a notice sink holds up to 20 notices raised before the server is attached, writes them in order on attach and sends later ones directly; the 21st early notice is dropped", () => {

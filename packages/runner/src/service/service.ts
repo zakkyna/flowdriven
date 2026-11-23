@@ -138,6 +138,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     cwd: options.dataDir,
     env: options.env ?? process.env,
     now,
+    claudePath: options.claudePath,
     ...options.agents,
     markChanged: () => options.markChanged?.("agents"),
   });
@@ -146,6 +147,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     cwd: options.dataDir,
     env: options.env ?? process.env,
     now,
+    claudePath: options.claudePath,
     ...options.agents,
     markChanged: () => options.markChanged?.("agents"),
   });
@@ -308,6 +310,23 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
           if (!agent) throw new RunnerError("not_found", "Agent not found.", { reason: "agent_unknown" });
           return agent;
         },
+        "agents.signIn": async ({ agentId }) => {
+          await registry.list();
+          const result = await setup.signIn(agentId);
+          if (result.error)
+            throw new RunnerError(
+              result.error === "agent_unknown"
+                ? "not_found"
+                : result.error === "setup_running"
+                  ? "conflict"
+                  : "not_allowed",
+              "Agent sign-in unavailable.",
+              { reason: result.error },
+            );
+          const agent = mapAgents(await registry.list()).find((item) => item.id === agentId);
+          if (!agent) throw new RunnerError("not_found", "Agent not found.", { reason: "agent_unknown" });
+          return agent;
+        },
         "agents.models": async ({ agentId }) => {
           const result = await registry.models(agentId);
           if (result.error)
@@ -320,6 +339,8 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
         },
         "agents.rescan": async () => {
           const result = await registry.rescan();
+          if (result.agents.some((agent) => agent.id === "claude-code" && agent.state === "ready"))
+            await hs?.rescan();
           return { ...result, agents: mapAgents(result.agents) };
         },
         "flows.list": flowReads.list,
@@ -394,7 +415,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
         const demo = demoFlow();
         engine.registerFlow(demo.manifest, DEMO_HASH, demo.files);
       }
-      return { settled };
+      return { settled: Promise.all([settled, registry.list()]) };
     },
     stop: () => {
       triggers.stop();

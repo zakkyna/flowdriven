@@ -11,7 +11,6 @@ import {
   type OperationOutput as V2Output,
 } from "@flowdriven/contracts";
 import {
-  type HarnessCard,
   KeeperSettings,
   operations as legacyOperations,
   type OperationInput,
@@ -40,7 +39,7 @@ import { toQueueView } from "./map-queue.ts";
 import { runTrigger, toRunSummary } from "./map-run-v1.ts";
 import { toTriggerStatus } from "./map-trigger.ts";
 import { readSettings } from "./settings.ts";
-import { liveWindow, summarizeUsage } from "./usage-summary.ts";
+import { summarizeUsage } from "./usage-summary.ts";
 import type { createWeekly } from "./weekly-limit.ts";
 
 export type HandlerContext = {
@@ -85,7 +84,13 @@ export function createDispatcher({
       audit("caller_refused", { operation: name, caller });
       throw new RunnerError("not_allowed", "Caller is not allowed.", { reason: "caller_not_allowed" });
     }
-    if (name === "flows.build" || name === "flows.update" || name === "harnesses.setConsent")
+    if (
+      name === "flows.build" ||
+      name === "flows.update" ||
+      name === "harnesses.setConsent" ||
+      name === "harnesses.list" ||
+      name === "harnesses.rescan"
+    )
       throw new RunnerError("unavailable", "Operation retired.", { reason: "retired" });
     const v2Handler = (v2[rootKey] ??
       (rootKey === "activity.summary" ? legacy["activity.summary"] : undefined)) as
@@ -162,7 +167,6 @@ export function createHandlers({
   mode,
   projectDir,
   now,
-  harnesses,
   keeper,
   weekly,
   capabilities,
@@ -178,6 +182,8 @@ export function createHandlers({
   | "settings.get"
   | "settings.update"
   | "harnesses.setConsent"
+  | "harnesses.list"
+  | "harnesses.rescan"
   | "audit.list"
   | "runs.list"
   | "runs.status"
@@ -245,44 +251,6 @@ export function createHandlers({
   }
   function summary() {
     return summarizeUsage({ store, now: now(), quotaOf, lines: readKeeperSettings(store).quotaLines });
-  }
-  function withQuota(card: HarnessCard): HarnessCard {
-    if (card.id !== "claude-code") return card;
-    const quota = quotaOf(card.id);
-    const time = now().getTime();
-    const five = liveWindow(quota.fiveHour, time);
-    const seven = liveWindow(quota.sevenDay, time);
-    const usage = summary().harnesses.find((h) => h.harnessId === card.id);
-    const refused =
-      quota.rejectedUntil !== undefined &&
-      quota.rejectedUntil > time &&
-      Number.isFinite(new Date(quota.rejectedUntil).getTime());
-    if (!usage && !five && !seven && !refused) return card;
-    const count = (t: {
-      calls: number;
-      input: number;
-      output: number;
-      cacheRead: number;
-      cacheWrite: number;
-    }) => ({
-      calls: t.calls,
-      tokens: Math.min(Number.MAX_SAFE_INTEGER, t.input + t.output + t.cacheRead + t.cacheWrite),
-    });
-    const empty = { calls: 0, tokens: 0 };
-    const windows: NonNullable<HarnessCard["quota"]["windows"]> = [];
-    if (five) windows.push({ name: "five_hour", ...five });
-    if (seven) windows.push({ name: "seven_day", ...seven });
-    return {
-      ...card,
-      quota: {
-        ...card.quota,
-        state: refused ? "exhausted" : windows.length ? "available" : "unknown",
-        until: refused ? new Date(quota.rejectedUntil as number).toISOString() : undefined,
-        today: usage ? count(usage.today) : empty,
-        week: usage ? count(usage.week) : empty,
-        windows,
-      },
-    };
   }
   function queue() {
     return toQueueView({
@@ -369,11 +337,6 @@ export function createHandlers({
         ...engine.listApprovals({ state }).reverse().map(approval),
         ...(weekly?.list() ?? []).filter((a) => !state || a.state === state),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    "harnesses.list": () => harnesses?.list().map(withQuota) ?? [],
-    "harnesses.rescan": () =>
-      harnesses
-        ? harnesses.rescan().then((cards) => cards.map(withQuota))
-        : unavailable("Looking for harnesses arrives with the harness adapters."),
     "queue.list": queue,
     "queue.move": ({ runId }) => {
       run(runId);

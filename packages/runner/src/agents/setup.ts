@@ -50,7 +50,7 @@ export function createAgentSetup(o: SetupOptions) {
     o.store.appendAudit({ at: o.now().toISOString(), kind: "agent_setup", detail: { agentId: id, phase } });
   const state = (
     id: string,
-    next: "installing" | "waiting_login" | "not_installed" | "ready",
+    next: "installing" | "waiting_login" | "not_installed" | "ready" | "needs_login",
     extra: Partial<NonNullable<ReturnType<Store["getHarnessState"]>>> = {},
   ) => {
     o.store.putHarnessState({
@@ -69,7 +69,14 @@ export function createAgentSetup(o: SetupOptions) {
   };
   function startSignIn(entry: CatalogEntry, path: string, version?: string) {
     const id = entry.id;
-    state(id, "waiting_login");
+    const startedAt = o.now().getTime();
+    state(id, "waiting_login", {
+      setUp: {
+        phase: "waiting_login",
+        startedAt: new Date(startedAt).toISOString(),
+        pollUntil: new Date(startedAt + 600000).toISOString(),
+      },
+    });
     audit(id, "waiting_login");
     try {
       spawnSignIn(entry.signIn.program, entry.signIn.args, { shell: false, env });
@@ -78,6 +85,15 @@ export function createAgentSetup(o: SetupOptions) {
     }
     let polling = false;
     const cancel = every(2000, () => {
+      if (o.now().getTime() >= startedAt + 600000) {
+        state(id, "needs_login", {
+          setUp: undefined,
+          problem: { code: "sign_in_timeout", at: o.now().toISOString() },
+        });
+        audit(id, "sign_in_timeout");
+        end(id);
+        return;
+      }
       if (polling) return;
       polling = true;
       void signInStatus(entry, path, detection(entry))
@@ -88,6 +104,7 @@ export function createAgentSetup(o: SetupOptions) {
             : undefined;
           if (!active.has(id)) return;
           state(id, "ready", {
+            setUp: undefined,
             billing: result.billing,
             ...(version ? { version } : {}),
             ...(models ? { models } : {}),
@@ -128,6 +145,7 @@ export function createAgentSetup(o: SetupOptions) {
       .replace(/(?:\/[^\s]+)+/g, "[path]")
       .slice(0, 120);
     state(id, "not_installed", {
+      setUp: undefined,
       problem: { code: "install_failed", at: o.now().toISOString(), ...(detail ? { detail } : {}) },
     });
     audit(id, "install_failed");
@@ -135,6 +153,23 @@ export function createAgentSetup(o: SetupOptions) {
   }
   return {
     startSignIn,
+    async signIn(id: string) {
+      const entry = catalog.find((item) => item.id === id);
+      if (!entry) return { error: "agent_unknown" as const };
+      const row = o.store.getHarnessState(id);
+      if (active.has(id) || row?.state === "installing" || row?.state === "waiting_login")
+        return { error: "setup_running" as const };
+      const path = find(entry, detection(entry));
+      if (!path || row?.state === "not_installed") return { error: "agent_not_installed" as const };
+      active.set(id, {});
+      o.store.appendAudit({
+        at: o.now().toISOString(),
+        kind: "agent_sign_in",
+        detail: { agentId: id, result: "started" },
+      });
+      startSignIn(entry, path, row?.version);
+      return {};
+    },
     async setUp(id: string) {
       const entry = catalog.find((item) => item.id === id);
       if (!entry) return { error: "agent_unknown" as const };
@@ -163,7 +198,14 @@ export function createAgentSetup(o: SetupOptions) {
         else fail(id, "Agent executable not found.");
         return {};
       }
-      state(id, "installing");
+      const startedAt = o.now().getTime();
+      state(id, "installing", {
+        setUp: {
+          phase: "installing",
+          startedAt: new Date(startedAt).toISOString(),
+          pollUntil: new Date(startedAt + 600000).toISOString(),
+        },
+      });
       audit(id, "installing");
       const command = entry.install;
       if (!command) return {};
@@ -194,9 +236,9 @@ export function createAgentSetup(o: SetupOptions) {
     },
     stop() {
       for (const [id, current] of active) {
+        active.delete(id);
         current.cancel?.();
         current.child?.kill();
-        active.delete(id);
       }
     },
   };

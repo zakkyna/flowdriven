@@ -107,7 +107,7 @@ export async function runConnectorDemo(
   try {
     script([]);
     await service.start().settled;
-    await service.call("harnesses.rescan", {});
+    await service.call("agents.rescan", {});
     await service.call("settings.update", { patch: { agentPermission: "on" } });
     const project = join(dataDir, "project");
     mkdirSync(project, { recursive: true });

@@ -324,9 +324,7 @@ test("the stored scan shows the card at once after a restart, and the gate and t
   });
   services.push(second);
   const pending = second.start().settled;
-  expect(((await second.call("harnesses.list", {})) as { version?: string }[]).at(0)?.version).toBe(
-    "2.1.318",
-  );
+  expect(s.getHarnessState("claude-code")?.scan).toMatchObject({ scan: { version: "2.1.318" } });
   expect(s.getRun("old")?.state).toBe("running");
   const direct = createHarnessService({
     store: s,

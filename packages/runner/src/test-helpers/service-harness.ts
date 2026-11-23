@@ -7,6 +7,7 @@ import { createClock, createIdGenerator } from "./clock.ts";
 export async function createServiceHarness(
   testFolder: string,
   options: {
+    dataDir?: string;
     caller?: "window" | "tool" | "phone";
     instant?: string;
     zone?: string;
@@ -16,7 +17,7 @@ export async function createServiceHarness(
     markChanged?: ServiceOptions["markChanged"];
   } = {},
 ) {
-  const dataDir = await mkdtemp(join(testFolder, "runner-"));
+  const dataDir = options.dataDir ?? (await mkdtemp(join(testFolder, "runner-")));
   try {
     const store = await openSqliteStore(join(dataDir, "flowdriven.sqlite"));
     try {
@@ -49,7 +50,7 @@ export async function createServiceHarness(
         async close() {
           service.stop();
           store.close();
-          await rm(dataDir, { recursive: true, force: true });
+          if (!options.dataDir) await rm(dataDir, { recursive: true, force: true });
         },
       };
     } catch (error) {
@@ -57,7 +58,7 @@ export async function createServiceHarness(
       throw error;
     }
   } catch (error) {
-    await rm(dataDir, { recursive: true, force: true });
+    if (!options.dataDir) await rm(dataDir, { recursive: true, force: true });
     throw error;
   }
 }

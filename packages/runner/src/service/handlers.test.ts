@@ -193,19 +193,22 @@ test("the six not-built operations answer unavailable with their sentences", asy
       { flowId: "x", requirementId: "x" },
       "Installing a requirement arrives with the readiness engine.",
     ],
-    ["harnesses.rescan", {}, "Looking for harnesses arrives with the harness adapters."],
+    ["harnesses.rescan", {}, "Operation retired."],
     ["harnesses.setConsent", { harnessId: "x", consent: "given" }, "Operation retired."],
   ] as const;
   for (const [name, input, message] of cases)
     await expect(s.call(name, input)).rejects.toMatchObject({ code: "unavailable", message });
   await expect(s.call("settings.update", { patch: {} })).rejects.toMatchObject({ code: "invalid_input" });
 });
-test("harnesses.list is empty, settings.get has the defaults and readiness.check has one unchecked row per requirement", async () => {
+test("TC-AGT-11 harnesses.list is retired, settings.get has the defaults and readiness.check has one unchecked row per requirement", async () => {
   const { service: s } = await setup();
   const d = demoFlow();
   d.manifest.requirements = [Requirement.parse({ id: "server", type: "mcp_server", tools: ["read"] })];
   s.engine.registerFlow(d.manifest, DEMO_HASH, d.files);
-  expect(await s.call("harnesses.list", {})).toEqual([]);
+  await expect(s.call("harnesses.list", {})).rejects.toMatchObject({
+    code: "unavailable",
+    reason: "retired",
+  });
   expect(await s.call("settings.get", {})).toMatchObject({
     language: "en",
     agentPermission: "unset",
