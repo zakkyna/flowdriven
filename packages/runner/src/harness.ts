@@ -52,7 +52,8 @@ export type StepRequest = {
   project: string;
   requirements: Requirement[];
   routes?: Routed[];
-  approvedCalls?: { tool: string; input: Value }[];
+  approvedCalls?: { tool: string; input: Value; outsideFlow?: true }[];
+  rejectedCalls?: { tool: string; digest: string }[];
   takesOutside?: boolean;
   onOutside?: () => void;
   effort?: "low" | "medium" | "high";

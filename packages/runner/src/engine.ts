@@ -453,7 +453,7 @@ export function createEngine(input: EngineDeps): Engine {
     sweep();
     const a = store.getApproval(id);
     if (!a) throw new EngineError("not_found", "Approval not found.");
-    if (a.kind !== "result_sign_off" && a.kind !== "risky_action")
+    if (a.kind !== "result_sign_off" && a.kind !== "risky_action" && a.kind !== "outside_flow")
       throw new EngineError("invalid_input", "Not a result sign-off.");
     if (a.state === "expired")
       throw new EngineError("conflict", "This approval expired.", { reason: "decision_expired" });
@@ -517,6 +517,10 @@ export function createEngine(input: EngineDeps): Engine {
       manifest.format === "flowdriven-flow/1.2"
         ? manifest.touches?.find((t) => t.id === a.touchId)
         : undefined;
+    if (decision === "always_allow" && a.kind === "outside_flow")
+      throw new EngineError("not_allowed", "Outside calls can only be approved once.", {
+        reason: "outside_flow_once",
+      });
     if (
       decision === "always_allow" &&
       (a.kind !== "risky_action" ||
@@ -531,7 +535,7 @@ export function createEngine(input: EngineDeps): Engine {
         touch.place.value !== a.place.value)
     )
       throw new EngineError("not_allowed", "The place is not fixed.", { reason: "place_not_fixed" });
-    if (a.kind === "risky_action") {
+    if (a.kind === "risky_action" || a.kind === "outside_flow") {
       store.transaction(() => {
         const rule =
           decision === "always_allow" && a.place && touch
@@ -600,7 +604,12 @@ export function createEngine(input: EngineDeps): Engine {
               runId: run.id,
               stepId: a.stepId,
               itemKey: a.itemKey,
-              tool: full < 0 ? qualified : qualified.slice(full + 1),
+              tool:
+                a.kind === "outside_flow" && a.call
+                  ? a.call.tool
+                  : full < 0
+                    ? qualified
+                    : qualified.slice(full + 1),
               digest: editedCall?.digest ?? entry.slice(separator + 1),
               kind: deferred ? "similar" : "approve",
               createdAt: at,
@@ -624,7 +633,12 @@ export function createEngine(input: EngineDeps): Engine {
             decisionLines: [
               ...(store.getRun(run.id)?.decisionLines ?? []),
               {
-                key: decision === "edit" ? "report.youApprovedEdited" : "report.youApproved",
+                key:
+                  decision === "edit"
+                    ? "report.youApprovedEdited"
+                    : a.kind === "outside_flow"
+                      ? "report.approvedOnce"
+                      : "report.youApproved",
                 params: { title: a.summary },
               },
             ],
@@ -632,8 +646,12 @@ export function createEngine(input: EngineDeps): Engine {
           store.upsertStep({ ...row, state: "pending" });
           store.updateRun(run.id, { state: "running" });
         } else {
-          store.upsertStep({ ...row, state: "skipped", skipped: { because: "rejected", approvalId: id } });
-          if (a.itemKey) {
+          store.upsertStep(
+            a.kind === "outside_flow"
+              ? { ...row, state: "pending" }
+              : { ...row, state: "skipped", skipped: { because: "rejected", approvalId: id } },
+          );
+          if (a.itemKey && a.kind !== "outside_flow") {
             const item = store.listItems(run.id).find((i) => i.key === a.itemKey && i.status === "running");
             if (item)
               store.upsertItem({
@@ -654,7 +672,7 @@ export function createEngine(input: EngineDeps): Engine {
       const remaining = store
         .listApprovals({ runId: run.id, state: "pending" })
         .filter((item) => item.stepId === a.stepId).length;
-      if (remaining && decision === "reject") {
+      if (remaining && decision === "reject" && a.kind !== "outside_flow") {
         store.updateRun(run.id, { state: "waiting_approval" });
         const updated = runById(run.id);
         return { run: updated, settled: Promise.resolve(updated) };

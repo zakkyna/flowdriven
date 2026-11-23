@@ -315,6 +315,12 @@ export function decide(
         return refuse(BROWSER_DENY.dayLimit);
       return { allow: true, outcome: "run", tool: base.tool, effect: "page", by: "grant", grant };
     }
+    if (
+      policy.rejectedCalls?.some(
+        (row) => row.tool === name && row.digest === digestCall(name, input as Value),
+      )
+    )
+      return refuse("You said no to this, so it was not done.");
     const copy = JSON.parse(JSON.stringify(input)) as Value;
     return {
       allow: false,
@@ -522,11 +528,16 @@ export function decide(
     const rule = findRule();
     if (rule) return allowed("rule", rule.id);
   }
-  if (base.allow && base.connector?.grant?.kind === "pick") return allowed("grant");
+  if (!outsideFlow && base.allow && base.connector?.grant?.kind === "pick") return allowed("grant");
   if (!ownLocal && !outsideFlow) {
     const rule = findRule();
     if (rule) return allowed("rule", rule.id);
   }
+  if (
+    outsideFlow &&
+    policy.rejectedCalls?.some((row) => row.tool === name && row.digest === digestCall(name, input as Value))
+  )
+    return refuse("You said no to this, so it was not done.");
   let copy: Value;
   try {
     const encoded = JSON.stringify(input);

@@ -3,7 +3,15 @@ import { callGrant, digestCall } from "../connectors/grants.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import type { ApprovalRow, RuleInput, RuleRow, Store } from "../storage.ts";
 
-export function pendingDecision(store: Store, options: { id: string; createdAt: string }): ApprovalRow {
+export function pendingDecision(
+  store: Store,
+  options: {
+    id: string;
+    createdAt: string;
+    kind?: ApprovalRow["kind"];
+    effect?: ApprovalRow["effect"];
+  },
+): ApprovalRow {
   const { manifest, files } = demoFlow();
   const flowId = `local.flow-${options.id}`;
   const runId = `run-${options.id}`;
@@ -37,9 +45,18 @@ export function pendingDecision(store: Store, options: { id: string; createdAt: 
     outputs: {},
     checks: [],
   });
+  const kind = options.kind ?? "result_sign_off";
+  const effect =
+    options.effect ?? (kind === "outside_flow" || kind === "risky_action" ? "change" : undefined);
+  const riskyAction =
+    effect === "send" || effect === "post" || effect === "pay" || effect === "delete" || effect === "merge"
+      ? effect
+      : undefined;
   const row: ApprovalRow = {
     id: options.id,
-    kind: "result_sign_off",
+    kind,
+    ...(effect ? { effect } : {}),
+    ...(riskyAction ? { riskyAction } : {}),
     runId,
     stepId: "alerts",
     itemKey: "",

@@ -332,11 +332,13 @@ export async function openSqliteStore(
         approval &&
         previous.approvalId !== approval.id &&
         approval.state === "approved" &&
-        approval.kind === "risky_action" &&
+        (approval.kind === "risky_action" || approval.kind === "outside_flow") &&
         approval.runId === row.runId &&
         approval.stepId === row.stepId &&
         approval.itemKey === row.itemKey &&
-        approval.approves.includes(`${row.tool}#${row.digest}`)
+        approval.approves.some(
+          (entry) => entry === `${row.tool}#${row.digest}` || entry.endsWith(`.${row.tool}#${row.digest}`),
+        )
       ) {
         execute(
           "UPDATE call_grants SET data = ? WHERE run_id = ? AND step_id = ? AND item_key = ? AND tool = ? AND digest = ?",

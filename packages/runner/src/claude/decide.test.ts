@@ -1490,3 +1490,111 @@ test("TC-SR1-06 protected paths are refused before grant lookup", () => {
   ).toMatchObject({ outcome: "refuse", reason: DENY.protectedPath });
   expect(lookups).toBe(0);
 });
+
+test("TC-SR1-49 a rejected outside call is refused without its payload", async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const { parseTemplate } = await import("@flowdriven/sdk");
+  const name = "WebFetch";
+  const input = { url: "https://example.test/" };
+  const nav = "mcp__claude-in-chrome__navigate";
+  const navInput = { tabId: 1, url: "https://example.test/other" };
+  const parsedTemplate = parseTemplate("https://example.test/inbox/{id:[a-z]{1,20}}");
+  if (!parsedTemplate.ok) throw new Error("bad template");
+  const gitFile = join(project, ".git/config");
+  const declaredFile = join(notes, "note.txt");
+  const rejectedCalls = [
+    { tool: name, digest: digestCall(name, input) },
+    { tool: nav, digest: digestCall(nav, navInput) },
+    { tool: "Read", digest: digestCall("Read", { file_path: gitFile }) },
+    { tool: "Read", digest: digestCall("Read", { file_path: declaredFile }) },
+  ];
+  const p: Policy = {
+    ...policy,
+    projectRoot: project,
+    touches: [
+      {
+        touchId: "read-notes",
+        effect: "read",
+        matcher: "folder",
+        place: { kind: "folder", value: notes, label: "Notes" },
+        fixedPlace: true,
+        list: "on_its_own",
+        covers: [],
+      },
+    ],
+    browser: {
+      requirementId: "web",
+      templates: [parsedTemplate.template],
+      perRun: 5,
+      perDay: 10,
+    },
+    rejectedCalls,
+    runId: "run",
+    stepId: "step",
+  };
+  expect(decide(p, call(name, input))).toEqual({
+    allow: false,
+    outcome: "refuse",
+    tool: name,
+    reason: "You said no to this, so it was not done.",
+  });
+  expect(
+    decide(p, call(nav, navInput), { counts: { run: 0, day: 0 }, tabs: new Set([1]), opened: 1 }),
+  ).toEqual({
+    allow: false,
+    outcome: "refuse",
+    tool: nav,
+    reason: "You said no to this, so it was not done.",
+  });
+  expect(decide(p, call("Read", { file_path: gitFile }))).toMatchObject({
+    outcome: "refuse",
+    reason: DENY.protectedPath,
+  });
+  expect(decide(p, call("Read", { file_path: declaredFile }))).toMatchObject({
+    outcome: "run",
+    by: "read",
+  });
+  const grant = {
+    runId: "run",
+    stepId: "step",
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve" as const,
+    createdAt: "2026-11-22",
+  };
+  expect(
+    decide(p, call(name, input), undefined, undefined, { grants: { findGrant: () => grant } }),
+  ).toMatchObject({ outcome: "run", by: "grant" });
+  expect(decide(p, call(name, { url: "https://other.example.test/" }))).toMatchObject({
+    outcome: "hold",
+    held: { outsideFlow: true },
+  });
+  expect(decide({ ...p, rejectedCalls: [] }, call(name, input))).toMatchObject({
+    outcome: "hold",
+    held: { outsideFlow: true },
+  });
+});
+
+test("TC-SR1-48 a choice grant cannot authorize an outside-flow call", () => {
+  const name = "mcp__mail__send";
+  const p: Policy = {
+    ...policy,
+    touches: [],
+    connector: {
+      requirementId: "mail",
+      label: "Mail",
+      name: "mail",
+      url: "https://example.test",
+      id: "id",
+      prefix: "mcp__mail__",
+      tools: ["send"],
+      read: [],
+      risky: { send: "send" },
+      blocked: [],
+    },
+  };
+  expect(
+    decide(p, call(name, { body: "hello" }), undefined, { calls: 0, granted: () => true }),
+  ).toMatchObject({ outcome: "hold", held: { outsideFlow: true, tool: name } });
+});

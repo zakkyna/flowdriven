@@ -179,6 +179,19 @@ export async function runLeaf(
           );
         const pickTools = ask && "do" in ask && ask.do === "ask" ? ask.ask.approves : [];
         const approvedCalls = approvedCallsOf(store, run.id, step.id, itemKey);
+        const rejectedCalls = store.listApprovals({ runId: run.id }).flatMap((row) => {
+          const grant = row.approves[0];
+          if (
+            row.kind !== "outside_flow" ||
+            row.state !== "rejected" ||
+            row.stepId !== step.id ||
+            row.itemKey !== itemKey ||
+            !row.call ||
+            !grant?.includes("#")
+          )
+            return [];
+          return [{ tool: row.call.tool, digest: grant.slice(grant.indexOf("#") + 1) }];
+        });
         result = await raceAbort(
           harness.runStep({
             runId: run.id,
@@ -196,6 +209,7 @@ export async function runLeaf(
             routes: run.routes ?? [],
             takesOutside: stepTakesOutsideText(step, manifest, run, itemKey, store.listSteps(run.id)),
             ...(approvedCalls.length ? { approvedCalls } : {}),
+            ...(rejectedCalls.length ? { rejectedCalls } : {}),
             onOutside: () => {
               row.outside = true;
               save();
@@ -221,6 +235,14 @@ export async function runLeaf(
       if (result.hold) {
         const hold = result.hold;
         const payload = heldPayload(hold.input, hold.tool);
+        const hiddenCharacters = [
+          ...new Set(
+            (JSON.stringify(hold.input).match(/\p{Cf}/gu) ?? []).map(
+              (char) =>
+                `[U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")} hidden character]`,
+            ),
+          ),
+        ];
         const auditHold = (approvalId?: string) =>
           store.appendAudit({
             at: now().toISOString(),
@@ -231,6 +253,7 @@ export async function runLeaf(
               tool: hold.tool,
               ...((hold.effect ?? hold.action) ? { effect: hold.effect ?? hold.action ?? "change" } : {}),
               digest: hold.digest,
+              ...(hiddenCharacters.length ? { hiddenCharacters } : {}),
             },
           });
         if (payload === undefined) {

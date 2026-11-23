@@ -185,3 +185,47 @@ test("usage reports step totals and escapes item keys", () => {
     "a@x\\|y",
   );
 });
+
+test("TC-j24-39 TC-SR1-48 outside decisions and audit records appear in report lines and audit markdown", () => {
+  const base = view({ state: "waiting_approval" });
+  const firstApproval = base.approvals.at(0);
+  if (!firstApproval) throw new Error("missing approval");
+  const outsideView: RunView = {
+    ...base,
+    approvals: [
+      {
+        ...firstApproval,
+        id: "outside-1",
+        kind: "outside_flow",
+        effect: "run_command",
+        summary: "alerts: Bash",
+      },
+    ],
+    audit: [
+      {
+        at: "2026-11-21T00:00:00.000Z",
+        kind: "call_held",
+        runId: "run-1",
+        detail: {
+          approvalId: "outside-1",
+          tool: "Bash",
+          effect: "run_command",
+          digest: "d1",
+          hiddenCharacters: ["[U+200B hidden character]"],
+        },
+      },
+      {
+        at: "2026-11-21T00:00:01.000Z",
+        kind: "decision_made",
+        runId: "run-1",
+        detail: { approvalId: "outside-1", decision: "approve", via: "window" },
+      },
+    ],
+  };
+  expect(reportLines(outsideView)[2]).toBe("Waiting for you: alerts: Bash");
+  const md = renderRunReport(outsideView);
+  expect(md).toContain("call\\_held");
+  expect(md).toContain("\\[U+200B hidden character\\]");
+  expect(md).toContain("decision\\_made");
+  expect(md).not.toContain(String.fromCodePoint(0x200b));
+});

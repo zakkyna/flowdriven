@@ -1057,3 +1057,96 @@ test("T17 invalid decision does not hide other decisions in either list", async 
     store.close();
   }
 });
+
+test("TC-RUL-28 outside decisions cannot become rules or batches", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const row = pendingDecision(store, {
+      id: "outside-rule",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "outside_flow",
+      effect: "send",
+    });
+    store.updateApproval(row.id, {
+      fixedPlace: true,
+      place: { kind: "account", value: "mail", label: "Mail" },
+      call: { tool: "Bash", input: { command: "echo hello" } },
+      payload: { kind: "text", text: "hello" },
+    });
+    const run = store.getRun(row.runId);
+    if (!run) throw new Error("missing run");
+    const rule = store.makeRule({
+      flowId: run.flowId,
+      touchId: "mail",
+      effect: "change",
+      place: { kind: "account", value: "mail", label: "Mail" },
+      sentence: "Change mail",
+    });
+    store.createApproval({
+      ...row,
+      id: "outside-change",
+      kind: "outside_flow",
+      effect: "change",
+      riskyAction: undefined,
+      fixedPlace: true,
+      place: { kind: "account", value: "mail", label: "Mail" },
+      call: { tool: "Bash", input: { command: "echo hello" } },
+      payload: { kind: "text", text: "hello" },
+    });
+    const listed = (await service.call("approvals.list", { runId: row.runId })) as Array<
+      Record<string, unknown>
+    >;
+    expect(listed.find((item) => item.id === "outside-change")).toMatchObject({
+      kind: "outside_flow",
+      canAlwaysAllow: false,
+      editable: false,
+    });
+    expect(listed.find((item) => item.id === "outside-change")?.similarGroup).toBeUndefined();
+    expect(listed.find((item) => item.id === "outside-change")?.similarWaiting).toBeUndefined();
+    await expect(
+      service.call("approvals.resolve", { approvalId: "outside-change", decision: "always_allow" }),
+    ).rejects.toMatchObject({ code: "not_allowed", reason: "outside_flow_once" });
+    await expect(
+      service.call("approvals.resolve", { approvalId: row.id, decision: "always_allow" }),
+    ).rejects.toMatchObject({ code: "not_allowed", reason: "outside_flow_once" });
+    await expect(
+      service.call("approvals.resolve", { approvalId: row.id, decision: "edit", editedText: "changed" }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "edit_not_allowed" });
+    store.createApproval({
+      ...row,
+      id: "batch-peer",
+      kind: "risky_action",
+      effect: "send",
+      riskyAction: "send",
+      similarGroup: "group",
+    });
+    await expect(
+      service.call("approvals.resolveSimilar", {
+        runId: row.runId,
+        group: "group",
+        approvalIds: [row.id, "batch-peer"],
+      }),
+    ).rejects.toMatchObject({ code: "not_allowed", reason: "outside_flow_once" });
+    store.updateApproval(row.id, { state: "approved", resolvedAt: "2026-11-21T00:00:01Z" });
+    await expect(
+      service.call("approvals.resolveSimilar", {
+        runId: row.runId,
+        group: "group",
+        approvalIds: [row.id, "batch-peer"],
+      }),
+    ).rejects.toMatchObject({ code: "not_allowed", reason: "outside_flow_once" });
+    expect(store.getApproval(row.id)?.state).toBe("approved");
+    expect(store.getApproval("batch-peer")?.state).toBe("pending");
+    expect(store.listRules()).toEqual([rule]);
+    expect(store.getApproval("outside-change")?.state).toBe("pending");
+  } finally {
+    service.stop();
+    store.close();
+  }
+});

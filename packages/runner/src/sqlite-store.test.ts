@@ -383,3 +383,49 @@ test("the lock goes away when the holder is killed", { timeout: 20_000 }, async 
   stores.push(store);
   expect(store.listFlows()).toEqual([]);
 });
+
+test.each(["Bash", "mcp__example__send"])(
+  "TC-SR1-48 a new outside approval re-arms a used grant for %s",
+  async (tool) => {
+    const { pendingDecision } = await import("./test-helpers/builders.ts");
+    const { digestCall, callGrant } = await import("./connectors/grants.ts");
+    const store = await open();
+    const first = pendingDecision(store, {
+      id: "rearm",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "outside_flow",
+    });
+    const input = { text: "hello" };
+    const digest = digestCall(tool, input);
+    const approve = tool.startsWith("mcp__") ? callGrant("req", tool, digest) : `${tool}#${digest}`;
+    store.updateApproval(first.id, { state: "approved", call: { tool, input }, approves: [approve] });
+    const second = {
+      ...first,
+      id: "rearm-second",
+      kind: "outside_flow" as const,
+      state: "approved" as const,
+      effect: "change" as const,
+      call: { tool, input },
+      approves: [approve],
+    };
+    store.createApproval(second);
+    const key = {
+      runId: first.runId,
+      stepId: first.stepId,
+      itemKey: first.itemKey,
+      tool,
+      digest,
+      kind: "approve" as const,
+      createdAt: first.createdAt,
+      approvalId: first.id,
+    };
+    store.putCallGrant(key);
+    store.useGrant(key, "2026-11-21T00:00:01Z");
+    store.putCallGrant(key);
+    expect(store.findGrant(key)).toBeUndefined();
+    store.putCallGrant({ ...key, approvalId: second.id });
+    expect(store.findGrant(key)).toMatchObject({ approvalId: second.id });
+    store.useGrant(key, "2026-11-21T00:00:02Z");
+    expect(store.findGrant(key)).toBeUndefined();
+  },
+);

@@ -565,6 +565,10 @@ export function createDecisionHandlers(
         params: { via: row.resolvedVia ?? "window" },
       });
     if (input.decision === "always_allow") {
+      if (row.kind === "outside_flow")
+        throw new RunnerError("not_allowed", "Outside calls can only be approved once.", {
+          reason: "outside_flow_once",
+        });
       if (row.effect && ["send", "post", "pay", "delete", "merge"].includes(row.effect))
         throw new RunnerError("not_allowed", "This action always asks.", { reason: "always_asks" });
       if (
@@ -619,6 +623,10 @@ export function createDecisionHandlers(
     const run = store.getRun(input.runId);
     if (!run) throw new RunnerError("not_found", "Run not found.");
     const rows = input.approvalIds.map((id) => store.getApproval(id));
+    if (rows.some((row) => row?.runId === input.runId && row.kind === "outside_flow"))
+      throw new RunnerError("not_allowed", "Outside calls can only be approved once.", {
+        reason: "outside_flow_once",
+      });
     if (
       rows.some(
         (row) =>

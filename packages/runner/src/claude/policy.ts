@@ -32,6 +32,7 @@ export type CompiledTouch = {
   covers: string[];
 };
 export type Policy = {
+  rejectedCalls?: { tool: string; digest: string }[];
   projectRoot?: string;
   protectedRoots?: string[];
   noCommands?: true;

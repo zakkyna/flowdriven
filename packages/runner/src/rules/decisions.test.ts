@@ -1280,3 +1280,1490 @@ test("TC-j24-30 flow deletion expires action and choice decisions", async () => 
     store.close();
   }
 });
+
+test("TC-SR1-48 outside Bash approval runs once, re-arms on repeat, ignores rules, and holds changed input", {
+  timeout: 20_000,
+}, async () => {
+  const { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createClaudeAdapter } = await import("../claude/adapter.ts");
+  const { createGrantBook } = await import("../connectors/grants.ts");
+  const { createRunnerService } = await import("../service/service.ts");
+  const { FAKE_CLAUDE_PATH, makeFakeHome, readFakeCalls, writeFakeScript } = await import(
+    "../test-helpers/fake-claude-script.ts"
+  );
+  const { recordRuleUse } = await import("./standing.ts");
+
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven-sr148-")));
+  const project = join(root, "project");
+  const notesDir = join(project, "notes");
+  mkdirSync(notesDir, { recursive: true });
+  writeFileSync(join(notesDir, "note.txt"), "ok");
+
+  const bashInput = { command: "echo hello" };
+  const changedInput = { command: "echo changed" };
+  const digest = digestCall("Bash", bashInput);
+  const home = makeFakeHome({
+    plays: [
+      {
+        when: "",
+        actions: [
+          { do: "tool", id: "b1", name: "Bash", input: bashInput },
+          { do: "result", result: "done" },
+        ],
+      },
+    ],
+  });
+
+  const store = await openSqliteStore(":memory:");
+  stores.push(store);
+  let seq = 0;
+  let clockMs = Date.parse("2026-11-21T00:00:00Z");
+  const now = () => {
+    clockMs += 1000;
+    return new Date(clockMs);
+  };
+  const newId = (prefix: string) => `${prefix}-${++seq}`;
+
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.2",
+    id: "local.outside-bash",
+    name: "Outside Bash",
+    kind: "build",
+    requirements: [{ id: "notes", type: "path", ref: "notes", access: "read_write" }],
+    touches: [
+      {
+        id: "write-notes",
+        sentence: "Write notes",
+        effect: "local_write",
+        rule: "asks_first",
+        covers: [],
+        place: { kind: "folder", value: "notes", label: "Notes" },
+      },
+    ],
+    steps: [
+      {
+        id: "work",
+        title: "Run work",
+        do: "worker",
+        instructions: "Work",
+        uses: ["notes"],
+        checks: [{ type: "contains", pattern: "done" }],
+      },
+    ],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const hash = `sha256:${"a".repeat(64)}`;
+  store.putFlow({
+    id: parsed.manifest.id,
+    hash,
+    version: parsed.manifest.version,
+    manifest: parsed.manifest,
+    files: {},
+    registeredAt: "2026-11-20T00:00:00Z",
+  });
+  store.putFlowHead({
+    id: parsed.manifest.id,
+    name: parsed.manifest.name,
+    summary: parsed.manifest.summary,
+    headHash: hash,
+    createdAt: "2026-11-20T00:00:00Z",
+    updatedAt: "2026-11-20T00:00:00Z",
+    origin: { kind: "import" },
+  });
+
+  const adapter = createClaudeAdapter({
+    claudePath: () => FAKE_CLAUDE_PATH,
+    env: () => ({ HOME: home, PATH: process.env.PATH, TMPDIR: tmpdir() }),
+    controlRoot: join(root, "control"),
+    audit: (kind, runId, detail) => store.appendAudit({ at: now().toISOString(), kind, runId, detail }),
+    newId,
+    newSessionId: () => `session-${++seq}`,
+    rounds: 20,
+    exitWaitMs: 10_000,
+    grants: createGrantBook(store),
+    confirmation: (runId) => {
+      const run = store.getRun(runId);
+      const confirmation = run && store.getConfirmation(run.flowId);
+      if (!run || !confirmation) return undefined;
+      return {
+        confirmation: {
+          flowId: run.flowId,
+          hash: run.flowHash,
+          onItsOwn: confirmation.onItsOwn,
+          touches: parsed.manifest.format === "flowdriven-flow/1.2" ? (parsed.manifest.touches ?? []) : [],
+        },
+        rules: store.listRules().filter((r) => r.flowId === run.flowId),
+        source: "window",
+        earlierNo: false,
+        startedAt: run.startedAt,
+      };
+    },
+    rules: (flowId) => store.listRules().filter((r) => r.flowId === flowId),
+    recordRule: (input) => recordRuleUse(store, input),
+  });
+
+  const service = createRunnerService({
+    store,
+    dataDir: root,
+    mode: "demo",
+    harness: adapter,
+    now,
+    newId,
+  });
+
+  try {
+    await service.call("flows.confirm", {
+      flowId: parsed.manifest.id,
+      hash,
+      onItsOwn: ["write-notes"],
+      pins: { notes: notesDir },
+    });
+    expect(store.listRules()).toHaveLength(1);
+    const matchingCmdRule = store.makeRule({
+      flowId: parsed.manifest.id,
+      touchId: "write-notes",
+      effect: "run_command",
+      place: { kind: "command", value: "echo hello", label: "Echo" },
+      sentence: "Echo hello",
+      createdAt: "2026-11-20T00:00:00Z",
+    });
+    expect(matchingCmdRule.state).toBe("active");
+
+    const started = await service.engine.startRun(parsed.manifest.id, { project });
+    expect(started.state).toBe("waiting_approval");
+    const first = store.listApprovals({ runId: started.id, state: "pending" })[0];
+    expect(first).toMatchObject({
+      kind: "outside_flow",
+      effect: "run_command",
+      approves: [`Bash#${digest}`],
+    });
+    if (!first) throw new Error("missing first outside decision");
+
+    const listed = (await service.call("approvals.list", { runId: started.id })) as Array<
+      Record<string, unknown>
+    >;
+    expect(listed[0]).toMatchObject({ id: first.id, canAlwaysAllow: false, editable: false });
+    expect(listed[0]?.similarGroup).toBeUndefined();
+    expect(listed[0]?.similarWaiting).toBeUndefined();
+
+    writeFakeScript(home, {
+      plays: [
+        {
+          when: "",
+          actions: [
+            { do: "tool", id: "b2", name: "Bash", input: bashInput },
+            { do: "tool", id: "b3", name: "Bash", input: bashInput },
+            { do: "result", result: "done" },
+          ],
+        },
+      ],
+    });
+    await service.call("approvals.resolve", { approvalId: first.id, decision: "approve" });
+    await vi.waitFor(
+      () => expect(store.listApprovals({ runId: started.id, state: "pending" })).toHaveLength(1),
+      {
+        timeout: 10_000,
+      },
+    );
+    const second = store.listApprovals({ runId: started.id, state: "pending" })[0];
+    if (!second) throw new Error("missing second outside decision");
+    expect(second.id).not.toBe(first.id);
+    expect(readFakeCalls(home)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "b2", hookExit: 0, ran: true }),
+        expect.objectContaining({ id: "b3", hookExit: 2, ran: false }),
+      ]),
+    );
+    expect(await service.call("audit.list", { runId: started.id })).toContainEqual(
+      expect.objectContaining({
+        kind: "grant_used",
+        detail: expect.objectContaining({ approvalId: first.id, digest }),
+      }),
+    );
+    expect(await service.call("runs.report", { runId: started.id })).toMatchObject({
+      decisionLines: [{ key: "report.approvedOnce", params: { title: first.summary } }],
+    });
+
+    writeFakeScript(home, {
+      plays: [
+        {
+          when: "",
+          actions: [
+            { do: "tool", id: "b4", name: "Bash", input: bashInput },
+            { do: "tool", id: "b5", name: "Bash", input: changedInput },
+            { do: "result", result: "done" },
+          ],
+        },
+      ],
+    });
+    await service.call("approvals.resolve", { approvalId: second.id, decision: "approve" });
+    await vi.waitFor(
+      () => expect(store.listApprovals({ runId: started.id, state: "pending" })).toHaveLength(1),
+      {
+        timeout: 10_000,
+      },
+    );
+    const third = store.listApprovals({ runId: started.id, state: "pending" })[0];
+    if (!third) throw new Error("missing third outside decision");
+    expect(third.call).toEqual({ tool: "Bash", input: changedInput });
+    expect(readFakeCalls(home)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "b4", hookExit: 0, ran: true }),
+        expect.objectContaining({ id: "b5", hookExit: 2, ran: false }),
+      ]),
+    );
+    expect(await service.call("audit.list", { runId: started.id })).toContainEqual(
+      expect.objectContaining({
+        kind: "grant_used",
+        detail: expect.objectContaining({ approvalId: second.id, digest }),
+      }),
+    );
+    expect(await service.call("runs.report", { runId: started.id })).toMatchObject({
+      decisionLines: [
+        { key: "report.approvedOnce", params: { title: first.summary } },
+        { key: "report.approvedOnce", params: { title: second.summary } },
+      ],
+    });
+  } finally {
+    service.stop();
+    rmSync(root, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("TC-SR1-48 mcp__ and WebFetch outside grants run once, re-arm, and block crash auto-resume", async () => {
+  const { decide } = await import("../claude/decide.ts");
+  const { callGrant, createGrantBook } = await import("../connectors/grants.ts");
+  const { createEngine } = await import("../engine.ts");
+  const { scriptedHarness } = await import("../scripted-harness.ts");
+  const { createRunnerService } = await import("../service/service.ts");
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+
+  const store = await openSqliteStore(":memory:");
+  stores.push(store);
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+
+  try {
+    const mcpTool = "mcp__claude_ai_Gmail__forward";
+    const mcpInput = { to: ["x@example.test"], threadId: "t1" };
+    const mcpDigest = digestCall(mcpTool, mcpInput);
+    const first = pendingDecision(store, {
+      id: "outside-mcp-1",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "outside_flow",
+      effect: "send",
+    });
+    store.updateApproval(first.id, {
+      call: { tool: mcpTool, input: mcpInput },
+      approves: [callGrant("mail", mcpTool, mcpDigest)],
+    });
+    await service.call("approvals.resolve", { approvalId: first.id, decision: "approve" });
+    expect(approvedCallsOf(store, first.runId, first.stepId, first.itemKey)).toEqual([
+      { tool: mcpTool, input: mcpInput, outsideFlow: true },
+    ]);
+
+    const policy = {
+      tools: [],
+      folders: [],
+      cwd: "/tmp",
+      addDirs: [],
+      schema: false,
+      sessionId: "s",
+      touches: [],
+      runId: first.runId,
+      stepId: first.stepId,
+      itemKey: first.itemKey,
+    };
+    const mcpCall = {
+      hook_event_name: "PreToolUse",
+      session_id: "s",
+      tool_use_id: "u1",
+      tool_name: mcpTool,
+      tool_input: mcpInput,
+    };
+    const grants = createGrantBook(store);
+    expect(decide(policy, mcpCall, undefined, undefined, { grants })).toMatchObject({
+      outcome: "run",
+      by: "grant",
+      grant: { approvalId: first.id },
+    });
+    store.useGrant(
+      {
+        runId: first.runId,
+        stepId: first.stepId,
+        itemKey: first.itemKey,
+        tool: mcpTool,
+        digest: mcpDigest,
+        kind: "approve",
+        createdAt: "",
+      },
+      "2026-11-21T00:00:01Z",
+    );
+    expect(decide(policy, mcpCall, undefined, undefined, { grants })).toMatchObject({
+      outcome: "hold",
+      held: { outsideFlow: true, tool: mcpTool },
+    });
+
+    const second = {
+      ...first,
+      id: "outside-mcp-2",
+      state: "pending" as const,
+      call: { tool: mcpTool, input: mcpInput },
+      approves: [callGrant("mail", mcpTool, mcpDigest)],
+      resolvedAt: undefined,
+      resolvedVia: undefined,
+    };
+    store.createApproval(second);
+    store.updateRun(first.runId, { state: "waiting_approval" });
+    await service.call("approvals.resolve", { approvalId: second.id, decision: "approve" });
+    expect(decide(policy, mcpCall, undefined, undefined, { grants })).toMatchObject({
+      outcome: "run",
+      by: "grant",
+      grant: { approvalId: second.id },
+    });
+    store.useGrant(
+      {
+        runId: first.runId,
+        stepId: first.stepId,
+        itemKey: first.itemKey,
+        tool: mcpTool,
+        digest: mcpDigest,
+        kind: "approve",
+        createdAt: "",
+      },
+      "2026-11-21T00:00:02Z",
+    );
+    expect(decide(policy, mcpCall, undefined, undefined, { grants })).toMatchObject({
+      outcome: "hold",
+      held: { outsideFlow: true, tool: mcpTool },
+    });
+
+    const webTool = "WebFetch";
+    const webInput = { url: "https://example.test/" };
+    const webDigest = digestCall(webTool, webInput);
+    const webRow = pendingDecision(store, {
+      id: "outside-webfetch",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "outside_flow",
+      effect: "change",
+    });
+    store.updateApproval(webRow.id, {
+      call: { tool: webTool, input: webInput },
+      approves: [`${webTool}#${webDigest}`],
+    });
+    await service.call("approvals.resolve", { approvalId: webRow.id, decision: "approve" });
+    expect(approvedCallsOf(store, webRow.runId, webRow.stepId, webRow.itemKey)).toEqual([
+      { tool: webTool, input: webInput, outsideFlow: true },
+    ]);
+    const webPolicy = { ...policy, runId: webRow.runId, stepId: webRow.stepId, itemKey: webRow.itemKey };
+    const webCall = { ...mcpCall, tool_name: webTool, tool_input: webInput };
+    expect(decide(webPolicy, webCall, undefined, undefined, { grants })).toMatchObject({
+      outcome: "run",
+      by: "grant",
+      grant: { approvalId: webRow.id },
+    });
+    store.useGrant(
+      {
+        runId: webRow.runId,
+        stepId: webRow.stepId,
+        itemKey: webRow.itemKey,
+        tool: webTool,
+        digest: webDigest,
+        kind: "approve",
+        createdAt: "",
+      },
+      "2026-11-21T00:00:03Z",
+    );
+    expect(decide(webPolicy, webCall, undefined, undefined, { grants })).toMatchObject({
+      outcome: "hold",
+      held: { outsideFlow: true, tool: webTool },
+    });
+    expect(
+      decide(
+        webPolicy,
+        { ...webCall, tool_input: { url: "https://other.example.test/" } },
+        undefined,
+        undefined,
+        {
+          grants,
+        },
+      ),
+    ).toMatchObject({ outcome: "hold", held: { outsideFlow: true, tool: webTool } });
+
+    const crashManifest = parseManifest({
+      format: "flowdriven-flow/1.1",
+      id: "local.crash-outside",
+      name: "Crash outside",
+      kind: "build",
+      steps: [{ id: "work", do: "worker", instructions: "Work", idempotent: true, checks: [] }],
+    });
+    if (!crashManifest.ok) throw new Error(JSON.stringify(crashManifest.issues));
+    const crashHash = `sha256:${"b".repeat(64)}`;
+    store.putFlow({
+      id: crashManifest.manifest.id,
+      hash: crashHash,
+      version: crashManifest.manifest.version,
+      manifest: crashManifest.manifest,
+      files: {},
+      registeredAt: "2026-11-21T00:00:00Z",
+    });
+    store.createRun({
+      id: "run-crash-outside",
+      flowId: crashManifest.manifest.id,
+      flowHash: crashHash,
+      flowVersion: crashManifest.manifest.version,
+      state: "running",
+      project: ".",
+      inputs: {},
+      params: {},
+      requirements: [],
+      startedAt: "2026-11-21T00:00:00Z",
+    });
+    store.upsertStep({
+      runId: "run-crash-outside",
+      stepId: "work",
+      itemKey: "",
+      state: "running",
+      attempts: [],
+      outputs: {},
+      checks: [],
+    });
+    store.createApproval({
+      id: "ap-crash-outside",
+      kind: "outside_flow",
+      effect: "change",
+      runId: "run-crash-outside",
+      stepId: "work",
+      itemKey: "",
+      summary: "work: Bash",
+      payload: "echo",
+      approves: [`Bash#${digestCall("Bash", { command: "echo" })}`],
+      onExpiry: "fail",
+      createdAt: "2026-11-21T00:00:00Z",
+      expiresAt: "2026-11-22T00:00:00Z",
+      state: "approved",
+    });
+    const harness = scriptedHarness({ steps: { work: { text: "ok" } } });
+    const recoveryEngine = createEngine({ store, harness, now: () => new Date("2026-11-21T00:01:00Z") });
+    await recoveryEngine.recoverAfterCrash();
+    expect(store.getRun("run-crash-outside")).toMatchObject({
+      state: "interrupted",
+      cause: { code: "crash", params: { step: "work" } },
+    });
+    expect(harness.calls).toEqual([]);
+    recoveryEngine.shutdown();
+  } finally {
+    service.stop();
+  }
+});
+
+test("TC-j24-39 decision audit and report record every path without secrets or raw hidden chars", async () => {
+  const { scriptedHarness } = await import("../scripted-harness.ts");
+  const { createRunnerService } = await import("../service/service.ts");
+  const { recordRuleUse } = await import("./standing.ts");
+
+  const store = await openSqliteStore(":memory:");
+  stores.push(store);
+  let seq = 0;
+  let ms = Date.parse("2026-11-21T00:00:00Z");
+  const now = () => {
+    ms += 1000;
+    return new Date(ms);
+  };
+  const newId = (prefix: string) => `${prefix}-${++seq}`;
+
+  const zws = String.fromCodePoint(0x200b);
+  const fakeToken = `sk-${"y".repeat(24)}`;
+  const riskyTool = "mcp__claude_ai_Gmail__reply";
+  const hiddenBody = `Hi${zws} ${fakeToken}`;
+  const hiddenInput = { to: "sam@example.test", subject: "Reply", body: hiddenBody };
+  const rejectInput = { to: "alex@example.test", subject: "Skip", body: "No" };
+  const outsideInput = { url: "https://example.test/" };
+
+  let mode: "hidden" | "reject" | "stop" | "outside" = "hidden";
+  const harness = scriptedHarness({
+    steps: {
+      work: (req) => {
+        if (req.approvedCalls?.length || req.rejectedCalls?.length) return { text: "ok" };
+        if (mode === "hidden")
+          return {
+            hold: {
+              requirementId: "mail",
+              tool: riskyTool,
+              input: hiddenInput,
+              digest: digestCall(riskyTool, hiddenInput),
+              effect: "send",
+              action: "send",
+            },
+          };
+        if (mode === "reject" || mode === "stop")
+          return {
+            hold: {
+              requirementId: "mail",
+              tool: riskyTool,
+              input: rejectInput,
+              digest: digestCall(riskyTool, rejectInput),
+              effect: "send",
+              action: "send",
+            },
+          };
+        return {
+          hold: {
+            requirementId: "WebFetch",
+            tool: "WebFetch",
+            input: outsideInput,
+            digest: digestCall("WebFetch", outsideInput),
+            effect: "change",
+            outsideFlow: true,
+          },
+        };
+      },
+    },
+  });
+
+  const service = createRunnerService({ store, dataDir: ".", mode: "demo", harness, now, newId });
+  try {
+    const parsed = parseManifest({
+      format: "flowdriven-flow/1.2",
+      id: "local.j24-39",
+      name: "Audit report flow",
+      kind: "build",
+      steps: [
+        {
+          id: "work",
+          title: "Work step",
+          do: "worker",
+          instructions: "Work",
+          checks: [{ type: "contains", pattern: "ok" }],
+        },
+      ],
+    });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    const hash = `sha256:${"a".repeat(64)}`;
+    store.putFlow({
+      id: parsed.manifest.id,
+      hash,
+      version: parsed.manifest.version,
+      manifest: parsed.manifest,
+      files: {},
+      registeredAt: "2026-11-21T00:00:00Z",
+    });
+    store.putChat({
+      id: "chat-secret",
+      title: "Secret chat",
+      titleSource: "flowdriven",
+      createdAt: "2026-11-21T00:00:00Z",
+      updatedAt: "2026-11-21T00:00:00Z",
+      from: "flowdriven",
+      language: "en",
+      languageSource: "app",
+      agent: "claude-code",
+      model: "default",
+      agentSource: "main_default",
+    });
+    store.putMessage({
+      id: "msg-secret",
+      chatId: "chat-secret",
+      seq: 1,
+      at: "2026-11-21T00:00:00Z",
+      role: "person",
+      kind: "text",
+      outside: false,
+      text: `Please use ${fakeToken}`,
+    });
+
+    // 1. Risky approved with hidden char and token
+    const r1 = await service.engine.startRun(parsed.manifest.id, { project: "." });
+    const a1 = store.listApprovals({ runId: r1.id, state: "pending" })[0];
+    if (!a1) throw new Error("missing a1");
+    expect(JSON.stringify(await service.call("approvals.list", { runId: r1.id }))).toContain(
+      "[U+200B hidden character]",
+    );
+    await service.call("approvals.resolve", { approvalId: a1.id, decision: "approve" });
+    await vi.waitFor(() => expect(store.getRun(r1.id)?.state).toBe("done"));
+    expect(await service.call("audit.list", { runId: r1.id })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "call_held",
+          detail: expect.objectContaining({
+            approvalId: a1.id,
+            hiddenCharacters: ["[U+200B hidden character]"],
+          }),
+        }),
+        expect.objectContaining({
+          kind: "decision_made",
+          detail: expect.objectContaining({ approvalId: a1.id, decision: "approve", via: "window" }),
+        }),
+      ]),
+    );
+    expect(await service.call("runs.report", { runId: r1.id })).toMatchObject({
+      decisionLines: [{ key: "report.youApproved", params: { title: a1.summary } }],
+    });
+
+    // 2. Risky rejected
+    mode = "reject";
+    const r2 = await service.engine.startRun(parsed.manifest.id, { project: "." });
+    const a2 = store.listApprovals({ runId: r2.id, state: "pending" })[0];
+    if (!a2) throw new Error("missing a2");
+    await service.call("approvals.resolve", { approvalId: a2.id, decision: "reject" });
+    await vi.waitFor(() => expect(store.getRun(r2.id)?.state).toBe("done"));
+    expect(await service.call("audit.list", { runId: r2.id })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "call_held",
+          detail: expect.objectContaining({ approvalId: a2.id }),
+        }),
+        expect.objectContaining({
+          kind: "decision_made",
+          detail: expect.objectContaining({ approvalId: a2.id, decision: "reject", via: "window" }),
+        }),
+      ]),
+    );
+    expect(await service.call("runs.report", { runId: r2.id })).toMatchObject({
+      decisionLines: [{ key: "report.youSaidNo", params: { title: a2.summary } }],
+    });
+
+    // 3. Stopped before answer
+    mode = "stop";
+    const r3 = await service.engine.startRun(parsed.manifest.id, { project: "." });
+    const a3 = store.listApprovals({ runId: r3.id, state: "pending" })[0];
+    if (!a3) throw new Error("missing a3");
+    await service.call("runs.stop", { runId: r3.id });
+    expect(await service.call("audit.list", { runId: r3.id })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "call_held",
+          detail: expect.objectContaining({ approvalId: a3.id }),
+        }),
+        expect.objectContaining({
+          kind: "decision_expired",
+          detail: expect.objectContaining({ approvalId: a3.id, runId: r3.id, why: "stop" }),
+        }),
+        expect.objectContaining({ kind: "run_stopped", detail: expect.objectContaining({ runId: r3.id }) }),
+      ]),
+    );
+    expect(await service.call("runs.report", { runId: r3.id })).toMatchObject({ decisionLines: [] });
+
+    // 4. Done by rule and rule revoked
+    const rule = store.makeRule({
+      flowId: parsed.manifest.id,
+      touchId: "log-hours",
+      effect: "change",
+      place: { kind: "account", value: "timesheet-account", label: "Timesheet" },
+      sentence: "Log hours",
+      createdAt: "2026-11-21T00:00:00Z",
+    });
+    store.createRun({
+      id: "run-rule-j24-39",
+      flowId: parsed.manifest.id,
+      flowHash: hash,
+      flowVersion: parsed.manifest.version,
+      state: "running",
+      project: ".",
+      inputs: {},
+      params: {},
+      requirements: [],
+      startedAt: "2026-11-21T00:00:00Z",
+    });
+    store.upsertStep({
+      runId: "run-rule-j24-39",
+      stepId: "work",
+      itemKey: "",
+      state: "running",
+      attempts: [],
+      outputs: {},
+      checks: [],
+    });
+    recordRuleUse(store, {
+      ruleId: rule.id,
+      runId: "run-rule-j24-39",
+      stepId: "work",
+      itemKey: "",
+      tool: "timesheet.log_entry",
+      title: "Log hours",
+      at: "2026-11-21T00:05:00Z",
+    });
+    expect(await service.call("audit.list", { runId: "run-rule-j24-39" })).toContainEqual(
+      expect.objectContaining({
+        kind: "rule_used",
+        detail: expect.objectContaining({ ruleId: rule.id, placeKind: "account" }),
+      }),
+    );
+    expect(await service.call("runs.report", { runId: "run-rule-j24-39" })).toMatchObject({
+      decisionLines: [{ key: "report.doneByRule", params: { title: "Log hours" } }],
+    });
+    await service.call("rules.revoke", { ruleId: rule.id });
+
+    // 5. Outside flow held and approved once
+    mode = "outside";
+    const r5 = await service.engine.startRun(parsed.manifest.id, { project: "." });
+    const a5 = store.listApprovals({ runId: r5.id, state: "pending" })[0];
+    if (!a5) throw new Error("missing a5");
+    await service.call("approvals.resolve", { approvalId: a5.id, decision: "approve" });
+    await vi.waitFor(() => expect(store.getRun(r5.id)?.state).toBe("done"));
+    expect(await service.call("audit.list", { runId: r5.id })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "call_held",
+          detail: expect.objectContaining({ approvalId: a5.id, tool: "WebFetch", effect: "change" }),
+        }),
+        expect.objectContaining({
+          kind: "decision_made",
+          detail: expect.objectContaining({ approvalId: a5.id, decision: "approve", via: "window" }),
+        }),
+      ]),
+    );
+    expect(await service.call("runs.report", { runId: r5.id })).toMatchObject({
+      decisionLines: [{ key: "report.approvedOnce", params: { title: a5.summary } }],
+    });
+
+    const allAudits = await service.call("audit.list", {});
+    expect(allAudits).toContainEqual(
+      expect.objectContaining({
+        kind: "rule_revoked",
+        detail: expect.objectContaining({ ruleId: rule.id, placeKind: "account", by: "ask_me_again" }),
+      }),
+    );
+    expect(JSON.stringify(allAudits)).not.toContain(fakeToken);
+    expect(JSON.stringify(allAudits)).not.toContain(zws);
+  } finally {
+    service.stop();
+  }
+});
+
+test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as const)(
+  "TC-SR7-01 row %i writes the exact decision audit record",
+  { timeout: 20_000 },
+  async (rowNumber) => {
+    const { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { ResolvedVia } = await import("@flowdriven/contracts");
+    const { createClaudeAdapter } = await import("../claude/adapter.ts");
+    const { CONNECTORS } = await import("../connectors/catalog.ts");
+    const { callGrant, createGrantBook } = await import("../connectors/grants.ts");
+    const { createEngine } = await import("../engine.ts");
+    const { routeRequirement } = await import("../router/route.ts");
+    const { createDecisionHandlers } = await import("../service/handlers.ts");
+    const { createRunnerService } = await import("../service/service.ts");
+    const { createWeekly } = await import("../service/weekly-limit.ts");
+    const { pendingDecision } = await import("../test-helpers/builders.ts");
+    const { FAKE_CLAUDE_PATH, makeFakeHome, writeFakeScript } = await import(
+      "../test-helpers/fake-claude-script.ts"
+    );
+    const { recordRuleUse } = await import("./standing.ts");
+
+    const store = await openSqliteStore(":memory:");
+    stores.push(store);
+    let seq = 0;
+    let ms = Date.parse("2026-11-21T00:00:00Z");
+    const now = () => {
+      ms += 1000;
+      return new Date(ms);
+    };
+    const newId = (prefix: string) => `${prefix}-${++seq}`;
+
+    const runWithFakeClaude = async (opts: {
+      manifestInput: unknown;
+      actions: import("../test-helpers/fake-claude-script.ts").FakeAction[];
+      nextActions?: import("../test-helpers/fake-claude-script.ts").FakeAction[];
+      connectors?: Record<string, { url: string; id: string; tools: { name: string; readOnly?: boolean }[] }>;
+      facts?: import("../claude/connector-scan.ts").ConnectorFact[];
+      catalog?: import("../connectors/catalog.ts").ConnectorEntry[];
+      effectCatalog?: import("./effects.ts").EffectEntry[];
+      routes?: import("../router/types.ts").Routed[];
+      confirm?: { flowId: string; hash: string; onItsOwn: string[]; pins?: Record<string, string> };
+      beforeStart?: (flowId: string, hash: string) => Promise<void> | void;
+      afterHold?: (runId: string, svc: import("../service/service.ts").RunnerService) => Promise<void>;
+    }) => {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven-sr701-")));
+      const project = join(root, "project");
+      const notesDir = join(project, "notes");
+      mkdirSync(notesDir, { recursive: true });
+      writeFileSync(join(notesDir, "note.txt"), "hello");
+      const home = makeFakeHome({
+        ...(opts.connectors ? { connectors: opts.connectors } : {}),
+        plays: [{ when: "", actions: opts.actions }],
+      });
+      const parsed = parseManifest(opts.manifestInput);
+      if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+      const hash = `sha256:${"a".repeat(64)}`;
+      store.putFlow({
+        id: parsed.manifest.id,
+        hash,
+        version: parsed.manifest.version,
+        manifest: parsed.manifest,
+        files: {},
+        registeredAt: "2026-11-20T00:00:00Z",
+      });
+      store.putFlowHead({
+        id: parsed.manifest.id,
+        name: parsed.manifest.name,
+        summary: parsed.manifest.summary,
+        headHash: hash,
+        createdAt: "2026-11-20T00:00:00Z",
+        updatedAt: "2026-11-20T00:00:00Z",
+        origin: { kind: "import" },
+      });
+
+      const adapter = createClaudeAdapter({
+        claudePath: () => FAKE_CLAUDE_PATH,
+        env: () => ({ HOME: home, PATH: process.env.PATH, TMPDIR: tmpdir() }),
+        controlRoot: join(root, "control"),
+        audit: (kind, runId, detail) => store.appendAudit({ at: now().toISOString(), kind, runId, detail }),
+        newId,
+        newSessionId: () => `session-${++seq}`,
+        rounds: 20,
+        exitWaitMs: 10_000,
+        ...(opts.catalog ? { catalog: opts.catalog } : {}),
+        ...(opts.effectCatalog ? { effectCatalog: opts.effectCatalog } : {}),
+        ...(opts.facts ? { connectors: () => opts.facts ?? [] } : {}),
+        grants: createGrantBook(store),
+        confirmation: (runId) => {
+          const run = store.getRun(runId);
+          const confirmation = run && store.getConfirmation(run.flowId);
+          if (!run || !confirmation) return undefined;
+          return {
+            confirmation: {
+              flowId: run.flowId,
+              hash: run.flowHash,
+              onItsOwn: confirmation.onItsOwn,
+              touches:
+                parsed.manifest.format === "flowdriven-flow/1.2" ? (parsed.manifest.touches ?? []) : [],
+            },
+            rules: store.listRules().filter((r) => r.flowId === run.flowId),
+            source: "window",
+            earlierNo: false,
+            startedAt: run.startedAt,
+          };
+        },
+        rules: (flowId) => store.listRules().filter((r) => r.flowId === flowId),
+        recordRule: (input) => recordRuleUse(store, input),
+      });
+
+      const service = createRunnerService({
+        store,
+        dataDir: root,
+        mode: "demo",
+        harness: adapter,
+        now,
+        newId,
+      });
+      const routeEngine = opts.routes
+        ? createEngine({
+            store,
+            harness: adapter,
+            now,
+            newId,
+            routeOf: () => opts.routes ?? [],
+          })
+        : service.engine;
+
+      try {
+        if (opts.confirm) {
+          await service.call("flows.confirm", {
+            flowId: parsed.manifest.id,
+            hash,
+            onItsOwn: opts.confirm.onItsOwn,
+            pins: Object.fromEntries(
+              Object.entries(opts.confirm.pins ?? {}).map(([k, v]) => [k, v === "NOTES" ? notesDir : v]),
+            ),
+          });
+        }
+        await opts.beforeStart?.(parsed.manifest.id, hash);
+        const run = await routeEngine.startRun(parsed.manifest.id, { project });
+        if (opts.nextActions) {
+          writeFakeScript(home, {
+            ...(opts.connectors ? { connectors: opts.connectors } : {}),
+            plays: [{ when: "", actions: opts.nextActions }],
+          });
+        }
+        await opts.afterHold?.(run.id, service);
+        const audit = (await service.call("audit.list", { runId: run.id })) as Array<{
+          id: number;
+          kind: string;
+          runId?: string;
+          detail: Record<string, unknown>;
+        }>;
+        return { run, audit, notesDir, flowId: parsed.manifest.id, service };
+      } finally {
+        if (routeEngine !== service.engine) routeEngine.shutdown();
+        service.stop();
+        rmSync(root, { recursive: true, force: true });
+        rmSync(home, { recursive: true, force: true });
+      }
+    };
+
+    const service = createRunnerService({
+      store,
+      dataDir: ".",
+      mode: "demo",
+      now,
+      newId,
+    });
+    try {
+      if (rowNumber === 1) {
+        const root = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven-sr7-r1-")));
+        const project = join(root, "project");
+        const notesDir = join(project, "notes");
+        mkdirSync(notesDir, { recursive: true });
+        const filePath = join(notesDir, "note.txt");
+        writeFileSync(filePath, "hello");
+        const home = makeFakeHome({
+          plays: [
+            {
+              when: "",
+              actions: [
+                { do: "tool", id: "r1", name: "Read", input: { file_path: filePath } },
+                { do: "result", result: "done" },
+              ],
+            },
+          ],
+        });
+        try {
+          const parsed = parseManifest({
+            format: "flowdriven-flow/1.2",
+            id: "local.sr7-r1",
+            name: "Read",
+            kind: "build",
+            requirements: [{ id: "notes", type: "path", ref: "notes", access: "read" }],
+            touches: [
+              {
+                id: "read-notes",
+                sentence: "Read notes",
+                effect: "read",
+                rule: "runs_alone",
+                covers: [],
+                place: { kind: "folder", value: "notes", label: "Notes" },
+              },
+            ],
+            steps: [
+              {
+                id: "read",
+                do: "worker",
+                instructions: "Read",
+                uses: ["notes"],
+                checks: [{ type: "contains", pattern: "done" }],
+              },
+            ],
+          });
+          if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+          const hash = `sha256:${"a".repeat(64)}`;
+          store.putFlow({
+            id: parsed.manifest.id,
+            hash,
+            version: parsed.manifest.version,
+            manifest: parsed.manifest,
+            files: {},
+            registeredAt: "2026-11-20T00:00:00Z",
+          });
+          store.putFlowHead({
+            id: parsed.manifest.id,
+            name: parsed.manifest.name,
+            summary: parsed.manifest.summary,
+            headHash: hash,
+            createdAt: "2026-11-20T00:00:00Z",
+            updatedAt: "2026-11-20T00:00:00Z",
+            origin: { kind: "import" },
+          });
+          await service.call("flows.confirm", {
+            flowId: parsed.manifest.id,
+            hash,
+            onItsOwn: [],
+            pins: { notes: notesDir },
+          });
+          const adapter = createClaudeAdapter({
+            claudePath: () => FAKE_CLAUDE_PATH,
+            env: () => ({ HOME: home, PATH: process.env.PATH, TMPDIR: tmpdir() }),
+            controlRoot: join(root, "control"),
+            audit: (kind, runId, detail) =>
+              store.appendAudit({ at: now().toISOString(), kind, runId, detail }),
+            newId,
+            newSessionId: () => `session-${++seq}`,
+            rounds: 20,
+            exitWaitMs: 10_000,
+            confirmation: (runId) => {
+              const run = store.getRun(runId);
+              const confirmation = run && store.getConfirmation(run.flowId);
+              if (!run || !confirmation) return undefined;
+              return {
+                confirmation: {
+                  flowId: run.flowId,
+                  hash: run.flowHash,
+                  onItsOwn: confirmation.onItsOwn,
+                  touches:
+                    parsed.manifest.format === "flowdriven-flow/1.2" ? (parsed.manifest.touches ?? []) : [],
+                },
+                rules: [],
+                source: "window",
+                earlierNo: false,
+                startedAt: run.startedAt,
+              };
+            },
+          });
+          const engine = createEngine({ store, harness: adapter, now, newId });
+          const run = await engine.startRun(parsed.manifest.id, { project });
+          engine.shutdown();
+          expect(run.state).toBe("done");
+          const audit = (await service.call("audit.list", { runId: run.id })) as Array<{
+            kind: string;
+            runId?: string;
+            detail: Record<string, unknown>;
+          }>;
+          expect(audit.filter((entry) => entry.kind === "call_held")).toEqual([]);
+          expect(audit.filter((entry) => entry.kind === "tool_calls")).toEqual([
+            expect.objectContaining({
+              kind: "tool_calls",
+              runId: run.id,
+              detail: expect.objectContaining({ allowed: 1, held: 0, refused: 0 }),
+            }),
+          ]);
+        } finally {
+          rmSync(root, { recursive: true, force: true });
+          rmSync(home, { recursive: true, force: true });
+        }
+        return;
+      }
+
+      if (rowNumber === 2 || rowNumber === 4) {
+        const input = { url: "https://example.test/" };
+        const digest = digestCall("WebFetch", input);
+        let heldId = "";
+        const { run, audit } = await runWithFakeClaude({
+          manifestInput: {
+            format: "flowdriven-flow/1.2",
+            id: "local.sr7-r24",
+            name: "Outside",
+            kind: "build",
+            steps: [
+              {
+                id: "work",
+                do: "worker",
+                instructions: "Work",
+                checks: [{ type: "contains", pattern: "done" }],
+              },
+            ],
+          },
+          actions: [
+            { do: "tool", id: "w1", name: "WebFetch", input },
+            { do: "result", result: "done" },
+          ],
+          nextActions:
+            rowNumber === 4
+              ? [
+                  { do: "tool", id: "w2", name: "WebFetch", input },
+                  { do: "result", result: "done" },
+                ]
+              : undefined,
+          confirm: { flowId: "local.sr7-r24", hash: "", onItsOwn: [] },
+          afterHold: async (runId, svc) => {
+            const pending = store.listApprovals({ runId, state: "pending" })[0];
+            if (!pending) throw new Error("missing pending outside hold");
+            heldId = pending.id;
+            if (rowNumber === 4) {
+              await svc.call("approvals.resolve", { approvalId: heldId, decision: "approve" });
+              await vi.waitFor(() => expect(store.getRun(runId)?.state).toBe("done"), { timeout: 10_000 });
+            }
+          },
+        });
+        if (rowNumber === 2) {
+          expect(audit.filter((e) => e.kind === "call_held")).toEqual([
+            expect.objectContaining({
+              kind: "call_held",
+              runId: run.id,
+              detail: expect.objectContaining({
+                approvalId: heldId,
+                tool: "WebFetch",
+                effect: "change",
+                digest,
+              }),
+            }),
+          ]);
+          expect(audit.filter((e) => e.kind === "tool_calls")).toEqual([
+            expect.objectContaining({
+              kind: "tool_calls",
+              runId: run.id,
+              detail: expect.objectContaining({ held: 1 }),
+            }),
+          ]);
+        } else {
+          expect(audit.filter((e) => e.kind === "grant_used")).toEqual([
+            expect.objectContaining({
+              kind: "grant_used",
+              runId: run.id,
+              detail: expect.objectContaining({ approvalId: heldId, digest }),
+            }),
+          ]);
+        }
+        return;
+      }
+
+      if (rowNumber === 3) {
+        const gmail = CONNECTORS[0];
+        if (!gmail) throw new Error("missing gmail");
+        const fact = {
+          name: gmail.name,
+          url: gmail.url,
+          id: `mcpsrv_${"a".repeat(24)}`,
+          status: "connected" as const,
+          tools: [{ name: "reply", readOnly: false }],
+        };
+        const req = {
+          id: "gmail",
+          type: "mcp_server" as const,
+          ref: "connector:gmail",
+          tools: ["reply"],
+          required: true,
+          sensitive: false,
+          why: "Reply",
+        };
+        const route = routeRequirement(req, { hooks: true, chrome: false, connectors: [fact] });
+        if (!route?.routed) throw new Error("missing route");
+        const input = { to: ["sam@example.test"], subject: "Hi", body: "Thanks" };
+        const toolName = `${gmail.prefix}reply`;
+        const digest = digestCall(toolName, input);
+        let heldId = "";
+        const { run, audit } = await runWithFakeClaude({
+          manifestInput: {
+            format: "flowdriven-flow/1.2",
+            id: "local.sr7-r3",
+            name: "Mail",
+            kind: "build",
+            requirements: [req],
+            touches: [
+              { id: "reply", sentence: "Reply", effect: "send", rule: "asks_first", covers: ["gmail.reply"] },
+            ],
+            steps: [
+              {
+                id: "reply",
+                do: "worker",
+                instructions: "Reply",
+                uses: ["gmail"],
+                checks: [{ type: "contains", pattern: "done" }],
+              },
+            ],
+          },
+          actions: [
+            { do: "tool", id: "m1", name: toolName, input },
+            { do: "result", result: "done" },
+          ],
+          connectors: { [gmail.name]: { url: fact.url, id: fact.id, tools: fact.tools } },
+          facts: [fact],
+          routes: [route],
+          confirm: { flowId: "local.sr7-r3", hash: "", onItsOwn: [] },
+          afterHold: async (runId) => {
+            const pending = store.listApprovals({ runId, state: "pending" })[0];
+            if (!pending) throw new Error("missing risky hold");
+            heldId = pending.id;
+          },
+        });
+        expect(audit.filter((e) => e.kind === "call_held")).toEqual([
+          expect.objectContaining({
+            kind: "call_held",
+            runId: run.id,
+            detail: expect.objectContaining({
+              approvalId: heldId,
+              tool: toolName,
+              effect: "send",
+              digest,
+            }),
+          }),
+        ]);
+        return;
+      }
+
+      if (rowNumber === 5) {
+        const timesheet = {
+          ref: "connector:timesheet",
+          name: "timesheet",
+          url: "https://timesheet.example.test/mcp",
+          prefix: "mcp__timesheet__",
+          label: "Timesheet",
+          read: [],
+          write: ["log_entry"],
+          risky: {},
+        };
+        const fact = {
+          name: timesheet.name,
+          url: timesheet.url,
+          id: `mcpsrv_${"b".repeat(24)}`,
+          status: "connected" as const,
+          tools: [{ name: "log_entry", readOnly: false }],
+        };
+        const req = {
+          id: "timesheet",
+          type: "mcp_server" as const,
+          ref: "connector:timesheet",
+          tools: ["log_entry"],
+          required: true,
+          sensitive: false,
+          why: "Log",
+        };
+        const route = routeRequirement(req, { hooks: true, chrome: false, connectors: [fact] }, [timesheet]);
+        if (!route?.routed) throw new Error("missing timesheet route");
+        const place = { kind: "account" as const, value: "timesheet-account", label: "Timesheet" };
+        const { run, audit, flowId } = await runWithFakeClaude({
+          manifestInput: {
+            format: "flowdriven-flow/1.2",
+            id: "local.sr7-r5",
+            name: "Timesheet",
+            kind: "build",
+            requirements: [req],
+            touches: [
+              {
+                id: "log-hours",
+                sentence: "Log hours",
+                effect: "change",
+                rule: "asks_first",
+                covers: ["timesheet.log_entry"],
+                place,
+              },
+            ],
+            steps: [
+              {
+                id: "log",
+                do: "worker",
+                instructions: "Log hours",
+                uses: ["timesheet"],
+                checks: [{ type: "contains", pattern: "done" }],
+              },
+            ],
+          },
+          actions: [
+            { do: "tool", id: "ts1", name: `${timesheet.prefix}log_entry`, input: { hours: 2 } },
+            { do: "result", result: "done" },
+          ],
+          connectors: { [timesheet.name]: { url: fact.url, id: fact.id, tools: fact.tools } },
+          facts: [fact],
+          catalog: [timesheet],
+          effectCatalog: [{ tool: `${timesheet.prefix}log_entry`, effect: "change", place }],
+          routes: [route],
+          confirm: { flowId: "local.sr7-r5", hash: "", onItsOwn: ["log-hours"] },
+        });
+        expect(run.state).toBe("done");
+        const rule = store.listRules()[0];
+        if (!rule) throw new Error("missing rule");
+        expect(audit.filter((e) => e.kind === "rule_used")).toEqual([
+          expect.objectContaining({
+            kind: "rule_used",
+            runId: run.id,
+            detail: {
+              ruleId: rule.id,
+              flowId,
+              touchId: "log-hours",
+              effect: "change",
+              placeKind: "account",
+              runId: run.id,
+              stepId: "log",
+            },
+          }),
+        ]);
+        expect(JSON.stringify(audit)).not.toContain("timesheet-account");
+        return;
+      }
+
+      if (rowNumber === 6 || rowNumber === 7 || rowNumber === 8) {
+        const row = pendingDecision(store, {
+          id: `sr7-r${rowNumber}`,
+          createdAt: "2026-11-21T00:00:00Z",
+          kind: "risky_action",
+          effect: "send",
+        });
+        const tool = "mcp__claude_ai_Gmail__reply";
+        const input = { to: ["sam@example.test"], subject: "Hello", body: "Thanks" };
+        store.updateApproval(row.id, {
+          call: { tool, input },
+          payload: { kind: "email", to: ["sam@example.test"], subject: "Hello", body: "Thanks" },
+          approves: [callGrant("mail", tool, digestCall(tool, input))],
+        });
+        const decision = rowNumber === 6 ? "approve" : rowNumber === 7 ? "edit" : "reject";
+        await service.call("approvals.resolve", {
+          approvalId: row.id,
+          decision,
+          ...(decision === "edit" ? { editedText: "Edited" } : {}),
+        });
+        const audit = (await service.call("audit.list", { runId: row.runId })) as Array<{
+          kind: string;
+          runId?: string;
+          detail: Record<string, unknown>;
+        }>;
+        const made = audit.filter((e) => e.kind === "decision_made");
+        expect(made).toEqual([
+          expect.objectContaining({
+            kind: "decision_made",
+            runId: row.runId,
+            detail: { approvalId: row.id, decision, via: "window" },
+          }),
+        ]);
+        expect(ResolvedVia.safeParse(made[0]?.detail.via).success).toBe(true);
+        return;
+      }
+
+      if (rowNumber === 9) {
+        const sendRow = pendingDecision(store, {
+          id: "sr7-r9-send",
+          createdAt: "2026-11-21T00:00:00Z",
+          kind: "risky_action",
+          effect: "send",
+        });
+        store.updateApproval(sendRow.id, {
+          fixedPlace: true,
+          place: { kind: "account", value: "mail", label: "Mail" },
+        });
+        await expect(
+          service.call("approvals.resolve", { approvalId: sendRow.id, decision: "always_allow" }),
+        ).rejects.toMatchObject({ code: "not_allowed", reason: "always_asks" });
+        expect(await service.call("audit.list", { runId: sendRow.runId })).toEqual([]);
+
+        const row = pendingDecision(store, {
+          id: "sr7-r9-change",
+          createdAt: "2026-11-21T00:00:00Z",
+          kind: "risky_action",
+          effect: "change",
+        });
+        const flow = store.getFlow(store.getRun(row.runId)?.flowId ?? "");
+        if (!flow || !flow.manifest || typeof flow.manifest !== "object") throw new Error("missing flow");
+        const place = { kind: "account" as const, value: "timesheet-account", label: "Timesheet" };
+        store.putFlow({
+          ...flow,
+          manifest: {
+            ...flow.manifest,
+            format: "flowdriven-flow/1.2",
+            touches: [
+              {
+                id: "log-hours",
+                sentence: "Log hours",
+                effect: "change",
+                rule: "asks_first",
+                covers: ["timesheet.log_entry"],
+                place,
+              },
+            ],
+          },
+        });
+        const tool = "timesheet.log_entry";
+        const input = { hours: 8 };
+        store.updateApproval(row.id, {
+          touchId: "log-hours",
+          fixedPlace: true,
+          place,
+          call: { tool, input },
+          approves: [callGrant("timesheet", tool, digestCall(tool, input))],
+        });
+        const res = (await service.call("approvals.resolve", {
+          approvalId: row.id,
+          decision: "always_allow",
+        })) as { decision: { ruleId?: string } };
+        const audit = (await service.call("audit.list", { runId: row.runId })) as Array<{
+          kind: string;
+          runId?: string;
+          detail: Record<string, unknown>;
+        }>;
+        expect(audit.filter((e) => e.kind === "decision_made")).toEqual([
+          expect.objectContaining({
+            kind: "decision_made",
+            runId: row.runId,
+            detail: { approvalId: row.id, decision: "always_allow", via: "window" },
+          }),
+        ]);
+        expect(audit.filter((e) => e.kind === "rule_created")).toEqual([
+          expect.objectContaining({
+            kind: "rule_created",
+            runId: row.runId,
+            detail: expect.objectContaining({
+              by: "always_allow",
+              ruleId: res.decision.ruleId,
+              placeKind: "account",
+            }),
+          }),
+        ]);
+        expect(JSON.stringify(audit)).not.toContain("timesheet-account");
+        return;
+      }
+
+      if (rowNumber === 10 || rowNumber === 11 || rowNumber === 12) {
+        const row = pendingDecision(store, {
+          id: `sr7-r${rowNumber}`,
+          createdAt: "2026-11-21T00:00:00Z",
+          kind: "risky_action",
+          effect: "change",
+        });
+        const run = store.getRun(row.runId);
+        if (!run) throw new Error("missing run");
+        if (rowNumber === 10) {
+          store.updateRun(row.runId, { state: "needs_login" });
+          store.putFlowHead({
+            id: run.flowId,
+            name: "Flow",
+            summary: "Summary",
+            headHash: run.flowHash,
+            createdAt: row.createdAt,
+            updatedAt: row.createdAt,
+            origin: { kind: "import" },
+          });
+          await service.call("flows.delete", { flowId: run.flowId });
+        } else if (rowNumber === 11) {
+          await service.call("runs.stop", { runId: row.runId });
+        } else {
+          await service.call("settings.update", { patch: { agentPermission: "on" } });
+          await service.call("settings.update", { patch: { agentPermission: "off" } });
+        }
+        const audit = (await service.call("audit.list", { runId: row.runId })) as Array<{
+          kind: string;
+          runId?: string;
+          detail: Record<string, unknown>;
+        }>;
+        const why = rowNumber === 10 ? "flow_deleted" : rowNumber === 11 ? "stop" : "permission_off";
+        expect(audit.filter((e) => e.kind === "decision_expired")).toEqual([
+          expect.objectContaining({
+            kind: "decision_expired",
+            runId: row.runId,
+            detail: { approvalId: row.id, runId: row.runId, why },
+          }),
+        ]);
+        if (rowNumber === 11)
+          expect(audit.filter((e) => e.kind === "run_stopped")).toEqual([
+            expect.objectContaining({ kind: "run_stopped", runId: row.runId }),
+          ]);
+        return;
+      }
+
+      const row = pendingDecision(store, {
+        id: "sr7-r13",
+        createdAt: "2026-11-21T00:00:00Z",
+        kind: "risky_action",
+        effect: "change",
+      });
+      const handlers = createDecisionHandlers(
+        store,
+        service.engine,
+        createWeekly({ store, now, recheck: () => {} }),
+        () => {},
+      );
+      handlers.resolve({ approvalId: row.id, decision: "approve" }, { caller: "phone" });
+      const audit = (await service.call("audit.list", { runId: row.runId })) as Array<{
+        kind: string;
+        runId?: string;
+        detail: Record<string, unknown>;
+      }>;
+      const made = audit.filter((e) => e.kind === "decision_made");
+      expect(made).toEqual([
+        expect.objectContaining({
+          kind: "decision_made",
+          runId: row.runId,
+          detail: { approvalId: row.id, decision: "approve", via: "phone" },
+        }),
+      ]);
+      expect(ResolvedVia.safeParse(made[0]?.detail.via).success).toBe(true);
+    } finally {
+      service.stop();
+    }
+  },
+);

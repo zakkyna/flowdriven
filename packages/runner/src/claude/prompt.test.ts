@@ -79,3 +79,27 @@ test("judge markers use a valid code and reject invalid codes", () => {
       "The marker code is not valid.",
     );
 });
+
+test("TC-SR1-48 outside approvals appear without a connector", () => {
+  const prompt = buildPrompt({
+    instructions: "Work",
+    outputs: [],
+    approved: [{ tool: "Bash", input: { command: "echo hello" } }],
+  });
+  expect(prompt).toContain(
+    'The owner approved this call. Make it once, exactly as written:\nBash {"command":"echo hello"}',
+  );
+  const combined = buildPrompt({
+    instructions: "Work",
+    outputs: [],
+    connector: {
+      label: "Gmail",
+      tools: ["mcp__g__reply"],
+      approved: [{ tool: "mcp__g__reply", input: { body: "hi" } }],
+    },
+    approved: [{ tool: "Bash", input: { command: "echo hi" } }],
+  });
+  expect(combined.match(/The owner approved this call\. Make it once, exactly as written:/g)).toHaveLength(2);
+  expect(combined).toContain('mcp__g__reply {"body":"hi"}');
+  expect(combined).toContain('Bash {"command":"echo hi"}');
+});

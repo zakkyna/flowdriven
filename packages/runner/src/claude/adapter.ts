@@ -245,6 +245,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                     earlierNo: confirmed.earlierNo,
                     startedAt: confirmed.startedAt,
                   });
+                if (req.rejectedCalls?.length) policy.rejectedCalls = req.rejectedCalls;
                 workFolder = policy.workFolder;
                 if (skillRequirement) {
                   const result = prepareSkillStep({
@@ -280,6 +281,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   } catch {}
                 }
                 return buildPrompt({
+                  approved: (req.approvedCalls ?? []).filter((call) => call.outsideFlow),
                   ...(policy.commands
                     ? { commands: { patterns: policy.commands.patterns, cwd: policy.cwd } }
                     : {}),
@@ -293,7 +295,9 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                           ),
                           labelHold: (policy.connector.labelTools?.length ?? 0) > 0,
                           approved: (req.approvedCalls ?? [])
-                            .filter((call) => policy.connector?.tools.includes(call.tool))
+                            .filter(
+                              (call) => !call.outsideFlow && policy.connector?.tools.includes(call.tool),
+                            )
                             .map((call) => ({
                               ...call,
                               tool: `${policy.connector?.prefix ?? ""}${call.tool}`,

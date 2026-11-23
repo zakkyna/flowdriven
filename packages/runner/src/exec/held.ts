@@ -128,7 +128,7 @@ export function sendCapable(store: Store, row: StepRow, manifest: FlowManifest):
       .listApprovals({ runId: row.runId })
       .some(
         (decision) =>
-          decision.kind === "risky_action" &&
+          (decision.kind === "risky_action" || decision.kind === "outside_flow") &&
           decision.stepId === row.stepId &&
           decision.itemKey === row.itemKey &&
           ["approved", "approved_edited", "allowed_always"].includes(decision.state),
@@ -157,16 +157,16 @@ export function approvedCallsOf(
   runId: string,
   stepId: string,
   itemKey: string,
-): { tool: string; input: Value }[] {
+): { tool: string; input: Value; outsideFlow?: true }[] {
   return store
     .listApprovals({ runId })
     .filter(
       (row) => row.state === "approved" || row.state === "approved_edited" || row.state === "allowed_always",
     )
-    .flatMap((row) => {
+    .flatMap((row): { tool: string; input: Value; outsideFlow?: true }[] => {
       const grant = row.approves.at(0);
       if (
-        row.kind !== "risky_action" ||
+        (row.kind !== "risky_action" && row.kind !== "outside_flow") ||
         row.stepId !== stepId ||
         row.itemKey !== itemKey ||
         !row.call ||
@@ -176,16 +176,20 @@ export function approvedCallsOf(
           runId,
           stepId,
           itemKey,
-          tool: row.call.tool.startsWith("mcp__") ? row.call.tool : grant.slice(0, grant.indexOf("#")),
+          tool:
+            row.kind === "outside_flow" || row.call.tool.startsWith("mcp__")
+              ? row.call.tool
+              : grant.slice(0, grant.indexOf("#")),
           digest: row.editedDigest ?? grant.slice(grant.indexOf("#") + 1),
           kind: "approve",
           createdAt: "",
         })
       )
         return [];
-      const tool = row.call.tool.startsWith("mcp__")
-        ? row.call.tool.slice(row.call.tool.lastIndexOf("__") + 2)
-        : row.call.tool;
+      const tool =
+        row.kind !== "outside_flow" && row.call.tool.startsWith("mcp__")
+          ? row.call.tool.slice(row.call.tool.lastIndexOf("__") + 2)
+          : row.call.tool;
       const input = row.call.input;
       if (
         row.state === "approved_edited" &&
@@ -206,7 +210,7 @@ export function approvedCallsOf(
           },
         ];
       }
-      return [{ ...row.call, tool }];
+      return [{ ...row.call, tool, ...(row.kind === "outside_flow" ? { outsideFlow: true as const } : {}) }];
     });
 }
 export function labelOf(requirements: Requirement[], requirementId: string): string {

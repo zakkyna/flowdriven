@@ -56,6 +56,9 @@ export function scriptedHarness(script: Script): ScriptedHarness {
         reply = entry.at(Math.min(n, entry.length - 1));
       } else reply = typeof entry === "function" ? entry(req) : entry;
       if (!reply) throw new Error(`no script for step ${key}`);
+      const held = reply.hold;
+      if (held && req.rejectedCalls?.some((row) => row.tool === held.tool && row.digest === held.digest))
+        reply = { ...reply, hold: undefined };
       if (reply.hang)
         await new Promise<never>((_resolve, reject) => {
           const abort = () => reject(new DOMException("Aborted", "AbortError"));

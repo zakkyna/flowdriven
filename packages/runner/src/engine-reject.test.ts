@@ -368,3 +368,95 @@ test("TC-RUL-26 a rejection during another item's session stops its rules", asyn
   await c.engine.decide(c.decision.id, "reject");
   expect(decide(policy, call, undefined, undefined, books)).toMatchObject({ outcome: "hold" });
 });
+
+test("TC-SR1-49 outside rejection continues the step without a grant", async () => {
+  // Chain continuation ("the chain proceeds") moved to B-10.T3 (TC-j24-10).
+  const manifest = flow([
+    { ...worker("reply"), outputs: [{ id: "summary", type: "text" }] },
+    worker("after", "Use ${steps.reply.outputs.summary}"),
+  ]);
+  const c = await setup(manifest, {
+    steps: {
+      reply: { text: "ok", outputs: { summary: "ok remaining work" }, hold: { ...hold, outsideFlow: true } },
+      after: { text: "ok" },
+    },
+  });
+  stores.push(c.store);
+  const run = await c.engine.startRun(manifest.id, { project: "." });
+  const row = c.store.listApprovals({ runId: run.id, state: "pending" })[0];
+  if (!row) throw new Error("missing decision");
+  expect((await c.engine.decide(row.id, "reject")).state).toBe("done");
+  expect(c.store.getStep(run.id, "reply")).toMatchObject({
+    state: "passed",
+    outputs: { summary: "ok remaining work" },
+  });
+  expect(c.store.getStep(run.id, "reply")?.attempts).toHaveLength(1);
+  expect(c.store.getStep(run.id, "after")?.state).toBe("passed");
+  expect(c.store.getRun(run.id)?.decisionLines).toContainEqual({
+    key: "report.youSaidNo",
+    params: { title: row.summary },
+  });
+  const replyReRun = c.harness.calls.filter((call) => call.stepId === "reply").at(-1);
+  expect(replyReRun?.rejectedCalls).toEqual([{ tool, digest: hold.digest }]);
+  expect(replyReRun?.approvedCalls).toBeUndefined();
+  expect(c.store.listApprovals({ runId: run.id })).toHaveLength(1);
+  expect(c.store.hasCallGrant(run.id, "reply", "")).toBe(false);
+  expect(c.store.listRules()).toEqual([]);
+});
+
+test("TC-SR1-49 the same outside call is held again in another step or item and while another waits", async () => {
+  const outside = { ...hold, outsideFlow: true as const };
+  const manifest = flow([worker("first"), worker("second")]);
+  const c = await setup(manifest, {
+    steps: { first: { text: "ok", hold: outside }, second: { text: "ok", hold: outside } },
+  });
+  stores.push(c.store);
+  const run = await c.engine.startRun(manifest.id, { project: "." });
+  const row = c.store.listApprovals({ runId: run.id, state: "pending" })[0];
+  if (!row) throw new Error("missing decision");
+  expect((await c.engine.decide(row.id, "reject")).state).toBe("waiting_approval");
+  expect(c.store.listApprovals({ runId: run.id, state: "pending" })).toMatchObject([
+    { stepId: "second", kind: "outside_flow" },
+  ]);
+  expect(c.harness.calls.at(-1)?.rejectedCalls).toBeUndefined();
+
+  const loopManifest = parseManifest({
+    ...flow([{ id: "loop", for_each: "${inputs.items}", as: "item", steps: [worker("work")] }]),
+    inputs: [{ id: "items", type: "list<text>", label: "Items" }],
+  });
+  if (!loopManifest.ok) throw new Error(JSON.stringify(loopManifest.issues));
+  const loopRunSetup = await setup(loopManifest.manifest, {
+    steps: { work: { text: "ok", hold: outside } },
+  });
+  stores.push(loopRunSetup.store);
+  const loopRun = await loopRunSetup.engine.startRun(loopManifest.manifest.id, {
+    project: ".",
+    inputs: { items: ["a", "b"] },
+  });
+  const firstItemDecision = loopRunSetup.store.listApprovals({ runId: loopRun.id, state: "pending" })[0];
+  if (!firstItemDecision) throw new Error("missing item #0 decision");
+  expect((await loopRunSetup.engine.decide(firstItemDecision.id, "reject")).state).toBe("waiting_approval");
+  expect(loopRunSetup.store.getStep(loopRun.id, "work", "#0")?.state).toBe("passed");
+  const secondItemDecision = loopRunSetup.store.listApprovals({ runId: loopRun.id, state: "pending" })[0];
+  expect(secondItemDecision).toMatchObject({ stepId: "work", itemKey: "#1", kind: "outside_flow" });
+  if (!secondItemDecision) throw new Error("missing item #1 decision");
+  // Rejecting item #0 while item #1 also has a pending decision on the same stepId still re-runs item #0.
+  const waitingItemSetup = await setup(loopManifest.manifest, {
+    steps: { work: { text: "ok", hold: outside } },
+  });
+  stores.push(waitingItemSetup.store);
+  const concurrentRun = await waitingItemSetup.engine.startRun(loopManifest.manifest.id, {
+    project: ".",
+    inputs: { items: ["a", "b"] },
+  });
+  const item0 = waitingItemSetup.store.listApprovals({ runId: concurrentRun.id, state: "pending" })[0];
+  if (!item0) throw new Error("missing concurrent item0 decision");
+  waitingItemSetup.store.createApproval({
+    ...item0,
+    id: "ap-item1-pending",
+    itemKey: "#1",
+  });
+  expect((await waitingItemSetup.engine.decide(item0.id, "reject")).state).toBe("waiting_approval");
+  expect(waitingItemSetup.store.getStep(concurrentRun.id, "work", "#0")?.state).toBe("passed");
+  expect(waitingItemSetup.store.getApproval("ap-item1-pending")?.state).toBe("pending");
+});

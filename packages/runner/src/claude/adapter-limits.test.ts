@@ -933,3 +933,110 @@ test("the harness service leaves confirmations unavailable until the store wirin
     store.close();
   }
 });
+
+test("TC-SR1-49 a rejected outside call is refused by the fake Claude hook", {
+  timeout: 20_000,
+}, async () => {
+  const { digestCall } = await import("../connectors/grants.ts");
+  const input = { url: "https://example.test/" };
+  const t = setup(
+    play([
+      { do: "tool", id: "web", name: "WebFetch", input },
+      { do: "result", result: "done" },
+    ]),
+    {
+      confirmation: () => ({
+        confirmation: { flowId: "example.flow", hash: "hash", onItsOwn: [], touches: [] },
+        rules: [],
+        source: "chat",
+        earlierNo: false,
+      }),
+    },
+  );
+  t.request.rejectedCalls = [{ tool: "WebFetch", digest: digestCall("WebFetch", input) }];
+  const result = await t.adapter.runStep(t.request);
+  expect(result.hold).toBeUndefined();
+  expect(readFakeCalls(t.home)).toContainEqual(
+    expect.objectContaining({ kind: "tool", id: "web", hookExit: 2, ran: false }),
+  );
+  expect(t.audits).toContainEqual(
+    expect.objectContaining({
+      kind: "tool_denied",
+      detail: expect.objectContaining({ reason: "You said no to this, so it was not done." }),
+    }),
+  );
+  expect(JSON.stringify(t.audits.filter((a) => a.kind === "tool_denied"))).not.toContain(
+    "https://example.test/",
+  );
+  expect(t.audits).toContainEqual(
+    expect.objectContaining({ kind: "tool_calls", detail: expect.objectContaining({ held: 0, refused: 1 }) }),
+  );
+});
+
+test("TC-SR1-48 an outside Bash grant runs once and the repeated call is held", {
+  timeout: 20_000,
+}, async () => {
+  const { createGrantBook, digestCall } = await import("../connectors/grants.ts");
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const store = await openSqliteStore(":memory:");
+  try {
+    const row = pendingDecision(store, {
+      id: "outside-bash",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "outside_flow",
+      effect: "run_command",
+    });
+    const input = { command: "echo hello" };
+    const digest = digestCall("Bash", input);
+    store.updateApproval(row.id, {
+      state: "approved",
+      call: { tool: "Bash", input },
+      approves: [`Bash#${digest}`],
+    });
+    store.putCallGrant({
+      runId: row.runId,
+      stepId: row.stepId,
+      itemKey: row.itemKey,
+      tool: "Bash",
+      digest,
+      kind: "approve",
+      createdAt: row.createdAt,
+      approvalId: row.id,
+    });
+    const t = setup(
+      play([
+        { do: "tool", id: "first", name: "Bash", input },
+        { do: "tool", id: "second", name: "Bash", input },
+        { do: "result", result: "done" },
+      ]),
+      {
+        grants: createGrantBook(store),
+        confirmation: () => ({
+          confirmation: { flowId: "example.flow", hash: "hash", onItsOwn: [], touches: [] },
+          rules: [],
+          source: "chat",
+          earlierNo: false,
+        }),
+      },
+    );
+    t.request.runId = row.runId;
+    t.request.stepId = row.stepId;
+    t.request.itemKey = row.itemKey;
+    const result = await t.adapter.runStep(t.request);
+    expect(result.hold).toMatchObject({ tool: "Bash", outsideFlow: true, digest });
+    expect(readFakeCalls(t.home)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "first", hookExit: 0, ran: true }),
+        expect.objectContaining({ id: "second", hookExit: 2, ran: false }),
+      ]),
+    );
+    expect(t.audits).toContainEqual(
+      expect.objectContaining({
+        kind: "grant_used",
+        detail: expect.objectContaining({ approvalId: row.id, digest }),
+      }),
+    );
+  } finally {
+    store.close();
+  }
+});
