@@ -120,6 +120,7 @@ test("TC-AGT-01 catalog has safe commands and both agents", async () => {
       lowestVersion: expect.any(String),
       models: expect.any(Object),
     });
+    if (!entry.install) throw new Error("Expected the shipped installer (TC-AGT-01).");
     for (const command of [entry.install, entry.signIn, entry.status]) {
       expect(command).toMatchObject({ program: expect.any(String), args: expect.any(Array) });
       expect([command.program, ...command.args].join(" ")).not.toMatch(

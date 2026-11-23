@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { Notice } from "@flowdriven/contracts";
 import { CONTRACT_VERSION, operations, RunnerError, type RunnerTopic } from "@flowdriven/contracts";
 import { createAgentRegistry, type RegistryOptions } from "../agents/registry.ts";
+import { createAgentSetup, type SetupOptions } from "../agents/setup.ts";
 import { STOP } from "../claude/browser-post.ts";
 import { visible } from "../claude/text.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
@@ -61,17 +62,10 @@ export type ServiceOptions = {
   agents?: Partial<
     Pick<
       RegistryOptions,
-      | "home"
-      | "extraDirs"
-      | "claudePath"
-      | "codexPath"
-      | "timeoutMs"
-      | "catalog"
-      | "fs"
-      | "spawnInstall"
-      | "every"
+      "home" | "extraDirs" | "claudePath" | "codexPath" | "timeoutMs" | "catalog" | "fs" | "every"
     >
-  >;
+  > &
+    Pick<SetupOptions, "spawnInstall" | "spawnSignIn">;
   scanTimeoutMs?: number;
   keeper?: { probes?: Probes; every?: Every };
   markChanged?: (topic: RunnerTopic) => void;
@@ -140,6 +134,14 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
         store.listRuns({ flowId: store.getRun(runId)?.flowId }).findIndex((run) => run.id === runId),
     });
   const registry = createAgentRegistry({
+    store,
+    cwd: options.dataDir,
+    env: options.env ?? process.env,
+    now,
+    ...options.agents,
+    markChanged: () => options.markChanged?.("agents"),
+  });
+  const setup = createAgentSetup({
     store,
     cwd: options.dataDir,
     env: options.env ?? process.env,
@@ -287,6 +289,25 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     call: createDispatcher({
       v2: {
         "agents.list": async () => mapAgents(await registry.list()),
+        "agents.setUp": async ({ agentId }) => {
+          await registry.list();
+          const result = await setup.setUp(agentId);
+          if (result.error) {
+            if (result.error === "agent_not_ready")
+              throw new RunnerError("not_allowed", "Agent is not ready.");
+            const code =
+              result.error === "agent_unknown"
+                ? "not_found"
+                : result.error === "setup_running"
+                  ? "conflict"
+                  : "unavailable";
+            throw new RunnerError(code, "Agent setup unavailable.", { reason: result.error });
+          }
+          options.markChanged?.("settings");
+          const agent = mapAgents(await registry.list()).find((item) => item.id === agentId);
+          if (!agent) throw new RunnerError("not_found", "Agent not found.", { reason: "agent_unknown" });
+          return agent;
+        },
         "agents.models": async ({ agentId }) => {
           const result = await registry.models(agentId);
           if (result.error)
@@ -377,6 +398,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     },
     stop: () => {
       triggers.stop();
+      setup.stop();
       registry.stop();
       engine.shutdown();
       hs?.stop();

@@ -6,7 +6,7 @@ export type CatalogEntry = {
   name: string;
   maker: string;
   binary: string;
-  install: AgentCommand;
+  install: AgentCommand | null;
   signIn: AgentCommand;
   status: AgentCommand;
   modelsCommand?: AgentCommand | null;

@@ -40,7 +40,7 @@ const defaults = (home?: string) => [
     ? [".claude/local", ".npm-global/bin", ".bun/bin"].map((dir) => join(home, dir))
     : []),
 ];
-function find(entry: CatalogEntry, options: DetectionOptions): string | undefined {
+export function find(entry: CatalogEntry, options: DetectionOptions): string | undefined {
   const dirs = [
     ...(options.env.PATH ?? "").split(":").filter(isAbsolute),
     ...(options.extraDirs ?? defaults(options.home ?? options.env.HOME)),
@@ -164,7 +164,6 @@ export type RegistryOptions = {
   timeoutMs?: number;
   catalog?: CatalogEntry[];
   fs?: DetectionOptions["fs"];
-  spawnInstall?: (program: string, args: string[]) => unknown;
   every?: (ms: number, fn: () => void) => () => void;
   markChanged?: () => void;
 };
@@ -249,7 +248,9 @@ export function createAgentRegistry(options: RegistryOptions) {
         risk: entry.risk,
         riskNote: { key: entry.noteKey },
         canSetUp,
-        ...(canSetUp ? { installCommand: [entry.install.program, ...entry.install.args].join(" ") } : {}),
+        ...(canSetUp && entry.install
+          ? { installCommand: [entry.install.program, ...entry.install.args].join(" ") }
+          : {}),
         billing: row?.billing ?? "unknown",
         ...(state === "ready" && row?.models?.list.length
           ? { models: row.models.list, defaultModel: row.models.list.find((m) => m.isDefault)?.id }
