@@ -56,9 +56,17 @@ export function heldPayload(input: Value, tool?: string): Value | undefined {
           : Array.isArray(value) && value.every((v) => typeof v === "string")
             ? value.map((v) => markHeld(v as string))
             : undefined;
-      const to = list(input.to);
-      const cc = input.cc === undefined ? undefined : list(input.cc);
-      const bcc = input.bcc === undefined ? undefined : list(input.bcc);
+      const addresses = (value: Value | undefined) => {
+        const items = typeof value === "string" ? [value] : value;
+        if (!Array.isArray(items) || !items.every((v) => typeof v === "string")) return undefined;
+        return items.map((v: string) => {
+          const ascii = asciiAddress(v);
+          return markHeld(v) + (ascii !== v.toLowerCase() ? ` (${markHeld(ascii)})` : "");
+        });
+      };
+      const to = addresses(input.to);
+      const cc = input.cc === undefined ? undefined : addresses(input.cc);
+      const bcc = input.bcc === undefined ? undefined : addresses(input.bcc);
       const attachments = input.attachments === undefined ? undefined : list(input.attachments);
       const subject = typeof input.subject === "string" ? markHeld(input.subject) : undefined;
       const body = typeof input.body === "string" ? markHeld(input.body) : undefined;

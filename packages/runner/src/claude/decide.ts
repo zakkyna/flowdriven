@@ -172,7 +172,7 @@ export type RuleBook = {
     place: NonNullable<import("./policy.ts").CompiledTouch["place"]>,
   ): RuleRow | undefined;
 };
-type Books = { grants?: Pick<Store, "findGrant">; rules?: RuleRow[] | RuleBook };
+type Books = { grants?: Pick<Store, "findGrant">; rules?: RuleRow[] | RuleBook; earlierNo?: () => boolean };
 
 export function decide(
   policy: Policy,
@@ -352,6 +352,8 @@ export function decide(
   const findRule = () => {
     if (
       touch?.fixedPlace &&
+      !policy.earlierNo &&
+      !books?.earlierNo?.() &&
       !hiddenAddress &&
       policy.flowId &&
       ((touch.list === "on_its_own" && (effect === "local_write" || effect === "run_command")) ||

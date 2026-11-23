@@ -283,7 +283,10 @@ export async function runLeaf(
               itemKey,
               summary:
                 replyTitle ??
-                `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
+                visible(
+                  `${visible(step.title ?? step.id, 80)}: ${hold.tool} on ${labelOf(run.requirements, hold.requirementId)}`,
+                  200,
+                ),
               payload,
               call: { tool: hold.tool, input: hold.input },
               approves: [grant],
@@ -427,7 +430,7 @@ export async function runLeaf(
                   itemKey,
                   summary: ownCheck
                     ? OWN_TEXT.summary(visible(interpolate(step.title ?? step.id, scope), 80))
-                    : `Approve the result of "${step.title ?? step.id}"`,
+                    : `Approve the result of "${visible(step.title ?? step.id, 80)}"`,
                   payload: ownCheck && typeof value === "string" ? value : result.text.slice(0, 4000),
                   ...(ownCheck && output !== undefined && typeof value === "string"
                     ? { ownText: { output, hash: ownTextHash(value) } }

@@ -21,6 +21,8 @@ async function ready(
     expiry?: string;
     source?: string;
     signoff?: boolean;
+    jobs?: { id: string; title: string }[];
+    question?: string;
   } = {},
 ) {
   const parsed = parseManifest({
@@ -66,7 +68,7 @@ async function ready(
         id: "pick",
         do: "ask",
         ask: {
-          question: "Pick for ${params.who}",
+          question: options.question ?? "Pick for ${params.who}",
           choose_from: options.source ?? "${steps.review.items where steps.full.outputs.verdict.fit}",
           max_pick: options.maxPick ?? 1,
           approves: ["host.publish"],
@@ -97,7 +99,8 @@ async function ready(
   const project = mkdtempSync(join(tmpdir(), "flowdriven-"));
   folders.push(project);
   writeFileSync(join(project, "out.txt"), "ok");
-  const jobs = ["one", "two", "three"].map((title, i) => ({ id: `j${i + 1}`, title: `Job ${title}` }));
+  const jobs =
+    options.jobs ?? ["one", "two", "three"].map((title, i) => ({ id: `j${i + 1}`, title: `Job ${title}` }));
   let duringProto: (() => void) | undefined;
   const c = await setup(parsed.manifest, {
     steps: {
@@ -282,4 +285,25 @@ test("a choice source that is not a list blocks the run", async () => {
   const c = await ready({ source: "${params.who}" });
   expect(c.run.state).toBe("blocked");
   expect(c.engine.listApprovals()).toEqual([]);
+});
+
+test.each([
+  [51, 4, "blocked"],
+  [50, 4, "waiting_approval"],
+  [1, 4001, "blocked"],
+  [1, 4000, "waiting_approval"],
+] as const)("T17 choice bounds count %i title %i", async (count, length, state) => {
+  const jobs = Array.from({ length: count }, (_, i) => ({ id: `j${i + 1}`, title: "x".repeat(length) }));
+  const c = await ready({ jobs, allFit: true });
+  expect(c.run.state).toBe(state);
+  if (state === "blocked") {
+    expect(c.store.getStep(c.run.id, "pick")?.note).toBe("The choices are too many or too long to show.");
+    expect(c.engine.listApprovals()).toEqual([]);
+  }
+});
+test("T17 long choice question keeps full payload and bounded summary", async () => {
+  const question = "q".repeat(300);
+  const c = await ready({ question });
+  expect(approval(c).summary.length).toBeLessThanOrEqual(200);
+  expect(approval(c).payload).toMatchObject({ question });
 });

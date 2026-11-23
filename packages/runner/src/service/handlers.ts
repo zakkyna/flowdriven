@@ -479,8 +479,18 @@ export function createDecisionHandlers(
       .filter((row) => !input.state || row.state === input.state)
       .flatMap((row) => {
         const run = store.getRun(row.runId);
-        if (!run || (input.flowId && input.flowId !== run.flowId)) return [];
-        return [toDecision(row, run, store)];
+        if (run && input.flowId && input.flowId !== run.flowId) return [];
+        try {
+          if (!run) throw new Error("Run not found");
+          return [toDecision(row, run, store)];
+        } catch {
+          store.appendAudit({
+            at: new Date().toISOString(),
+            kind: "internal_error",
+            detail: { method: "approvals.list" },
+          });
+          return [];
+        }
       });
     const synthetic =
       !input.runId && !input.flowId

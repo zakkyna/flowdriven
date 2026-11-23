@@ -47,3 +47,25 @@ test("TC-SR1-12 the held place uses sorted lower-case ASCII recipients", async (
     held: { fixedPlace: false },
   });
 });
+
+for (const tool of ["mcp__claude_ai_Gmail__send_message", "mcp__gmail__reply"]) {
+  for (const field of ["to", "cc", "bcc"] as const) {
+    test(`TC-SR1-12 ${tool} displays ASCII for ${field}`, () => {
+      const address = `sam@b${String.fromCodePoint(0xfc)}cher.example.test`;
+      const homograph = `sam@${String.fromCodePoint(0x430)}pple.example.test`;
+      const input = {
+        to: ["sam@example.test"],
+        subject: "Hello",
+        body: "Hello",
+        [field]: [address, homograph, "sam@example.test"],
+      };
+      expect(heldPayload(input, tool)).toMatchObject({
+        [field]: [
+          `${address} (sam@xn--bcher-kva.example.test)`,
+          `${homograph} (sam@xn--pple-43d.example.test)`,
+          "sam@example.test",
+        ],
+      });
+    });
+  }
+}

@@ -310,3 +310,61 @@ test("TC-j24-08 checks that need a rejected output skip while status checks stil
   });
   expect(c.store.getStep(run.id, "status")?.state).toBe("passed");
 });
+
+test("TC-RUL-26 a rejection during another item's session stops its rules", async () => {
+  const c = await ready();
+  const { decide } = await import("./claude/decide.ts");
+  const { earlierNo } = await import("./rules/decisions.ts");
+  const place = { kind: "account" as const, value: "account", label: "Account" };
+  const rule = {
+    id: "r",
+    flowId: "local.reject",
+    touchId: "change",
+    effect: "change" as const,
+    place,
+    state: "active" as const,
+    createdAt: "2026-11-01T00:00:00Z",
+    createdBy: "confirm" as const,
+    sentence: "Change",
+    uses: 0,
+  };
+  const policy = {
+    tools: ["sheet.update"],
+    folders: [],
+    cwd: "/tmp",
+    addDirs: [],
+    schema: false,
+    sessionId: "s",
+    flowId: "local.reject",
+    earlierNo: false,
+    effectCatalog: [
+      {
+        tool: "sheet.update",
+        effect: "change" as const,
+        place: { kind: "account" as const, value: "account" },
+      },
+    ],
+    touches: [
+      {
+        touchId: "change",
+        effect: "change" as const,
+        matcher: "exact" as const,
+        place,
+        fixedPlace: true,
+        list: "on_its_own" as const,
+        covers: ["sheet.update"],
+      },
+    ],
+  };
+  const call = {
+    hook_event_name: "PreToolUse",
+    session_id: "s",
+    tool_use_id: "id",
+    tool_name: "sheet.update",
+    tool_input: {},
+  };
+  const books = { rules: [rule], earlierNo: () => earlierNo(c.store, c.run.id) };
+  expect(decide(policy, call, undefined, undefined, books)).toMatchObject({ by: "rule" });
+  await c.engine.decide(c.decision.id, "reject");
+  expect(decide(policy, call, undefined, undefined, books)).toMatchObject({ outcome: "hold" });
+});

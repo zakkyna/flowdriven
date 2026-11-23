@@ -483,6 +483,15 @@ test("TC-j24-15 rule near misses, revoked rules, and risky rules hold", () => {
     rules: [rule],
   };
   expect(decide(p, call(name, { hours: 8 }))).toMatchObject({ outcome: "run", by: "rule", ruleId: rule.id });
+  expect(
+    decide(p, call(name, { hours: 8 }), undefined, undefined, { rules: [rule], earlierNo: () => true }),
+  ).toMatchObject({ outcome: "hold" });
+  expect(
+    decide({ ...p, earlierNo: true }, call(name, { hours: 8 }), undefined, undefined, {
+      rules: [rule],
+      earlierNo: () => false,
+    }),
+  ).toMatchObject({ outcome: "hold" });
   for (const mismatch of [
     { ...p, flowId: "example.weekly-supplier-report" },
     { ...p, rules: [{ ...rule, state: "revoked" as const }] },

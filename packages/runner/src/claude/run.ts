@@ -46,7 +46,7 @@ export type RunInput = {
   browser?: boolean;
   connectorPrefix?: string;
   onOutside?: () => void;
-  books?: { grants?: GrantBook; rules?: () => import("../storage.ts").RuleRow[] };
+  books?: { grants?: GrantBook; rules?: () => import("../storage.ts").RuleRow[]; earlierNo?: () => boolean };
   makePolicy: (control: { root: string; cwd: string }, sessionId: string) => Policy;
   makePrompt: (policy: Policy) => string;
 };
@@ -218,7 +218,11 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
               ((input.books?.grants ?? deps.grants)?.has(input.runId, grant, input.itemKey, input.stepId) ??
                 false),
           },
-          { grants: input.books?.grants ?? deps.grants, rules: input.books?.rules?.() },
+          {
+            grants: input.books?.grants ?? deps.grants,
+            rules: input.books?.rules?.(),
+            earlierNo: input.books?.earlierNo,
+          },
         );
         if (
           !decision.allow &&

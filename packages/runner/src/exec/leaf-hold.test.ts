@@ -554,3 +554,15 @@ test("TC-j24-06 the run stays waiting while an approved item is still running", 
     service.stop();
   }
 });
+
+test("TC-SR1-12 held email summary and payload show ASCII recipient", async () => {
+  const address = `sam@b${String.fromCodePoint(0xfc)}cher.example.test`;
+  const tool = "mcp__gmail__reply";
+  const input = { to: [address], subject: "Hello", body: "Hello" };
+  const c = await ready({
+    steps: { send: { hold: { ...hold, tool, input, action: "send", digest: digestCall(tool, input) } } },
+  });
+  await c.start();
+  expect(approval(c).summary).toContain("sam@xn--bcher-kva.example.test");
+  expect(approval(c).payload).toMatchObject({ to: [`${address} (sam@xn--bcher-kva.example.test)`] });
+});

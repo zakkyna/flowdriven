@@ -42,10 +42,19 @@ export function createActivityHandler(store: Store, engine: Engine) {
     const decisions: ActivitySummary["needsYou"] = store
       .listApprovals({ state: "pending" })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((row) => {
-        const run = store.getRun(row.runId);
-        if (!run) throw new Error("Run not found");
-        return { kind: "decision", decision: toDecision(row, run, store) };
+      .flatMap((row) => {
+        try {
+          const run = store.getRun(row.runId);
+          if (!run) throw new Error("Run not found");
+          return [{ kind: "decision" as const, decision: toDecision(row, run, store) }];
+        } catch {
+          store.appendAudit({
+            at: new Date().toISOString(),
+            kind: "internal_error",
+            detail: { method: "activity.summary" },
+          });
+          return [];
+        }
       });
     const needsYou = [...questions, ...decisions];
     const rows = store.listRuns();

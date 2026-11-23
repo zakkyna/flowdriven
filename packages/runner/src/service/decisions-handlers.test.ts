@@ -1020,3 +1020,40 @@ test("TC-RUL-10 phone decisions retain their source and cannot edit or create ru
     store.close();
   }
 });
+
+test("T17 invalid decision does not hide other decisions in either list", async () => {
+  const store = await openSqliteStore(":memory:");
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    const good = pendingDecision(store, { id: "good-t17", createdAt: "2026-11-21T00:00:00Z" });
+    const bad = pendingDecision(store, { id: "bad-t17", createdAt: "2026-11-21T00:00:00Z" });
+    store.updateApproval(bad.id, { summary: "x".repeat(201) });
+    expect(await service.call("approvals.list", {})).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: good.id })]),
+    );
+    expect(await service.call("activity.summary", {})).toMatchObject({
+      needsYou: expect.arrayContaining([
+        expect.objectContaining({ decision: expect.objectContaining({ id: good.id }) }),
+      ]),
+    });
+    expect(
+      store
+        .listAudit()
+        .filter((row) => row.kind === "internal_error")
+        .map((row) => row.detail),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: "approvals.list" }),
+        expect.objectContaining({ method: "activity.summary" }),
+      ]),
+    );
+  } finally {
+    service.stop();
+    store.close();
+  }
+});

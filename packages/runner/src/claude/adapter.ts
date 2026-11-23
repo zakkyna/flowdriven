@@ -185,6 +185,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
               },
               books: {
                 grants: confirmed?.grants ?? options.grants,
+                earlierNo: () => options.confirmation?.(req.runId)?.earlierNo ?? false,
                 rules: confirmed
                   ? () => options.rules?.(confirmed.confirmation.flowId) ?? confirmed.rules ?? []
                   : undefined,
