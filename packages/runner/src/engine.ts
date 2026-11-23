@@ -269,6 +269,8 @@ export function createEngine(input: EngineDeps): Engine {
   });
   function beginStart(flowId: string, options: StartOptions): Begun {
     assertRunning();
+    if (store.getFlowHead(flowId)?.deletedAt)
+      throw new EngineError("not_found", "Flow not found.", "flow_deleted");
     const flow = store.getFlow(flowId);
     if (!flow) throw new EngineError("not_found", "Flow not found.");
     const manifest = flow.manifest as FlowManifest;
@@ -995,6 +997,18 @@ export function createEngine(input: EngineDeps): Engine {
       for (const start of deferred) start();
     },
     ...recovery,
+    beginResume(runId) {
+      const run = store.getRun(runId);
+      if (run && store.getFlowHead(run.flowId)?.deletedAt)
+        throw new EngineError("not_found", "Flow not found.", "flow_deleted");
+      return recovery.beginResume(runId);
+    },
+    async resumeRun(runId) {
+      const run = store.getRun(runId);
+      if (run && store.getFlowHead(run.flowId)?.deletedAt)
+        throw new EngineError("not_found", "Flow not found.", "flow_deleted");
+      return recovery.resumeRun(runId);
+    },
     async startRun(flowId, options) {
       return beginStart(flowId, options).settled;
     },

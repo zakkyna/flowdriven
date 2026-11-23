@@ -429,6 +429,7 @@ export function createTriggerService(deps: TriggerDeps): TriggerService {
     return paused;
   }
   function section(candidate: TriggerRow) {
+    if (store.getFlowHead(candidate.flowId)?.deletedAt) return;
     let row = store.getTrigger(candidate.flowId, candidate.index);
     if (!row?.enabled) return;
     try {

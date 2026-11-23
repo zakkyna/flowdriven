@@ -274,3 +274,56 @@ test("shutdown refuses new work and drops walks that have not begun", { timeout:
   await tick();
   expect(g.calls).toEqual(["run-1:a"]);
 });
+
+test("TC-START-09 deleted flow cannot start or write a run", async () => {
+  const c = await setup();
+  const row = c.store.getFlow("local.test");
+  if (!row) throw new Error("Missing flow");
+  c.store.putFlowHead({
+    id: row.id,
+    name: "Test",
+    summary: "Test",
+    headHash: row.hash,
+    createdAt: row.registeredAt,
+    updatedAt: row.registeredAt,
+    origin: { kind: "import" },
+    deletedAt: row.registeredAt,
+  });
+  expect(() => c.engine.beginStart(row.id, { project: "/tmp" })).toThrow(
+    expect.objectContaining({ code: "not_found", reason: "flow_deleted" }),
+  );
+  expect(c.store.listRuns({ flowId: row.id })).toEqual([]);
+});
+
+test("TC-START-09 a failed run of a deleted flow cannot resume", async () => {
+  const c = await setup();
+  const row = c.store.getFlow("local.test");
+  if (!row) throw new Error("Missing flow");
+  c.store.createRun({
+    id: "failed-run",
+    flowId: row.id,
+    flowHash: row.hash,
+    flowVersion: row.version,
+    state: "failed",
+    project: "/tmp",
+    inputs: {},
+    params: {},
+    requirements: [],
+    startedAt: row.registeredAt,
+  });
+  c.store.putFlowHead({
+    id: row.id,
+    name: "Test",
+    summary: "Test",
+    headHash: row.hash,
+    createdAt: row.registeredAt,
+    updatedAt: row.registeredAt,
+    origin: { kind: "import" },
+    deletedAt: row.registeredAt,
+  });
+  const before = c.store.getRun("failed-run");
+  expect(() => c.engine.beginResume("failed-run")).toThrow(
+    expect.objectContaining({ code: "not_found", reason: "flow_deleted" }),
+  );
+  expect(c.store.getRun("failed-run")).toEqual(before);
+});

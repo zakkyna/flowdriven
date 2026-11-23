@@ -30,6 +30,8 @@ export function createFlowDeleteHandler(store: Store, engine: Engine, now: () =>
         deletedAt: at,
       });
       store.deleteConfirmation(flowId);
+      store.deleteCapabilityConsent(flowId);
+      for (const trigger of store.listTriggers(flowId)) store.putTrigger({ ...trigger, enabled: false });
       store.deleteFlowData(flowId);
       store.deleteSchedule(flowId);
       for (const rule of store

@@ -30,7 +30,10 @@ export function createFlowReadHandlers(store: Store, engine: Engine, now: () => 
           [...loaded.files].map(([name, bytes]) => [name, new TextDecoder().decode(bytes)]),
         );
         return store.transaction(() => {
+          if (store.getFlowHead(loaded.manifest.id)?.deletedAt)
+            throw new RunnerError("invalid_input", "This flow has been deleted.");
           const row = engine.registerFlow(loaded.manifest, loaded.hash, files);
+          store.putFlow({ ...row, savedBy: { kind: "import" } });
           if (!store.getFlowHead(row.id))
             store.putFlowHead({
               id: row.id,

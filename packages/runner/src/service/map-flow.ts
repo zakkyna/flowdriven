@@ -96,7 +96,11 @@ export function toFlowDetail(row: FlowRow, store: Store): FlowDetail {
     );
   const touches = "touches" in manifest ? (manifest.touches ?? []) : [];
   const defaults = placeTouches(touches, {
-    origin: store.getFlowHead(row.id)?.origin.kind === "market" ? "market" : "chat",
+    origin:
+      (row.savedBy?.kind === "save_flow" || row.savedBy?.kind === "save_change") &&
+      ["chat", "skill"].includes(store.getFlowHead(row.id)?.origin.kind ?? "")
+        ? "chat"
+        : "market",
   });
   const lists = { onItsOwn: [] as string[], asksFirst: [] as string[], never: [] as string[] };
   const views = touches.map((touch) => {

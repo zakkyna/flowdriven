@@ -154,7 +154,7 @@ test("TC-STO-36 root flow model shows live state, required inputs and rule place
       { id: "log", list: "on_its_own", byRule: rule.id },
       { id: "send", list: "asks_first", alwaysAsks: true },
     ]);
-    expect(detail.confirmLists).toMatchObject({ onItsOwn: ["log"], asksFirst: ["send"], never: [] });
+    expect(detail.confirmLists).toEqual({ onItsOwn: [], asksFirst: ["log", "send"], never: [] });
     store.createRun({
       id: "run-live",
       flowId: manifest.id,

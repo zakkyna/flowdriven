@@ -442,7 +442,7 @@ test("TC-STO-36 flow reads use the version 2 model", async () => {
         { id: "log", list: "on_its_own", byRule: expect.any(String) },
         { id: "reply", list: "asks_first" },
       ],
-      confirmLists: { asksFirst: ["reply"] },
+      confirmLists: { onItsOwn: [], asksFirst: ["log", "reply"], never: [] },
     });
   } finally {
     x.service.stop();
@@ -502,7 +502,7 @@ test("TC-STO-36 lists live flows newest first and hides tombstones", async () =>
     ]);
     const detail = await x.service.call("flows.get", { flowId: x.manifest.id });
     expect(detail).toMatchObject({
-      confirmLists: { asksFirst: ["reply"] },
+      confirmLists: { onItsOwn: [], asksFirst: ["log", "reply"], never: [] },
       touches: [
         { id: "log", byRule: expect.any(String) },
         { id: "reply", list: "asks_first" },
@@ -1020,5 +1020,150 @@ test("TC-STO-34 a failed deletion rolls back every write", async () => {
   } finally {
     service.stop();
     store.close();
+  }
+});
+
+test("TC-SR2-08 imported defaults allow reads only and confirmation creates no rule", async () => {
+  const { rmSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { flowV12Yaml } = await import("../../../sdk/src/test-data/flow-v12.ts");
+  const path = await importFixture();
+  const x = await setup([]);
+  try {
+    writeFileSync(
+      join(path, "flow.yaml"),
+      flowV12Yaml({
+        requirements: [
+          { id: "fs", type: "path" },
+          { id: "timesheet-account", type: "account" },
+        ],
+        touches: [
+          touch("read", "read"),
+          touch("change", "change", account),
+          touch("write", "local_write", { ...folder, value: "fs" }),
+          touch("command", "run_command", command),
+        ],
+      }),
+    );
+    const imported = (await x.service.call("flows.import", { path })) as {
+      flow: { id: string };
+      hash: string;
+      issues: unknown[];
+    };
+    if (!imported.flow) throw new Error(JSON.stringify(imported.issues));
+    const detail = (await x.service.call("flows.get", { flowId: imported.flow.id })) as {
+      confirmLists: { onItsOwn: string[]; asksFirst: string[]; never: string[] };
+    };
+    expect(detail.confirmLists).toEqual({
+      onItsOwn: ["read"],
+      asksFirst: ["change", "write", "command"],
+      never: [],
+    });
+    await x.service.call("flows.confirm", {
+      flowId: imported.flow.id,
+      hash: imported.hash,
+      onItsOwn: detail.confirmLists.onItsOwn,
+      pins: { fs: "/Notes" },
+    });
+    expect(x.store.listRules().filter((r) => r.flowId === imported.flow?.id)).toEqual([]);
+  } finally {
+    x.service.stop();
+    x.store.close();
+    rmSync(path, { recursive: true, force: true });
+  }
+});
+
+test("TC-SR3-01 reimport over saved flow marks the new version imported", async () => {
+  const { rmSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { flowV12Yaml } = await import("../../../sdk/src/test-data/flow-v12.ts");
+  const path = await importFixture();
+  const x = await setup([]);
+  try {
+    const first = (await x.service.call("flows.import", { path })) as {
+      flow: { id: string };
+      hash: string;
+      issues: unknown[];
+    };
+    if (!first.flow) throw new Error("Import failed");
+    const head = x.store.getFlowHead(first.flow.id);
+    if (!head) throw new Error("Missing head");
+    x.store.putFlowHead({ ...head, origin: { kind: "chat", chatId: "chat", draftId: "draft" } });
+    const saved = x.store.getFlow(first.flow.id);
+    if (!saved) throw new Error("Missing version");
+    x.store.putFlow({ ...saved, savedBy: { kind: "save_flow" } });
+    writeFileSync(
+      join(path, "flow.yaml"),
+      flowV12Yaml({
+        requirements: [
+          { id: "fs", type: "path" },
+          { id: "timesheet-account", type: "account" },
+        ],
+        touches: [touch("change", "change", account)],
+      }),
+    );
+    const next = (await x.service.call("flows.import", { path })) as {
+      flow: { id: string };
+      hash: string;
+      issues: unknown[];
+    };
+    if (!next.flow) throw new Error(JSON.stringify(next.issues));
+    expect(x.store.getFlow(next.flow.id)?.savedBy).toEqual({ kind: "import" });
+    expect(
+      (
+        (await x.service.call("flows.get", { flowId: next.flow.id })) as {
+          confirmLists: { asksFirst: string[] };
+        }
+      ).confirmLists.asksFirst,
+    ).toEqual(["change"]);
+  } finally {
+    x.service.stop();
+    x.store.close();
+    rmSync(path, { recursive: true, force: true });
+  }
+});
+
+test("TC-STO-37 importing a deleted id changes nothing", async () => {
+  const { rmSync } = await import("node:fs");
+  const path = await importFixture();
+  const x = await setup([]);
+  try {
+    const first = (await x.service.call("flows.import", { path })) as {
+      flow: { id: string };
+      hash: string;
+      issues: unknown[];
+    };
+    if (!first.flow) throw new Error("Import failed");
+    await x.service.call("flows.delete", { flowId: first.flow.id });
+    const before = {
+      head: x.store.getFlowHead(first.flow.id),
+      row: x.store.getFlow(first.flow.id),
+      audit: x.store.listAudit(),
+    };
+    await expect(x.service.call("flows.import", { path })).rejects.toMatchObject({ code: "invalid_input" });
+    expect({
+      head: x.store.getFlowHead(first.flow.id),
+      row: x.store.getFlow(first.flow.id),
+      audit: x.store.listAudit(),
+    }).toEqual(before);
+  } finally {
+    x.service.stop();
+    x.store.close();
+    rmSync(path, { recursive: true, force: true });
+  }
+});
+
+test("TC-STO-34 deletion disables all trigger rows and removes capability consent", async () => {
+  const x = await setup([]);
+  try {
+    x.store.putCapabilityConsent({ flowId: x.manifest.id, hash, at });
+    for (const index of [0, 8])
+      x.store.putTrigger({ flowId: x.manifest.id, index, enabled: true, hash, spec: "{}", enabledAt: at });
+    await x.service.call("flows.delete", { flowId: x.manifest.id });
+    expect(x.store.getCapabilityConsent(x.manifest.id)).toBeUndefined();
+    expect(x.store.listTriggers(x.manifest.id).map((row) => row.enabled)).toEqual([false, false]);
+  } finally {
+    x.service.stop();
+    x.store.close();
   }
 });
