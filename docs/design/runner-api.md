@@ -38,7 +38,7 @@ type ChatId = Id; type MessageId = Id; type DraftId = Id; type QuestionId = Id; 
 type AgentId = string;      // ^[a-z][a-z0-9-]{0,31}$: "claude-code", "codex"
 type SkillId = Id;          // "claude-code:<name>", "flowdriven:<name>"
 type TouchId = string;      // ^[a-z0-9][a-z0-9-]{0,63}$
-type LanguageCode = string; // ^[a-z]{2,3}(-[A-Z]{2})?$ and one of the codes main passes at spawn (--languages), from apps/desktop/src/i18n/languages.ts
+type LanguageCode = string; // ^[a-z]{2,3}(-[A-Z]{2})?$ and one of the codes main passes at spawn (--languages), from apps/desktop/electron/languages.json, kept equal to the codes of apps/desktop/src/i18n/languages.ts by TC-ELE-28
 ```
 
 ### 2.2 The operation table
@@ -118,7 +118,7 @@ type TouchRule = "runs_alone" | "asks_first" | "not_allowed";
 type Effect = "read" | "local_write" | "run_command" | "change" | "send" | "post" | "pay" | "delete" | "merge";
 type RuleEffect = "local_write" | "run_command" | "change";   // the only effects a standing rule may have in V1
 type Place = { kind: "account" | "folder" | "address" | "site" | "command" | "repo"; value: string; label: string };   // a rule's place kind: change -> account or folder, local_write -> folder, run_command -> command
-type Line = { key: string; params?: Record<string, string | number> };  // key ^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9_]*)+$, at most 100; values at most 400 except `report.anotherWay`, `decision.newTry` and `report.didAnotherWay` text, at most 4000
+type Line = { key: string; params?: Record<string, string | number> };  // key ^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9_]*)+$, at most 100; values at most 400 except `report.anotherWay`, `decision.newTry`, `report.didAnotherWay` and `report.usedNote` text, at most 4000
 type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 type ScheduleSpec =                                  // input
@@ -277,6 +277,7 @@ type Approval = {
   createdAt: IsoDateTime;                       // asked time shown on pending cards
   resolvedAt?: IsoDateTime; resolvedVia?: ResolvedVia;
   picks?: string[]; editedSubject?: string; editedText?: string; anotherWayText?: string;
+  newTry?: Line;                                 // decision.newTry {text}: a decision made after Another way
   chatId?: ChatId; ruleId?: RuleId;
 };
 ```
@@ -1001,7 +1002,7 @@ type NoticeTarget =                                        // v2: inbox and buil
 type Notice = { id: string; kind: NoticeKind; title: Line; body: Line; language: LanguageCode; target: NoticeTarget };   // title and body are fixed Lines with no params; drawn by main; at most 80 and 240 characters once drawn
 ```
 
-- The runner sends `title` and `body` as `Line` values with the app language at the moment it sends; main draws them with the words of `apps/desktop/src/i18n` (FS-j30.A16). `parseNotice` accepts only the keys of the table above and refuses any `params` on `title` and `body`. The text is fixed: never a decision title, a flow name, a payload, an input value, an email's text or a secret (F-16.R6). Over the tool server (V2) the same holds: `approvals.list` gives the flow id, the step id and the state only (section 5).
+- The runner sends `title` and `body` as `Line` values with the app language at the moment it sends; main draws them from `apps/desktop/electron/notice-words.json`, the same words en.ts and id.ts hold (FS-j30.A16). `parseNotice` accepts only the keys of the table above and refuses any `params` on `title` and `body`. The text is fixed: never a decision title, a flow name, a payload, an input value, an email's text or a secret (F-16.R6). Over the tool server (V2) the same holds: `approvals.list` gives the flow id, the step id and the state only (section 5).
 - A notice id is stable per item (for example `approval:<id>`, `question:<id>`), so the same item never notifies twice. Throttling stays in `notify/policy.ts`: at most one per run every 10 minutes unless a decision waits.
 - New frame `notice_clear` (`{jsonrpc: "2.0", method: "notice_clear", params: {id: NoticeId}}`): the runner sends it when the item is decided, answered, cancelled, expired, or its run stops; main closes that notification (F-16.R3).
 
@@ -1141,7 +1142,7 @@ Between main and the runner (stdio, newline-delimited JSON-RPC 2.0, `wire.ts`): 
 
 ### 12.5 Version check
 
-1. Main spawns the runner with `--languages=<codes>`, the codes of `apps/desktop/src/i18n/languages.ts`, then sends `runner.info` before it relays any call. When `contractVersion` is not `CONTRACT_VERSION`, main stops the runner, marks the link incompatible, does not restart it, and answers every `runner:call` with `{ok: false, error: {code: "unavailable", reason: "contract_mismatch"}}`.
+1. Main spawns the runner with `--languages=<codes>`, the codes of `apps/desktop/electron/languages.json`, then sends `runner.info` before it relays any call. When `contractVersion` is not `CONTRACT_VERSION`, main stops the runner, marks the link incompatible, does not restart it, and answers every `runner:call` with `{ok: false, error: {code: "unavailable", reason: "contract_mismatch"}}`.
 2. The renderer calls `runner.info` first. On a mismatch it shows "FlowDriven needs an update: the app and its engine do not match." with "Quit" (`window.quit`) and makes no other call (FS-j01.E8).
 3. Runner exit codes 3 (`data_folder_locked`), 5 (`store_newer`) and 6 (`migration_failed` or `backup_failed`) are not restarted; main answers every call with that reason, and the renderer shows its plain screen with "Quit".
 4. `FixtureRunnerClient` reports `contractVersion: 2`, `mode: "sample"`.

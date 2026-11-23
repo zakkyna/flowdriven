@@ -57,7 +57,7 @@ Situation. They write flows as files (flow format 1.2) with the SDK, test them a
 |---|---|
 | Goals | A stable, documented, open flow format. Tests that never need a real agent or account. An adapter port to add another agent. Language files they can add in one file. |
 | Pains | Closed formats. Flows that behave differently on each agent. Unclear safety rules for what a flow may declare. |
-| Success | A flow that passes the SDK checks runs the same way on every supported agent, or says plainly why it cannot. A new language is one new file plus one line. |
+| Success | A flow that passes the SDK checks runs the same way on every supported agent, or says plainly why it cannot. A new language is one new file plus its code in two lists, and `pnpm check` names a list it is missing from. |
 
 ## 3. Goals and non-goals
 
@@ -707,7 +707,7 @@ Numbers marked "target" are the drafter's proposals. Other numbers come from the
 
 | Id | Requirement | Source |
 |---|---|---|
-| NF-36 | English is the default. Bahasa Indonesia is complete. Adding a language is one new file plus one line (F-20). | owner |
+| NF-36 | English is the default. Bahasa Indonesia is complete. Adding a language is one new file plus its code in `languages.ts` and `apps/desktop/electron/languages.json`, and `pnpm check` names a list it is missing from (F-20). | owner |
 | NF-37 | The window's `lang` follows the language. Dates and times use `Intl.DateTimeFormat`. Date tests also run in zones other than UTC (`Asia/Bangkok`, `Europe/Amsterdam`); product code takes an IANA zone and never reads the process zone. | AD-14 |
 | NF-38 | Translations live only in the language files. | AD-14 |
 

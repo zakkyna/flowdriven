@@ -54,7 +54,7 @@ At most ten steps, matching the clickable prototype brief ('One file per languag
 1. Copy `apps/desktop/src/i18n/en.ts` to `apps/desktop/src/i18n/<code>.ts`.
 2. Set `code` and `name` (the name written in the language itself).
 3. Translate the values. Keep the keys and every `{placeholder}`. Give each count the plural forms your language needs.
-4. Add one line for your file to `apps/desktop/src/i18n/languages.ts`.
+4. Add one line for your file to `apps/desktop/src/i18n/languages.ts` and add its code to `apps/desktop/electron/languages.json`. Notification words of the new language go in `apps/desktop/electron/notice-words.json`; until they are added they show in English.
 5. Run `pnpm check`. It fails, naming the file, the key and the fix in one line, on a key English lacks, a changed placeholder, a missing `other` plural form, or a code that is taken or is not a language tag. It lists the words not translated yet; they show in English until they are.
 6. Keep product names as they are (FlowDriven, Claude Code, Codex). Do not add hidden or format characters; the hidden-character check refuses them.
 7. Bahasa Indonesia's word rules (the prototype brief's 'Words') are the example of a style note; a new language may add its own short style note at the top of its file.

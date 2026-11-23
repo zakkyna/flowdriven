@@ -86,7 +86,14 @@ export function toFlowSummary(row: FlowRow, store: Store): FlowSummary {
 export function toFlowDetail(row: FlowRow, store: Store): FlowDetail {
   const manifest = SdkManifest.parse(row.manifest);
   const confirmation = store.getConfirmation(row.id);
-  const active = store.listRules().filter((r) => r.flowId === row.id && r.state === "active");
+  const active = store
+    .listRules()
+    .filter(
+      (r) =>
+        r.flowId === row.id &&
+        r.state === "active" &&
+        ["local_write", "run_command", "change"].includes(r.effect),
+    );
   const touches = "touches" in manifest ? (manifest.touches ?? []) : [];
   const defaults = placeTouches(touches, {
     origin: store.getFlowHead(row.id)?.origin.kind === "market" ? "market" : "chat",

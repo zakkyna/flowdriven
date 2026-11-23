@@ -448,7 +448,7 @@ Shared setup used by the L3 cases below.
 - File: packages/contracts/src/approval.test.ts
 - Given: the version 2 schemas and line keys
 - When: valid and invalid decisions, choices and reason codes are parsed
-- Then: `outside_flow` and `another_way` with text round-trip, `report.anotherWay`, `decision.newTry` and `report.didAnotherWay` accept the full 4,000-character text while other Line values retain their 400-character limit; missing, empty, too-long or hidden-character text fails, and unrelated kinds reject the choice; `outside_flow_once`, `another_way_not_allowed`, `text_too_long`, `report.approvedOnce`, `report.anotherWay`, `decision.newTry` and `report.didAnotherWay` exist with the right params.
+- Then: `outside_flow` and `another_way` with text round-trip, `report.anotherWay`, `decision.newTry`, `report.didAnotherWay` and `report.usedNote` accept the full 4,000-character text while other Line values retain their 400-character limit; missing, empty, too-long or hidden-character text fails, and unrelated kinds reject the choice; `outside_flow_once`, `another_way_not_allowed`, `text_too_long`, `report.approvedOnce`, `report.anotherWay`, `decision.newTry` and `report.didAnotherWay` exist with the right params.
 - Traces: AD-03, AD-06, AD-07, F-13
 - Build step: B-32
 - Fails first because: the version 2 contract lacks these variants and keys.
@@ -3680,7 +3680,7 @@ Shared fixtures for this group (built in `apps/desktop/src/i18n/test-helpers/tre
 ### TC-I18N-31 A language added the way the guide says works end to end
 - Layer: L1
 - File: apps/desktop/src/i18n/i18n.test.ts
-- Given: a copy of the real `apps/desktop/src/i18n` folder in a temporary folder; `xx.ts` {code: "xx", name: "Xxish", words: {common: {cancel: "Xcancel", close: "Xclose"}}} added; one line for it added to the copy's `languages.ts`
+- Given: a copy of the real `apps/desktop/src/i18n` folder at `<tmp>/apps/desktop/src/i18n`, with `apps/desktop/electron/notice-words.json` copied to `<tmp>/apps/desktop/electron/` so the import resolves; `xx.ts` {code: "xx", name: "Xxish", words: {common: {cancel: "Xcancel", close: "Xclose"}}} added; one line for it added to the copy's `languages.ts`
 - When: `checkLanguages` runs on the copy, then `listLanguages()` and `t("common.cancel", {}, "xx")` and `t("rail.newChat", {}, "xx")` run against the copy
 - Then: `findings` is empty; `untranslated` has one entry for `xx` holding every other key; the list is "English", "Bahasa Indonesia", "Xxish"; the two words are "Xcancel" and "New chat".
 - Traces: FS-j30.P7, FS-j30.A12, F-20, B-31
@@ -4190,10 +4190,10 @@ Fakes for this group (in `apps/desktop/electron/test-helpers/fakes.ts` (new)): `
 - File: apps/desktop/electron/notifier.test.ts
 - Given: the source of `notifier.ts` and the `Line` keys `notice.*` of TC-CON-27
 - When: the source is read and a notice is drawn in "en" and in "id" with a test language file that changes the words of `notice.decisionTitle`
-- Then: the source holds no literal notification sentence (every title and body comes from `t`); the test language's words appear in the notification, so main uses the notice's `language` and not a fixed one; nothing from the runner's params is added (the keys have none).
+- Then: the source holds no literal notification sentence (every title and body comes from the injected `words(language, key)`); the test language's words appear in the notification, so main uses the notice's `language` and not a fixed one; nothing from the runner's params is added (the keys have none).
 - Traces: FS-j30.A16, AD-14
 - Build step: B-06
-- Fails first because: the notification words are not read through `apps/desktop/src/i18n`.
+- Fails first because: main shows plain strings and has no injected `words(language, key)`.
 
 ### TC-ELE-19 Closing the last window keeps the app alive on macOS; quitting and reopening
 - Layer: L1
@@ -5345,7 +5345,7 @@ The guides are `README.md`, `CONTRIBUTING.md` and `docs/translating.md` (see `co
 ### TC-DOC-09 The steps of translating.md work on a copy
 - Layer: L1
 - File: apps/desktop/src/i18n/translating-steps.test.ts (new)
-- Given: a temporary copy of `apps/desktop/src/i18n`; the steps of `docs/translating.md` carried out by the test: copy `en.ts` to `fr.ts`, set `code` "fr" and `name` "Francais" (the test writes the real name with `String.fromCodePoint(0xe7)`), keep the keys, translate two values (one of them the plural `flows.count` with `one` and `other`), add one line to `languages.ts`
+- Given: a temporary copy of `apps/desktop/src/i18n` at `<tmp>/apps/desktop/src/i18n`, with `apps/desktop/electron/notice-words.json` at `<tmp>/apps/desktop/electron/`; the steps of `docs/translating.md` carried out by the test: copy `en.ts` to `fr.ts`, set `code` "fr" and `name` "Francais" (the test writes the real name with `String.fromCodePoint(0xe7)`), keep the keys, translate two values (one of them the plural `flows.count` with `one` and `other`), add one line to `languages.ts`
 - When: `checkLanguages` runs on the copy; then the test sets `flows.count` to {one: "{n} x", few: "{n} y", other: "{n} z"} and runs again; then removes `other`
 - Then: the first run has no finding and `untranslated` lists the other keys; the second gives `unknown_plural_form` for `few` (French has `one`, `many` and `other`); the third gives `missing_other_form`; `t("flows.count", {n: 2}, "fr")` is the French `other` text after the first step.
 - Traces: FS-j30.P7, FS-j30.A12, F-20, B-31
@@ -5384,7 +5384,7 @@ The guides are `README.md`, `CONTRIBUTING.md` and `docs/translating.md` (see `co
 
 ## Repository checks
 
-Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). Decided for V1 (owner): `tools/checks/` stays unchanged, so these are Vitest tests in `apps/desktop/src/repo-checks.test.ts` (new, project `ui`) that import the existing scripts as black boxes (`checkManifests` from `tools/checks/dependency-gate.mjs`, `scanText` from `tools/checks/hidden-chars.mjs`, `makeRepo` from `tools/checks/test/helpers/temp-repo.mjs`) or run them with `spawnSync`; the rule helpers `findBypassFlags` and `findUnsafeCodexCommands` live in `apps/desktop/src/test/repo-rules.ts` (new). The source-rule cases are in `packages/runner/src/source-rules.test.ts`.
+Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). Decided for V1 (owner): `tools/checks/` stays unchanged, so these are Vitest tests in `apps/desktop/src/repo-checks.test.ts` (new, project `ui`) that build a temporary repository with `makeTempRepo` of `apps/desktop/src/test/temp-repo.ts` and run the scripts of `tools/checks/` with `node` as a child process; no TypeScript test imports a `.mjs` file (build-order decision 17); the rule helpers `findBypassFlags` and `findUnsafeCodexCommands` live in `apps/desktop/src/test/repo-rules.ts` (new). The source-rule cases are in `packages/runner/src/source-rules.test.ts`.
 
 ### TC-REPO-01 The dependency gate refuses a new package
 - Layer: L1
@@ -5576,8 +5576,8 @@ Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). De
 - Runner emits codes only. `packages/contracts/src/line-keys.ts` exports `LINE_KEYS`; the check counts those keys as used (TC-I18N-16) and TC-I18N-32 checks English and Indonesian have each. Key names this group chose: the fixed `notice.*` keys of TC-CON-27 (no params), `phone.needsYou`, `phone.started`, `phone.confirmInApp`, `phone.noExactMatch`, `phone.permissionOff`, `chat.starting`, `text.outsideTag`, `text.linkNotOpened`; their English text is in the cases.
 - Contract shapes this group assumes: a notice is `{id, kind, title: Line, body: Line, language, target}` with `title` and `body` fixed keys and no params; the runner started with `--languages=en,id` refuses `settings.update {patch: {language}}` for another code with `language_unknown`. `runner-api.md` sections 6.6 and 10 carry these.
 - Main renders a notice into at most 80 characters of title and 240 of body, cutting with "..." (ASCII). The V2 bot module draws its lines through an injected `renderLine`, because no package holds words; phone messages and the tool server show fixed text only (owner decision, 2026-11-21).
-- Electron main imports the words from `apps/desktop/src/i18n`; `tsconfig.electron.json` must include that folder.
-- Check result shape: `checkLanguages` returns `{findings, untranslated}`; the journey cases read `.findings`. Finding kinds added beyond the journeys: `missing_other_form`, `unknown_plural_form`, `invalid_code`, `duplicate_code`, `file_name_code_mismatch`, `markup_in_value`, `web_address_in_value`, `unknown_placeholder`, `bad_placeholder`, `glued_sentence`, `unused_line_key`. Reason: the prototype brief ('Fixes after the re-check' under 'English and Bahasa Indonesia') lists each rule and the failing line must name file, key and fix.
+- Electron main does not import `apps/desktop/src/i18n`, and `tsconfig.electron.json` stays unchanged. Main reads the registered codes from `apps/desktop/electron/languages.json` (kept equal to `languages.ts` by TC-ELE-28) and the notice words from `apps/desktop/electron/notice-words.json`, which `en.ts` and `id.ts` also import; `notifier.ts` takes them through an injected `words(language, key)`.
+- Check result shape: `checkLanguages` returns `{findings, untranslated}`; the journey cases read `.findings`. Finding kinds added beyond the journeys: `unknown_plural_form`, `file_name_code_mismatch`, `markup_in_value`, `web_address_in_value`, `unknown_placeholder`, `bad_placeholder`, `glued_sentence`, `unused_line_key`. Reason: the prototype brief ('Fixes after the re-check' under 'English and Bahasa Indonesia') lists each rule and the failing line must name file, key and fix.
 - A key family built at run time (for example `status.<code>`) is listed once in `apps/desktop/src/i18n/dynamic-keys.ts` (new) and counts as used. Reason: the scan reads only `t("literal")` calls.
 - Glued sentences are found by a source scan for `t(...)` joined with `+`, a template string or `.join` in one expression. Siblings in JSX are allowed.
 - Web address rule: only schemes (`http:`, `https:`, `ftp:`, `mailto:`) and `www.` are refused in words; bare domains are not, to avoid false hits. Markup rule: HTML tags, comments and entities; a lone `<` or `>` in a comparison is allowed.
@@ -5591,5 +5591,5 @@ Checks of T-29 (a malicious contribution) and T-30 (update and supply chain). De
 - New reasons to add to `runner-api.md` 11.2 when their release builds: memory `too_long`; skills `skill_in_use`; marketplace `listing_mismatch`, `own_browser_not_supported`, `listing_revoked`, `signature_invalid`, `hash_mismatch`, `private_data_found`, `market_unreachable`, `changed_on_disk`; phone `bot_token_rejected`, `command_stale`, `replay`, `outside_text`, `code_expired`. A memory edit keeps `outside: true`. The per-file skill size limit is 1,000,000 bytes.
 - Phone: the two-tap token lasts 60 seconds and is bound to the decision and the account; commands are `/flows`, `/run <flow name>`, `/needs` and `/stop`; `/run` needs an exact name. Reason: FS-j26 gives the rules but no grammar.
 - Marketplace crypto: Ed25519 over canonical JSON (keys sorted, UTF-8, no spaces) with the base64 signature; keys are made with `node:crypto` at test time and never stored. The tool server binds `127.0.0.1`. Reason: spec 9.6 names Ed25519 and a pinned key.
-- DOC and repository checks are Vitest tests (`apps/desktop/src/docs.test.ts`, `apps/desktop/src/repo-checks.test.ts`) that import the unchanged `tools/checks` scripts; they use layer L1 because L4 is `node:test` inside `tools/checks/test/`, which V1 does not touch. The agent-rules helpers scan `AGENTS.md`, `CLAUDE.md`, `README.md`, `CONTRIBUTING.md` and `docs/translating.md`, not the design documents (which name the refused flags on purpose in the safety tests).
+- DOC and repository checks are Vitest tests (`apps/desktop/src/docs.test.ts`, `apps/desktop/src/repo-checks.test.ts`) that run the unchanged `tools/checks` scripts with `node` as a child process (build-order decision 17); they use layer L1 because L4 is `node:test` inside `tools/checks/test/`, which V1 does not touch. The agent-rules helpers scan `AGENTS.md`, `CLAUDE.md`, `README.md`, `CONTRIBUTING.md` and `docs/translating.md`, not the design documents (which name the refused flags on purpose in the safety tests).
 - No case tests pixel layout (focus ring, contrast, ellipsis, reduced motion, narrow widths); those are CSS and belong to the L5 capture walk.

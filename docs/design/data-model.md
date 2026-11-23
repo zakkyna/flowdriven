@@ -25,7 +25,7 @@ type Effect = "read" | "local_write" | "run_command" | "change" | "send" | "post
 type TouchRule = "runs_alone" | "asks_first" | "not_allowed";
 type Place = { kind: "account" | "folder" | "address" | "site" | "command" | "repo"; value: string; label: string };
 type Line = { key: string; params?: Record<string, string | number> };
-type LanguageCode = string;          // a code main passes to the runner at spawn (--languages), from apps/desktop/src/i18n/languages.ts (new): "en", "id"
+type LanguageCode = string;          // a code main passes to the runner at spawn (--languages), from apps/desktop/electron/languages.json (new), kept equal to the codes of apps/desktop/src/i18n/languages.ts by TC-ELE-28: "en", "id"
 type InputType = "text" | "longtext" | "number" | "bool" | "date" | "time" | "duration" | "choice"
   | "url" | "file" | "folder" | "secret_ref" | "list<text>";
 type TypedValue = { type: InputType; value: string | number | boolean | string[] };

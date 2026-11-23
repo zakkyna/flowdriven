@@ -1186,7 +1186,7 @@ Shared test support: "Harness H" and the other shared fakes (clock, zone, store,
 - File: packages/runner/src/assistant/turn.test.ts
 - Given: (a) limit 10, spent 10.00; (b) `example.weekly-supplier-report` has run 24 times today (limit 24, default) on the injected clock.
 - When: `run weekly supplier report` is sent in each case.
-- Then: (a) a run exists in `waiting_approval` behind the one synthetic `budget_raise` decision (no run) "Monthly limit reached. Raise it in Settings to continue." and its card badge is "Needs you"; no agent step ran; after `settings.update` raises the limit the run continues; (b) no run is created and the chat says "Weekly supplier report reached its limit of 24 runs today."
+- Then: (a) a run exists in `waiting_approval` behind the one synthetic `budget_raise` decision (no run) "Monthly limit reached. Raise it in Settings to continue." and its card badge is "Needs you"; no agent step ran; after `settings.update` raises the limit the run continues; (b) no run is created and the chat says "Weekly supplier report reached its limit of 24 runs today."; after `settings.update {patch: {language: "id"}}` the same start is refused as before (from TC-j30-35)
 - Traces: FS-j20.E4, FS-j20.A25, SR-9, F-04, F-23
 - Build step: B-24
 - Fails first because: neither limit is enforced for starts from a chat.
@@ -5432,7 +5432,7 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 - File: apps/desktop/src/i18n/i18n.test.ts (new)
 - Given: a temporary tree with `en.ts` (keys `a.one` "One {n}", `a.two` {one: "{n} item", other: "{n} items"}, `a.unused`), `id.ts` missing `a.two`, `xx.ts` with the extra key `a.extra`, `a.one` as "Satu {m}" and `a.two` as {one: "{n} x"}, `zz.ts` absent from `languages.ts`, a source file calling `t("a.missing")` and `t("a.one")`, a source file calling `t("b." + code)` with no exported key list, and a language value holding `String.fromCodePoint(0xa0)`
 - When: `checkLanguages({root})` runs
-- Then: the findings include one each of `missing_key_in_english` (key `a.missing`), `unused_english_key` (`a.unused`, `a.two`), `incomplete_indonesian` (`a.two`), `extra_key` (language `xx`, key `a.extra`), `placeholder_mismatch` (`xx`, `a.one`), `missing_plural_form` (`xx`, `a.two`: no `other`), `dynamic_key_unlisted` (that source file), `not_in_list` (file `zz.ts`) and `hidden_character` (with file and line); each finding is one line with the file, the key and the fix; the keys `xx` lacks (`a.unused`) are not findings (see TC-j30-28).
+- Then: the findings include one each of `missing_key_in_english` (key `a.missing`), `unused_english_key` (`a.unused`, `a.two`), `incomplete_indonesian` (`a.two`), `extra_key` (language `xx`, key `a.extra`), `placeholder_mismatch` (`xx`, `a.one`), `missing_other_form` (`xx`, `a.two`: no `other`), `dynamic_key_unlisted` (that source file), `not_in_list` (file `zz.ts`) and `hidden_character` (with file and line); each finding is one line with the file, the key and the fix; the keys `xx` lacks (`a.unused`) are not findings (see TC-j30-28).
 - Traces: FS-j30.A11, FS-j30.A17, F-20
 - Build step: B-06
 - Fails first because: `apps/desktop/src/i18n/i18n.test.ts` does not exist.
@@ -5450,7 +5450,7 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 ### TC-j30-22 A contributor's test language works the way the guide says
 - Layer: L1
 - File: apps/desktop/src/i18n/i18n.test.ts
-- Given: a temporary copy of the package with `xx.ts` {code: "xx", name: "Xxish", words: {common: {cancel: "Xcancel", close: "Xclose"}}} and one line for it in `languages.ts`
+- Given: a temporary copy of the package (the words folder at `<tmp>/apps/desktop/src/i18n` and `notice-words.json` at `<tmp>/apps/desktop/electron/`) with `xx.ts` {code: "xx", name: "Xxish", words: {common: {cancel: "Xcancel", close: "Xclose"}}} and one line for it in `languages.ts`
 - When: `checkLanguages` runs on the copy; the list and `createT(languages)` are read
 - Then: there are no findings (a partial language is allowed) and the notes list its missing keys as "not translated yet, shown in English"; the list is "English", "Bahasa Indonesia", "Xxish"; `t("common.cancel", {}, "xx")` is "Xcancel" and `t("rail.newChat", {}, "xx")` is "New chat".
 - Traces: FS-j30.P7, FS-j30.A12, FS-j30.P6, B-31
@@ -5490,9 +5490,9 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 ### TC-j30-26 Notifications use the app language at the moment they are made, with fixed words
 - Layer: L3
 - File: apps/desktop/electron/notifier.test.ts (main-process integration with fake `Notification`)
-- Given: `electronNoticeHandler`, drawn by Electron main from `Line` values with a `language` function returning "en", then "id"; the notice frames `question_waiting` and `approval_waiting` as the runner sends them (codes only, no params: `notice.questionTitle`, `notice.questionBody`, `notice.decisionTitle`, `notice.decisionBody`).
-- When: the handler runs in `en`, the language changes to `id`, and the handler runs again.
-- Then: the first notice keeps its English title "FlowDriven has a question for you" and body "Open the chat to answer."; the next question notice is drawn from the Indonesian words for the same keys (the title and body equal `t("id", "notice.questionTitle")` and `t("id", "notice.questionBody")` and differ from the English ones); the approval notice is drawn from `notice.decisionTitle` and `notice.decisionBody` in the same way; no drawn text holds a flow name or a decision title.
+- Given: `electronNoticeHandler`, drawn by Electron main from `Line` values from notices whose `language` field is "en", then "id"; the notice frames `question_waiting` and `approval_waiting` as the runner sends them (codes only, no params: `notice.questionTitle`, `notice.questionBody`, `notice.decisionTitle`, `notice.decisionBody`).
+- When: the handler runs on a notice whose `language` is "en", then on the next notice, which carries `language` "id".
+- Then: the first notice keeps its English title "FlowDriven has a question for you" and body "Open the chat to answer."; the next question notice is drawn from the Indonesian words for the same keys (the title and body equal the Indonesian words of `notice.questionTitle` and `notice.questionBody` and differ from the English ones); the approval notice is drawn from `notice.decisionTitle` and `notice.decisionBody` in the same way; no drawn text holds a flow name or a decision title.
 - Traces: FS-j30.A16, FS-j30.P3, FS-j30.P11, F-16
 - Build step: B-06
 - Fails first because: notice text is fixed English strings in the runner (`notify/policy.ts`) and main draws none.
@@ -5522,7 +5522,7 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 - File: apps/desktop/src/i18n/i18n.test.ts (new)
 - Given: `en.ts` with `a.two` as {one: "{n} item", other: "{n} items"}; temporary language files for the cases: (a) `xx.ts` with `a.two` as {one: "{n} x"}; (b) `id.ts` with `a.two` as {one: "{n} butir", other: "{n} butir"} (the `Intl.PluralRules` categories of `id` are only `other`); (c) `ar.ts` with `a.two` as {few: "{n} a", other: "{n} b"} (the categories of `ar` include `few`).
 - When: `checkLanguages({root})` runs on each file; then `t("a.two", {n: 7}, "xx")` runs with the file of (a) and with a valid `xx` form {other: "{n} y"}.
-- Then: (a) one finding `missing_plural_form` (language `xx`, key `a.two`, fix: add `other`); (b) one finding `unknown_plural_form` (language `id`, key `a.two`, form `one`, fix: remove the form, `id` uses only `other`); (c) no finding; with the valid `xx` form the call returns "7 y", `other` being the fallback for a category the file does not list.
+- Then: (a) one finding `missing_other_form` (language `xx`, key `a.two`, fix: add `other`); (b) one finding `unknown_plural_form` (language `id`, key `a.two`, form `one`, fix: remove the form, `id` uses only `other`); (c) no finding; with the valid `xx` form the call returns "7 y", `other` being the fallback for a category the file does not list.
 - Traces: FS-j30.A11, FS-j30.A10, F-20
 - Build step: B-06
 - Fails first because: the check knows no categories and `other` is not required.
@@ -5532,7 +5532,7 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 - File: apps/desktop/src/i18n/i18n.test.ts (new)
 - Given: temporary language files: `x_.ts` with code "x_"; `aa.ts` and `ab.ts` both with code "aa"; `pt-br.ts` with code "pt-BR"; all listed in `languages.ts`.
 - When: `checkLanguages({root})` runs.
-- Then: one finding `invalid_language_code` (file `x_.ts`, fix: use a valid language tag such as `pt-BR`); one finding `duplicate_language_code` naming both `aa.ts` and `ab.ts` (fix: give one file another code); no finding for `pt-BR`.
+- Then: one finding `invalid_code` (file `x_.ts`, fix: use a valid language tag such as `pt-BR`); one finding `duplicate_code` naming both `aa.ts` and `ab.ts` (fix: give one file another code); no finding for `pt-BR`.
 - Traces: FS-j30.A11, FS-j30.P7, F-20
 - Build step: B-06
 - Fails first because: the check does not look at codes.
@@ -5582,7 +5582,7 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 - File: packages/runner/src/service/handlers.test.ts
 - Given: Harness H; `spendingLimit` 10 with 10.00 spent (the limit is reached).
 - When: `settings.update {patch: {language: "id"}}` runs.
-- Then: the update succeeds; no run is created or paused, no `budget_raise` decision is added, no agent call is made and no notice is sent; the daily limit of FS-j20.E4 still applies to chat turns afterwards (a start is refused as before).
+- Then: the update succeeds; no run is created or paused, no `budget_raise` decision is added, no agent call is made and no notice is sent; the daily limit of FS-j20.E4 still applies to chat turns afterwards (a start is refused as before; this clause is asserted in TC-j20-46 (b), B-24.T4).
 - Traces: FS-j30.E4, SR-9
 - Build step: B-06
 - Fails first because: nothing states that the language setting is independent of the limits.
@@ -5592,7 +5592,7 @@ Release split for these cases: Skills list is V1 (B-15); Memory, Phone & bots an
 - File: packages/runner/src/service/handlers.test.ts
 - Given: `example.fill-timesheet` confirmed with hash H and a weekly schedule on.
 - When: `settings.update {patch: {language: "id"}}`, then `{patch: {language: "en"}}`.
-- Then: after each, `flows.get` returns hash H, state `confirmed` and the same schedule; `flows.list` shows no "Changed: confirm again" badge; the next scheduled start is not refused with `needs_confirmation`.
+- Then: after each, `flows.get` returns hash H, state `confirmed` and the same schedule; `flows.list` shows no "Changed: confirm again" badge; the next scheduled start is not refused with `needs_confirmation` (this clause is asserted in TC-SR3-07, B-13.T2).
 - Traces: FS-j30.E7, SR-3
 - Build step: B-06
 - Fails first because: no case ties the flow's hash to the language setting.

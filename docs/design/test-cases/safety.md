@@ -936,7 +936,7 @@ A flow runs only as the exact version the person confirmed (its content hash). A
 - File: packages/runner/src/service/flows-handlers.test.ts
 - Given: FLOW-TS confirmed at H1.
 - When: `flows.setSchedule` (daily 17:00), `settings.update {mainAgent}`, `chats.setAgent`, `settings.update {language: "id"}`, `settings.update {spendingLimit: 25}`, permission off then on.
-- Then: after each call `flows.get` returns `hash: H1`, `state: "confirmed"`, the same `confirmed.at`.
+- Then: after each call `flows.get` returns `hash: H1`, `state: "confirmed"`, the same `confirmed.at`; and, after the language update, the next scheduled start is not refused with `needs_confirmation` (from TC-j30-36).
 - Traces: SR-3, FS-j12.A14, FS-j21
 - Build step: B-13
 - Fails first because: the schedule is stored in the flow file today and changes the hash.

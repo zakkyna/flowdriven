@@ -23,6 +23,7 @@ import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
 import { createFlowHandlers } from "./flows.ts";
+import { createFlowReadHandlers } from "./flows-import.ts";
 import {
   type Caller,
   createDecisionHandlers,
@@ -240,6 +241,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
   const runs = createRunHandlers(store, engine, (name) =>
     name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   );
+  const flowReads = createFlowReadHandlers(store, engine, now);
   const appVersion = (
     JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
   ).version;
@@ -247,6 +249,9 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     engine,
     call: createDispatcher({
       v2: {
+        "flows.list": flowReads.list,
+        "flows.get": flowReads.get,
+        "flows.import": flowReads.import,
         "flows.confirm": createFlowHandlers(store, now).confirm,
         "rules.list": rules.list,
         "rules.revoke": rules.revoke,

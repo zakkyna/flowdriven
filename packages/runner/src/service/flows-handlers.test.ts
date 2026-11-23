@@ -420,3 +420,362 @@ test("TC-j24-18 confirmed rules reach a fake Claude run", { timeout: 20000 }, as
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("TC-STO-36 flow reads use the version 2 model", async () => {
+  const x = await setup([touch("log", "change", account), touch("reply", "send", account)]);
+  try {
+    await x.service.call("flows.confirm", { ...x.input, onItsOwn: ["log"] });
+    expect(await x.service.call("flows.list", {})).toMatchObject([{ id: x.manifest.id, state: "confirmed" }]);
+    expect(await x.service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
+      summary: { state: "confirmed" },
+      touches: [
+        { id: "log", list: "on_its_own", byRule: expect.any(String) },
+        { id: "reply", list: "asks_first" },
+      ],
+      confirmLists: { asksFirst: ["reply"] },
+    });
+  } finally {
+    x.service.stop();
+    x.store.close();
+  }
+});
+
+test("TC-STO-36 lists live flows newest first and hides tombstones", async () => {
+  const x = await setup(
+    [touch("log", "change", account), { ...touch("reply", "send", account), rule: "runs_alone" }],
+    {
+      inputs: [
+        { id: "duration", label: "Duration", type: "text", required: true },
+        { id: "work", label: "What you did", type: "text", required: true },
+      ],
+    },
+  );
+  try {
+    await x.service.call("flows.confirm", { ...x.input, onItsOwn: ["log"] });
+    x.store.createRun({
+      id: "run",
+      flowId: x.manifest.id,
+      flowHash: hash,
+      flowVersion: x.manifest.version,
+      state: "waiting_approval",
+      project: ".",
+      inputs: {},
+      params: {},
+      requirements: [],
+      startedAt: at,
+    });
+    x.store.createApproval({
+      id: "approval",
+      kind: "result_sign_off",
+      runId: "run",
+      stepId: "step",
+      itemKey: "",
+      summary: "Review",
+      payload: "Review",
+      approves: [],
+      onExpiry: "end",
+      createdAt: at,
+      expiresAt: at,
+      state: "pending",
+    });
+    const second = flowWithRules(x.store, [], { id: "local.second", name: "Second" });
+    const deleted = flowWithRules(x.store, [], { id: "local.deleted", name: "Deleted" });
+    const secondHead = x.store.getFlowHead(second.manifest.id);
+    const deletedHead = x.store.getFlowHead(deleted.manifest.id);
+    if (!secondHead || !deletedHead) throw new Error("Missing head");
+    x.store.putFlowHead({ ...secondHead, createdAt: "2026-11-24T00:00:00.000Z" });
+    x.store.putFlowHead({ ...deletedHead, deletedAt: at });
+    const list = await x.service.call("flows.list", {});
+    expect(list).toMatchObject([
+      { id: second.manifest.id, state: "new" },
+      { id: x.manifest.id, live: "needs_you", asksFor: ["Duration", "What you did"] },
+    ]);
+    const detail = await x.service.call("flows.get", { flowId: x.manifest.id });
+    expect(detail).toMatchObject({
+      confirmLists: { asksFirst: ["reply"] },
+      touches: [
+        { id: "log", byRule: expect.any(String) },
+        { id: "reply", list: "asks_first" },
+      ],
+    });
+    expect(detail).not.toHaveProperty("signOff");
+    await expect(x.service.call("flows.get", { flowId: deleted.manifest.id })).rejects.toMatchObject({
+      code: "not_found",
+      reason: "flow_deleted",
+    });
+  } finally {
+    x.service.stop();
+    x.store.close();
+  }
+});
+
+test("TC-SR3-01 TC-SR3-02 flow state follows the head hash and changed place", async () => {
+  const x = await setup([touch("log", "change", account)]);
+  try {
+    expect(await x.service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
+      summary: { state: "new" },
+    });
+    await x.service.call("flows.confirm", x.input);
+    expect(await x.service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
+      summary: { state: "confirmed" },
+    });
+    const nextHash = `sha256:${"b".repeat(64)}`;
+    const manifest = FlowManifest.parse({ ...x.manifest, touches: [touch("log", "change", folder)] });
+    x.store.putFlow({
+      id: manifest.id,
+      hash: nextHash,
+      version: manifest.version,
+      manifest,
+      files: {},
+      registeredAt: at,
+    });
+    const head = x.store.getFlowHead(manifest.id);
+    if (!head) throw new Error("Missing head");
+    x.store.putFlowHead({ ...head, headHash: nextHash });
+    expect(await x.service.call("flows.get", { flowId: manifest.id })).toMatchObject({
+      summary: { state: "changed" },
+      changes: [{ sign: "~", text: "log" }],
+    });
+    await x.service.call("flows.confirm", { ...x.input, hash: nextHash });
+    expect(await x.service.call("flows.get", { flowId: manifest.id })).toMatchObject({
+      summary: { state: "confirmed" },
+    });
+  } finally {
+    x.service.stop();
+    x.store.close();
+  }
+});
+
+test("TC-SR3-12 legacy confirmations produce the migrated flow states", async () => {
+  const x = await setup([]);
+  try {
+    expect(await x.service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
+      summary: { state: "new" },
+    });
+    const confirmation = {
+      flowId: x.manifest.id,
+      hash,
+      at,
+      by: "migration" as const,
+      onItsOwn: [],
+      legacy: true as const,
+      pins: { skills: {}, folders: {} },
+    };
+    x.store.putConfirmation(confirmation);
+    expect(await x.service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
+      summary: { state: "confirmed" },
+    });
+    x.store.putConfirmation({ ...confirmation, hash: `sha256:${"b".repeat(64)}` });
+    expect(await x.service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
+      summary: { state: "changed" },
+    });
+  } finally {
+    x.service.stop();
+    x.store.close();
+  }
+});
+
+test("TC-j12-36 settings leave confirmed flow state and hash unchanged", async () => {
+  const { exampleAgentProfile } = await import("../test-helpers/agent-profiles.ts");
+  const x = await setup([]);
+  try {
+    await x.service.call("flows.confirm", x.input);
+    for (const patch of [
+      { mainAgent: { agent: "codex", model: exampleAgentProfile.models[0] } },
+      { mainAgent: { agent: "codex", model: exampleAgentProfile.models[1] } },
+      { spendingLimit: 50 },
+      { busyFallback: true },
+    ]) {
+      await x.service.call("settings.update", { patch });
+      expect(await x.service.call("flows.get", { flowId: x.manifest.id })).toMatchObject({
+        hash,
+        summary: { state: "confirmed" },
+      });
+      expect(await x.service.call("flows.list", {})).toMatchObject([{ state: "confirmed" }]);
+    }
+  } finally {
+    x.service.stop();
+    x.store.close();
+  }
+});
+
+async function importFixture(schedule = "17:00") {
+  const { mkdirSync, mkdtempSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { flowV12Yaml } = await import("../../../sdk/src/test-data/flow-v12.ts");
+  mkdirSync(".workflow/scratch", { recursive: true });
+  const dir = mkdtempSync(join(process.cwd(), ".workflow/scratch/b05-import-"));
+  writeFileSync(join(dir, "flow.yaml"), flowV12Yaml({ schedule: { type: "daily", time: schedule } }));
+  writeFileSync(join(dir, "README.md"), "Read me\n");
+  return dir;
+}
+
+for (const [id, time] of [
+  ["TC-j28-46", "09:00"],
+  ["TC-SR2-20", "17:00"],
+]) {
+  test(`${id} importing a schedule suggestion does not enable it`, async () => {
+    const { rmSync } = await import("node:fs");
+    const path = await importFixture(time);
+    const x = await setup([]);
+    try {
+      const result = await x.service.call("flows.import", { path });
+      expect(result).toMatchObject({ flow: { state: "new", schedule: { type: "manual" } } });
+      const list = await x.service.call("flows.list", {});
+      expect(list).toContainEqual(
+        expect.objectContaining({ state: "new", schedule: expect.objectContaining({ type: "manual" }) }),
+      );
+      const imported = result as { flow: { id: string } };
+      expect(x.store.getSchedule(imported.flow.id)).toBeUndefined();
+      expect(x.store.getConfirmation(imported.flow.id)).toBeUndefined();
+      expect(x.store.listRules().filter((r) => r.flowId === imported.flow.id)).toEqual([]);
+      expect(x.store.listApprovals()).toEqual([]);
+      expect(x.store.listTriggers(imported.flow.id)).toEqual([]);
+    } finally {
+      x.service.stop();
+      x.store.close();
+      rmSync(path, { recursive: true, force: true });
+    }
+  });
+}
+
+test("TC-STO-37 import returns a summary and duplicate is unknown", async () => {
+  const { rmSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { flowV12Yaml } = await import("../../../sdk/src/test-data/flow-v12.ts");
+  const path = await importFixture();
+  const x = await setup([]);
+  try {
+    const first = (await x.service.call("flows.import", { path })) as { flow: { id: string }; hash: string };
+    expect(first).toMatchObject({
+      flow: { state: "new" },
+      hash: expect.any(String),
+      issues: [],
+    });
+    x.store.putConfirmation({
+      flowId: first.flow.id,
+      hash: first.hash,
+      at,
+      by: "confirm_dialog",
+      onItsOwn: [],
+      pins: { skills: {}, folders: {} },
+    });
+    x.store.putSchedule({
+      flowId: first.flow.id,
+      type: "daily",
+      time: "17:00",
+      whenItsTime: "ask",
+      setAt: at,
+      setBy: "window",
+      confirmedHash: first.hash,
+    });
+    writeFileSync(join(path, "flow.yaml"), flowV12Yaml({ summary: "Changed summary" }));
+    expect(await x.service.call("flows.import", { path })).toMatchObject({
+      flow: { state: "changed", schedule: { type: "daily", time: "17:00" } },
+    });
+    expect(x.store.getSchedule(first.flow.id)).toMatchObject({ type: "daily", time: "17:00" });
+    expect(x.store.listAudit()).toContainEqual(expect.objectContaining({ kind: "flow_imported" }));
+    expect(x.service.knows("flows.duplicate")).toBe(false);
+    await expect(x.service.call("flows.duplicate", { flowId: x.manifest.id })).rejects.toMatchObject({
+      code: "not_found",
+    });
+  } finally {
+    x.service.stop();
+    x.store.close();
+    rmSync(path, { recursive: true, force: true });
+  }
+});
+
+test("TC-SR1-47 risky planted rules never appear as allowed", async () => {
+  const { mkdirSync, mkdtempSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { DatabaseSync } = await import("node:sqlite");
+  const { FlowDetail } = await import("@flowdriven/contracts");
+  const { matchRule } = await import("../rules/standing.ts");
+  const { canAlwaysAllow } = await import("../rules/always-allow.ts");
+  const { decide } = await import("../claude/decide.ts");
+  mkdirSync(".workflow/scratch", { recursive: true });
+  const dir = mkdtempSync(join(process.cwd(), ".workflow/scratch/b05-rules-"));
+  const path = join(dir, "data.sqlite");
+  const store = await openSqliteStore(path);
+  const service = createRunnerService({ store, dataDir: dir, mode: "demo", now: () => new Date(at) });
+  const effects = ["send", "post", "pay", "delete", "merge"] as const;
+  const { manifest } = flowWithRules(
+    store,
+    effects.map((effect) => touch(effect, effect, account)),
+  );
+  const db = new DatabaseSync(path);
+  try {
+    for (const effect of effects) {
+      const row = {
+        id: `rule-${effect}`,
+        flowId: manifest.id,
+        touchId: effect,
+        effect,
+        place: account,
+        sentence: effect,
+        state: "active" as const,
+        createdAt: at,
+        createdBy: "always_allow" as const,
+        uses: 0,
+      };
+      db.prepare("INSERT INTO standing_rules VALUES (?, ?, ?, ?)").run(
+        row.id,
+        row.flowId,
+        row.state,
+        JSON.stringify(row),
+      );
+      expect(
+        matchRule(
+          [row],
+          { flowId: manifest.id, touchId: effect, effect, place: account },
+          { touches: [{ id: effect, effect, place: account }] },
+        ),
+      ).toBeUndefined();
+      const tool = "example.action";
+      const policy = {
+        tools: [tool],
+        folders: [],
+        cwd: ".",
+        addDirs: [],
+        schema: false,
+        sessionId: "session",
+        flowId: manifest.id,
+        effectCatalog: [{ tool, effect, place: { kind: "account" as const, value: account.value } }],
+        touches: [
+          {
+            touchId: effect,
+            effect,
+            matcher: "exact" as const,
+            place: account,
+            fixedPlace: true,
+            list: "on_its_own" as const,
+            covers: [tool],
+          },
+        ],
+        rules: [row],
+      };
+      expect(
+        decide(policy, {
+          hook_event_name: "PreToolUse",
+          session_id: "session",
+          tool_name: tool,
+          tool_use_id: "call",
+          tool_input: {},
+        }),
+      ).toMatchObject({ outcome: "hold", held: { action: effect } });
+      expect(canAlwaysAllow({ effect, place: "fixed", caller: "window" })).toBe(false);
+    }
+    const detail = FlowDetail.parse(await service.call("flows.get", { flowId: manifest.id }));
+    for (const view of detail.touches) {
+      expect(view.list).toBe("asks_first");
+      expect(view).not.toHaveProperty("byRule");
+    }
+    expect(store.listRules().every((r) => r.uses === 0)).toBe(true);
+  } finally {
+    db.close();
+    service.stop();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

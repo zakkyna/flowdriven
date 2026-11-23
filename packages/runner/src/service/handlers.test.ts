@@ -1,8 +1,8 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Approval, RunDetail, RunSummary as RunSummaryV2 } from "@flowdriven/contracts";
-import { FlowDetail, RunSummary } from "@flowdriven/contracts/v1";
+import { Approval, FlowDetail, RunDetail, RunSummary as RunSummaryV2 } from "@flowdriven/contracts";
+import { RunSummary } from "@flowdriven/contracts/v1";
 import { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
 import { createFixtureRunnerClient } from "../../../fixtures/src/client.ts";
@@ -75,11 +75,19 @@ async function finish(s: RunnerService, pick: string) {
   return detail;
 }
 
-test("flows.list and flows.get show the demo flow as approved, with four steps and no run yet", async () => {
+test("TC-STO-36 flows.list and flows.get show the demo flow as new, with four steps and no run yet", async () => {
   const { service: s } = await setup();
   const list = await s.call("flows.list", {});
   expect(list).toEqual([
-    expect.objectContaining({ signOff: expect.objectContaining({ state: "approved" }), stepCount: 4 }),
+    expect.objectContaining({
+      state: "new",
+      steps: expect.arrayContaining([
+        { id: "alerts", title: "alerts" },
+        { id: "review", title: "review" },
+        { id: "pick", title: "pick" },
+        { id: "build", title: "build" },
+      ]),
+    }),
   ]);
   const flow = FlowDetail.parse(await s.call("flows.get", { flowId: demoFlow().manifest.id }));
   expect(list).toEqual([expect.not.objectContaining({ lastRun: expect.anything() })]);
@@ -245,7 +253,7 @@ test("an output that does not parse becomes Internal error and an audit entry", 
   expect(audit).toHaveBeenCalledTimes(2);
   expect(audit).toHaveBeenCalledWith("internal_error", expect.objectContaining({ method: "runner.info" }));
 });
-test("flows.import registers a valid folder, reports the issues of an invalid one and refuses a relative path", async () => {
+test("TC-STO-37 flows.import registers a valid folder, reports the issues of an invalid one and refuses a relative path", async () => {
   const { service: s } = await setup("live");
   const yaml = `format: flowdriven-flow/1.1\nid: local.import-test\nname: Import test\nkind: build\nsteps:\n  - id: a\n    do: worker\n    instructions: Hello\n    checks:\n      - type: contains\n        pattern: Hello\n`;
   const good = dir(),
@@ -262,7 +270,7 @@ test("flows.import registers a valid folder, reports the issues of an invalid on
   expect(invalid).not.toHaveProperty("flow");
   expect(await s.call("flows.list", {})).toEqual([]);
   expect(await s.call("flows.import", { path: good })).toMatchObject({
-    flow: expect.objectContaining({ manifest: expect.objectContaining({ id: "local.import-test" }) }),
+    flow: expect.objectContaining({ id: "local.import-test", state: "new" }),
     hash: expect.any(String),
   });
   expect(await s.call("flows.list", {})).toHaveLength(1);

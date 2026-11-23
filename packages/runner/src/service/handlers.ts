@@ -1,4 +1,3 @@
-import { isAbsolute } from "node:path";
 import type { SettingsPatch } from "@flowdriven/contracts";
 import {
   type ErrorReason,
@@ -19,8 +18,7 @@ import {
   type OperationName,
   type OperationOutput,
 } from "@flowdriven/contracts/v1";
-import { FlowManifest, hasErrors, hasHiddenText, type Value } from "@flowdriven/sdk";
-import { FlowFileError, loadFlowFolder } from "@flowdriven/sdk/node";
+import { FlowManifest, hasHiddenText, type Value } from "@flowdriven/sdk";
 import type { Engine } from "../engine.ts";
 import { EngineError } from "../errors.ts";
 import type { HarnessQuota, Keeper } from "../keeper/types.ts";
@@ -37,7 +35,7 @@ import { ALLOW_FIRST } from "./claude-harness.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 import { toApproval } from "./map-approval.ts";
 import { toDecision } from "./map-decision.ts";
-import { type LocalChecks, toFlowDetail, toFlowSummary, toReadinessReport } from "./map-flow-v1.ts";
+import { type LocalChecks, toReadinessReport } from "./map-flow-v1.ts";
 import { toQueueView } from "./map-queue.ts";
 import { runTrigger, toRunSummary } from "./map-run-v1.ts";
 import { toTriggerStatus } from "./map-trigger.ts";
@@ -151,6 +149,9 @@ export function createHandlers({
   local,
 }: HandlerContext): Omit<
   Handlers,
+  | "flows.list"
+  | "flows.get"
+  | "flows.import"
   | "runner.info"
   | "settings.get"
   | "settings.update"
@@ -182,14 +183,6 @@ export function createHandlers({
     const f = store.getFlow(row.flowId, row.flowHash);
     if (!f) throw new Error("Flow not found.");
     return FlowManifest.parse(f.manifest).name;
-  }
-  function detail(row: FlowRow) {
-    const runs = store.listRuns({ flowId: row.id });
-    const last = runs.reduce<RunRow | undefined>(
-      (a, b) => (!a || b.startedAt >= a.startedAt ? b : a),
-      undefined,
-    );
-    return toFlowDetail(row, runs, last ? store.listSteps(last.id) : []);
   }
   function approval(row: ApprovalRow) {
     const r = run(row.runId);
@@ -296,7 +289,6 @@ export function createHandlers({
   }
   return {
     "activity.summary": createActivityHandler(store, engine),
-    "flows.list": () => store.listFlows().map((r) => toFlowSummary(r, store.listRuns({ flowId: r.id }))),
     "flows.capabilities": ({ flowId }) => {
       flow(flowId);
       return capabilities ? capabilities.get(flowId) : unavailable("The preview arrives in this plan.");
@@ -311,7 +303,6 @@ export function createHandlers({
       flow(flowId);
       return capabilities ? capabilities.withdraw(flowId) : unavailable("The preview arrives in this plan.");
     },
-    "flows.get": ({ flowId }) => detail(flow(flowId)),
     "flows.build": () => unavailable("Building a flow from chat arrives with the agent."),
     "flows.update": () => unavailable("Editing a flow in the app arrives with the agent."),
     "flows.run": (input) => {
@@ -355,24 +346,6 @@ export function createHandlers({
         ...engine.listApprovals({ state }).reverse().map(approval),
         ...(weekly?.list() ?? []).filter((a) => !state || a.state === state),
       ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    "flows.import": ({ path }) => {
-      if (!isAbsolute(path))
-        throw new RunnerError("invalid_input", "The flow folder must be an absolute path.");
-      try {
-        const loaded = loadFlowFolder(path);
-        if (hasErrors(loaded.issues)) return { issues: loaded.issues };
-        const files = Object.fromEntries(
-          [...loaded.files].map(([name, bytes]) => [name, new TextDecoder().decode(bytes)]),
-        );
-        const row = engine.registerFlow(loaded.manifest, loaded.hash, files);
-        return { flow: detail(row), issues: loaded.issues, hash: loaded.hash };
-      } catch (error) {
-        if (error instanceof FlowFileError) throw new RunnerError("invalid_input", error.message);
-        if (error instanceof Error && "code" in error && error.code === "ENOENT")
-          throw new RunnerError("not_found", "There is no folder at that path.");
-        throw error;
-      }
-    },
     "harnesses.list": () => harnesses?.list().map(withQuota) ?? [],
     "harnesses.rescan": () =>
       harnesses
