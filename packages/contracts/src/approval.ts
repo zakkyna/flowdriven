@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { Effect, Id, IsoDateTime, Place } from "./common.ts";
+import { containsHiddenText, Effect, Id, IsoDateTime, Line, Place } from "./common.ts";
 
 export const RiskyAction = z.enum(["send", "post", "pay", "delete", "merge"]);
 export type RiskyAction = z.infer<typeof RiskyAction>;
 export const RISKY_ACTIONS: readonly RiskyAction[] = ["send", "post", "pay", "delete", "merge"];
 export const ApprovalKind = z.enum([
   "risky_action",
+  "outside_flow",
   "flow_sign_off",
   "result_sign_off",
   "budget_raise",
@@ -21,6 +22,7 @@ export const ApprovalState = z.enum([
   "rejected",
   "expired",
   "allowed_always",
+  "another_way",
 ]);
 export type ApprovalState = z.infer<typeof ApprovalState>;
 const payloadText = z.string().max(4000);
@@ -69,6 +71,13 @@ const ApprovalFields = z.strictObject({
   resolvedVia: ResolvedVia.optional(),
   editedSubject: z.string().max(300).optional(),
   editedText: z.string().max(4000).optional(),
+  anotherWayText: z
+    .string()
+    .min(1)
+    .max(4000)
+    .refine((text) => !containsHiddenText(text))
+    .optional(),
+  newTry: Line.optional(),
   chatId: Id.optional(),
   ruleId: Id.optional(),
   flowId: Id.optional(),
@@ -112,17 +121,48 @@ export const Approval = ApprovalFields.superRefine((approval, ctx) => {
   }
   const risky = RISKY_ACTIONS.some((effect) => effect === approval.effect);
   if (
-    approval.kind === "risky_action" &&
+    (approval.kind === "risky_action" || approval.kind === "outside_flow") &&
     (!approval.effect ||
       (risky ? approval.riskyAction !== approval.effect : approval.riskyAction !== undefined))
   )
     ctx.addIssue({ code: "custom", path: ["effect"], message: "The effect and risky action must agree." });
-  if (approval.kind !== "risky_action" && approval.riskyAction !== undefined)
+  if (
+    approval.kind !== "risky_action" &&
+    approval.kind !== "outside_flow" &&
+    approval.riskyAction !== undefined
+  )
     ctx.addIssue({
       code: "custom",
       path: ["riskyAction"],
       message: "Only risky actions name a risky action.",
     });
+  if (
+    approval.kind === "outside_flow" &&
+    (approval.editable ||
+      approval.canAlwaysAllow ||
+      approval.similarGroup !== undefined ||
+      approval.similarWaiting !== undefined)
+  )
+    ctx.addIssue({ code: "custom", message: "Outside decisions cannot be edited or grouped." });
+  const canTry = ["risky_action", "outside_flow", "result_sign_off"].includes(approval.kind);
+  if (
+    (approval.state === "another_way") !== (approval.anotherWayText !== undefined) ||
+    (approval.state === "another_way" && !canTry)
+  )
+    ctx.addIssue({
+      code: "custom",
+      path: ["anotherWayText"],
+      message: "Another way requires its text and an eligible decision.",
+    });
+  if (
+    approval.newTry &&
+    (!canTry ||
+      approval.newTry.key !== "decision.newTry" ||
+      typeof approval.newTry.params?.text !== "string" ||
+      !approval.newTry.params.text ||
+      containsHiddenText(approval.newTry.params.text))
+  )
+    ctx.addIssue({ code: "custom", path: ["newTry"], message: "New try requires its text." });
   if (
     approval.canAlwaysAllow &&
     (approval.kind !== "risky_action" ||
@@ -145,7 +185,7 @@ export const Approval = ApprovalFields.superRefine((approval, ctx) => {
     ctx.addIssue({ code: "custom", path: ["state"], message: "Always allowed needs a change and a rule." });
 });
 export type Approval = z.infer<typeof Approval>;
-export const ApprovalDecision = z.enum(["approve", "edit", "reject", "always_allow"]);
+export const ApprovalDecision = z.enum(["approve", "edit", "reject", "always_allow", "another_way"]);
 export type ApprovalDecision = z.infer<typeof ApprovalDecision>;
 export const APPROVAL_EXPIRY_HOURS = 24;
 export function approvalExpiresAt(createdAt: string): string {
@@ -166,11 +206,18 @@ export const ApprovalsResolveInput = z
     decision: ApprovalDecision,
     editedText: z.string().min(1).max(4000).optional(),
     editedSubject: z.string().min(1).max(300).optional(),
+    anotherWayText: z
+      .string()
+      .min(1)
+      .max(4000)
+      .refine((text) => !containsHiddenText(text))
+      .optional(),
   })
   .refine(
     (v) =>
       (v.decision === "edit") === (v.editedText !== undefined) &&
-      (v.editedSubject === undefined || v.decision === "edit"),
+      (v.editedSubject === undefined || v.decision === "edit") &&
+      (v.decision === "another_way") === (v.anotherWayText !== undefined),
   );
 export type ApprovalsResolveInput = z.infer<typeof ApprovalsResolveInput>;
 export const ApprovalsResolveOutput = z.strictObject({

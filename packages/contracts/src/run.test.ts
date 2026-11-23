@@ -109,7 +109,7 @@ test("a step run can list blocked calls, each with a count of at least one, at m
   expect(StepRun.safeParse({ ...step, blocked: Array.from({ length: 21 }, () => row) }).success).toBe(false);
 });
 
-test("TC-CON-12 version 2 states", async () => {
+test("TC-CON-12 and TC-CON-45 version 2 states", async () => {
   const c = await import("./index.ts");
   expect(c.RunState.options).toEqual([
     "queued",
@@ -142,8 +142,9 @@ test("TC-CON-12 version 2 states", async () => {
     "rejected",
     "expired",
     "allowed_always",
+    "another_way",
   ]);
-  expect(c.ApprovalDecision.options).toEqual(["approve", "edit", "reject", "always_allow"]);
+  expect(c.ApprovalDecision.options).toEqual(["approve", "edit", "reject", "always_allow", "another_way"]);
   expect(c.ResolvedVia.options).toEqual(["window", "chat", "phone", "rule", "stop", "permission_off"]);
   expect(c.AgentState.options).toEqual([
     "not_installed",
@@ -203,7 +204,7 @@ test("TC-CON-25 causes and input problems", async () => {
     false,
   );
 });
-test("TC-CON-26 version 2 run models", async () => {
+test("TC-CON-26 and TC-CON-46 version 2 run models", async () => {
   const c = await import("./run.ts");
   const run = {
     id: "r",
@@ -235,6 +236,9 @@ test("TC-CON-26 version 2 run models", async () => {
   );
   const detail = {
     ...run,
+    notes: [],
+    skippedStarts: [],
+    attemptLog: [],
     inputs: [],
     steps: [],
     approvalIds: [],
@@ -248,4 +252,52 @@ test("TC-CON-26 version 2 run models", async () => {
   for (const costLine of [{ kind: "plan" }, { kind: "amount", usd: 0.42 }, { kind: "none" }])
     expect(c.RunDetail.safeParse({ ...detail, costLine }).success).toBe(true);
   expect(c.RunDetail.safeParse({ ...detail, costLine: { kind: "amount" } }).success).toBe(false);
+});
+
+test("TC-CON-46 note and repetition contract shapes", async () => {
+  const { RunDetail, Cause } = await import("./run.ts");
+  const at = "2026-11-23T00:00:00Z";
+  const note = { id: "n", text: "words", at, outside: true, state: "used", fromStep: 1, usedAt: at };
+  const detail = {
+    id: "r",
+    flowId: "f",
+    flowName: "F",
+    flowVersion: "1.0.0",
+    flowHash: `sha256:${"a".repeat(64)}`,
+    source: "chat",
+    agent: "claude",
+    versionChanged: false,
+    oneTime: false,
+    project: "/p",
+    state: "blocked",
+    startedAt: at,
+    inputs: [],
+    steps: [],
+    approvalIds: [],
+    outputs: [],
+    usage: [],
+    estimatedCostUsd: 0,
+    decisionLines: [],
+    costLine: { kind: "none" },
+    canRunAgain: true,
+    canTryAgain: true,
+    notes: [note],
+    skippedStarts: [{ at, runId: "r2" }],
+    attemptLog: [
+      { step: 1, attempt: 1, reason: "repeated_error", count: 3, evidence: "error", outside: true },
+    ],
+  };
+  expect(RunDetail.safeParse(detail).success).toBe(true);
+  for (const state of ["waiting", "used", "not_used"])
+    expect(RunDetail.safeParse({ ...detail, notes: [{ ...note, state }] }).success).toBe(true);
+  for (const bad of [
+    { ...note, state: "bad" },
+    { ...note, outside: undefined },
+    { ...note, at: "bad" },
+  ])
+    expect(RunDetail.safeParse({ ...detail, notes: [bad] }).success).toBe(false);
+  for (const key of ["notes", "skippedStarts", "attemptLog"])
+    expect(RunDetail.safeParse({ ...detail, [key]: undefined }).success).toBe(false);
+  expect(Cause.safeParse({ code: "stuck_repeating" }).success).toBe(true);
+  expect(Cause.safeParse({ code: "unknown" }).success).toBe(false);
 });

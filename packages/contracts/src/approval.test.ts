@@ -314,3 +314,54 @@ test("TC-CON-44 decisions have no deadline", async () => {
     expect(ResolvedVia.safeParse(via).success).toBe(true);
   expect(ResolvedVia.safeParse("expiry").success).toBe(false);
 });
+
+test("TC-CON-45 outside decisions and another way", async () => {
+  const { ApprovalsResolveInput, Line, operations } = await import("./index.ts");
+  const outside = { ...base, kind: "outside_flow", editable: false };
+  expect(Approval.safeParse(outside).success).toBe(true);
+  expect(Approval.safeParse({ ...outside, effect: "read", riskyAction: undefined }).success).toBe(true);
+  for (const bad of [
+    { effect: undefined },
+    { editable: true },
+    { similarGroup: "g" },
+    { similarWaiting: 1 },
+    { riskyAction: undefined },
+  ])
+    expect(Approval.safeParse({ ...outside, ...bad }).success).toBe(false);
+  const choice = { approvalId: "ap-1", decision: "another_way", anotherWayText: "x".repeat(4000) };
+  expect(ApprovalsResolveInput.safeParse(choice).success).toBe(true);
+  for (const text of [undefined, "", "x".repeat(4001), `x${String.fromCodePoint(0x200b)}`])
+    expect(ApprovalsResolveInput.safeParse({ ...choice, anotherWayText: text }).success).toBe(false);
+  expect(ApprovalsResolveInput.safeParse({ ...choice, decision: "approve" }).success).toBe(false);
+  const answered = {
+    ...outside,
+    state: "another_way",
+    anotherWayText: "try again",
+    newTry: { key: "decision.newTry", params: { text: "x" } },
+  };
+  expect(Approval.safeParse(answered).success).toBe(true);
+  for (const bad of [
+    { anotherWayText: undefined },
+    { state: "approved" },
+    { kind: "flow_sign_off", riskyAction: undefined },
+    { newTry: { key: "other.key", params: { text: "x" } } },
+  ])
+    expect(Approval.safeParse({ ...answered, ...bad }).success).toBe(false);
+  for (const key of ["report.anotherWay", "decision.newTry", "report.didAnotherWay", "report.usedNote"]) {
+    expect(Line.safeParse({ key, params: { text: "x".repeat(4000) } }).success).toBe(true);
+    expect(Line.safeParse({ key, params: { text: "x".repeat(4001) } }).success).toBe(false);
+    expect(Line.safeParse({ key, params: { other: "x".repeat(401) } }).success).toBe(false);
+  }
+  expect(Line.safeParse({ key: "report.approvedOnce", params: { title: "x".repeat(401) } }).success).toBe(
+    false,
+  );
+  for (const reason of [
+    "outside_flow_once",
+    "another_way_not_allowed",
+    "text_too_long",
+    "empty_text",
+    "hidden_characters",
+  ])
+    expect(operations["approvals.resolve"].reasons).toContain(reason);
+  expect(operations["approvals.resolveSimilar"].reasons).toContain("outside_flow_once");
+});

@@ -501,3 +501,18 @@ test("TC-CON-44 fixture decisions wait beyond 25 hours and can be answered", asy
       .state,
   ).toBe("approved");
 });
+
+test("TC-CON-45 fixture records another way and its text", async () => {
+  const client = createFixtureRunnerClient({ scenario: "story-v2" });
+  const { decision } = await client.call("approvals.resolve", {
+    approvalId: "decision-1",
+    decision: "another_way",
+    anotherWayText: "Try this",
+  });
+  expect(decision.state).toBe("another_way");
+  expect(decision.anotherWayText).toBe("Try this");
+  expect(decision.ruleId).toBeUndefined();
+  const run = await client.call("runs.status", { runId: "run-timesheet-wait" });
+  expect(run.decisionLines).toContainEqual({ key: "report.anotherWay", params: { text: "Try this" } });
+  expect(run.decisionLines.some((line) => line.key === "report.youApproved")).toBe(false);
+});

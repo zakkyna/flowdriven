@@ -995,6 +995,8 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/contracts/src/operations-v2.test.ts` | RunDetail fixture without notes, skipped starts and attempt log | Required empty arrays in the fixture (TC-CON-46) | B-32.T1 |
+| `packages/contracts/src/run.test.ts` (TC-CON-12, TC-CON-26) | Earlier approval enums and RunDetail fixture | Adds Another way and required empty run arrays (TC-CON-45, TC-CON-46) | B-32.T1 |
 | `packages/runner/src/engine-recovery.test.ts` | Approved send with an unused grant and no declared requirement | Send with declared Gmail requirement and a used grant; retain the unused-grant scenario (TC-SR8-06; FS-j25.P12) | B-05.T16 |
 | `packages/runner/src/service/map-flow.test.ts`, `readiness-connector.test.ts`, `readiness-local.test.ts`, `review-02b-a2.test.ts` | Version 1 mapper and readiness assertions | Keep the same assertions using the extracted version 1 mapper; add version 2 mapping coverage (TC-STO-36) | B-05.T9 |
 | `packages/runner/src/states.test.ts` | Step states match the version 1 contract | Step states match the version 2 contract, including stopped (TC-ENG-07) | B-05.T7 |

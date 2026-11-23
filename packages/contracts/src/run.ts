@@ -162,6 +162,7 @@ export const Cause = z.strictObject({
     "limits_not_applied",
     "crash",
     "step_failed",
+    "stuck_repeating",
     "stopped",
     "flow_deleted",
     "agent_cannot_be_limited",
@@ -248,6 +249,28 @@ export const RunDetail = RunSummary.extend({
   estimatedCostUsd: z.number(),
   report: RunReport.optional(),
   blockedReason: z.string().optional(),
+  notes: z.array(
+    z.strictObject({
+      id: Id,
+      text: z.string(),
+      at: IsoDateTime,
+      fromStep: z.number().int().min(1).optional(),
+      state: z.enum(["waiting", "used", "not_used"]),
+      usedAt: IsoDateTime.optional(),
+      outside: z.boolean(),
+    }),
+  ),
+  skippedStarts: z.array(z.strictObject({ at: IsoDateTime, runId: Id })),
+  attemptLog: z.array(
+    z.strictObject({
+      step: z.number().int().min(1),
+      attempt: z.number().int().min(1),
+      reason: z.enum(["repeated_call", "repeated_error"]),
+      count: z.number().int().min(1),
+      evidence: z.string(),
+      outside: z.boolean(),
+    }),
+  ),
   decisionLines: z.array(Line),
   answer: z
     .strictObject({ lines: z.array(z.string()), chatId: Id.optional(), messageId: Id.optional() })

@@ -48,13 +48,32 @@ export const TouchId = z
 export type TouchId = z.infer<typeof TouchId>;
 export const LanguageCode = z.string().regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/);
 export type LanguageCode = z.infer<typeof LanguageCode>;
-export const Line = z.strictObject({
-  key: z
-    .string()
-    .max(100)
-    .regex(/^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9_]*)+$/),
-  params: z.record(z.string(), z.union([z.string().max(400), z.number()])).optional(),
-});
+const hidden = /[\p{Default_Ignorable_Code_Point}\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+export function containsHiddenText(text: string): boolean {
+  return hidden.test(text.replaceAll("\n", "").replaceAll("\t", ""));
+}
+
+export const Line = z
+  .strictObject({
+    key: z
+      .string()
+      .max(100)
+      .regex(/^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9_]*)+$/),
+    params: z.record(z.string(), z.union([z.string().max(4000), z.number()])).optional(),
+  })
+  .refine((line) =>
+    Object.entries(line.params ?? {}).every(
+      ([name, value]) =>
+        typeof value !== "string" ||
+        value.length <=
+          (name === "text" &&
+          ["report.anotherWay", "decision.newTry", "report.didAnotherWay", "report.usedNote"].includes(
+            line.key,
+          )
+            ? 4000
+            : 400),
+    ),
+  );
 export type Line = z.infer<typeof Line>;
 export const Place = z.strictObject({
   kind: z.enum(["account", "folder", "address", "site", "command", "repo"]),

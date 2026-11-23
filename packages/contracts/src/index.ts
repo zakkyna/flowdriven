@@ -10,6 +10,7 @@ export * from "./client.ts";
 export * from "./common.ts";
 export * from "./flow.ts";
 export * from "./harness.ts";
+export * from "./line-keys.ts";
 export * from "./notice.ts";
 export * from "./operations.ts";
 export * from "./queue.ts";
@@ -22,6 +23,5 @@ export * from "./skills.ts";
 export * from "./starts.ts";
 export * from "./trigger.ts";
 export * from "./version.ts";
-
 export * from "./window.ts";
 export * from "./wire.ts";

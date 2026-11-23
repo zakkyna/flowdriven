@@ -378,6 +378,9 @@ export function createFixtureRunnerClient(
         startedAt: now(),
         inputs: [],
         steps: [],
+        notes: [],
+        skippedStarts: [],
+        attemptLog: [],
         approvalIds: [],
         outputs: [],
         usage: [],
@@ -947,14 +950,17 @@ export function createFixtureRunnerClient(
         }
         d.ruleId = rule.id;
       }
+      if (input.decision === "another_way") d.anotherWayText = input.anotherWayText;
       d.state =
-        input.decision === "approve"
-          ? "approved"
-          : input.decision === "edit"
-            ? "approved_edited"
-            : input.decision === "reject"
-              ? "rejected"
-              : "allowed_always";
+        input.decision === "another_way"
+          ? "another_way"
+          : input.decision === "approve"
+            ? "approved"
+            : input.decision === "edit"
+              ? "approved_edited"
+              : input.decision === "reject"
+                ? "rejected"
+                : "allowed_always";
       d.canAlwaysAllow = false;
       d.resolvedAt = now();
       d.resolvedVia = "window";
@@ -962,15 +968,19 @@ export function createFixtureRunnerClient(
         const r = run(d.runId);
         const step = r.steps.find((s) => s.stepId === d.stepId);
         if (step && input.decision === "reject") step.state = "skipped";
-        r.decisionLines.push({
-          key:
-            input.decision === "reject"
-              ? "report.youSaidNo"
-              : input.decision === "edit"
-                ? "report.youApprovedEdited"
-                : "report.youApproved",
-          params: { title: d.stepTitle ?? d.summary },
-        });
+        r.decisionLines.push(
+          input.decision === "another_way"
+            ? { key: "report.anotherWay", params: { text: input.anotherWayText ?? "" } }
+            : {
+                key:
+                  input.decision === "reject"
+                    ? "report.youSaidNo"
+                    : input.decision === "edit"
+                      ? "report.youApprovedEdited"
+                      : "report.youApproved",
+                params: { title: d.stepTitle ?? d.summary },
+              },
+        );
         if (
           r.state === "waiting_approval" &&
           state.settings.agentPermission === "on" &&
