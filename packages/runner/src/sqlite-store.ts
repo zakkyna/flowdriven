@@ -359,6 +359,14 @@ export async function openSqliteStore(
         json(row),
       );
     },
+    hasCallGrant(runId, stepId, itemKey) {
+      return !!get(
+        "SELECT 1 FROM call_grants WHERE run_id = ? AND (step_id = ? OR step_id = '*') AND item_key = ? LIMIT 1",
+        runId,
+        stepId,
+        itemKey,
+      );
+    },
     findGrant(key) {
       const row = decode<CallGrant>(
         get(

@@ -1,10 +1,8 @@
 import type { FlowManifest } from "@flowdriven/sdk";
-import { catalogEntry } from "../connectors/catalog.ts";
 import type { Begun, ResolvedDeps } from "../engine.ts";
 import { EngineError } from "../errors.ts";
-import { effectOf } from "../rules/effects.ts";
 import type { RunRow, StepRow } from "../storage.ts";
-import { approvedCallsOf } from "./held.ts";
+import { sendCapable } from "./held.ts";
 
 export function createRecovery(ctx: {
   deps: ResolvedDeps;
@@ -63,22 +61,6 @@ export function createRecovery(ctx: {
     });
     return matching.length === 1 && matching.at(0)?.idempotent === true;
   }
-  function sendCapable(row: StepRow, manifest: FlowManifest): boolean {
-    if (approvedCallsOf(store, row.runId, row.stepId, row.itemKey).length > 0) return true;
-    const steps = manifest.steps.flatMap((step) => ("for_each" in step ? step.steps : [step]));
-    const step = steps.find((entry) => entry.id === row.stepId);
-    if (!step) return false;
-    const risky = ["send", "post", "pay", "delete", "merge"];
-    return manifest.requirements
-      .filter((req) => step.uses.includes(req.id) && req.type === "mcp_server")
-      .some((req) => {
-        if (req.type !== "mcp_server") return false;
-        const prefix = catalogEntry(req.ref)?.prefix;
-        return (req.tools ?? []).some((tool) =>
-          risky.includes(effectOf(prefix ? prefix + tool : `${req.id}.${tool}`).effect),
-        );
-      });
-  }
   function beginRecover(): { runs: RunRow[]; settled: Promise<RunRow[]> } {
     ctx.assertRunning();
     const resumed: Begun[] = [];
@@ -99,7 +81,7 @@ export function createRecovery(ctx: {
           );
         const previouslyInterrupted = store.listSteps(run.id).filter((row) => row.state === "interrupted");
         const all = [...interrupted, ...previouslyInterrupted];
-        const risky = all.find((row) => sendCapable(row, manifest));
+        const risky = all.find((row) => sendCapable(store, row, manifest));
         const safe = !risky && all.every((row) => isIdempotent(row, manifest));
         store.transaction(() => {
           for (const row of interrupted) store.upsertStep({ ...row, state: "interrupted" });

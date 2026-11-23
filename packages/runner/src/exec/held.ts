@@ -1,16 +1,19 @@
 import { domainToASCII } from "node:url";
 import {
+  type FlowManifest,
   type LeafStep,
   type LoopStep,
   parseExpression,
   type Requirement,
   references,
   templateExpressions,
+  unattendedRisk,
   type Value,
 } from "@flowdriven/sdk";
 import { visible } from "../claude/text.ts";
 import { catalogEntry } from "../connectors/catalog.ts";
 import { isCallGrant } from "../connectors/grants.ts";
+import { effectOf } from "../rules/effects.ts";
 import type { StepRow, Store } from "../storage.ts";
 
 export const MAX_HOLDS = 3;
@@ -108,6 +111,37 @@ export function heldPayload(input: Value, tool?: string): Value | undefined {
       .map(([address, converted]) => `\n${visible(address, Infinity)} (${visible(converted, Infinity)})`)
       .join("");
   return text.length <= MAX_HELD_CHARS ? text : undefined;
+}
+
+export function sendCapable(store: Store, row: StepRow, manifest: FlowManifest): boolean {
+  if (store.hasCallGrant(row.runId, row.stepId, row.itemKey)) return true;
+  if (
+    store
+      .listApprovals({ runId: row.runId })
+      .some(
+        (decision) =>
+          decision.kind === "risky_action" &&
+          decision.stepId === row.stepId &&
+          decision.itemKey === row.itemKey &&
+          ["approved", "approved_edited", "allowed_always"].includes(decision.state),
+      )
+  )
+    return true;
+  const steps = manifest.steps.flatMap((step) => ("for_each" in step ? step.steps : [step]));
+  const step = steps.find((entry) => entry.id === row.stepId);
+  if (!step) return false;
+  if (unattendedRisk(step, manifest)) return true;
+  return manifest.requirements.some((req) => {
+    if (!step.uses.includes(req.id) || req.type !== "mcp_server") return false;
+    const entry = catalogEntry(req.ref);
+    return (req.tools ?? []).some(
+      (tool) =>
+        entry?.labelTools?.includes(tool) ||
+        ["send", "post", "pay", "delete", "merge"].includes(
+          effectOf(entry ? entry.prefix + tool : `${req.id}.${tool}`).effect,
+        ),
+    );
+  });
 }
 
 export function approvedCallsOf(

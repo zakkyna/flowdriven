@@ -442,6 +442,7 @@ export interface Store {
   revokeRule(id: string, by: string): void;
   useRule(id: string, at: string): void;
   putCallGrant(row: CallGrant): void;
+  hasCallGrant(runId: string, stepId: string, itemKey: string): boolean;
   findGrant(key: CallGrant): CallGrant | undefined;
   findPickGrant(key: CallGrant): CallGrant | undefined;
   useGrant(key: CallGrant, at: string): void;

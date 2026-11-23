@@ -14,7 +14,7 @@ import { callGrant } from "../connectors/grants.ts";
 import type { ResolvedDeps } from "../engine.ts";
 import type { StepResult } from "../harness.ts";
 import type { RunRow, StepRow } from "../storage.ts";
-import { approvedCallsOf, HOLD_TEXT, heldPayload, labelOf, MAX_HOLDS } from "./held.ts";
+import { approvedCallsOf, HOLD_TEXT, heldPayload, labelOf, MAX_HOLDS, sendCapable } from "./held.ts";
 import { limits } from "./limits.ts";
 import { stepTakesOutsideText } from "./outside.ts";
 import { OWN_TEXT, ownTextHash, ownTextRefusal } from "./own-text.ts";
@@ -352,8 +352,16 @@ export async function runLeaf(
       } else if (result.exit === "interrupted") {
         Object.assign(attempt, { endedAt: now().toISOString(), exit: "interrupted" });
         row.state = "interrupted";
-        save();
-        store.updateRun(run.id, { state: "interrupted" });
+        store.transaction(() => {
+          save();
+          store.updateRun(run.id, {
+            state: "interrupted",
+            cause: {
+              code: "crash",
+              ...(sendCapable(store, row, manifest) ? { params: { step: row.stepId } } : {}),
+            },
+          });
+        });
         return "halt";
       } else if (result.exit !== "ok") failure = "worker failed";
       else {

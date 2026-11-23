@@ -210,3 +210,28 @@ test("beginAnswer stores no grant for a pick whose key starts with # or is empty
   );
   await begun.settled;
 });
+
+test("TC-SR8-06 Quit during a send-capable step records the crash warning", async () => {
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.quit",
+    name: "Quit",
+    kind: "build",
+    requirements: [{ id: "mail", type: "mcp_server", ref: "connector:gmail", tools: ["send_message"] }],
+    steps: [
+      {
+        id: "send",
+        do: "worker",
+        instructions: "Send",
+        uses: ["mail"],
+        checks: [{ type: "contains", pattern: "ok" }],
+      },
+    ],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const c = await setup(parsed.manifest, { steps: { send: { exit: "interrupted" } } });
+  stores.push(c.store);
+  const run = await c.engine.startRun(parsed.manifest.id, { project: "/tmp" });
+  expect(run).toMatchObject({ state: "interrupted", cause: { code: "crash", params: { step: "send" } } });
+  expect(c.store.getStep(run.id, "send")?.state).toBe("interrupted");
+});
