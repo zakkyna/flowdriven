@@ -1,3 +1,4 @@
+import languages from "./languages.json";
 import { broadcastRunnerEvent, type IpcLike, registerRunnerIpc, type WindowLike } from "./runner-ipc";
 import { RunnerLink, type SpawnFn } from "./runner-link";
 import { dataDirFor, isDemo, runnerEntry } from "./runner-paths";
@@ -12,6 +13,7 @@ export type RunnerBridgeOptions = {
   execPath?: string;
   log?: (line: string) => void;
   now?: () => number;
+  languages?: readonly string[];
 };
 export function startRunnerBridge(options: RunnerBridgeOptions): {
   link: RunnerLink;
@@ -25,6 +27,7 @@ export function startRunnerBridge(options: RunnerBridgeOptions): {
     entry: runnerEntry(options.dirname),
     dataDir,
     demo: isDemo(options.env),
+    languages: options.languages ?? languages,
     env: options.env,
     onEvent: (event) => broadcastRunnerEvent(options.windows(), event),
     onNotice: options.onNotice,

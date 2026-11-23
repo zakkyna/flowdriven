@@ -1,12 +1,13 @@
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { MAX_FRAME_BYTES as CONTRACT_MAX, CONTRACT_VERSION as ROOT_VERSION } from "@flowdriven/contracts";
 import { afterEach, expect, test, vi } from "vitest";
+import { languages } from "../src/i18n/languages";
 import { CONTRACT_VERSION } from "./contract-names";
 import {
   ALL_TOPICS_EVENT,
@@ -97,6 +98,34 @@ test("a start passes the entry, the flags and the exact environment to spawn", (
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.emit("exit", 0, null);
+});
+test("TC-ELE-28 passes each registered language list and filters the environment", () => {
+  const codes = languages.map(({ code }) => code);
+  for (const list of [codes, [...codes, "xx"]]) {
+    const child = new FakeChild();
+    const spawnFn = vi.fn(() => child);
+    const link = make({
+      spawn: spawnFn,
+      languages: list,
+      env: { HOME: "h", USER: "u", PATH: "p", TMPDIR: "t", LANG: "l", SECRET: "x" },
+    });
+    link.start();
+    expect(spawnFn).toHaveBeenCalledExactlyOnceWith(
+      "node",
+      ["entry", "--stdio", "--data-dir", "/data", `--languages=${list.join(",")}`],
+      {
+        env: { HOME: "h", USER: "u", PATH: "p", TMPDIR: "t", LANG: "l", ELECTRON_RUN_AS_NODE: "1" },
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
+    child.emit("exit", 0, null);
+  }
+});
+test("TC-ELE-28 keeps Electron's registered codes in step with the real languages", () => {
+  const codes = JSON.parse(readFileSync(new URL("./languages.json", import.meta.url), "utf8"));
+  expect(codes, "Add the new code to apps/desktop/electron/languages.json").toEqual(
+    languages.map(({ code }) => code),
+  );
 });
 test("when the runner exits, waiting calls fail with The engine stopped. and the next call starts it again", async () => {
   const children: FakeChild[] = [];

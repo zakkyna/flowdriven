@@ -37,6 +37,7 @@ export type RunnerLinkOptions = {
   entry: string;
   dataDir: string;
   demo: boolean;
+  languages?: readonly string[];
   env: Record<string, string | undefined>;
   onEvent: (event: unknown) => void;
   onNotice?: (params: Record<string, unknown>) => void;
@@ -83,6 +84,7 @@ export class RunnerLink {
           "--data-dir",
           this.options.dataDir,
           ...(this.options.demo ? ["--demo"] : []),
+          ...(this.options.languages ? [`--languages=${this.options.languages.join(",")}`] : []),
         ],
         { env: runnerEnv(this.options.env), stdio: ["pipe", "pipe", "pipe"] },
       );

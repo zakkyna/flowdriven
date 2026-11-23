@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { app, BrowserWindow, ipcMain, Notification } from "electron";
+import languages from "./languages.json";
 import { electronNoticeHandler } from "./notifier";
 import { startRunnerBridge } from "./runner-bridge";
 import { APP_ORIGIN } from "./security";
@@ -46,6 +47,7 @@ if (!app.requestSingleInstanceLock()) {
     });
     const bridge = startRunnerBridge({
       ipc: ipcMain,
+      languages,
       onNotice,
       spawn: (command, args, options) => spawn(command, args, options),
       env: process.env,

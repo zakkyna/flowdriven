@@ -1001,6 +1001,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `apps/desktop/electron/runner-bridge.test.ts` | Spawn arguments omit languages | Spawn arguments include registered languages (TC-ELE-28, FS-j30.A10), retaining all other argument assertions | B-06.T11 |
 | `packages/runner/src/service/args.test.ts` | Default options and usage omit languages | Default and usage include languages (TC-AGT-40); existing error checks remain | B-06.T6 |
 | `packages/runner/src/service/handlers.test.ts` (TC-j12-32) | The service accepts Indonesian without an explicit list | The service is started with the registered list (TC-AGT-30), retaining restart assertions | B-06.T6 |
 | `apps/desktop/src/i18n/i18n.test.ts` (TC-I18N-18) | Placeholder differences alone are reported | Unknown placeholders are also reported (TC-I18N-27), retaining each mismatch assertion | B-06.T5 |
