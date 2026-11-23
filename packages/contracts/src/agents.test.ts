@@ -68,3 +68,16 @@ test("TC-j01-10 agent operations and strict agent id", async () => {
   expect(operations["agents.list"].reads).toContain("agents");
   expect(operations["agents.setUp"].writes).toEqual(["agents", "settings"]);
 });
+
+test.each(["memory_on", "own_instruction_files"])("B-07.T8 accepts memory gap %s", async (memoryGap) => {
+  const { Agent } = await import("./agents.ts");
+  const capability = { tier: "enforced", accountTools: true, memoryGap };
+  expect(Agent.shape.capability.safeParse(capability).success).toBe(true);
+});
+
+test("B-07.T8 accepts no memory gap and rejects other values", async () => {
+  const { Agent } = await import("./agents.ts");
+  const capability = { tier: "enforced", accountTools: true };
+  expect(Agent.shape.capability.safeParse(capability).success).toBe(true);
+  expect(Agent.shape.capability.safeParse({ ...capability, memoryGap: "other" }).success).toBe(false);
+});

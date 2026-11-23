@@ -40,6 +40,7 @@ export const Agent = z.strictObject({
   capability: z.strictObject({
     tier: z.enum(["enforced", "folder_limited", "label_only"]),
     accountTools: z.boolean(),
+    memoryGap: z.enum(["memory_on", "own_instruction_files"]).optional(),
   }),
   setUp: z.strictObject({ phase: z.enum(["installing", "waiting_login"]), since: IsoDateTime }).optional(),
   problem: z
