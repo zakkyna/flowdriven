@@ -12,7 +12,7 @@ import { createGrantBook, digestCall, pickKeyUsable } from "./connectors/grants.
 import { EngineError } from "./errors.ts";
 import { runAsk } from "./exec/ask.ts";
 import { createChain } from "./exec/chain.ts";
-import { skippedDependency } from "./exec/held.ts";
+import { anotherWayOf, skippedDependency } from "./exec/held.ts";
 import { runLeaf } from "./exec/leaf.ts";
 import { runLoop } from "./exec/loop.ts";
 import { ownTextHash } from "./exec/own-text.ts";
@@ -79,7 +79,7 @@ export interface Engine {
   beginAnswer(approvalId: string, answer: { picks: string[] }): Begun;
   beginDecide(
     approvalId: string,
-    decision: "approve" | "reject" | "edit" | "always_allow",
+    decision: "approve" | "reject" | "edit" | "always_allow" | "another_way",
     edit?: { text: string; subject?: string },
     via?: "window" | "phone",
   ): Begun;
@@ -437,7 +437,7 @@ export function createEngine(input: EngineDeps): Engine {
   }
   function beginDecide(
     id: string,
-    decision: "approve" | "reject" | "edit" | "always_allow",
+    decision: "approve" | "reject" | "edit" | "always_allow" | "another_way",
     edit?: { text: string; subject?: string },
     via: "window" | "phone" = "window",
     deferred?: Array<() => void>,
@@ -449,11 +449,62 @@ export function createEngine(input: EngineDeps): Engine {
       });
       return { run, settled: Promise.resolve(run) };
     };
+    const continueStep = (run: RunRow, a: ApprovalRow, stopIfRemaining: boolean): Begun => {
+      const remaining = store
+        .listApprovals({ runId: run.id, state: "pending" })
+        .filter((item) => item.stepId === a.stepId).length;
+      if (remaining && stopIfRemaining) {
+        store.updateRun(run.id, { state: "waiting_approval" });
+        const updated = runById(run.id);
+        return { run: updated, settled: Promise.resolve(updated) };
+      }
+      if (remaining) {
+        store.updateRun(run.id, { state: "waiting_approval" });
+        const updated = runById(run.id);
+        return schedule(updated, async () => {
+          const manifest = flowFor(updated).manifest as FlowManifest;
+          const loop = manifest.steps.find(
+            (step) => "for_each" in step && step.steps.some((nested) => nested.id === a.stepId),
+          );
+          const item = store
+            .listItems(run.id)
+            .find((entry) => entry.key === a.itemKey && entry.loopId === loop?.id);
+          const nested =
+            loop && "for_each" in loop ? loop.steps.find((step) => step.id === a.stepId) : undefined;
+          if (!loop || !("for_each" in loop) || !item || !nested) return runById(run.id);
+          const scope = makeScope(updated, store.listSteps(run.id), manifest, store.listItems(run.id));
+          const outcome = await runLeaf(nested, {
+            deps,
+            run: updated,
+            manifest,
+            itemKey: a.itemKey,
+            keepWaiting: true,
+            scope: itemScope(scope, loop, item.item, store.listSteps(run.id), item.key),
+          });
+          if (outcome === "passed" && loop.steps.at(-1)?.id === nested.id)
+            store.transaction(() => {
+              store.upsertItem({ ...item, status: "passed" });
+              if (loop.key !== undefined)
+                store.markSeen(updated.flowId, loop.id, item.key, now().toISOString());
+            });
+          if (outcome === "passed" || outcome === "skipped")
+            store.updateRun(run.id, { state: "waiting_approval" });
+          return runById(run.id);
+        });
+      }
+      const updated = runById(run.id);
+      return schedule(updated, () => walk(updated));
+    };
     assertRunning();
     sweep();
     const a = store.getApproval(id);
     if (!a) throw new EngineError("not_found", "Approval not found.");
-    if (a.kind !== "result_sign_off" && a.kind !== "risky_action" && a.kind !== "outside_flow")
+    if (
+      decision !== "another_way" &&
+      a.kind !== "result_sign_off" &&
+      a.kind !== "risky_action" &&
+      a.kind !== "outside_flow"
+    )
       throw new EngineError("invalid_input", "Not a result sign-off.");
     if (a.state === "expired")
       throw new EngineError("conflict", "This approval expired.", { reason: "decision_expired" });
@@ -465,8 +516,33 @@ export function createEngine(input: EngineDeps): Engine {
     const run = runById(a.runId);
     if (run.state !== "waiting_approval")
       throw new EngineError("not_allowed", "Run is not waiting for approval.");
-    if (decision !== "approve" && decision !== "reject" && decision !== "edit" && decision !== "always_allow")
+    if (
+      decision !== "approve" &&
+      decision !== "reject" &&
+      decision !== "edit" &&
+      decision !== "always_allow" &&
+      decision !== "another_way"
+    )
       throw new EngineError("invalid_input", "Invalid decision.");
+    if (decision === "another_way") {
+      if (via !== "window")
+        throw new EngineError("not_allowed", "Caller is not allowed.", { reason: "caller_not_allowed" });
+      if (a.kind !== "result_sign_off" && a.kind !== "risky_action" && a.kind !== "outside_flow")
+        throw new EngineError("invalid_input", "Another way is not allowed for this decision.", {
+          reason: "another_way_not_allowed",
+        });
+      const text = edit?.text;
+      if (text === undefined || !text.trim())
+        throw new EngineError("invalid_input", "Write the text first.", { reason: "empty_text" });
+      if (text.length > 4000)
+        throw new EngineError("invalid_input", "Keep it under 4,000 characters.", {
+          reason: "text_too_long",
+        });
+      if (hasHiddenText(text) || /\p{Cf}/u.test(text))
+        throw new EngineError("invalid_input", "Remove hidden characters.", {
+          reason: "hidden_characters",
+        });
+    }
     let editedCall: { tool: string; input: Value; digest: string } | undefined;
     if (decision === "edit") {
       const call = a.call;
@@ -536,6 +612,47 @@ export function createEngine(input: EngineDeps): Engine {
     )
       throw new EngineError("not_allowed", "The place is not fixed.", { reason: "place_not_fixed" });
     if (a.kind === "risky_action" || a.kind === "outside_flow") {
+      if (decision === "another_way") {
+        const text = edit?.text ?? "";
+        store.transaction(() => {
+          store.updateApproval(id, {
+            state: "another_way",
+            anotherWayText: text,
+            resolvedAt: at,
+            resolvedVia: via,
+          });
+          store.appendAudit({
+            at,
+            kind: "decision_made",
+            runId: run.id,
+            detail: { approvalId: id, decision: "another_way", via },
+          });
+          store.upsertStep({
+            ...row,
+            state: "pending",
+            attempts: [
+              ...row.attempts,
+              {
+                number: row.attempts.length + 1,
+                replan: false,
+                worker: deps.harness.name,
+                startedAt: a.createdAt,
+                endedAt: at,
+                exit: "failed",
+                anotherWay: true,
+              },
+            ],
+          });
+          store.updateRun(run.id, {
+            state: "running",
+            decisionLines: [
+              ...(store.getRun(run.id)?.decisionLines ?? []),
+              { key: "report.anotherWay", params: { text } },
+            ],
+          });
+        });
+        return continueStep(run, a, false);
+      }
       store.transaction(() => {
         const rule =
           decision === "always_allow" && a.place && touch
@@ -669,54 +786,55 @@ export function createEngine(input: EngineDeps): Engine {
           });
         }
       });
-      const remaining = store
-        .listApprovals({ runId: run.id, state: "pending" })
-        .filter((item) => item.stepId === a.stepId).length;
-      if (remaining && decision === "reject" && a.kind !== "outside_flow") {
-        store.updateRun(run.id, { state: "waiting_approval" });
-        const updated = runById(run.id);
-        return { run: updated, settled: Promise.resolve(updated) };
-      }
-      if (remaining) {
-        store.updateRun(run.id, { state: "waiting_approval" });
-        const updated = runById(run.id);
-        return schedule(updated, async () => {
-          const manifest = flowFor(updated).manifest as FlowManifest;
-          const loop = manifest.steps.find(
-            (step) => "for_each" in step && step.steps.some((nested) => nested.id === a.stepId),
-          );
-          const item = store
-            .listItems(run.id)
-            .find((entry) => entry.key === a.itemKey && entry.loopId === loop?.id);
-          const nested =
-            loop && "for_each" in loop ? loop.steps.find((step) => step.id === a.stepId) : undefined;
-          if (!loop || !("for_each" in loop) || !item || !nested) return runById(run.id);
-          const scope = makeScope(updated, store.listSteps(run.id), manifest, store.listItems(run.id));
-          const outcome = await runLeaf(nested, {
-            deps,
-            run: updated,
-            manifest,
-            itemKey: a.itemKey,
-            keepWaiting: true,
-            scope: itemScope(scope, loop, item.item, store.listSteps(run.id), item.key),
-          });
-          if (outcome === "passed" && loop.steps.at(-1)?.id === nested.id)
-            store.transaction(() => {
-              store.upsertItem({ ...item, status: "passed" });
-              if (loop.key !== undefined)
-                store.markSeen(updated.flowId, loop.id, item.key, now().toISOString());
-            });
-          if (outcome === "passed" || outcome === "skipped")
-            store.updateRun(run.id, { state: "waiting_approval" });
-          return runById(run.id);
-        });
-      }
-      const updated = runById(run.id);
-      return schedule(updated, () => walk(updated));
+      return continueStep(run, a, decision === "reject" && a.kind !== "outside_flow");
     }
     if (decision === "edit")
       throw new EngineError("invalid_input", "Only text can be edited.", { reason: "edit_not_allowed" });
     store.transaction(() => {
+      if (decision === "another_way") {
+        const text = edit?.text ?? "";
+        store.updateApproval(id, {
+          state: "another_way",
+          anotherWayText: text,
+          resolvedAt: at,
+          resolvedVia: via,
+        });
+        store.appendAudit({
+          at,
+          kind: "decision_made",
+          runId: run.id,
+          detail: { approvalId: id, decision: "another_way", via },
+        });
+        const attempt = row.attempts.at(-1);
+        if (attempt) {
+          attempt.endedAt ??= at;
+          attempt.exit = "failed";
+          attempt.anotherWay = true;
+        } else {
+          row.attempts.push({
+            number: 1,
+            replan: false,
+            worker: deps.harness.name,
+            startedAt: a.createdAt,
+            endedAt: at,
+            exit: "failed",
+            anotherWay: true,
+          });
+        }
+        row.state = "pending";
+        row.outputs = {};
+        row.checks = [];
+        delete row.ownerApproved;
+        store.upsertStep(row);
+        store.updateRun(run.id, {
+          state: "running",
+          decisionLines: [
+            ...(store.getRun(run.id)?.decisionLines ?? []),
+            { key: "report.anotherWay", params: { text } },
+          ],
+        });
+        return;
+      }
       store.updateApproval(id, {
         state: decision === "approve" ? "approved" : "rejected",
         resolvedAt: at,
@@ -728,13 +846,18 @@ export function createEngine(input: EngineDeps): Engine {
         runId: run.id,
         detail: { approvalId: id, decision, via },
       });
-      if (decision === "approve")
+      if (decision === "approve") {
+        const outsideAnotherWay = anotherWayOf(store, run.id, a.stepId, a.itemKey, { outsideOnly: true });
         store.updateRun(run.id, {
           decisionLines: [
             ...(store.getRun(run.id)?.decisionLines ?? []),
             { key: "report.youApproved", params: { title: a.summary } },
+            ...(outsideAnotherWay === undefined
+              ? []
+              : [{ key: "report.didAnotherWay", params: { text: outsideAnotherWay } }]),
           ],
         });
+      }
       if (decision === "approve") {
         const attempt = row.attempts.at(-1);
         if (attempt) attempt.exit = "ok";
@@ -787,13 +910,7 @@ export function createEngine(input: EngineDeps): Engine {
         });
       }
     });
-    if (store.listApprovals({ runId: run.id, state: "pending" }).some((item) => item.stepId === a.stepId)) {
-      store.updateRun(run.id, { state: "waiting_approval" });
-      const updated = runById(run.id);
-      return { run: updated, settled: Promise.resolve(updated) };
-    }
-    const updated = runById(run.id);
-    return schedule(updated, () => walk(updated));
+    return continueStep(run, a, decision !== "another_way");
   }
   return {
     registerFlow(manifest, hash, files = {}) {

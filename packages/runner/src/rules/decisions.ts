@@ -33,9 +33,15 @@ export const restrictedApprovals = {
         !/^[A-Za-z0-9._:-]{1,100}$/.test(data.flowId) ||
         !/^[A-Za-z0-9._:-]{1,100}$/.test(data.stepId) ||
         typeof data.state !== "string" ||
-        !["pending", "approved", "approved_edited", "rejected", "expired", "allowed_always"].includes(
-          data.state,
-        )
+        ![
+          "pending",
+          "approved",
+          "approved_edited",
+          "rejected",
+          "expired",
+          "allowed_always",
+          "another_way",
+        ].includes(data.state)
       )
         throw new Error("Invalid restricted approval");
       return data;

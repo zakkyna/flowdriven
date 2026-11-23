@@ -14,7 +14,16 @@ import { callGrant } from "../connectors/grants.ts";
 import type { ResolvedDeps } from "../engine.ts";
 import type { StepResult } from "../harness.ts";
 import type { RunRow, StepRow } from "../storage.ts";
-import { approvedCallsOf, HOLD_TEXT, heldPayload, labelOf, MAX_HOLDS, sendCapable } from "./held.ts";
+import {
+  anotherWayOf,
+  approvedCallsOf,
+  HOLD_TEXT,
+  heldPayload,
+  labelOf,
+  MAX_HOLDS,
+  rejectedCallsOf,
+  sendCapable,
+} from "./held.ts";
 import { limits } from "./limits.ts";
 import { stepTakesOutsideText } from "./outside.ts";
 import { OWN_TEXT, ownTextHash, ownTextRefusal } from "./own-text.ts";
@@ -97,7 +106,8 @@ export async function runLeaf(
   const { duration, attempts, replanAt, mediumAt } = limits(step, manifest);
   row.limitMs = duration;
   const failures: string[] = [];
-  for (let n = 1; n <= attempts; n++) {
+  const start = 1 + row.attempts.filter((a) => a.anotherWay).length;
+  for (let n = start; n <= attempts; n++) {
     const replan = n === replanAt;
     const ctl = new AbortController();
     const active = deps.active.get(run.id) ?? new Set<AbortController>();
@@ -159,6 +169,7 @@ export async function runLeaf(
         }
         instructions = plan.instructions;
       }
+      const anotherWayText = anotherWayOf(store, run.id, step.id, itemKey);
       let result: StepResult;
       if (step.do === "builtin") {
         const fn = deps.builtins[step.builtin];
@@ -179,19 +190,7 @@ export async function runLeaf(
           );
         const pickTools = ask && "do" in ask && ask.do === "ask" ? ask.ask.approves : [];
         const approvedCalls = approvedCallsOf(store, run.id, step.id, itemKey);
-        const rejectedCalls = store.listApprovals({ runId: run.id }).flatMap((row) => {
-          const grant = row.approves[0];
-          if (
-            row.kind !== "outside_flow" ||
-            row.state !== "rejected" ||
-            row.stepId !== step.id ||
-            row.itemKey !== itemKey ||
-            !row.call ||
-            !grant?.includes("#")
-          )
-            return [];
-          return [{ tool: row.call.tool, digest: grant.slice(grant.indexOf("#") + 1) }];
-        });
+        const rejectedCalls = rejectedCallsOf(store, run.id, step.id, itemKey);
         result = await raceAbort(
           harness.runStep({
             runId: run.id,
@@ -210,6 +209,7 @@ export async function runLeaf(
             takesOutside: stepTakesOutsideText(step, manifest, run, itemKey, store.listSteps(run.id)),
             ...(approvedCalls.length ? { approvedCalls } : {}),
             ...(rejectedCalls.length ? { rejectedCalls } : {}),
+            ...(anotherWayText === undefined ? {} : { anotherWay: { text: anotherWayText } }),
             onOutside: () => {
               row.outside = true;
               save();
@@ -345,6 +345,9 @@ export async function runLeaf(
               expiresAt: new Date(Date.parse(createdAt) + 86400000).toISOString(),
               state: "pending",
               ...(row.outside === true ? { outside: true } : {}),
+              ...(anotherWayText === undefined
+                ? {}
+                : { newTry: { key: "decision.newTry", params: { text: anotherWayText } } }),
             });
             auditHold(approvalId);
             if (chatId) {
@@ -491,6 +494,9 @@ export async function runLeaf(
                   createdAt,
                   expiresAt: new Date(Date.parse(createdAt) + 86400000).toISOString(),
                   state: "pending",
+                  ...(anotherWayText === undefined
+                    ? {}
+                    : { newTry: { key: "decision.newTry", params: { text: anotherWayText } } }),
                 });
                 store.updateRun(run.id, { state: "waiting_approval" });
               });
@@ -498,7 +504,18 @@ export async function runLeaf(
             } else {
               Object.assign(attempt, { endedAt: now().toISOString(), exit: "ok" });
               row.state = "passed";
-              save();
+              const outsideAnotherWay = anotherWayOf(store, run.id, step.id, itemKey, { outsideOnly: true });
+              if (outsideAnotherWay !== undefined) {
+                store.transaction(() => {
+                  save();
+                  store.updateRun(run.id, {
+                    decisionLines: [
+                      ...(store.getRun(run.id)?.decisionLines ?? []),
+                      { key: "report.didAnotherWay", params: { text: outsideAnotherWay } },
+                    ],
+                  });
+                });
+              } else save();
               return "passed";
             }
           }

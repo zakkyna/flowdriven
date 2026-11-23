@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { demoFlow } from "./demo/demo-flow.ts";
 import type { RunView } from "./engine.ts";
 import { renderRunReport, reportLines } from "./report.ts";
@@ -228,4 +228,88 @@ test("TC-j24-39 TC-SR1-48 outside decisions and audit records appear in report l
   expect(md).toContain("\\[U+200B hidden character\\]");
   expect(md).toContain("decision\\_made");
   expect(md).not.toContain(String.fromCodePoint(0x200b));
+});
+
+test("TC-ENG-26 another way decision and outside retry appear in runs.report and audit markdown without text in audit", async () => {
+  const { parseManifest } = await import("@flowdriven/sdk");
+  const { digestCall } = await import("./connectors/grants.ts");
+  const { scriptedHarness } = await import("./scripted-harness.ts");
+  const { openSqliteStore } = await import("./sqlite-store.ts");
+  const { createRunnerService } = await import("./service/service.ts");
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.report-aw",
+    name: "Report another way",
+    kind: "build",
+    steps: [
+      {
+        id: "work",
+        title: "Work",
+        do: "worker",
+        instructions: "Work",
+        checks: [{ type: "contains", pattern: "ok" }],
+      },
+    ],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const store = await openSqliteStore(":memory:");
+  const tool = "WebFetch";
+  const input = { url: "https://example.test" };
+  const harness = scriptedHarness({
+    steps: {
+      work: (req) =>
+        req.anotherWay
+          ? { text: "ok" }
+          : {
+              hold: {
+                requirementId: tool,
+                tool,
+                input,
+                digest: digestCall(tool, input),
+                effect: "read",
+                outsideFlow: true,
+              },
+            },
+    },
+  });
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    harness,
+    now: () => new Date("2026-11-22T00:00:00Z"),
+  });
+  try {
+    service.engine.registerFlow(parsed.manifest, `sha256:${"a".repeat(64)}`);
+    const run = await service.engine.startRun(parsed.manifest.id, { project: "." });
+    const row = store.listApprovals({ runId: run.id, state: "pending" }).at(0);
+    if (!row) throw new Error("missing approval");
+    const words = "Skip fetching and write the summary.";
+    await service.call("approvals.resolve", {
+      approvalId: row.id,
+      decision: "another_way",
+      anotherWayText: words,
+    });
+    await vi.waitFor(() => expect(store.getRun(run.id)?.state).toBe("done"));
+    const finalView = service.engine.getRun(run.id);
+    expect(reportLines(finalView)).toEqual([
+      "Report another way: done. 1 of 1 steps passed.",
+      "Items: 0 processed, 0 skipped as seen, 0 failed.",
+      "Nothing needs your attention.",
+    ]);
+    expect(await service.call("runs.report", { runId: run.id })).toMatchObject({
+      runId: run.id,
+      decisionLines: [
+        { key: "report.anotherWay", params: { text: words } },
+        { key: "report.didAnotherWay", params: { text: words } },
+      ],
+    });
+    const md = renderRunReport(finalView);
+    expect(md).toContain("decision\\_made");
+    expect(md).toContain("another\\_way");
+    expect(md).not.toContain(words);
+  } finally {
+    service.stop();
+    store.close();
+  }
 });

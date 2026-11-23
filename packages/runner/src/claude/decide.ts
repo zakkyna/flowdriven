@@ -218,6 +218,16 @@ export function decide(
   const base = decideLegacy(policy, call, state, connectorState);
   if (policy.touches === undefined) {
     if (base.allow) return { ...base, outcome: "run" };
+    if (
+      base.held &&
+      policy.rejectedCalls?.some((row) => row.tool === base.held?.tool && row.digest === base.held?.digest)
+    )
+      return {
+        allow: false,
+        outcome: "refuse",
+        tool: base.tool,
+        reason: "You said no to this, so it was not done.",
+      };
     return {
       ...base,
       outcome: base.held ? "hold" : "refuse",
@@ -534,7 +544,6 @@ export function decide(
     if (rule) return allowed("rule", rule.id);
   }
   if (
-    outsideFlow &&
     policy.rejectedCalls?.some((row) => row.tool === name && row.digest === digestCall(name, input as Value))
   )
     return refuse("You said no to this, so it was not done.");

@@ -108,6 +108,28 @@ export function createDispatcher({
         ("editedSubject" in input && input.editedSubject === ""))
     )
       throw new RunnerError("invalid_input", "Write the text first.", { reason: "empty_text" });
+    if (
+      !parsed.success &&
+      caller === "window" &&
+      name === "approvals.resolve" &&
+      input &&
+      typeof input === "object" &&
+      "decision" in input &&
+      input.decision === "another_way" &&
+      "anotherWayText" in input &&
+      typeof input.anotherWayText === "string"
+    ) {
+      if (input.anotherWayText === "")
+        throw new RunnerError("invalid_input", "Write the text first.", { reason: "empty_text" });
+      if (input.anotherWayText.length > 4000)
+        throw new RunnerError("invalid_input", "Keep it under 4,000 characters.", {
+          reason: "text_too_long",
+        });
+      if (hasHiddenText(input.anotherWayText) || /\p{Cf}/u.test(input.anotherWayText))
+        throw new RunnerError("invalid_input", "Remove hidden characters.", {
+          reason: "hidden_characters",
+        });
+    }
     if (!parsed.success)
       throw new RunnerError("invalid_input", parsed.error.issues.at(0)?.message ?? "Invalid input.");
     try {
@@ -536,11 +558,17 @@ export function createDecisionHandlers(
     input: V2Input<"approvals.resolve">,
     { caller }: { caller: Caller } = { caller: "window" },
   ) => {
+    if (caller !== "window" && input.decision === "another_way")
+      throw new RunnerError("not_allowed", "Caller is not allowed.", { reason: "caller_not_allowed" });
     if (caller === "phone" && (input.decision === "edit" || input.decision === "always_allow"))
       throw new RunnerError("not_allowed", "This decision is not available from a phone.", {
         reason: "phone_no_rules",
       });
     if (input.approvalId.startsWith("weekly-limit:")) {
+      if (input.decision === "another_way")
+        throw new RunnerError("invalid_input", "Another way is not allowed for this decision.", {
+          reason: "another_way_not_allowed",
+        });
       if (input.decision !== "approve" && input.decision !== "reject")
         throw new RunnerError("invalid_input", "Invalid decision.");
       const [old] = weekly.resolve(input.approvalId, input.decision);
@@ -551,11 +579,16 @@ export function createDecisionHandlers(
     }
     const row = store.getApproval(input.approvalId);
     if (!row) {
-      if (input.approvalId === (store.getSetting("spending-pause") as { id?: string } | undefined)?.id)
+      if (input.approvalId === (store.getSetting("spending-pause") as { id?: string } | undefined)?.id) {
+        if (input.decision === "another_way")
+          throw new RunnerError("invalid_input", "Another way is not allowed for this decision.", {
+            reason: "another_way_not_allowed",
+          });
         throw new RunnerError("not_allowed", "Raise the limit in settings.", { reason: "raise_in_settings" });
+      }
       throw new RunnerError("not_found", "Approval not found.");
     }
-    if (row.kind === "ask")
+    if (row.kind === "ask" && input.decision !== "another_way")
       throw new RunnerError("invalid_input", "This is a choice. Pick from its options.");
     if (row.state === "expired")
       throw new RunnerError("conflict", "This approval expired.", { reason: "decision_expired" });
@@ -564,7 +597,23 @@ export function createDecisionHandlers(
         reason: "already_answered",
         params: { via: row.resolvedVia ?? "window" },
       });
-    if (input.decision === "always_allow") {
+    if (input.decision === "another_way") {
+      if (row.kind !== "risky_action" && row.kind !== "outside_flow" && row.kind !== "result_sign_off")
+        throw new RunnerError("invalid_input", "Another way is not allowed for this decision.", {
+          reason: "another_way_not_allowed",
+        });
+      const text = input.anotherWayText;
+      if (text === undefined || !text.trim())
+        throw new RunnerError("invalid_input", "Write the text first.", { reason: "empty_text" });
+      if (text.length > 4000)
+        throw new RunnerError("invalid_input", "Keep it under 4,000 characters.", {
+          reason: "text_too_long",
+        });
+      if (hasHiddenText(text) || /\p{Cf}/u.test(text))
+        throw new RunnerError("invalid_input", "Remove hidden characters.", {
+          reason: "hidden_characters",
+        });
+    } else if (input.decision === "always_allow") {
       if (row.kind === "outside_flow")
         throw new RunnerError("not_allowed", "Outside calls can only be approved once.", {
           reason: "outside_flow_once",
@@ -600,7 +649,9 @@ export function createDecisionHandlers(
       input.decision,
       input.decision === "edit" && input.editedText !== undefined
         ? { text: input.editedText, subject: input.editedSubject }
-        : undefined,
+        : input.decision === "another_way" && input.anotherWayText !== undefined
+          ? { text: input.anotherWayText }
+          : undefined,
       caller === "phone" ? "phone" : "window",
     );
     const current = store.getApproval(row.id);

@@ -59,6 +59,8 @@ export function toDecision(row: ApprovalRow, run: RunRow, store: Store): Approva
     resolvedVia: row.resolvedVia,
     editedSubject: row.editedSubject,
     editedText: row.editedText,
+    anotherWayText: row.anotherWayText,
+    newTry: row.newTry,
     ruleId: row.ruleId,
     canAlwaysAllow:
       row.kind === "risky_action" &&

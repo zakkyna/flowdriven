@@ -1150,3 +1150,259 @@ test("TC-RUL-28 outside decisions cannot become rules or batches", async () => {
     store.close();
   }
 });
+
+test("TC-RUL-29 another way validates window text, rejects non-window callers and ineligible kinds, and writes no grant", async () => {
+  const store = await openSqliteStore(":memory:");
+  const cleared: string[] = [];
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    clearNotice: (id) => cleared.push(id),
+    now: () => new Date("2026-11-22T00:00:00Z"),
+  });
+  try {
+    const { callGrant, digestCall } = await import("../connectors/grants.ts");
+    const tool = "mcp__claude_ai_Gmail__reply";
+    const input = { to: "sam@example.test", subject: "Invoice", body: "Monday" };
+    const digest = digestCall(tool, input);
+    const risky = pendingDecision(store, {
+      id: "aw-risky",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "risky_action",
+      effect: "send",
+    });
+    store.updateApproval(risky.id, {
+      call: { tool, input },
+      approves: [callGrant("mail", tool, digest)],
+      payload: { kind: "email", to: [input.to], subject: input.subject, body: input.body },
+    });
+    const outside = pendingDecision(store, {
+      id: "aw-outside",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "outside_flow",
+      effect: "change",
+    });
+    const outTool = "WebFetch";
+    const outInput = { url: "https://example.test/page" };
+    const outDigest = digestCall(outTool, outInput);
+    store.updateApproval(outside.id, {
+      call: { tool: outTool, input: outInput },
+      approves: [`${outTool}#${outDigest}`],
+      payload: { kind: "text", text: "Fetch page" },
+    });
+    const signOff = pendingDecision(store, {
+      id: "aw-signoff",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "result_sign_off",
+    });
+    const choice = pendingDecision(store, {
+      id: "aw-choice",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "ask",
+    });
+    const expiredChoice = pendingDecision(store, {
+      id: "aw-choice-expired",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "ask",
+    });
+    store.updateApproval(expiredChoice.id, { state: "expired" });
+    const answeredChoice = pendingDecision(store, {
+      id: "aw-choice-answered",
+      createdAt: "2026-11-21T00:00:00Z",
+      kind: "ask",
+    });
+    store.updateApproval(answeredChoice.id, { state: "approved", resolvedVia: "window" });
+    const flowSignOff = pendingDecision(store, {
+      id: "aw-flow-signoff",
+      createdAt: "2026-11-21T00:00:00Z",
+    });
+    store.updateApproval(flowSignOff.id, {
+      kind: "flow_sign_off" as unknown as typeof flowSignOff.kind,
+    });
+    const reqAddition = pendingDecision(store, {
+      id: "aw-req-add",
+      createdAt: "2026-11-21T00:00:00Z",
+    });
+    store.updateApproval(reqAddition.id, {
+      kind: "requirement_addition" as unknown as typeof reqAddition.kind,
+    });
+    store.putSetting("weekly:claude-code", {
+      resetsAt: Date.parse("2026-11-23T00:00:00Z") / 1000,
+      askedAt: "2026-11-21T23:00:00Z",
+      percent: 95,
+    });
+    store.putSetting("spending-pause", {
+      id: "budget-aw",
+      month: "2026-11",
+      reachedAt: "2026-11-21T23:00:00Z",
+      limitUsd: 10,
+      expiresAt: "2026-12-01T00:00:00Z",
+      state: "pending",
+    });
+
+    for (const caller of ["tool", "phone"] as const) {
+      for (const anotherWayText of ["Try another way", ""]) {
+        await expect(
+          service.call(
+            "approvals.resolve",
+            { approvalId: risky.id, decision: "another_way", anotherWayText },
+            caller,
+          ),
+        ).rejects.toMatchObject({ code: "not_allowed", reason: "caller_not_allowed" });
+        expect(store.listAudit()).toContainEqual(
+          expect.objectContaining({
+            kind: "caller_refused",
+            detail: { operation: "approvals.resolve", caller },
+          }),
+        );
+      }
+    }
+    expect(store.getApproval(risky.id)?.state).toBe("pending");
+    expect(store.hasCallGrant(risky.runId, risky.stepId, risky.itemKey)).toBe(false);
+
+    for (const target of [risky, outside]) {
+      for (const [anotherWayText, reason] of [
+        ["", "empty_text"],
+        ["  \n\t ", "empty_text"],
+        [`try${String.fromCodePoint(0x200b)}`, "hidden_characters"],
+        [`try${String.fromCodePoint(0x202e)}`, "hidden_characters"],
+        ["a".repeat(4001), "text_too_long"],
+      ] as const) {
+        await expect(
+          service.call("approvals.resolve", {
+            approvalId: target.id,
+            decision: "another_way",
+            anotherWayText,
+          }),
+        ).rejects.toMatchObject({ code: "invalid_input", reason });
+        expect(store.getApproval(target.id)?.state).toBe("pending");
+        expect(store.hasCallGrant(target.runId, target.stepId, target.itemKey)).toBe(false);
+        expect(store.listRules()).toEqual([]);
+      }
+    }
+
+    await expect(
+      service.call("approvals.resolve", { approvalId: choice.id, decision: "approve" }),
+    ).rejects.toThrow("This is a choice. Pick from its options.");
+    await expect(
+      service.call("approvals.resolve", {
+        approvalId: choice.id,
+        decision: "another_way",
+        anotherWayText: "",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "empty_text" });
+    for (const text of ["Try differently", "   \n "]) {
+      await expect(
+        service.call("approvals.resolve", {
+          approvalId: choice.id,
+          decision: "another_way",
+          anotherWayText: text,
+        }),
+      ).rejects.toMatchObject({ code: "invalid_input", reason: "another_way_not_allowed" });
+    }
+    await expect(
+      service.call("approvals.resolve", {
+        approvalId: expiredChoice.id,
+        decision: "another_way",
+        anotherWayText: "Try differently",
+      }),
+    ).rejects.toMatchObject({ code: "conflict", reason: "decision_expired" });
+    await expect(
+      service.call("approvals.resolve", {
+        approvalId: answeredChoice.id,
+        decision: "another_way",
+        anotherWayText: "Try differently",
+      }),
+    ).rejects.toMatchObject({ code: "conflict", reason: "already_answered" });
+    for (const ineligibleId of ["weekly-limit:claude-code", "budget-aw", flowSignOff.id, reqAddition.id]) {
+      await expect(
+        service.call("approvals.resolve", {
+          approvalId: ineligibleId,
+          decision: "another_way",
+          anotherWayText: "Try differently",
+        }),
+      ).rejects.toMatchObject({ code: "invalid_input", reason: "another_way_not_allowed" });
+    }
+    expect(store.getApproval(choice.id)?.state).toBe("pending");
+    expect(store.getApproval(flowSignOff.id)?.state).toBe("pending");
+    expect(store.getApproval(reqAddition.id)?.state).toBe("pending");
+
+    const riskyText = "First line\n\tSecond line";
+    expect(
+      await service.call("approvals.resolve", {
+        approvalId: risky.id,
+        decision: "another_way",
+        anotherWayText: riskyText,
+      }),
+    ).toMatchObject({
+      decision: {
+        id: risky.id,
+        state: "another_way",
+        anotherWayText: riskyText,
+        resolvedVia: "window",
+      },
+      stepWaiting: 0,
+    });
+    expect(cleared).toContain(`approval:${risky.id}`);
+    expect(store.hasCallGrant(risky.runId, risky.stepId, risky.itemKey)).toBe(false);
+    expect(store.listRules()).toEqual([]);
+    expect(store.getRun(risky.runId)?.decisionLines).toContainEqual({
+      key: "report.anotherWay",
+      params: { text: riskyText },
+    });
+    const riskyAudit = store.listAudit(risky.runId);
+    expect(riskyAudit).toContainEqual(
+      expect.objectContaining({
+        kind: "decision_made",
+        detail: { approvalId: risky.id, decision: "another_way", via: "window" },
+      }),
+    );
+    expect(JSON.stringify(riskyAudit)).not.toContain("First line");
+
+    const maxText = "a".repeat(4000);
+    expect(
+      await service.call("approvals.resolve", {
+        approvalId: outside.id,
+        decision: "another_way",
+        anotherWayText: maxText,
+      }),
+    ).toMatchObject({
+      decision: { id: outside.id, state: "another_way", anotherWayText: maxText, resolvedVia: "window" },
+      stepWaiting: 0,
+    });
+    expect(store.hasCallGrant(outside.runId, outside.stepId, outside.itemKey)).toBe(false);
+    expect(store.getRun(outside.runId)?.decisionLines).toContainEqual({
+      key: "report.anotherWay",
+      params: { text: maxText },
+    });
+
+    expect(
+      await service.call("approvals.resolve", {
+        approvalId: signOff.id,
+        decision: "another_way",
+        anotherWayText: "Make it shorter",
+      }),
+    ).toMatchObject({
+      decision: {
+        id: signOff.id,
+        state: "another_way",
+        anotherWayText: "Make it shorter",
+        resolvedVia: "window",
+      },
+      stepWaiting: 0,
+    });
+
+    for (const caller of ["tool", "phone"] as const) {
+      const restricted = (await service.call("approvals.list", { runId: risky.runId }, caller)) as Array<
+        Record<string, unknown>
+      >;
+      expect(restricted).toEqual([
+        { flowId: `local.flow-${risky.id}`, stepId: "alerts", state: "another_way" },
+      ]);
+    }
+  } finally {
+    service.stop();
+    store.close();
+  }
+});

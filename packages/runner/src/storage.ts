@@ -60,6 +60,7 @@ export type Attempt = {
   startedAt: string;
   endedAt?: string;
   exit?: ExitClass;
+  anotherWay?: true;
 }; // worker = the harness name
 export type CheckOutcome = {
   type: string;
@@ -158,7 +159,7 @@ export type ApprovalRow = {
   onExpiry: "end" | "fail";
   createdAt: string;
   expiresAt: string;
-  state: ApprovalState | "approved_edited" | "allowed_always";
+  state: ApprovalState | "approved_edited" | "allowed_always" | "another_way";
   picks?: string[];
   resolvedAt?: string;
   riskyAction?: RiskyAction;
@@ -172,6 +173,8 @@ export type ApprovalRow = {
   editedSubject?: string;
   editedText?: string;
   editedDigest?: string;
+  anotherWayText?: string;
+  newTry?: Line;
   ruleId?: string;
   outside?: boolean;
   call?: { tool: string; input: Value };

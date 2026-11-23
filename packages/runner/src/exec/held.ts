@@ -213,6 +213,47 @@ export function approvedCallsOf(
       return [{ ...row.call, tool, ...(row.kind === "outside_flow" ? { outsideFlow: true as const } : {}) }];
     });
 }
+export function rejectedCallsOf(
+  store: Pick<Store, "listApprovals">,
+  runId: string,
+  stepId: string,
+  itemKey: string,
+): { tool: string; digest: string }[] {
+  return store.listApprovals({ runId }).flatMap((row) => {
+    const grant = row.approves[0];
+    if (
+      !((row.kind === "outside_flow" && row.state === "rejected") || row.state === "another_way") ||
+      row.stepId !== stepId ||
+      row.itemKey !== itemKey ||
+      !row.call ||
+      !grant?.includes("#")
+    )
+      return [];
+    return [{ tool: row.call.tool, digest: grant.slice(grant.indexOf("#") + 1) }];
+  });
+}
+export function anotherWayOf(
+  store: Pick<Store, "listApprovals">,
+  runId: string,
+  stepId: string,
+  itemKey: string,
+  options?: { outsideOnly?: boolean },
+): string | undefined {
+  let newest: { at: string; text: string } | undefined;
+  for (const row of store.listApprovals({ runId })) {
+    if (
+      row.state !== "another_way" ||
+      row.stepId !== stepId ||
+      row.itemKey !== itemKey ||
+      row.anotherWayText === undefined ||
+      (options?.outsideOnly && row.kind !== "outside_flow")
+    )
+      continue;
+    const at = row.resolvedAt ?? "";
+    if (!newest || at >= newest.at) newest = { at, text: row.anotherWayText };
+  }
+  return newest?.text;
+}
 export function labelOf(requirements: Requirement[], requirementId: string): string {
   return (
     catalogEntry(requirements.find((requirement) => requirement.id === requirementId)?.ref)?.label ??

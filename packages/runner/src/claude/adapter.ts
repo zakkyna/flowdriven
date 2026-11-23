@@ -280,6 +280,27 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                       );
                   } catch {}
                 }
+                let anotherWay: { text: string; token: string } | undefined;
+                if (req.anotherWay !== undefined) {
+                  const haystacks = [
+                    req.instructions,
+                    req.anotherWay.text,
+                    req.lastFailure ?? "",
+                    prepared?.skill.body ?? "",
+                  ];
+                  for (let i = 0; i < 3; i++) {
+                    const candidate = (options.newToken ?? (() => randomBytes(8).toString("hex")))();
+                    if (
+                      /^[a-f0-9]{16}$/.test(candidate) &&
+                      haystacks.every((part) => !part.includes(candidate))
+                    ) {
+                      anotherWay = { text: req.anotherWay.text, token: candidate };
+                      break;
+                    }
+                  }
+                  if (anotherWay === undefined)
+                    throw new Error("FlowDriven could not mark the owner's words.");
+                }
                 return buildPrompt({
                   approved: (req.approvedCalls ?? []).filter((call) => call.outsideFlow),
                   ...(policy.commands
@@ -313,6 +334,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   instructions: req.instructions,
                   outputs: req.outputs,
                   ...(req.lastFailure === undefined ? {} : { lastFailure: req.lastFailure }),
+                  ...(anotherWay === undefined ? {} : { anotherWay }),
                 });
               },
             },
