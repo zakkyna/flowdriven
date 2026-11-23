@@ -867,6 +867,7 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 
 | Case | First stated step | Now | Reason |
 |---|---|---|---|
+| j30-21, I18N-30 (LINE_KEYS coverage) | B-06.T5 | B-06.T7 | The real-tree check receives LINE_KEYS in T7, per the T5 pre-check decision. |
 | j24-34 (scheduled-slot record) | B-05.T7 | B-12.T7 | The missed scheduled-slot record is built with TC-j12-12. |
 | j25-21 (rendered audit sentence) | B-05.T7 | B-19.T6 | The renderer draws the audit sentence from the recorded codes. |
 | j24-33 (rendered stopped words) | B-05.T7 | B-16, B-19 | The renderer draws the stopped words from the run state and cause. |
@@ -997,6 +998,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `apps/desktop/src/i18n/i18n.test.ts` (TC-I18N-18) | Placeholder differences alone are reported | Unknown placeholders are also reported (TC-I18N-27), retaining each mismatch assertion | B-06.T5 |
 | `packages/runner/src/claude/review-05b-fix.test.ts` (TC-j24-01) | A reply recipient without an address is shown as a decision | A named RFC 5322 recipient is shown in full (TC-SR1-12) | B-05.T19 |
 | `packages/runner/src/service/flows-handlers.test.ts`, `service/map-flow.test.ts` (TC-STO-36) | Chat-origin rows without an app-saved version place changes under Does on its own | Such rows place changes under Asks you first (TC-SR2-08; architecture 6.3) | B-05.T18 |
 | `packages/contracts/src/operations-v2.test.ts` | RunDetail fixture without notes, skipped starts and attempt log | Required empty arrays in the fixture (TC-CON-46) | B-32.T1 |

@@ -64,6 +64,8 @@ export async function checkLanguages(options: {
   lineKeys?: readonly string[];
   languageDir?: string;
   sourceDirs?: readonly string[];
+  pendingKeys?: readonly string[];
+  allowlist?: readonly { key: string; text: string; reason: string }[];
 }): Promise<{ findings: Finding[]; untranslated: Entry[] }> {
   const { root } = options;
   const languageDir =
@@ -105,9 +107,35 @@ export async function checkLanguages(options: {
   const english = langs.find(({ value }) => value.code === "en");
   if (!english) return { findings, untranslated };
   const englishFile = join(languageDir, "en.ts");
+  const listText = await readFile(join(root, languageDir, "languages.ts"), "utf8");
+  const allowlist = options.allowlist ?? [];
+  for (const entry of allowlist) {
+    if (
+      !langs.some(({ words }) => {
+        const word = words.get(entry.key);
+        return (
+          word !== undefined && (typeof word === "string" ? [word] : Object.values(word)).includes(entry.text)
+        );
+      })
+    )
+      add(
+        "stale_allowlist",
+        join(languageDir, "check.ts"),
+        "allowlist entry no longer exists. Fix: remove it.",
+        { key: entry.key },
+      );
+  }
   const seen = new Map<string, string>();
   for (const { file, value, words } of langs) {
     const { code } = value;
+    const name = basename(file, ".ts");
+    if (!new RegExp(`["']\\./${name}["']`).test(listText))
+      add(
+        "not_in_list",
+        file,
+        `this language file is not in the list. Fix: add one line for it to ${languageDir}/languages.ts.`,
+      );
+    const source = await readFile(join(root, file), "utf8");
     if (!isValidLanguageCode(code))
       add(
         "invalid_code",
@@ -143,6 +171,54 @@ export async function checkLanguages(options: {
       }
     if (missing.length && code !== "id") untranslated.push({ language: code, keys: missing });
     for (const [key, word] of words) {
+      const reference = english.words.get(key);
+      const referenceTexts =
+        reference === undefined ? [] : typeof reference === "string" ? [reference] : Object.values(reference);
+      const expectedAll = new Set(referenceTexts.flatMap(placeholders));
+      for (const text of typeof word === "string" ? [word] : Object.values(word)) {
+        const lineIndex = source.indexOf(text);
+        const line = lineIndex < 0 ? undefined : source.slice(0, lineIndex).split("\n").length;
+        for (const char of text) {
+          if (/\p{Cf}|\u00a0/u.test(char)) {
+            const point = char.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0");
+            add("hidden_character", file, `has hidden character U+${point}. Fix: remove it.`, { key, line });
+          }
+        }
+        if (/<\/?[a-z][^>]*>|<!--[\s\S]*?-->|&(?:#\d+|#x[\da-f]+|[a-z][\da-z]+);/i.test(text))
+          add("markup_in_value", file, "contains markup. Fix: use plain text.", { key });
+        if (/\b(?:https?:\/\/|ftp:\/\/|mailto:|www\.)/i.test(text))
+          add(
+            "web_address_in_value",
+            file,
+            "contains an address. Fix: words files hold no addresses; keep the address in code.",
+            { key },
+          );
+        const stripped = text.replace(/\{[a-z][A-Za-z0-9]*\}/g, "");
+        if (/[{}]/.test(stripped))
+          add("bad_placeholder", file, "has a broken placeholder. Fix: use a name such as {name}.", { key });
+        if (file !== english.file && placeholders(text).some((part) => !expectedAll.has(part)))
+          add(
+            "unknown_placeholder",
+            file,
+            "has a placeholder not in English. Fix: use the English placeholders.",
+            { key },
+          );
+        if (
+          (code === "en" || code === "id") &&
+          !allowlist.some((entry) => entry.key === key && entry.text === text)
+        ) {
+          if (
+            /\b(?:consent|trigger|payload|connector|mcp|harness|api key|token|hash|prompt|sandbox|json|digest|schema|stdio|runner|ipc)\b/i.test(
+              text,
+            )
+          )
+            add("forbidden_word", file, "contains a technical word. Fix: use plain words.", { key });
+          if (/\b(?:run-[\da-f]{6,}|[a-z]+-\d{12})\b/i.test(text))
+            add("run_id_in_value", file, "contains a run id. Fix: remove it.", { key });
+          if (/\b(?:\d+\.\d+\.\d+|v\d+)\b/i.test(text))
+            add("version_in_value", file, "contains a version number. Fix: remove it.", { key });
+        }
+      }
       if (!english.words.has(key)) {
         add(
           "extra_key",
@@ -193,9 +269,17 @@ export async function checkLanguages(options: {
     }
   }
   const used = new Set(options.lineKeys ?? []);
+  const dynamicKeys: string[] = [];
   try {
     const dynamic = await readFile(join(root, languageDir, "dynamic-keys.ts"), "utf8");
-    for (const match of dynamic.matchAll(/["']([\w]+\.[\w.]+)["']/g)) if (match[1]) used.add(match[1]);
+    for (const match of dynamic.matchAll(/["']([\w]+\.[\w.]+)["']/g))
+      if (match[1]) dynamicKeys.push(match[1]);
+    if (dynamic.includes("STATUS_KEYS")) {
+      const status = await readFile(join(root, languageDir, "status.ts"), "utf8");
+      for (const match of status.matchAll(/["'](status\.[\w.]+)["']/g))
+        if (match[1]) dynamicKeys.push(match[1]);
+    }
+    for (const key of dynamicKeys) used.add(key);
   } catch {
     /* No dynamic keys. */
   }
@@ -203,7 +287,33 @@ export async function checkLanguages(options: {
     for (const path of await files(join(root, dir))) {
       if (path === join(root, languageDir, "check.ts")) continue;
       const text = await readFile(path, "utf8");
-      for (const match of text.matchAll(/\bt\(\s*["']([\w]+(?:\.[\w]+)+)["']/g)) {
+      const file = relative(root, path);
+      for (const [index, lineText] of text.split("\n").entries()) {
+        const calls = [...lineText.matchAll(/\bt\(/g)];
+        if (
+          calls.length >= 2 &&
+          (/\bt\([^;]*\+[^;]*\bt\(/.test(lineText) ||
+            /`[^`]*\$\{t\([^`]*\$\{t\(/.test(lineText) ||
+            /\[[^;]*\bt\([^;]*\bt\([^;]*\]\.join\(/.test(lineText))
+        )
+          add(
+            "glued_sentence",
+            file,
+            "joins translated fragments. Fix: make one key for the whole sentence with placeholders.",
+            { line: index + 1 },
+          );
+        for (const match of lineText.matchAll(/\bt\(\s*(?:["']([^"']*)["']\s*\+|`([^`$]*)\$\{)/g)) {
+          const prefix = match[1] ?? match[2] ?? "";
+          if (!dynamicKeys.some((key) => key.startsWith(prefix)))
+            add(
+              "dynamic_key_unlisted",
+              file,
+              "dynamic key is not listed. Fix: list its keys in dynamic-keys.ts.",
+              { line: index + 1 },
+            );
+        }
+      }
+      for (const match of text.matchAll(/\bt\(\s*["'`]([\w]+(?:\.[\w]+)+)["'`]\s*(?=[,)])/g)) {
         const key = match[1];
         if (!key) continue;
         used.add(key);
@@ -219,8 +329,17 @@ export async function checkLanguages(options: {
         }
       }
     }
+  const pending = new Set(options.pendingKeys ?? []);
+  for (const key of pending)
+    if (!english.words.has(key) || used.has(key))
+      add(
+        "stale_pending_key",
+        join(languageDir, "pending-keys.ts"),
+        "pending key is used or missing. Fix: remove it from the pending list.",
+        { key },
+      );
   for (const key of english.words.keys())
-    if (!used.has(key))
+    if (!used.has(key) && !pending.has(key))
       add(
         "unused_english_key",
         englishFile,

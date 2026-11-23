@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { checkLanguages, formatFinding, formatUntranslated } from "./check";
+import { pendingKeys } from "./pending-keys";
 import { createT } from "./t";
 import { BASE, language, tree } from "./test-helpers/tree";
 
@@ -8,12 +9,24 @@ function first<T>(items: T[]): T {
   if (item === undefined) throw new Error("Expected an item");
   return item;
 }
-async function check(changes: Record<string, string> = {}, lineKeys: string[] = []) {
-  const temp = await tree(changes);
+async function check(
+  changes: Record<string, string> = {},
+  lineKeys: string[] = [],
+  allowlist: { key: string; text: string; reason: string }[] = [],
+) {
+  const names = Object.keys(changes)
+    .map((file) => /^lang\/([\w-]+)\.ts$/.exec(file)?.[1])
+    .filter((name) => name && !["en", "id", "languages", "dynamic-keys"].includes(name));
+  const registered = names.map((name) => `import "./${name}";`).join(" ");
+  const temp = await tree({
+    ...changes,
+    "lang/languages.ts": changes["lang/languages.ts"] ?? `${BASE["lang/languages.ts"]} ${registered}`,
+  });
   try {
     return await checkLanguages({
       root: temp.root,
       lineKeys,
+      allowlist,
       load: (path) => import(/* @vite-ignore */ path),
     });
   } finally {
@@ -73,17 +86,21 @@ test("TC-I18N-18 placeholder differences", async () => {
   const renamed = await check({
     "lang/id.ts": BASE["lang/id.ts"].replace('one: "Satu {n}"', 'one: "Satu {m}"'),
   });
-  expect(formatFinding(first(renamed.findings))).toBe(
+  expect(formatFinding(first(renamed.findings.filter(({ kind }) => kind === "placeholder_mismatch")))).toBe(
     "lang/id.ts a.one: has {m} but English has {n}. Fix: use {n}.",
   );
   for (const replacement of ['one: "Satu {m}"', 'one: "Satu"', 'one: "Satu {n} {n2}"']) {
     expect(
       (await check({ "lang/id.ts": BASE["lang/id.ts"].replace('one: "Satu {n}"', replacement) })).findings,
-    ).toMatchObject([{ kind: "placeholder_mismatch", key: "a.one" }]);
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "placeholder_mismatch", key: "a.one" })]),
+    );
   }
   expect(
     (await check({ "lang/id.ts": BASE["lang/id.ts"].replace("{n} butir", "{count} butir") })).findings,
-  ).toMatchObject([{ kind: "placeholder_mismatch", key: "a.two" }]);
+  ).toEqual(
+    expect.arrayContaining([expect.objectContaining({ kind: "placeholder_mismatch", key: "a.two" })]),
+  );
 });
 test("TC-I18N-19 TC-j30-29 missing other and fallback", async () => {
   expect(
@@ -171,4 +188,131 @@ test("TC-j30-30 invalid, duplicate and case-insensitive file names", async () =>
     { kind: "duplicate_code", file: "lang/ab.ts" },
     { kind: "invalid_code", file: "lang/x_.ts" },
   ]);
+});
+
+test("TC-I18N-23 unregistered language", async () => {
+  expect(
+    (await check({ ...extra("zz", "zz", used), "lang/languages.ts": BASE["lang/languages.ts"] })).findings,
+  ).toContainEqual(expect.objectContaining({ kind: "not_in_list", file: "lang/zz.ts" }));
+});
+test("TC-I18N-24 hidden characters", async () => {
+  for (const cp of [0x200b, 0x202e, 0xa0, 0xfeff, 0x2066, 0xe0041]) {
+    const result = await check({
+      "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", `Dipakai${String.fromCodePoint(cp)}`),
+    });
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ kind: "hidden_character", file: "lang/id.ts", line: 5, key: "a.used" }),
+    );
+  }
+  expect(
+    (await check({ "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", "é ñ 日本語") })).findings,
+  ).toEqual([]);
+});
+test("TC-I18N-25 markup", async () => {
+  for (const value of [
+    "<b>Dipakai</b>",
+    "Dipakai <img src=x>",
+    "Dipakai &amp; lagi",
+    "Dipakai &#8203;",
+    "<!-- hi -->",
+  ]) {
+    expect(
+      (await check({ "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", value) })).findings,
+    ).toContainEqual(expect.objectContaining({ kind: "markup_in_value", key: "a.used" }));
+  }
+  expect(
+    (await check({ "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", "a < b dan c > d") })).findings,
+  ).toEqual([]);
+});
+test("TC-I18N-26 addresses", async () => {
+  for (const value of [
+    "https://example.com",
+    "http://example.com/x",
+    "www.example.com",
+    "ftp://example.com",
+    "mailto:sam@example.com",
+  ]) {
+    expect(
+      (await check({ "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", value) })).findings,
+    ).toContainEqual(expect.objectContaining({ kind: "web_address_in_value", key: "a.used" }));
+  }
+  expect((await check()).findings).toEqual([]);
+});
+test("TC-I18N-27 invalid and unknown placeholders", async () => {
+  for (const [value, kind] of [
+    ["{who}", "unknown_placeholder"],
+    ["{", "bad_placeholder"],
+    ["{}", "bad_placeholder"],
+    ["{ n }", "bad_placeholder"],
+  ]) {
+    expect(
+      (await check({ "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", `Dipakai ${value}`) })).findings,
+    ).toContainEqual(expect.objectContaining({ kind, file: "lang/id.ts" }));
+  }
+  expect(
+    (await check({ "lang/en.ts": BASE["lang/en.ts"].replace("Used", "Used {1}") })).findings,
+  ).toContainEqual(expect.objectContaining({ kind: "bad_placeholder", file: "lang/en.ts" }));
+});
+test("TC-I18N-28 TC-j30-32 glued sentences", async () => {
+  const source =
+    't("a.two");\n// used\nconst a = t("a.one") + " " + t("a.used");\nconst b = `${t("a.one")} ${t("a.used")}`;\nconst c = [t("a.one"), t("a.used")].join(" ");\nconst d = t("a.one"); const e = t("a.used");';
+  const result = await check({
+    "src/app.ts": source,
+    "src/view.tsx": '<span>{t("a.one")}</span><span>{t("a.used")}</span>',
+  });
+  expect(result.findings.map(({ kind, line }) => ({ kind, line }))).toEqual(
+    [3, 4, 5].map((line) => ({ kind: "glued_sentence", line })),
+  );
+  expect(
+    createT([{ code: "id", name: "Indonesia", words: { chat: { starting: "Menjalankan {flow}." } } }])(
+      "chat.starting",
+      { flow: "Fill timesheet" },
+      "id",
+    ),
+  ).toBe("Menjalankan Fill timesheet.");
+});
+test("TC-j30-20 multiple finding kinds and dynamic keys", async () => {
+  const result = await check({
+    "lang/id.ts": BASE["lang/id.ts"].replace('other: "{n} butir"', 'other: "{m} butir"'),
+    "lang/zz.ts": language("zz", used),
+    "lang/languages.ts": BASE["lang/languages.ts"],
+    "src/app.ts": `${BASE["src/app.ts"]}\nt("b." + code);`,
+  });
+  expect(result.findings.map(({ kind }) => kind)).toEqual(
+    expect.arrayContaining(["placeholder_mismatch", "not_in_list", "dynamic_key_unlisted"]),
+  );
+});
+test("TC-j30-31 TC-I18N-29 formatted findings", async () => {
+  const result = await check({ "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", "<b>Dipakai</b>") });
+  expect(result.findings.length).toBeGreaterThan(0);
+  for (const finding of result.findings)
+    expect(formatFinding(finding)).toMatch(/^lang\/id\.ts.*a\.used: .*Fix: .+\.$/);
+});
+test("TC-I18N-35 plain words and allowlist", async () => {
+  for (const [value, kind] of [
+    ["sandbox", "forbidden_word"],
+    ["run-abcdef", "run_id_in_value"],
+    ["v123", "version_in_value"],
+  ] as const) {
+    expect(
+      (await check({ "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", value) })).findings,
+    ).toContainEqual(expect.objectContaining({ kind, key: "a.used" }));
+  }
+  const changes = { "lang/id.ts": BASE["lang/id.ts"].replace("Dipakai", "sandbox") };
+  expect((await check(changes, [], [{ key: "a.used", text: "sandbox", reason: "test" }])).findings).toEqual(
+    [],
+  );
+  expect((await check({}, [], [{ key: "a.used", text: "sandbox", reason: "test" }])).findings).toContainEqual(
+    expect.objectContaining({ kind: "stale_allowlist" }),
+  );
+});
+test("TC-j30-21 TC-I18N-30 real tree", async () => {
+  const result = await checkLanguages({
+    root: process.cwd(),
+    lineKeys: [],
+    pendingKeys,
+    load: (path) => import(/* @vite-ignore */ path),
+  });
+  expect(result.findings.map(formatFinding)).toEqual([]);
+  expect(result.untranslated.filter(({ language }) => language === "id")).toEqual([]);
 });
