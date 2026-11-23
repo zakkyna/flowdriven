@@ -1,8 +1,10 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { findPrivateTraces } from "./test/repo-rules";
+import { makeTempRepo } from "./test/temp-repo";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const folders = [
@@ -74,4 +76,99 @@ test("TC-REPO-11 scans every fixture and test helper and requires synthetic fake
   expect(missingHeader("packages/runner/src/test-helpers/fake-new.ts", "// missing")).toEqual([
     "packages/runner/src/test-helpers/fake-new.ts",
   ]);
+});
+
+test("TC-REPO-01 rejects unapproved dependencies and accepts the unchanged repository", () => {
+  const scenarios = [
+    ["apps/desktop/package.json", "dependencies", "left-pad", "1.3.0", "left-pad is not on the allowlist"],
+    [
+      "packages/contracts/package.json",
+      "dependencies",
+      "react",
+      "19.3.1",
+      "react is not allowed in package @flowdriven/contracts",
+    ],
+    [
+      "apps/desktop/package.json",
+      "devDependencies",
+      "vitest-fake-font",
+      "1.0.0",
+      "vitest-fake-font is not on the allowlist",
+    ],
+  ] as const;
+  for (const [path, field, name, version, message] of scenarios) {
+    const manifest = JSON.parse(readFileSync(join(root, path), "utf8"));
+    manifest[field] = { ...manifest[field], [name]: version };
+    const result = makeTempRepo({ [path]: JSON.stringify(manifest) }, "dependency-gate.mjs");
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain(`${path}: ${message}`);
+  }
+  const clean = makeTempRepo({}, "dependency-gate.mjs");
+  expect(clean.status).toBe(0);
+  expect(clean.stdout).toContain("dependency-gate: OK");
+});
+
+test("TC-REPO-02 keeps the words folder out of workspaces", () => {
+  const allowlist = JSON.parse(readFileSync(join(root, "tools/checks/allowlist.json"), "utf8"));
+  expect(Object.keys(allowlist.workspaces)).toEqual([
+    "flowdriven-workspace",
+    "@flowdriven/contracts",
+    "@flowdriven/fixtures",
+    "@flowdriven/sdk",
+    "@flowdriven/runner",
+    "@flowdriven/desktop",
+  ]);
+  expect(existsSync(join(root, "packages/i18n"))).toBe(false);
+  expect(
+    filesUnder(join(root, "apps/desktop/src/i18n")).filter((path) => path.endsWith("/package.json")),
+  ).toEqual([]);
+  const result = spawnSync(process.execPath, ["tools/checks/dependency-gate.mjs"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("dependency-gate: OK");
+  expect(result.stderr).toBe("");
+});
+
+test("TC-REPO-03 rejects look-alikes, aliases, non-registry sources and install hooks", () => {
+  for (const [name, version] of [
+    ["reactt", "19.3.1"],
+    ["react-dom ", "19.3.1"],
+    ["react", "npm:evil-react@1.0.0"],
+    ["@flowdriven/contract", "workspace:*"],
+    ["react", "git+https://example.com/x.git"],
+  ] as const) {
+    const path = "apps/desktop/package.json";
+    const manifest = JSON.parse(readFileSync(join(root, path), "utf8"));
+    manifest.dependencies = { ...manifest.dependencies, [name]: version };
+    const result = makeTempRepo({ [path]: JSON.stringify(manifest) }, "dependency-gate.mjs");
+    expect(result.status, name).toBe(1);
+    expect(result.stdout, name).toContain(name);
+    expect(result.stdout).toMatch(/not on the allowlist|must be an exact version|not a workspace package/);
+  }
+  const path = "packages/runner/package.json";
+  const manifest = JSON.parse(readFileSync(join(root, path), "utf8"));
+  manifest.scripts = { postinstall: "node x.js" };
+  const result = makeTempRepo({ [path]: JSON.stringify(manifest) }, "dependency-gate.mjs");
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain(`${path}: field scripts is not allowed`);
+});
+
+test("TC-REPO-04 detects hidden characters in words and code", () => {
+  const result = makeTempRepo(
+    {
+      "apps/desktop/src/i18n/id.ts": `"Setujui${String.fromCodePoint(0x202e)}"`,
+      "packages/runner/src/a.ts": `// ok ${String.fromCodePoint(0x2066)} x ${String.fromCodePoint(0x2069)}`,
+    },
+    "hidden-chars.mjs",
+  );
+  expect(result.status).toBe(1);
+  expect(result.stdout).toMatch(/apps\/desktop\/src\/i18n\/id\.ts:1:\d+ U\+202E bidi-control/);
+  expect(result.stdout).toMatch(/packages\/runner\/src\/a\.ts:1:\d+ U\+2066 bidi-control/);
+  expect(result.stdout).toMatch(/packages\/runner\/src\/a\.ts:1:\d+ U\+2069 bidi-control/);
+  expect(result.stdout).toContain("hidden-chars: FAIL, 3 findings");
+  const clean = makeTempRepo({}, "hidden-chars.mjs");
+  expect(clean.status).toBe(0);
+  expect(clean.stdout).toContain("hidden-chars: OK");
 });
