@@ -354,13 +354,23 @@ export type ScheduleRow = {
   pausedAt?: string;
   pausedWhy?: "blocked_runs" | "challenge";
 };
-export type HarnessStateRow = {
+export type AgentRow = {
   id: string;
-  consent: "not_given" | "given" | "revoked";
+  consent?: "not_given" | "given" | "revoked";
   consentAt?: string;
   scan?: Value;
   scanAt?: string;
+  state: "not_installed" | "installing" | "waiting_login" | "needs_login" | "ready" | "unknown";
+  stateAt: string;
+  version?: string;
+  billing: "plan" | "per_use" | "unknown";
+  problem?: {
+    code: "install_failed" | "sign_in_timeout" | "too_old" | "unreadable";
+    at: string;
+    detail?: string;
+  };
 };
+export type StoredAgentRow = Partial<AgentRow> & Pick<AgentRow, "id">;
 export type ModelUsage = {
   model: string;
   input: number;
@@ -504,8 +514,8 @@ export interface Store {
   getSetting(name: string): Value | undefined;
   putSetting(name: string, value: Value): void;
   deleteSetting(name: string): void;
-  getHarnessState(id: string): HarnessStateRow | undefined;
-  putHarnessState(row: HarnessStateRow): void;
+  getHarnessState(id: string): StoredAgentRow | undefined;
+  putHarnessState(row: StoredAgentRow): void;
   transaction<T>(fn: () => T): T; // BEGIN and COMMIT, ROLLBACK on a throw; nested calls use savepoints
   putFlow(row: FlowRow): void;
   addVersion(

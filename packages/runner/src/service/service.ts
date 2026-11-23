@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Notice } from "@flowdriven/contracts";
 import { CONTRACT_VERSION, operations, type RunnerTopic } from "@flowdriven/contracts";
+import { createAgentRegistry, type RegistryOptions } from "../agents/registry.ts";
 import { STOP } from "../claude/browser-post.ts";
 import { visible } from "../claude/text.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
@@ -17,6 +18,7 @@ import { bundledSkill, readSkillFolder, skillSource } from "../skills/skill-fold
 import type { Store } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
 import type { TriggerDeps, TriggerService } from "../triggers/service.ts";
+import { mapAgents } from "./agents.ts";
 import { createAuditHandler } from "./audit.ts";
 import { createCapabilities } from "./capabilities.ts";
 import { createHarnessService } from "./claude-harness.ts";
@@ -56,6 +58,20 @@ export type ServiceOptions = {
   exists?: (path: string) => boolean;
   webCheck?: () => { chromeFlag: boolean; hostFile: boolean };
   claudePath?: string;
+  agents?: Partial<
+    Pick<
+      RegistryOptions,
+      | "home"
+      | "extraDirs"
+      | "claudePath"
+      | "codexPath"
+      | "timeoutMs"
+      | "catalog"
+      | "fs"
+      | "spawnInstall"
+      | "every"
+    >
+  >;
   scanTimeoutMs?: number;
   keeper?: { probes?: Probes; every?: Every };
   markChanged?: (topic: RunnerTopic) => void;
@@ -123,6 +139,14 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
       runIndex: (runId) =>
         store.listRuns({ flowId: store.getRun(runId)?.flowId }).findIndex((run) => run.id === runId),
     });
+  const registry = createAgentRegistry({
+    store,
+    cwd: options.dataDir,
+    env: options.env ?? process.env,
+    now,
+    ...options.agents,
+    markChanged: () => options.markChanged?.("agents"),
+  });
   const weekly = createWeekly({ store, now, recheck: () => wired?.keeper.recheck() });
   const wired =
     mode === "live"
@@ -256,6 +280,11 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     engine,
     call: createDispatcher({
       v2: {
+        "agents.list": async () => mapAgents(await registry.list()),
+        "agents.rescan": async () => {
+          const result = await registry.rescan();
+          return { ...result, agents: mapAgents(result.agents) };
+        },
         "flows.list": flowReads.list,
         "flows.get": flowReads.get,
         "flows.import": flowReads.import,
@@ -323,6 +352,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     },
     stop: () => {
       triggers.stop();
+      registry.stop();
       engine.shutdown();
       hs?.stop();
     },

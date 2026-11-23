@@ -27,7 +27,7 @@ import type { HarnessFacts, Routed } from "../router/types.ts";
 import { earlierNo } from "../rules/decisions.ts";
 import { recordRuleUse } from "../rules/standing.ts";
 import { bundledSkill, readSkillFolder, skillSource } from "../skills/skill-folder.ts";
-import type { HarnessStateRow, Store } from "../storage.ts";
+import type { Store, StoredAgentRow } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 
@@ -163,7 +163,7 @@ export function gate(
 }
 export function toHarnessCard(
   stored: StoredScan | undefined,
-  state: HarnessStateRow | undefined,
+  state: StoredAgentRow | undefined,
 ): HarnessCard {
   const scan = stored?.scan;
   const detected = scan?.detected === true;

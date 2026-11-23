@@ -867,6 +867,9 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 
 | Case | First stated step | Now | Reason |
 |---|---|---|---|
+| j01-25 (setUp and settings.update clauses) | B-07.T1 | B-07.T5, B-07.T4 | T1 checks list and rescan; setUp and the readiness gate are built in their own tasks. |
+| SR6-07 (setUp, signIn and models clauses) | B-07.T1 | B-07.T5, B-07.T6, B-07.T2 | T1 checks list and rescan; the other operations are built in their own tasks. |
+| AGT-04 (models clause) | B-07.T1 | B-07.T2 | T1 checks detection states; models are built in T2. |
 | AST-36 (full scripted session) | B-06.T7 | B-12 or B-15 | Later emitters complete the scripted session; T7 checks existing Lines and source. |
 | j30-35 (refused start) | B-06.T6 | B-24.T4 | Covered by TC-j20-46 after a language change. |
 | j30-36 (next scheduled start) | B-06.T6 | B-13.T2 | Covered by TC-SR3-07 after a language change. |

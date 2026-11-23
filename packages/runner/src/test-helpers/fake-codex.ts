@@ -30,7 +30,11 @@ appendFileSync(
     ...(prompt === undefined ? {} : { prompt }),
   })}\n`,
 );
-if (isStatus) {
+if (args.length === 1 && args[0] === "--version") {
+  process.stdout.write(`${script.version ?? "0.166.0"}\n`);
+} else if (args.length === 1 && args[0] === "--help") {
+  process.stdout.write("fake codex\n");
+} else if (isStatus) {
   const status = script.signedIn === false ? script.profile.status.signedOut : script.profile.status.signedIn;
   process.stdout.write(status.stdout);
   process.exitCode = status.exitCode;

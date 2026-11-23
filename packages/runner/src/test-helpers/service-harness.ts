@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { createRunnerService } from "../service/service.ts";
+import { createRunnerService, type ServiceOptions } from "../service/service.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import { createClock, createIdGenerator } from "./clock.ts";
 
@@ -11,6 +11,9 @@ export async function createServiceHarness(
     instant?: string;
     zone?: string;
     languages?: readonly string[];
+    agents?: ServiceOptions["agents"];
+    env?: ServiceOptions["env"];
+    markChanged?: ServiceOptions["markChanged"];
   } = {},
 ) {
   const dataDir = await mkdtemp(join(testFolder, "runner-"));
@@ -25,6 +28,9 @@ export async function createServiceHarness(
         mode: "demo",
         languages: options.languages ?? ["en", "id"],
         now: clock.now,
+        agents: options.agents,
+        env: options.env,
+        markChanged: options.markChanged,
         newId,
       });
       try {

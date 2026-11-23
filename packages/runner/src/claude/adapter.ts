@@ -3,9 +3,11 @@ import { rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { describeTemplate, type Touch, type Value } from "@flowdriven/sdk";
+import { AGENT_CATALOG } from "../agents/catalog.ts";
+import { detect, signInStatus } from "../agents/registry.ts";
 import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
 import type { GrantBook } from "../connectors/grants.ts";
-import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
+import { type AgentAdapter, type CallInfo, HarnessCallError, type StepRequest } from "../harness.ts";
 import type { EffectEntry } from "../rules/effects.ts";
 import { type LoadedSkill, skillSource } from "../skills/skill-folder.ts";
 import type { Confirmation, ConsentPins, RuleRow } from "../storage.ts";
@@ -77,8 +79,10 @@ export type ClaudeAdapterOptions = {
   allowed?: () => string | undefined;
   afterAllow?: () => void;
 };
-export type ClaudeAdapter = HarnessAdapter & { interrupt(sentence: string): void };
+export type ClaudeAdapter = AgentAdapter & { interrupt(sentence: string): void };
 export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapter {
+  const claudeCatalog = AGENT_CATALOG.find((entry) => entry.id === "claude-code");
+  if (!claudeCatalog) throw new Error("Claude catalog entry missing");
   const active = new Set<(sentence?: string) => void>();
   let stopped = false;
   const guard = () => (stopped ? "FlowDriven is stopping." : options.allowed?.());
@@ -125,6 +129,20 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
   return {
     id: "claude-code",
     name: "Claude Code",
+    maker: "Anthropic",
+    catalog: claudeCatalog,
+    async detect() {
+      return detect(claudeCatalog, {
+        explicit: options.claudePath() ?? "",
+        env: options.env(),
+        cwd: dirname(options.controlRoot),
+      });
+    },
+    async signInStatus() {
+      const path = options.claudePath();
+      if (!path) return { state: "not_installed", billing: "unknown" };
+      return signInStatus(claudeCatalog, path, { env: options.env(), cwd: dirname(options.controlRoot) });
+    },
     stop() {
       stopped = true;
       for (const stop of active) stop();

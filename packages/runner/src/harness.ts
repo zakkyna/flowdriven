@@ -122,3 +122,10 @@ export interface HarnessAdapter {
   judge(req: JudgeRequest): Promise<JudgeResult>;
   probe(req: ProbeRequest): Promise<ProbeResult>;
 }
+
+export interface AgentAdapter extends HarnessAdapter {
+  readonly maker: string;
+  readonly catalog: import("./agents/catalog.ts").CatalogEntry;
+  detect(): Promise<import("./agents/registry.ts").Detection>;
+  signInStatus(): Promise<Pick<import("./agents/registry.ts").Detection, "state" | "billing" | "problem">>;
+}

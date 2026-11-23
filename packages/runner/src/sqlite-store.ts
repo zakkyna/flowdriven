@@ -15,7 +15,6 @@ import type {
   DraftRow,
   FlowHead,
   FlowRow,
-  HarnessStateRow,
   ItemRow,
   MessageRow,
   RememberedAnswer,
@@ -26,6 +25,7 @@ import type {
   StartRow,
   StepRow,
   Store,
+  StoredAgentRow,
   TriggerRow,
   UsageEventRow,
   WaitingQuestion,
@@ -868,7 +868,7 @@ export async function openSqliteStore(
       execute("INSERT OR REPLACE INTO settings (name, data) VALUES (?, ?)", name, json(value));
     },
     getHarnessState(id) {
-      return decode<HarnessStateRow>(get("SELECT data FROM harness_state WHERE id = ?", id));
+      return decode<StoredAgentRow>(get("SELECT data FROM harness_state WHERE id = ?", id));
     },
     putHarnessState(row) {
       let data: string;

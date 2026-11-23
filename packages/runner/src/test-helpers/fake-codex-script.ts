@@ -8,6 +8,7 @@ import type { AgentProfile } from "./agent-profiles.ts";
 
 export type FakeCodexScript = {
   profile: AgentProfile;
+  version?: string;
   signedIn?: boolean;
   events?: unknown[];
 };
