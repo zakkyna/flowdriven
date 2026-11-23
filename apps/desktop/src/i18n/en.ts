@@ -1,9 +1,28 @@
+import noticeWords from "../../electron/notice-words.json";
 import type { PluralValue, Words } from "./plural";
 
 const en = {
   code: "en",
   name: "English",
   words: {
+    notice: noticeWords.en,
+    hold: {
+      tooLarge: "This call is too large to show for your approval.",
+      tooMany: "Too many calls are waiting for your approval.",
+    },
+    step: {
+      toolRanUnchecked: "The tool ran without a check.",
+    },
+    report: {
+      approvedOnce: "You approved once: {title}.",
+      anotherWay: "You asked for another way: {text}.",
+      didAnotherWay: "Did it another way, as you asked: {text}.",
+      usedNote: "Used your note: {text}.",
+      youApproved: "You approved: {title}.",
+      youApprovedEdited: "You approved your edited version: {title}.",
+      youSaidNo: "You said no: {title}. It was not done.",
+      doneByRule: "Done by your rule: {title}.",
+    },
     common: {
       anotherWay: "Another way",
       send: "Send",
@@ -258,6 +277,23 @@ const en = {
       },
     },
     chat: {
+      itsTime: "It is {time}. Time for {flow}.",
+      dueAt: "This was due at {time}. Time for {flow}.",
+      alreadyWaiting: "{flow} is already waiting for your answer.",
+      chainStopped: "Stopped. {names} did not start.",
+      reportInActivity: "Done. The report is in Activity.",
+      useTheButtons: "Use the buttons on the card above.",
+      fillInForm: "Please fill in the form above, then choose Start.",
+      agentChanged: "Now using {agent} · {model}",
+      mainAgentNotReady: "{main} is not ready. Using {agent}.",
+      modelGone: "{old} is no longer available. Now using {agent} · {model}.",
+      skillUnreadable: "This skill cannot be read.",
+      makeFromSkill: "Make a flow from {skill}.",
+      permissionOff: "FlowDriven may not run your AI agents.",
+      agentCannotRunFlow:
+        "{agent} cannot run this flow safely yet. Choose Claude Code in the picker to run it.",
+      nothingWaiting: "Nothing is waiting for you.",
+      alwaysAllowed: "Always allowed for {flow}.",
       timeFor: "Time for {name}.",
       confirmFlowFirst: "Confirm {name} first?",
       queuedBehind: "Waiting for the earlier run of this flow",
@@ -333,6 +369,7 @@ const en = {
       starting: "Starting {flow}.",
     },
     flows: {
+      empty: "No flows yet",
       earlierRunWaits: "The earlier run still waits for you.",
       seeWaiting: "See what's waiting",
       introduction: "Tasks you set up once. Run them whenever you like, or on a schedule.",

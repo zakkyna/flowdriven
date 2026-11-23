@@ -62,6 +62,7 @@ export async function checkLanguages(options: {
   root: string;
   load: (path: string) => Promise<{ default: Language }>;
   lineKeys?: readonly string[];
+  checkUnusedLineKeys?: boolean;
   languageDir?: string;
   sourceDirs?: readonly string[];
   pendingKeys?: readonly string[];
@@ -283,11 +284,14 @@ export async function checkLanguages(options: {
   } catch {
     /* No dynamic keys. */
   }
+  const emitted = new Set<string>();
   for (const dir of sourceDirs)
     for (const path of await files(join(root, dir))) {
       if (path === join(root, languageDir, "check.ts")) continue;
       const text = await readFile(path, "utf8");
       const file = relative(root, path);
+      for (const match of text.matchAll(/\bkey:\s*["']([a-z][\w]*(?:\.[a-z][\w]*)+)["']/g))
+        if (match[1]) emitted.add(match[1]);
       for (const [index, lineText] of text.split("\n").entries()) {
         const calls = [...lineText.matchAll(/\bt\(/g)];
         if (
@@ -329,6 +333,10 @@ export async function checkLanguages(options: {
         }
       }
     }
+  if (options.checkUnusedLineKeys)
+    for (const key of options.lineKeys ?? [])
+      if (!emitted.has(key))
+        add("unused_line_key", "line-keys.ts", "unused Line key. Fix: remove it from line-keys.ts.", { key });
   const pending = new Set(options.pendingKeys ?? []);
   for (const key of pending)
     if (!english.words.has(key) || used.has(key))

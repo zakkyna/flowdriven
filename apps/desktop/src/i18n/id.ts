@@ -1,9 +1,28 @@
+import noticeWords from "../../electron/notice-words.json";
 import type { EnglishWords, TranslationWords } from "./en";
 
 export default {
   code: "id",
   name: "Bahasa Indonesia",
   words: {
+    notice: noticeWords.id,
+    hold: {
+      tooLarge: "Panggilan ini terlalu besar untuk ditampilkan agar Anda setujui.",
+      tooMany: "Terlalu banyak panggilan menunggu persetujuan Anda.",
+    },
+    step: {
+      toolRanUnchecked: "Alat berjalan tanpa pemeriksaan.",
+    },
+    report: {
+      approvedOnce: "Anda menyetujui sekali: {title}.",
+      anotherWay: "Anda meminta cara lain: {text}.",
+      didAnotherWay: "Dilakukan dengan cara lain, sesuai permintaan Anda: {text}.",
+      usedNote: "Memakai catatan Anda: {text}.",
+      youApproved: "Anda menyetujui: {title}.",
+      youApprovedEdited: "Anda menyetujui versi yang Anda ubah: {title}.",
+      youSaidNo: "Anda menolak: {title}. Tidak dilakukan.",
+      doneByRule: "Dilakukan sesuai aturan Anda: {title}.",
+    },
     common: {
       anotherWay: "Cara lain",
       send: "Kirim",
@@ -258,6 +277,23 @@ export default {
       },
     },
     chat: {
+      itsTime: "Sekarang {time}. Saatnya {flow}.",
+      dueAt: "Ini dijadwalkan pada {time}. Saatnya {flow}.",
+      alreadyWaiting: "{flow} sudah menunggu jawaban Anda.",
+      chainStopped: "Dihentikan. {names} tidak dimulai.",
+      reportInActivity: "Selesai. Laporannya ada di Aktivitas.",
+      useTheButtons: "Gunakan tombol pada kartu di atas.",
+      fillInForm: "Isi formulir di atas, lalu pilih Mulai.",
+      agentChanged: "Sekarang memakai {agent} · {model}",
+      mainAgentNotReady: "{main} belum siap. Memakai {agent}.",
+      modelGone: "{old} tidak tersedia lagi. Sekarang memakai {agent} · {model}.",
+      skillUnreadable: "Skill ini tidak dapat dibaca.",
+      makeFromSkill: "Buat flow dari {skill}.",
+      permissionOff: "FlowDriven tidak diizinkan menjalankan agen AI Anda.",
+      agentCannotRunFlow:
+        "{agent} belum dapat menjalankan flow ini dengan aman. Pilih Claude Code untuk menjalankannya.",
+      nothingWaiting: "Tidak ada yang menunggu Anda.",
+      alwaysAllowed: "Selalu diizinkan untuk {flow}.",
       timeFor: "Waktunya {name}.",
       confirmFlowFirst: "Konfirmasi {name} dulu?",
       queuedBehind: "Menunggu proses sebelumnya dari flow ini.",
@@ -333,6 +369,7 @@ export default {
       starting: "Memulai {flow}.",
     },
     flows: {
+      empty: "Belum ada flow",
       earlierRunWaits: "Proses sebelumnya masih menunggu Anda.",
       seeWaiting: "Lihat yang menunggu",
       introduction: "Pekerjaan yang Anda siapkan sekali. Jalankan kapan saja atau sesuai jadwal.",

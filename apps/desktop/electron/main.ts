@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { app, BrowserWindow, ipcMain, Notification } from "electron";
 import languages from "./languages.json";
-import { electronNoticeHandler } from "./notifier";
+import { electronNoticeHandler, noticeWord } from "./notifier";
 import { startRunnerBridge } from "./runner-bridge";
 import { APP_ORIGIN } from "./security";
 import {
@@ -32,6 +32,7 @@ if (!app.requestSingleInstanceLock()) {
     serveApp(path.join(__dirname, "../dist"));
     const onNotice = electronNoticeHandler({
       Notification,
+      words: noticeWord,
       windows: () => BrowserWindow.getAllWindows(),
       open: (hash) => {
         const window = BrowserWindow.getAllWindows()[0];

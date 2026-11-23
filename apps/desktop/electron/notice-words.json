@@ -1,0 +1,22 @@
+{
+  "en": {
+    "decisionTitle": "FlowDriven needs a decision",
+    "decisionBody": "Open FlowDriven to see what is waiting.",
+    "questionTitle": "FlowDriven has a question for you",
+    "questionBody": "Open the chat to answer.",
+    "problemTitle": "A flow needs your attention",
+    "problemBody": "Open Activity to see what happened.",
+    "limitTitle": "FlowDriven paused a flow",
+    "limitBody": "Open Activity to see why."
+  },
+  "id": {
+    "decisionTitle": "FlowDriven butuh keputusan Anda",
+    "decisionBody": "Buka FlowDriven untuk melihat yang menunggu.",
+    "questionTitle": "FlowDriven punya pertanyaan untuk Anda",
+    "questionBody": "Buka chat untuk menjawab.",
+    "problemTitle": "Sebuah flow butuh perhatian Anda",
+    "problemBody": "Buka Aktivitas untuk melihat yang terjadi.",
+    "limitTitle": "FlowDriven menjeda sebuah flow",
+    "limitBody": "Buka Aktivitas untuk melihat alasannya."
+  }
+}

@@ -867,6 +867,7 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 
 | Case | First stated step | Now | Reason |
 |---|---|---|---|
+| AST-36 (full scripted session) | B-06.T7 | B-12 or B-15 | Later emitters complete the scripted session; T7 checks existing Lines and source. |
 | j30-35 (refused start) | B-06.T6 | B-24.T4 | Covered by TC-j20-46 after a language change. |
 | j30-36 (next scheduled start) | B-06.T6 | B-13.T2 | Covered by TC-SR3-07 after a language change. |
 | I18N-33 (turn language) | B-06.T6 | B-08 | Covered by TC-AST-18 when chat turns exist. |
@@ -1001,6 +1002,8 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `apps/desktop/src/i18n/i18n.test.ts` (TC-j30-21, TC-I18N-30) | Real tree has no Line keys supplied | Real tree counts LINE_KEYS as used (TC-I18N-32), retaining the existing findings and Indonesian checks | B-06.T7 |
+| `apps/desktop/electron/notifier.test.ts` | Notices use plain strings and inbox or builder routes | Notices use fixed Lines, language and version 2 routes (TC-j30-26, TC-ELE-18, TC-ELE-21, TC-ELE-23), preserving validation and notification assertions | B-06.T7 |
 | `apps/desktop/electron/runner-bridge.test.ts` | Spawn arguments omit languages | Spawn arguments include registered languages (TC-ELE-28, FS-j30.A10), retaining all other argument assertions | B-06.T11 |
 | `packages/runner/src/service/args.test.ts` | Default options and usage omit languages | Default and usage include languages (TC-AGT-40); existing error checks remain | B-06.T6 |
 | `packages/runner/src/service/handlers.test.ts` (TC-j12-32) | The service accepts Indonesian without an explicit list | The service is started with the registered list (TC-AGT-30), retaining restart assertions | B-06.T6 |

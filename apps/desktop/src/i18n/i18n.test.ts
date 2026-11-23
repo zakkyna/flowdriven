@@ -309,10 +309,50 @@ test("TC-I18N-35 plain words and allowlist", async () => {
 test("TC-j30-21 TC-I18N-30 real tree", async () => {
   const result = await checkLanguages({
     root: process.cwd(),
-    lineKeys: [],
+    lineKeys: (await import("@flowdriven/contracts")).LINE_KEYS,
     pendingKeys,
     load: (path) => import(/* @vite-ignore */ path),
   });
   expect(result.findings.map(formatFinding)).toEqual([]);
   expect(result.untranslated.filter(({ language }) => language === "id")).toEqual([]);
+});
+
+test("TC-I18N-32 every Line key has English and Indonesian words", async () => {
+  const { LINE_KEYS } = await import("@flowdriven/contracts");
+  const { default: en } = await import("./en");
+  const { default: id } = await import("./id");
+  for (const key of LINE_KEYS) {
+    for (const words of [en.words, id.words]) {
+      const value = key
+        .split(".")
+        .reduce<unknown>(
+          (v, part) =>
+            typeof v === "object" && v !== null ? (v as Record<string, unknown>)[part] : undefined,
+          words,
+        );
+      expect(value, key).toBeDefined();
+      if (typeof value === "object" && value !== null) expect(value, key).toHaveProperty("other");
+    }
+  }
+});
+
+test("TC-I18N-32 reports an unused Line key on a scratch tree", async () => {
+  const temp = await tree();
+  try {
+    const result = await checkLanguages({
+      root: temp.root,
+      lineKeys: ["a.used"],
+      checkUnusedLineKeys: true,
+      load: (path) => import(/* @vite-ignore */ path),
+    });
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        kind: "unused_line_key",
+        key: "a.used",
+        message: expect.stringContaining("remove it from line-keys.ts"),
+      }),
+    );
+  } finally {
+    await temp.cleanup();
+  }
 });
