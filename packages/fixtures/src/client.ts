@@ -17,6 +17,44 @@ import {
 } from "@flowdriven/contracts";
 import { buildState, FIXTURE_NOW, type FixtureStateV2, type Scenario } from "./state";
 
+const SEARCH_SNIPPET_MAX = 160;
+
+function buildSearchSnippet(text: string, query: string, maxLen = SEARCH_SNIPPET_MAX): string {
+  if (text.length <= maxLen) return text;
+  const index = text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+  if (index < 0) return text.slice(0, maxLen);
+  const center = index + Math.floor(query.length / 2);
+  let start = Math.max(0, center - Math.floor(maxLen / 2));
+  if (query.length >= maxLen) start = Math.min(start, index);
+  if (start + maxLen > text.length) start = Math.max(0, text.length - maxLen);
+  return text.slice(start, start + maxLen);
+}
+
+function formatSearchResultValue(entry: {
+  type: string;
+  value: string | number | boolean | string[];
+}): string | undefined {
+  if (entry.type === "secret_ref") return undefined;
+  if (Array.isArray(entry.value)) return entry.value.join(", ");
+  return String(entry.value);
+}
+
+function messageSearchText(m: FixtureStateV2["chats"][number]["messages"][number]): string | undefined {
+  if (m.kind === "text" || m.kind === "reply") return m.text;
+  if (m.kind === "result" && m.result) {
+    const values = m.result.values;
+    const filled = m.result.lines.map((line) =>
+      line.replace(/\{([^{}]+)\}/g, (match, key: string) => {
+        if (!Object.hasOwn(values, key)) return match;
+        const entry = values[key];
+        return entry ? (formatSearchResultValue(entry) ?? match) : match;
+      }),
+    );
+    return filled.join("\n");
+  }
+  return undefined;
+}
+
 export interface FixtureRunnerClient extends RunnerClient {
   readonly state: FixtureStateV2;
   readonly calls: { operation: OperationName; input: unknown }[];
@@ -674,31 +712,74 @@ export function createFixtureRunnerClient(
       return { needsYou, needsYouCount: needsYou.length, running, earlier };
     },
     "search.query": ({ text }) => {
-      const q = text.toLocaleLowerCase();
-      const chats = state.chats
-        .filter(
-          (c) =>
-            !q ||
-            c.chat.title.toLocaleLowerCase().includes(q) ||
-            c.messages.some(
-              (m) =>
-                (m.text ?? "").toLocaleLowerCase().includes(q) ||
-                m.result?.lines.some((line) => line.toLocaleLowerCase().includes(q)),
-            ),
+      const query = text.trim();
+      const q = query.toLocaleLowerCase();
+      if (!q) {
+        const chats = [...state.chats]
+          .sort(
+            (a, b) => b.chat.updatedAt.localeCompare(a.chat.updatedAt) || a.chat.id.localeCompare(b.chat.id),
+          )
+          .slice(0, 5)
+          .map((c) => ({
+            chatId: c.chat.id,
+            title: c.chat.title,
+            updatedAt: c.chat.updatedAt,
+            outside: false,
+          }));
+        const flows = [...state.flows]
+          .sort(
+            (a, b) =>
+              a.summary.name.localeCompare(b.summary.name, undefined, { sensitivity: "base" }) ||
+              a.summary.id.localeCompare(b.summary.id),
+          )
+          .slice(0, 200)
+          .map((f) => ({ flowId: f.summary.id, name: f.summary.name, summary: f.summary.summary }));
+        return { recent: true, chats, flows };
+      }
+
+      const chats = [...state.chats]
+        .sort(
+          (a, b) => b.chat.updatedAt.localeCompare(a.chat.updatedAt) || a.chat.id.localeCompare(b.chat.id),
         )
-        .sort((a, b) => b.chat.updatedAt.localeCompare(a.chat.updatedAt))
-        .slice(0, q ? 20 : 5)
-        .map((c) => ({
-          chatId: c.chat.id,
-          title: c.chat.title,
-          updatedAt: c.chat.updatedAt,
-          outside: false,
-        }));
+        .flatMap((c) => {
+          const sortedMessages = [...c.messages].sort((a, b) => b.seq - a.seq);
+          let matchText: string | undefined;
+          let matchOutside = false;
+          for (const m of sortedMessages) {
+            const candidate = messageSearchText(m);
+            if (candidate !== undefined && candidate.toLocaleLowerCase().includes(q)) {
+              matchText = candidate;
+              matchOutside = Boolean(m.outside);
+              break;
+            }
+          }
+          const titleMatches = c.chat.title.toLocaleLowerCase().includes(q);
+          if (!titleMatches && matchText === undefined) return [];
+          return [
+            {
+              chatId: c.chat.id,
+              title: c.chat.title,
+              updatedAt: c.chat.updatedAt,
+              ...(matchText !== undefined ? { snippet: buildSearchSnippet(matchText, query) } : {}),
+              outside: matchText !== undefined && matchOutside,
+            },
+          ];
+        })
+        .slice(0, 20);
       const flows = state.flows
-        .filter((f) => !q || `${f.summary.name} ${f.summary.summary}`.toLocaleLowerCase().includes(q))
-        .slice(0, q ? 50 : 200)
+        .filter(
+          (f) =>
+            f.summary.name.toLocaleLowerCase().includes(q) ||
+            f.summary.summary.toLocaleLowerCase().includes(q),
+        )
+        .sort(
+          (a, b) =>
+            a.summary.name.localeCompare(b.summary.name, undefined, { sensitivity: "base" }) ||
+            a.summary.id.localeCompare(b.summary.id),
+        )
+        .slice(0, 50)
         .map((f) => ({ flowId: f.summary.id, name: f.summary.name, summary: f.summary.summary }));
-      return { recent: !q, chats, flows };
+      return { recent: false, chats, flows };
     },
     "skills.list": () => state.skills,
     "skills.makeFlow": ({ skillId }) => {

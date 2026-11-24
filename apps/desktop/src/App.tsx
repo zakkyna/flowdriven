@@ -1,5 +1,5 @@
 import { createFixtureRunnerClient, type Scenario } from "@flowdriven/fixtures/v1";
-import { type ReactElement, useLayoutEffect, useMemo, useRef } from "react";
+import { type ReactElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { TranslationKey } from "./i18n/t";
 import { LegacyApp } from "./legacy/LegacyApp";
 import {
@@ -10,6 +10,7 @@ import { type Route, routeToHash, useRoute } from "./nav/route";
 import { COMPACT_QUERY, Drawer, NARROW_QUERY, useMediaQuery } from "./shell/Drawer";
 import { LanguageProvider, useHasLanguageProvider, useLanguage } from "./shell/language";
 import { type MorePreferenceStorage, Rail, type SecondaryNavItem } from "./shell/Rail";
+import { SearchDialog } from "./shell/SearchDialog";
 import styles from "./shell/Shell.module.css";
 
 export type AppProps = {
@@ -86,7 +87,22 @@ function AppContent({ now, zone, secondaryItems, moreStorage }: AppProps): React
     [hasLegacyProvider, legacy],
   );
   const mainRef = useRef<HTMLElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
   const routeKey = routeToHash(route);
+  useEffect(() => {
+    if (legacy) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== "k") return;
+      if (event.defaultPrevented || searchOpen) return;
+      if (document.querySelector('[role="dialog"], dialog[open]')) return;
+      event.preventDefault();
+      setSearchOpen(true);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [legacy, searchOpen]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: route changes must reset the main area.
   useLayoutEffect(() => {
     if (legacy) return;
@@ -132,17 +148,26 @@ function AppContent({ now, zone, secondaryItems, moreStorage }: AppProps): React
           route={route}
           pageTitle={routeTitle(route, t)}
           compact={isCompact}
+          onOpenSearch={openSearch}
           now={now}
           zone={zone}
           secondaryItems={secondaryItems}
           moreStorage={moreStorage}
         />
       ) : (
-        <Rail route={route} now={now} zone={zone} secondaryItems={secondaryItems} moreStorage={moreStorage} />
+        <Rail
+          route={route}
+          onOpenSearch={openSearch}
+          now={now}
+          zone={zone}
+          secondaryItems={secondaryItems}
+          moreStorage={moreStorage}
+        />
       )}
       <main id="main-content" tabIndex={-1} ref={mainRef} className={styles.main}>
         <PlaceholderScreen route={route} />
       </main>
+      <SearchDialog open={searchOpen} onClose={closeSearch} />
     </div>
   );
 }

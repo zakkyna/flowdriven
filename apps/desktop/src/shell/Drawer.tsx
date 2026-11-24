@@ -67,6 +67,14 @@ export function Drawer({
     setOpen(false);
   }, []);
 
+  const handleOpenSearch = useCallback(() => {
+    if (!onOpenSearch) return;
+    returnFocusRef.current = false;
+    setOpen(false);
+    menuButtonRef.current?.focus();
+    onOpenSearch();
+  }, [onOpenSearch]);
+
   useEffect(() => {
     if (prevRouteRef.current !== routeKey) {
       prevRouteRef.current = routeKey;
@@ -155,7 +163,7 @@ export function Drawer({
               <Rail
                 route={route}
                 compact={compact}
-                onOpenSearch={onOpenSearch}
+                onOpenSearch={onOpenSearch ? handleOpenSearch : undefined}
                 now={now}
                 zone={zone}
                 secondaryItems={secondaryItems}

@@ -197,6 +197,8 @@ const en = {
     },
     search: {
       placeholder: "Search chats and flows",
+      chats: "Chats",
+      flows: "Flows",
       noResults: 'Nothing found for "{query}".',
     },
     welcome: {

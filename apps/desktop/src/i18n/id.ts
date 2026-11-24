@@ -197,6 +197,8 @@ export default {
     },
     search: {
       placeholder: "Cari chat dan flow",
+      chats: "Chat",
+      flows: "Flow",
       noResults: 'Tidak ada hasil untuk "{query}".',
     },
     welcome: {
