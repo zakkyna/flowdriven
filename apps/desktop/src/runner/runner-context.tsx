@@ -28,6 +28,9 @@ export function RunnerProvider({
 }): ReactElement {
   return <Context.Provider value={client}>{children}</Context.Provider>;
 }
+export function useOptionalRunnerClient(): RunnerClient | null {
+  return useContext(Context);
+}
 export function useRunnerClient(): RunnerClient {
   const client = useContext(Context);
   if (!client) throw new Error("RunnerProvider is missing");

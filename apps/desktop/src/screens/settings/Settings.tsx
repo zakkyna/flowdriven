@@ -2,7 +2,9 @@ import { type ReactElement, useId } from "react";
 import { useRunnerQuery } from "../../runner/runner-context";
 import { useLanguage } from "../../shell/language";
 import { Page } from "../../ui/Page";
+import { AgentsSection } from "./AgentsSection";
 import { Appearance } from "./Appearance";
+import { LanguageSection } from "./LanguageSection";
 import styles from "./SettingsPage.module.css";
 
 export function Settings(): ReactElement {
@@ -30,9 +32,11 @@ export function Settings(): ReactElement {
           </section>
           <section className={styles.section} aria-labelledby={`${baseId}-language`}>
             <h2 id={`${baseId}-language`}>{t("settings.language")}</h2>
+            <LanguageSection />
           </section>
           <section className={styles.section} aria-labelledby={`${baseId}-agents`}>
             <h2 id={`${baseId}-agents`}>{t("settings.agents")}</h2>
+            <AgentsSection agents={agentsQuery.data ?? []} />
           </section>
           <section className={styles.section} aria-labelledby={`${baseId}-permission`}>
             <h2 id={`${baseId}-permission`}>{t("settings.permission")}</h2>

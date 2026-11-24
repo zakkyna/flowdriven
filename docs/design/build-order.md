@@ -1008,8 +1008,11 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 | j12-01 (full seven-heading order clause) | B-20.T4 | B-20.T7 | T4 renders all seven headings (later sections empty) and checks calls, Appearance, Notifications, no Background, and the later-release line; the full seven-heading document-order assertion is written in T7 once every section is mounted. |
 | j12-33 | B-20.T4 | B-20.T6 | MainAgentSection and the busy toggle are built in T6; T4 adds `failSettingsUpdate` to the fixture client and `renderApp` and mounts Settings inside ToastProvider. |
 | j31-32 | B-20.T4 | B-20.T6 | MainAgentSection is built in T6. |
+| j30-04 (first launch screen radios clause) | B-20.T5 | B-21.T2 | T5 checks Settings' Language group, English and Bahasa Indonesia order, checked state, and explanation line; the Welcome screen is built in B-21.T2. |
+| j30-33 (open chat line drawing clause) | B-20.T5 | B-17.T1 | T5 checks switching to Bahasa Indonesia with Claude Code needs_login, settings.update, window lang, Claude Code unchanged, and chat c1 keeping language en; opening c1 and drawing chat.agentSignedOut moves to B-17.T1 where Thread.tsx and Lines.tsx are built. |
+| j30-34 (chat permission-off line and button rendering clause) | B-20.T5 | B-17.T2 | T5 checks switching to Bahasa Indonesia with agentPermission off, settings.update, window lang, permission staying off, and chat.permissionOff having distinct Indonesian text; drawing chat.permissionOff with Turn on permission in a chat moves to B-17.T2 where Composer.tsx is built. |
 
-116 cases moved.
+119 cases moved.
 
 ### Tests that change
 

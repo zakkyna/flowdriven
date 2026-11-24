@@ -86,12 +86,12 @@ const decisionStatuses: Record<ApprovalState, StatusEntry> = {
 };
 
 const agentStatuses: Record<AgentState, StatusEntry> = {
-  not_installed: { icon: "circle-slash", tone: "neutral", key: "status.not_installed", muted: true },
-  installing: { icon: "ring", tone: "info", key: "status.installing" },
-  waiting_login: { icon: "clock", tone: "wait", key: "status.needs_login" },
-  needs_login: { icon: "key", tone: "wait", key: "agents.needsSignIn" },
-  ready: { icon: "check", tone: "ok", key: "status.ready" },
-  unknown: { icon: "dash", tone: "neutral", key: "status.unchecked", muted: true },
+  not_installed: { icon: "circle-slash", tone: "neutral", key: "agentState.not_installed", muted: true },
+  installing: { icon: "ring", tone: "info", key: "agentState.installing" },
+  waiting_login: { icon: "clock", tone: "wait", key: "agentState.waiting_login" },
+  needs_login: { icon: "key", tone: "wait", key: "agentState.needs_login" },
+  ready: { icon: "check", tone: "ok", key: "agentState.ready" },
+  unknown: { icon: "dash", tone: "neutral", key: "agentState.unknown", muted: true },
 };
 
 export type StatusBadgeProps =
