@@ -292,8 +292,10 @@ export function createChatHandlers({
       const at = now().toISOString();
       const language = appLanguage(store, languages);
       return store.transaction(() => {
+        const current = store.getChat(input.chatId);
+        if (!current) throw new RunnerError("not_found", "Chat not found.");
         const updated: ChatRow = {
-          ...chat,
+          ...current,
           agent: input.agent,
           model: input.model,
           agentSource: "person",

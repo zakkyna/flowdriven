@@ -107,6 +107,7 @@ export function unsafeShellLine(
       continue;
     }
     if (quote === undefined && ";&|()<>".includes(c)) {
+      if (c === "(" && started) return true;
       flush();
       let op = c;
       const next = line[i + 1];
@@ -146,26 +147,37 @@ export function unsafeShellLine(
       redirect = true;
       continue;
     }
+    if (redirect && token.startsWith("!")) return true;
     if (/[^\x20-\x7e]/.test(token) || token.startsWith("=")) return true;
     const lower = token.normalize("NFKC").toUpperCase().toLowerCase();
     const parts = lower.split(/[/=,:@]/);
+    const strippedParts = lower.replace(/^-[a-z]+/, "").split(/[/=,:@]/);
     const last = parts.at(-1) ?? "";
+    const protectedNames = [
+      ".git",
+      ".claude",
+      ".mcp.json",
+      ".claude.json",
+      ".codex",
+      "keychains",
+      "security",
+      "..",
+    ];
     if (
-      parts.some((part) =>
-        [".git", ".claude", ".mcp.json", ".claude.json", ".codex", "keychains", "security", ".."].includes(
-          part,
-        ),
-      ) ||
+      parts.some((part) => protectedNames.includes(part)) ||
+      strippedParts.some((part) => protectedNames.includes(part)) ||
       REFUSED_FLAGS.some((flag) => lower === flag || lower.startsWith(`${flag}=`)) ||
       lower === "--full-auto" ||
       /dangerously|danger-full-access|bypasspermissions/.test(lower)
     )
       return true;
     if (scope) {
-      const candidates = [token, ...token.split(/[=@:]/).slice(1)];
+      const candidates: string[] = [];
+      for (let idx = 0; idx < token.length; idx++) {
+        if (token[idx] === "/" && (idx === 0 || token[idx - 1] !== "/")) candidates.push(token.slice(idx));
+      }
       for (let candidate of candidates) {
-        if (!candidate.startsWith("/")) continue;
-        candidate = candidate.replace(/^\/System\/Volumes\/Data(?=\/)/i, "");
+        candidate = candidate.replace(/^\/+/, "/").replace(/^\/System\/Volumes\/Data(?=\/)/i, "");
         const path = resolveDeep(candidate);
         if (!path) return true;
         const folded = path.toLowerCase();
@@ -180,23 +192,59 @@ export function unsafeShellLine(
     if (last === "eval") {
       if (unsafeShellLine(tokens.slice(i + 1).join(" "), scope, depth + 1)) return true;
     }
-    if (shells.has(last)) {
-      let script: string | undefined;
+    if (last === "env") {
       for (let j = i + 1; j < tokens.length && !separators.has(tokens[j] ?? ""); j++) {
         const flag = tokens[j] ?? "";
-        if (/^-([a-z]*c[a-z]*)$/i.test(flag)) {
-          for (let k = j + 1; k < tokens.length && !separators.has(tokens[k] ?? ""); k++) {
-            const part = tokens[k] ?? "";
-            if (!part.startsWith("-")) {
-              script = part;
-              break;
-            }
+        if (flag === "--") break;
+        if (flag === "--split-string" || flag.startsWith("--split-string=")) return true;
+        if (flag.startsWith("-") && !flag.startsWith("--")) {
+          if (flag.slice(1).includes("S")) return true;
+          if (["-u", "-C", "-P", "-a"].includes(flag)) j++;
+          continue;
+        }
+        if (flag.startsWith("--")) {
+          if (["--unset", "--chdir", "--argv0"].includes(flag)) j++;
+          continue;
+        }
+        if (flag.includes("=")) continue;
+        break;
+      }
+    }
+    if (shells.has(last)) {
+      let script: string | undefined;
+      let bad = false;
+      for (let j = i + 1; j < tokens.length && !separators.has(tokens[j] ?? ""); j++) {
+        const flag = tokens[j] ?? "";
+        if (flag === "--") break;
+        if (
+          /^[-+][a-zA-Z]*[oO][a-zA-Z]*$/.test(flag) ||
+          flag === "--rcfile" ||
+          flag.startsWith("--rcfile=") ||
+          flag === "--init-file" ||
+          flag.startsWith("--init-file=")
+        ) {
+          bad = true;
+          break;
+        }
+        if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(flag)) {
+          const nextIdx = tokens[j + 1] === "--" ? j + 2 : j + 1;
+          const candidate = tokens[nextIdx];
+          if (
+            candidate === undefined ||
+            separators.has(candidate) ||
+            redirections.has(candidate) ||
+            candidate.startsWith("-") ||
+            candidate.startsWith("+")
+          ) {
+            bad = true;
+          } else {
+            script = candidate;
           }
           break;
         }
-        if (!flag.startsWith("-")) break;
+        if (!flag.startsWith("-") && !flag.startsWith("+")) break;
       }
-      if (script === undefined || unsafeShellLine(script, scope, depth + 1)) return true;
+      if (bad || script === undefined || unsafeShellLine(script, scope, depth + 1)) return true;
     }
     if (redirect) redirect = false;
   }

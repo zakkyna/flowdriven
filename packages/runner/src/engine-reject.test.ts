@@ -11,7 +11,7 @@ afterEach(() => {
   for (const store of stores.splice(0)) store.close();
 });
 const tool = "reply";
-const input = { body: "Hello" };
+const input = { to: ["sam@example.test"], body: "Hello" };
 const hold = { requirementId: "mail", tool, input, digest: digestCall(tool, input), action: "send" as const };
 function flow(steps: unknown[]) {
   const result = parseManifest({
@@ -464,7 +464,7 @@ test("TC-SR1-49 the same outside call is held again in another step or item and 
 test("TC-ENG-26 another way retries in the same step, preserves safety and marks new decisions", async () => {
   const { toDecision } = await import("./service/map-decision.ts");
   const manifest = flow([worker("reply")]);
-  const secondInput = { body: "Draft for team" };
+  const secondInput = { to: ["sam@example.test"], body: "Draft for team" };
   const secondHold = {
     requirementId: "mail",
     tool,
@@ -664,7 +664,9 @@ test("TC-ENG-26 fake claude refuses repeating the held call after another way ac
     const root = realpathSync(mkdtempSync(join(tmpdir(), `flow-aw-${mode}-`)));
     const toolName = mode === "outside" ? `${gmail.prefix}forward` : `${gmail.prefix}reply`;
     const toolInput =
-      mode === "outside" ? { to: ["x@example.test"], threadId: "t1" } : { threadId: "t1", body: "Hello" };
+      mode === "outside"
+        ? { to: ["x@example.test"], threadId: "t1" }
+        : { to: ["sam@example.test"], threadId: "t1", body: "Hello" };
     const words = `Use another approach for ${mode}.`;
     const home = makeFakeHome({
       connectors: { [gmail.name]: { url: fact.url, id: fact.id, tools: fact.tools } },

@@ -111,3 +111,89 @@ test("TC-SR1-12 generic recipient with invalid domain is blocked", () => {
     heldPayload({ to: "Sam <sam@bad domain.test>", threadId: "t" }, "mcp__gmail__forward"),
   ).toBeUndefined();
 });
+
+test("hidden recipients on send_message (draftId) and reply (no to or replyAll) return undefined and record no place", async () => {
+  expect(
+    heldPayload(
+      { draftId: "draft-1", to: ["sam@example.test"], subject: "Hi", body: "Hi" },
+      "mcp__claude_ai_Gmail__send_message",
+    ),
+  ).toBeUndefined();
+  expect(heldPayload({ draftId: "draft-1" }, "mcp__claude_ai_Gmail__send_message")).toBeUndefined();
+  expect(heldPayload({ threadId: "t-1", body: "Thanks." }, "mcp__claude_ai_Gmail__reply")).toBeUndefined();
+  expect(
+    heldPayload(
+      { threadId: "t-1", cc: ["lee@example.test"], body: "Thanks." },
+      "mcp__claude_ai_Gmail__reply",
+    ),
+  ).toBeUndefined();
+  expect(
+    heldPayload(
+      { to: ["sam@example.test"], subject: "Re: Hi", body: "Thanks.", replyAll: true },
+      "mcp__claude_ai_Gmail__reply",
+    ),
+  ).toBeUndefined();
+  expect(
+    heldPayload(
+      { to: ["sam@example.test"], subject: "Re: Hi", body: "Thanks." },
+      "mcp__claude_ai_Gmail__reply",
+    ),
+  ).toEqual({
+    kind: "email",
+    to: ["sam@example.test"],
+    subject: "Re: Hi",
+    body: "Thanks.",
+  });
+  expect(
+    heldPayload({ to: "sam@example.test", threadId: "t-1", body: "Thanks." }, "mcp__claude_ai_Gmail__reply"),
+  ).toContain("sam@example.test");
+
+  const { decide } = await import("../claude/decide.ts");
+  const sendName = "mcp__claude_ai_Gmail__send_message";
+  const replyName = "mcp__claude_ai_Gmail__reply";
+  const policy = {
+    tools: [sendName, replyName],
+    folders: [],
+    cwd: "/tmp",
+    addDirs: [],
+    schema: false,
+    sessionId: "s",
+    declaredTools: [
+      { tool: sendName, cover: "gmail.send_message" },
+      { tool: replyName, cover: "gmail.reply" },
+    ],
+    touches: [
+      {
+        touchId: "send",
+        effect: "send" as const,
+        matcher: "exact" as const,
+        fixedPlace: true,
+        place: { kind: "address" as const, value: "sam@example.test", label: "Sam" },
+        list: "asks_first" as const,
+        covers: ["gmail.send_message", "gmail.reply"],
+      },
+    ],
+  };
+  const call = (tool: string, input: Record<string, unknown>) => ({
+    hook_event_name: "PreToolUse",
+    session_id: "s",
+    tool_use_id: "id",
+    tool_name: tool,
+    tool_input: input,
+  });
+
+  for (const [tool, input] of [
+    [sendName, { draftId: "draft-1", to: ["sam@example.test"], subject: "Hi", body: "Hi" }],
+    [replyName, { threadId: "t-1", cc: ["sam@example.test"], body: "Thanks." }],
+    [replyName, { to: ["sam@example.test"], replyAll: true, body: "Thanks." }],
+  ] as const) {
+    const res = decide(policy, call(tool, input));
+    expect(res).toMatchObject({ outcome: "hold", held: { fixedPlace: false } });
+    if ("held" in res && res.held) expect("place" in res.held).toBe(false);
+  }
+
+  expect(decide(policy, call(replyName, { to: ["sam@example.test"], body: "Thanks." }))).toMatchObject({
+    outcome: "hold",
+    held: { place: { kind: "address", value: "sam@example.test" } },
+  });
+});

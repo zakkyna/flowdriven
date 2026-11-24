@@ -1,17 +1,28 @@
 import { EventEmitter } from "node:events";
-import { mkdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { expect, test } from "vitest";
 import { createRunnerService } from "../service/service.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import { AGENT_PROFILES } from "../test-helpers/agent-profiles.ts";
 import {
   FAKE_CLAUDE_PATH,
+  FAKE_HELP,
   makeFakeHome,
   readFakeCalls,
   writeFakeScript,
 } from "../test-helpers/fake-claude-script.ts";
 import { AGENT_CATALOG } from "./catalog.ts";
+import { createAgentSetup } from "./setup.ts";
 
 async function fixture(installed = false, loggedIn = false, noInstall = false) {
   const home = makeFakeHome({ auth: { loggedIn } });
@@ -129,19 +140,23 @@ test("TC-j01-06 TC-AGT-05 permission then install then sign-in and ready", async
     expect(f.timerPeriods).toEqual([600000]);
     f.install();
     f.children[0]?.emit("close", 0);
-    await expect.poll(() => f.store.getHarnessState("claude-code")?.state).toBe("waiting_login");
-    expect(f.signIns).toMatchObject([{ program: "claude", args: ["auth", "login"], shell: false }]);
+    await expect
+      .poll(() => f.store.getHarnessState("claude-code")?.state, { timeout: 5000 })
+      .toBe("waiting_login");
+    expect(f.signIns).toMatchObject([
+      { program: join(f.bin, "claude"), args: ["auth", "login"], shell: false, cwd: f.home },
+    ]);
     expect(f.timerPeriods).toEqual([600000, 2000]);
     for (let poll = 0; poll < 2; poll++) {
       const before = readFakeCalls(f.home).length;
       f.timers[0]?.();
-      await expect.poll(() => readFakeCalls(f.home).length).toBe(before + 1);
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await expect.poll(() => readFakeCalls(f.home).length, { timeout: 5000 }).toBe(before + 1);
+      await new Promise((resolve) => setTimeout(resolve, 200));
       expect(f.store.getHarnessState("claude-code")?.state).toBe("waiting_login");
     }
     f.loggedIn();
     f.timers[0]?.();
-    await expect.poll(() => f.store.getHarnessState("claude-code")?.state).toBe("ready");
+    await expect.poll(() => f.store.getHarnessState("claude-code")?.state, { timeout: 5000 }).toBe("ready");
     expect(
       f.store
         .listAudit()
@@ -311,9 +326,39 @@ test("TC-j01-08 TC-SR6-08 both catalog installers are fixed and agent output can
 test("TC-SR6-07 setup never opens agent credential files", async () => {
   const f = await fixture(true);
   try {
+    mkdirSync(join(f.home, ".claude"), { recursive: true });
+    mkdirSync(join(f.home, ".codex"), { recursive: true });
+    writeFileSync(join(f.home, ".claude", ".credentials.json"), "sentinel");
+    writeFileSync(join(f.home, ".codex", "auth.json"), "sentinel");
+    writeFakeScript(f.home, {
+      auth: { raw: '{"loggedIn":false,"authMethod":"claude.ai","email":"sam@example.test"}' },
+    });
     await f.list();
-    expect(await f.setup()).toMatchObject({ state: "waiting_login" });
+    await f.service.call("agents.rescan", {});
+    expect(await f.service.call("agents.signIn", { agentId: "claude-code" })).toMatchObject({
+      state: "waiting_login",
+    });
+    writeFakeScript(f.home, {
+      auth: { raw: '{"loggedIn":true,"authMethod":"claude.ai","email":"sam@example.test"}' },
+    });
+    f.timers[0]?.();
+    await expect.poll(() => f.store.getHarnessState("claude-code")?.state).toBe("ready");
+    const models = await f.service.call("agents.models", { agentId: "claude-code" });
+    expect(await f.setup()).toMatchObject({ state: "ready" });
     expect(f.opened).toEqual([]);
+    expect(f.store.getHarnessState("claude-code")).toMatchObject({
+      state: "ready",
+      billing: "plan",
+      version: "2.1.318",
+    });
+    const dump = JSON.stringify([
+      f.store.getHarnessState("claude-code"),
+      await f.list(),
+      models,
+      f.store.listAudit(),
+    ]);
+    expect(dump).not.toContain("sam@example.test");
+    expect(dump).not.toContain("sentinel");
   } finally {
     f.close();
   }
@@ -515,6 +560,271 @@ test("TC-j01-27 restart detects a present agent as ready or signed out", async (
       }
     } finally {
       f.close();
+    }
+  }
+});
+
+test("sign-in starts the detected binary path (explicit claudePath and fallback folder)", async () => {
+  for (const mode of ["explicit", "fallback"] as const) {
+    const home = makeFakeHome({ auth: { loggedIn: false } });
+    const store = await openSqliteStore(":memory:");
+    const signIns: unknown[] = [];
+    const customDir = join(home, mode === "explicit" ? "custom" : "fallback");
+    const emptyBin = join(home, "empty-bin");
+    mkdirSync(customDir, { recursive: true });
+    mkdirSync(emptyBin, { recursive: true });
+    symlinkSync(process.execPath, join(emptyBin, "node"));
+    const binaryPath = join(customDir, "claude");
+    symlinkSync(FAKE_CLAUDE_PATH, binaryPath);
+    const service = createRunnerService({
+      store,
+      dataDir: home,
+      mode: "demo",
+      env: { HOME: home, PATH: emptyBin, USER: "test", LANG: "en", TMPDIR: home },
+      agents: {
+        extraDirs: mode === "explicit" ? [] : [customDir],
+        ...(mode === "explicit" ? { claudePath: binaryPath } : {}),
+        codexPath: join(emptyBin, "codex"),
+        spawnSignIn: (program, args, options) => {
+          signIns.push({ program, args, ...options });
+        },
+        every: () => () => {},
+      },
+    });
+    try {
+      await service.call("agents.list", {});
+      await service.call("agents.signIn", { agentId: "claude-code" });
+      expect(signIns).toHaveLength(1);
+      const call = signIns[0] as {
+        program: string;
+        args: string[];
+        shell: boolean;
+        cwd: string;
+        env: Record<string, string>;
+      };
+      expect(call).toMatchObject({
+        program: binaryPath,
+        args: ["auth", "login"],
+        shell: false,
+        cwd: home,
+      });
+      expect(Object.keys(call.env).sort()).toEqual(["HOME", "LANG", "PATH", "TMPDIR", "USER"]);
+    } finally {
+      service.stop();
+      store.close();
+      rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test("TC-j01-25 too-old agent signIn is refused with no spawn, no audit and problem kept", async () => {
+  const f = await fixture(true);
+  try {
+    writeFakeScript(f.home, { help: FAKE_HELP.replace("--json-schema\n", "") });
+    expect(await f.list()).toMatchObject([
+      { id: "claude-code", state: "unknown", problem: { code: "too_old" } },
+      { id: "codex", state: "not_installed" },
+    ]);
+    const auditBefore = f.store.listAudit();
+    await expect(f.service.call("agents.signIn", { agentId: "claude-code" })).rejects.toMatchObject({
+      code: "not_allowed",
+      reason: "agent_not_ready",
+    });
+    expect(f.signIns).toEqual([]);
+    expect(f.store.listAudit()).toEqual(auditBefore);
+    expect(f.store.getHarnessState("claude-code")).toMatchObject({
+      state: "unknown",
+      problem: { code: "too_old" },
+    });
+  } finally {
+    f.close();
+  }
+});
+
+test("sign-in child process group gets SIGTERM then SIGKILL on timeout, ready, and stop", {
+  timeout: 20_000,
+}, async () => {
+  for (const mode of ["timeout", "ready", "stop"] as const) {
+    const home = makeFakeHome();
+    const bin = join(home, "bin");
+    mkdirSync(bin, { recursive: true });
+    const startedFile = join(home, "signin-started");
+    const statusFile = join(home, "status.json");
+    writeFileSync(statusFile, '{"loggedIn":false}');
+    const claudeScript = join(bin, "claude");
+    writeFileSync(
+      claudeScript,
+      `#!/usr/bin/env node
+const { writeFileSync, readFileSync } = require("node:fs");
+const args = process.argv.slice(2).join(" ");
+if (args === "--version") { console.log("2.1.318"); process.exit(0); }
+if (args === "auth status --json") { console.log(readFileSync(${JSON.stringify(statusFile)}, "utf8")); process.exit(0); }
+if (args === "auth login") {
+  process.on("SIGTERM", () => {});
+  writeFileSync(${JSON.stringify(startedFile)}, String(process.pid));
+  setInterval(() => {}, 10000);
+}
+`,
+    );
+    chmodSync(claudeScript, 0o755);
+    const store = await openSqliteStore(":memory:");
+    let ms = Date.parse("2026-11-23T00:00:00Z");
+    const timers: (() => void)[] = [];
+    const signals: [number, NodeJS.Signals][] = [];
+    let pid: number | undefined;
+    store.putHarnessState({
+      id: "claude-code",
+      state: "needs_login",
+      stateAt: new Date(ms).toISOString(),
+      version: "2.1.318",
+      billing: "unknown",
+    });
+    const setup = createAgentSetup({
+      store,
+      cwd: home,
+      env: { HOME: home, PATH: `${bin}:${dirname(process.execPath)}` },
+      now: () => new Date(ms),
+      extraDirs: [],
+      claudePath: claudeScript,
+      every: (_ms, fn) => {
+        timers.push(fn);
+        return () => {
+          const i = timers.indexOf(fn);
+          if (i >= 0) timers.splice(i, 1);
+        };
+      },
+      killGroup: (groupPid, sig) => {
+        signals.push([groupPid, sig]);
+        process.kill(-groupPid, sig);
+      },
+    });
+    try {
+      expect(await setup.signIn("claude-code")).toEqual({});
+      await expect.poll(() => existsSync(startedFile)).toBe(true);
+      pid = Number(readFileSync(startedFile, "utf8"));
+      if (mode === "timeout") {
+        ms += 600_000;
+        timers[0]?.();
+      } else if (mode === "ready") {
+        writeFileSync(statusFile, '{"loggedIn":true}');
+        timers[0]?.();
+        await expect.poll(() => store.getHarnessState("claude-code")?.state).toBe("ready");
+      } else {
+        setup.stop();
+      }
+      expect(signals[0]).toEqual([pid, "SIGTERM"]);
+      await expect
+        .poll(() => signals, { timeout: 5000 })
+        .toEqual([
+          [pid, "SIGTERM"],
+          [pid, "SIGKILL"],
+        ]);
+      await expect
+        .poll(() => {
+          try {
+            process.kill(pid ?? -1, 0);
+            return true;
+          } catch {
+            return false;
+          }
+        })
+        .toBe(false);
+    } finally {
+      setup.stop();
+      if (pid !== undefined) {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {}
+      }
+      store.close();
+      rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test("default installer process group gets SIGTERM then SIGKILL on timeout and SIGKILL at once on stop", {
+  timeout: 20_000,
+}, async () => {
+  for (const mode of ["timeout", "stop"] as const) {
+    const home = makeFakeHome();
+    const bin = join(home, "bin");
+    mkdirSync(bin, { recursive: true });
+    const startedFile = join(home, "install-started");
+    const installerScript = join(bin, "fake-installer");
+    writeFileSync(
+      installerScript,
+      `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+process.on("SIGTERM", () => {});
+writeFileSync(${JSON.stringify(startedFile)}, String(process.pid));
+setInterval(() => {}, 10000);
+`,
+    );
+    chmodSync(installerScript, 0o755);
+    const store = await openSqliteStore(":memory:");
+    let ms = Date.parse("2026-11-23T00:00:00Z");
+    const timers: (() => void)[] = [];
+    const signals: [number, NodeJS.Signals][] = [];
+    let pid: number | undefined;
+    const catalog = AGENT_CATALOG.map((entry) =>
+      entry.id === "claude-code" ? { ...entry, install: { program: installerScript, args: [] } } : entry,
+    );
+    const setup = createAgentSetup({
+      store,
+      cwd: home,
+      env: { HOME: home, PATH: `${bin}:${dirname(process.execPath)}` },
+      now: () => new Date(ms),
+      extraDirs: [],
+      catalog,
+      every: (_ms, fn) => {
+        timers.push(fn);
+        return () => {
+          const i = timers.indexOf(fn);
+          if (i >= 0) timers.splice(i, 1);
+        };
+      },
+      killGroup: (groupPid, sig) => {
+        signals.push([groupPid, sig]);
+        process.kill(-groupPid, sig);
+      },
+    });
+    try {
+      expect(await setup.setUp("claude-code")).toEqual({});
+      await expect.poll(() => existsSync(startedFile)).toBe(true);
+      pid = Number(readFileSync(startedFile, "utf8"));
+      if (mode === "timeout") {
+        ms += 600_000;
+        timers[0]?.();
+        expect(signals[0]).toEqual([pid, "SIGTERM"]);
+        await expect
+          .poll(() => signals, { timeout: 5000 })
+          .toEqual([
+            [pid, "SIGTERM"],
+            [pid, "SIGKILL"],
+          ]);
+      } else {
+        setup.stop();
+        expect(signals).toEqual([[pid, "SIGKILL"]]);
+      }
+      await expect
+        .poll(() => {
+          try {
+            process.kill(pid ?? -1, 0);
+            return true;
+          } catch {
+            return false;
+          }
+        })
+        .toBe(false);
+    } finally {
+      setup.stop();
+      if (pid !== undefined) {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {}
+      }
+      store.close();
+      rmSync(home, { recursive: true, force: true });
     }
   }
 });

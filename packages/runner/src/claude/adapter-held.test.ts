@@ -405,7 +405,11 @@ test(
 test("TC-SR1-26 a held reply carries effect and fixed place through the fake hook", timeout, async () => {
   const t = await setup(
     [
-      tool("tu-1", "reply", { threadId: "thread-sam", body: "Thanks, I will send the invoice on Monday." }),
+      tool("tu-1", "reply", {
+        to: ["sam@example.test"],
+        threadId: "thread-sam",
+        body: "Thanks, I will send the invoice on Monday.",
+      }),
       done,
     ],
     true,

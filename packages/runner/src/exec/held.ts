@@ -94,7 +94,20 @@ function addresses(value: Value | undefined): string[] | undefined {
   return result;
 }
 
+export function hasHiddenRecipients(tool: string | undefined, input: unknown): boolean {
+  if (!tool || !input || typeof input !== "object" || Array.isArray(input)) return false;
+  const record = input as Record<string, Value>;
+  if (/(?:^|__|\.)send_message$/.test(tool)) return Object.hasOwn(record, "draftId");
+  if (/(?:^|__|\.)reply$/.test(tool)) {
+    if (record.replyAll === true) return true;
+    const to = addresses(record.to);
+    return !to || to.length === 0;
+  }
+  return false;
+}
+
 export function heldPayload(input: Value, tool?: string): Value | undefined {
+  if (hasHiddenRecipients(tool, input)) return undefined;
   if (
     tool &&
     /(?:^|__)(?:reply|send_message)$/.test(tool) &&

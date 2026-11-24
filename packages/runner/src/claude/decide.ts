@@ -2,7 +2,7 @@ import { isAbsolute } from "node:path";
 import { commandLineAllowed, parseCommandLine, type Value } from "@flowdriven/sdk";
 import { digestCall } from "../connectors/grants.ts";
 import { throwsMailAway } from "../connectors/label-rule.ts";
-import { asciiAddress } from "../exec/held.ts";
+import { asciiAddress, hasHiddenRecipients } from "../exec/held.ts";
 import type { HeldCall } from "../harness.ts";
 import { matchGrant } from "../rules/decisions.ts";
 import { EFFECT_RANK, EFFECTS, type Effect, effectOf } from "../rules/effects.ts";
@@ -372,6 +372,7 @@ export function decide(
   let effect: Effect;
   let catalogPlace: NonNullable<import("./policy.ts").CompiledTouch["place"]> | undefined;
   let hiddenAddress = false;
+  const hiddenRecipients = hasHiddenRecipients(name, input);
   if (name === "Read" || name === "Glob" || name === "Grep") effect = "read";
   else if (name === "Write" || name === "Edit") effect = "local_write";
   else if (name === "Bash") {
@@ -408,7 +409,7 @@ export function decide(
         };
       }
     }
-    if (entry.place?.kind === "address") {
+    if (entry.place?.kind === "address" && !hiddenRecipients) {
       const addresses = entry.place.fromInput.flatMap((key) => {
         const value = input[key];
         return typeof value === "string"
@@ -496,7 +497,7 @@ export function decide(
   });
   if (grant) return allowed("grant", undefined, grant);
   if (effect === "read" && !outsideFlow) return allowed("read");
-  const place = external ? catalogPlace : touch?.place;
+  const place = hiddenRecipients ? undefined : external ? catalogPlace : touch?.place;
   const findRule = () => {
     if (
       touch?.fixedPlace &&

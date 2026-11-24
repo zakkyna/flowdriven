@@ -283,3 +283,57 @@ test("TC-SR1-39 rejects non-ASCII shell whitespace inside a word", () => {
   const command = `echo${String.fromCodePoint(0xa0)}safe`;
   expect(decide({ ...policy, touches: [] }, call(command))).toMatchObject({ outcome: "refuse" });
 });
+
+test("TC-SR1-39 refuses protected folders after delimiters or zsh clobber and nested script bypasses", () => {
+  const data = "/tmp/flowdriven-data";
+  const p = {
+    ...policy,
+    touches: [],
+    projectRoot: "/tmp/project",
+    protectedRoots: [`${data}/control`, data],
+  };
+  for (const command of [
+    `printf allow >!${data}/control/a/hook.sh`,
+    `printf allow >>!${data}/control/a/res/1`,
+    `printf allow &>!${data}/control/a/res/1`,
+    `sort -o${data}/store.db junk.txt`,
+    `tool --list=a,${data}/store.db`,
+    `tool +${data}/store.db`,
+    "echo x >!out.txt",
+    "sort -o.git/hooks/x junk.txt",
+    "sh -c +x 'security find-generic-password -w -s x'",
+    "bash -c -o posix 'cat /Users/x/.codex/auth.json'",
+    "bash -o posix -c 'echo ok'",
+    "zsh -c --rcfile x 'security find-generic-password -w'",
+    "cat README.md(e:'security find-generic-password -w >o':)",
+    "env -S 'security find-generic-password -w'",
+    "env -iS 'security find-generic-password -w'",
+    "env --split-string='security find-generic-password -w'",
+    `tool %${data}/store.db`,
+    "bash -oc posix 'echo ok'",
+    "bash +o posix -c 'echo ok'",
+    "bash --init-file x -c 'echo ok'",
+    "bash -c",
+    "bash -c ; echo ok",
+  ])
+    expect(decide(p, call(command)), command).toMatchObject({
+      outcome: "refuse",
+      reason: COMMAND_DENY.badInput,
+    });
+  expect(decide(p, call("bash -c -- 'echo ok'"))).toMatchObject({
+    outcome: "hold",
+    held: {
+      outsideFlow: true,
+      tool: "Bash",
+      input: { command: "bash -c -- 'echo ok'", description: "test" },
+    },
+  });
+  expect(decide(p, call("sort -o/tmp/project/out.txt in.txt"))).toMatchObject({
+    outcome: "hold",
+    held: {
+      outsideFlow: true,
+      tool: "Bash",
+      input: { command: "sort -o/tmp/project/out.txt in.txt", description: "test" },
+    },
+  });
+});

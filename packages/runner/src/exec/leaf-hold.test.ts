@@ -480,15 +480,24 @@ test("TC-SR1-23 a reply retains bcc, attachments and unrecognized input", async 
   expect(approval(d).payload).toEqual(JSON.stringify(extra, null, 2));
 });
 
-test("TC-SR5-15 a reply without a display recipient keeps the entire input", async () => {
+test("TC-SR5-15 a reply without a display recipient blocks with hold.tooLarge and one with to keeps the entire input", async () => {
+  // Rewritten for B-07.T9: reply with no `to` has hidden recipients so heldPayload returns undefined.
   const input = { threadId: "thread-sam", body: "Thanks." };
   const c = await ready({
     steps: {
       send: { hold: { ...hold, tool: "mcp__claude_ai_Gmail__reply", action: "send", effect: "send", input } },
     },
   });
-  await c.start();
-  expect(approval(c).payload).toBe(JSON.stringify(input, null, 2));
+  const run = await c.start();
+  expect(run).toMatchObject({
+    state: "blocked",
+    blockedReason: "FlowDriven could not show the whole text, so it did not ask.",
+  });
+  expect(c.store.listApprovals()).toEqual([]);
+  expect(c.store.getStep(run.id, "send")).toMatchObject({
+    state: "failed",
+    noteLine: { key: "hold.tooLarge" },
+  });
   const other = { to: "sam@example.test", body: "Thanks." };
   const d = await ready({
     steps: {

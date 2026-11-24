@@ -1,12 +1,12 @@
-import { mkdirSync, rmSync, symlinkSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { ChatView } from "@flowdriven/contracts";
 import { expect, test } from "vitest";
 import { AGENT_CATALOG } from "../agents/catalog.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import { AGENT_PROFILES } from "../test-helpers/agent-profiles.ts";
 import { seedSampleFlow } from "../test-helpers/builders.ts";
-import { FAKE_CLAUDE_PATH, makeFakeHome } from "../test-helpers/fake-claude-script.ts";
+import { FAKE_CLAUDE_PATH, FAKE_HELP, makeFakeHome } from "../test-helpers/fake-claude-script.ts";
 import { FAKE_CODEX_PATH, writeFakeCodexScript } from "../test-helpers/fake-codex-script.ts";
 import { createRunnerService } from "./service.ts";
 
@@ -315,5 +315,72 @@ test("TC-j31-35 run agent, model and chat_agent_changed audit are recorded", asy
     );
   } finally {
     f.close();
+  }
+});
+
+test("chats.delete during a held first scan makes setAgent answer not_found and leaves no row, note or message", async () => {
+  const home = makeFakeHome();
+  const bin = join(home, "bin");
+  mkdirSync(bin);
+  const startedFile = join(home, "scan-started");
+  const releaseFile = join(home, "scan-release");
+  const claudeScript = join(bin, "claude");
+  writeFileSync(
+    claudeScript,
+    `#!/usr/bin/env node
+const { existsSync, writeFileSync } = require("node:fs");
+const args = process.argv.slice(2).join(" ");
+if (args === "--version") {
+  writeFileSync(${JSON.stringify(startedFile)}, "1");
+  const timer = setInterval(() => {
+    if (existsSync(${JSON.stringify(releaseFile)})) {
+      clearInterval(timer);
+      console.log("2.1.318");
+      process.exit(0);
+    }
+  }, 10);
+} else if (args === "--help") {
+  console.log(${JSON.stringify(FAKE_HELP)});
+} else if (args === "auth status --json") {
+  console.log('{"loggedIn":true,"authMethod":"subscription"}');
+}
+`,
+  );
+  chmodSync(claudeScript, 0o755);
+  const store = await openSqliteStore(":memory:");
+  let n = 0;
+  let ms = Date.parse("2026-11-23T00:00:00.000Z");
+  const service = createRunnerService({
+    store,
+    dataDir: home,
+    mode: "demo",
+    env: { HOME: home, PATH: `${bin}:${dirname(process.execPath)}` },
+    now: () => new Date(++ms),
+    agents: {
+      extraDirs: [],
+      claudePath: claudeScript,
+      codexPath: join(bin, "codex"),
+    },
+    newId: (prefix) => `${prefix}-${String(++n).padStart(12, "0")}`,
+  });
+  try {
+    const created = (await service.call("chats.create", {})) as { chatId: string };
+    const pending = service.call("chats.setAgent", {
+      chatId: created.chatId,
+      agent: "claude-code",
+      model: "opus-5.5",
+    });
+    await expect.poll(() => existsSync(startedFile)).toBe(true);
+    await service.call("chats.delete", { chatId: created.chatId });
+    writeFileSync(releaseFile, "go");
+    await expect(pending).rejects.toMatchObject({ code: "not_found" });
+    expect(store.getChat(created.chatId)).toBeUndefined();
+    expect(store.listMessages(created.chatId)).toEqual([]);
+    expect(store.listAudit().filter((row) => row.kind === "chat_agent_changed")).toEqual([]);
+  } finally {
+    if (!existsSync(releaseFile)) writeFileSync(releaseFile, "go");
+    service.stop();
+    store.close();
+    rmSync(home, { recursive: true, force: true });
   }
 });

@@ -10,16 +10,22 @@ type Child = {
   stderr: { on(event: "data", listener: (data: Buffer) => void): unknown } | null;
   on(event: "close", listener: (code: number | null) => void): unknown;
   on(event: "error", listener: () => void): unknown;
-  kill(): boolean;
+  kill(signal?: NodeJS.Signals): boolean;
 };
-type SpawnOptions = { shell: false; env: Record<string, string> };
+type SignInChild = {
+  pid?: number;
+  kill?: (signal?: NodeJS.Signals) => unknown;
+  stop?: () => void;
+};
+type SpawnOptions = { shell: false; env: Record<string, string>; cwd: string };
 export type SetupOptions = RegistryOptions & {
   spawnInstall?: (program: string, args: string[], options: SpawnOptions) => Child;
-  spawnSignIn?: (program: string, args: string[], options: SpawnOptions) => unknown;
+  spawnSignIn?: (program: string, args: string[], options: SpawnOptions) => SignInChild | undefined | void;
+  killGroup?: (pid: number, signal: NodeJS.Signals) => void;
 };
 export function createAgentSetup(o: SetupOptions) {
   const catalog = o.catalog ?? AGENT_CATALOG;
-  const active = new Map<string, { cancel?: () => void; child?: Child }>();
+  const active = new Map<string, { cancel?: () => void; child?: Child; signIn?: SignInChild }>();
   const every =
     o.every ??
     ((ms: number, fn: () => void) => {
@@ -27,15 +33,101 @@ export function createAgentSetup(o: SetupOptions) {
       return () => clearInterval(timer);
     });
   const env = childEnv(o.env);
+  const killGroup = o.killGroup ?? ((pid: number, signal: NodeJS.Signals) => process.kill(-pid, signal));
+  const signalGroup = (pid: number | undefined, signal: NodeJS.Signals) => {
+    if (pid === undefined) return;
+    try {
+      killGroup(pid, signal);
+    } catch {
+      /* The process group could not be signalled. */
+    }
+  };
+  const stopSignIn = (child: SignInChild | undefined) => {
+    if (!child) return;
+    if (child.stop) {
+      child.stop();
+      return;
+    }
+    if (child.kill) {
+      try {
+        child.kill("SIGTERM");
+      } catch {}
+      const timer = setTimeout(() => {
+        try {
+          child.kill?.("SIGKILL");
+        } catch {}
+      }, 1500);
+      timer.unref?.();
+      return;
+    }
+    if (child.pid !== undefined) {
+      const pid = child.pid;
+      signalGroup(pid, "SIGTERM");
+      const timer = setTimeout(() => signalGroup(pid, "SIGKILL"), 1500);
+      timer.unref?.();
+    }
+  };
   const spawnInstall =
     o.spawnInstall ??
-    ((program, args, opts) => spawn(program, args, { ...opts, stdio: ["ignore", "ignore", "pipe"] }));
+    ((program, args, opts) => {
+      const child = spawn(program, args, { ...opts, detached: true, stdio: ["ignore", "ignore", "pipe"] });
+      let closed = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = () => {
+        closed = true;
+        clearTimeout(timer);
+      };
+      child.on("error", done);
+      child.on("close", done);
+      return {
+        stderr: child.stderr,
+        on: child.on.bind(child),
+        kill(signal?: NodeJS.Signals) {
+          if (closed) return false;
+          if (signal === "SIGKILL") {
+            clearTimeout(timer);
+            signalGroup(child.pid, "SIGKILL");
+            return true;
+          }
+          signalGroup(child.pid, signal ?? "SIGTERM");
+          if (timer === undefined) {
+            timer = setTimeout(() => {
+              if (!closed) signalGroup(child.pid, "SIGKILL");
+            }, 1000);
+            timer.unref?.();
+          }
+          return true;
+        },
+      };
+    });
   const spawnSignIn =
     o.spawnSignIn ??
     ((program, args, opts) => {
-      const child = spawn(program, args, { ...opts, stdio: "ignore" });
-      child.on("error", () => {});
+      const child = spawn(program, args, { ...opts, detached: true, stdio: "ignore" });
+      let closed = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = () => {
+        closed = true;
+        clearTimeout(timer);
+      };
+      child.on("error", done);
+      child.on("close", done);
       child.unref();
+      return {
+        get pid() {
+          return child.pid;
+        },
+        stop() {
+          if (closed) return;
+          signalGroup(child.pid, "SIGTERM");
+          if (timer === undefined) {
+            timer = setTimeout(() => {
+              if (!closed) signalGroup(child.pid, "SIGKILL");
+            }, 1500);
+            timer.unref?.();
+          }
+        },
+      };
     });
   const detection = (entry: CatalogEntry): DetectionOptions => ({
     env: o.env,
@@ -64,8 +156,10 @@ export function createAgentSetup(o: SetupOptions) {
     o.markChanged?.();
   };
   const end = (id: string) => {
-    active.get(id)?.cancel?.();
+    const current = active.get(id);
     active.delete(id);
+    current?.cancel?.();
+    stopSignIn(current?.signIn);
   };
   function startSignIn(entry: CatalogEntry, path: string, version?: string) {
     const id = entry.id;
@@ -79,7 +173,12 @@ export function createAgentSetup(o: SetupOptions) {
     });
     audit(id, "waiting_login");
     try {
-      spawnSignIn(entry.signIn.program, entry.signIn.args, { shell: false, env });
+      const signInChild = spawnSignIn(path, entry.signIn.args, { shell: false, env, cwd: o.cwd });
+      if (signInChild) {
+        const currentAfterSpawn = active.get(id);
+        if (currentAfterSpawn) currentAfterSpawn.signIn = signInChild;
+        else stopSignIn(signInChild);
+      }
     } catch {
       /* Status remains authoritative. */
     }
@@ -159,6 +258,7 @@ export function createAgentSetup(o: SetupOptions) {
       const row = o.store.getHarnessState(id);
       if (active.has(id) || row?.state === "installing" || row?.state === "waiting_login")
         return { error: "setup_running" as const };
+      if (row?.state === "unknown") return { error: "agent_not_ready" as const };
       const path = find(entry, detection(entry));
       if (!path || row?.state === "not_installed") return { error: "agent_not_installed" as const };
       active.set(id, {});
@@ -210,7 +310,7 @@ export function createAgentSetup(o: SetupOptions) {
       const command = entry.install;
       if (!command) return {};
       try {
-        const child = spawnInstall(command.program, command.args, { shell: false, env });
+        const child = spawnInstall(command.program, command.args, { shell: false, env, cwd: o.cwd });
         const current = active.get(id);
         if (current) current.child = child;
         let stderr = "";
@@ -220,12 +320,16 @@ export function createAgentSetup(o: SetupOptions) {
         child.on("error", () => fail(id, stderr));
         child.on("close", (code) => {
           if (!active.has(id)) return;
-          active.get(id)?.cancel?.();
+          const entryActive = active.get(id);
+          if (entryActive) {
+            entryActive.cancel?.();
+            entryActive.child = undefined;
+          }
           if (code === 0) void afterInstall(entry).catch(() => fail(id, stderr));
           else fail(id, stderr);
         });
         const cancel = every(600000, () => {
-          child.kill();
+          child.kill("SIGTERM");
           fail(id, stderr);
         });
         if (current) current.cancel = cancel;
@@ -238,7 +342,8 @@ export function createAgentSetup(o: SetupOptions) {
       for (const [id, current] of active) {
         active.delete(id);
         current.cancel?.();
-        current.child?.kill();
+        current.child?.kill("SIGKILL");
+        stopSignIn(current.signIn);
       }
     },
   };

@@ -123,7 +123,13 @@ test("TC-SR5-11 injected email cannot forward, send or delete", { timeout: 60000
   for (const first of ["reply", "trash_thread"]) {
     const t = await play([
       search,
-      action(first, first, { threadId: "thread-sam", body: "invoice" }),
+      action(
+        first,
+        first,
+        first === "reply"
+          ? { to: ["sam@example.test"], threadId: "thread-sam", body: "invoice" }
+          : { threadId: "thread-sam", body: "invoice" },
+      ),
       action("later", first === "reply" ? "trash_thread" : "reply"),
       { do: "result" },
     ]);

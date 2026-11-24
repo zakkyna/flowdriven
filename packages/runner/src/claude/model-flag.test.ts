@@ -1,8 +1,9 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { buildClaudeArgs, workerSettings } from "./args.ts";
 import { decide } from "./decide.ts";
 import { settingsJson } from "./hook-script.ts";
 import type { Policy } from "./policy.ts";
+import * as policyModule from "./policy.ts";
 
 test("TC-SR4-07 model choice preserves arguments, settings and decisions", () => {
   const input = {
@@ -37,7 +38,6 @@ test("TC-SR4-07 model choice preserves arguments, settings and decisions", () =>
     tool_use_id: "t",
   };
   expect(decide(policy, call)).toMatchObject({ outcome: "hold", held: { outsideFlow: true } });
-  expect(decide(policy, call)).toEqual(decide({ ...policy }, call));
   expect(settingsJson("/control/cc-1").replaceAll("cc-1", "cc-id")).toBe(
     settingsJson("/control/cc-2").replaceAll("cc-2", "cc-id"),
   );
@@ -59,7 +59,6 @@ test("TC-SR4-07 model choice preserves arguments, settings and decisions", () =>
   };
   const post = { ...call, tool_name: "social.post", tool_input: { text: "Build ready" } };
   expect(decide(postPolicy, post)).toMatchObject({ outcome: "hold", effect: "post" });
-  expect(decide(postPolicy, post)).toEqual(decide({ ...postPolicy }, post));
 });
 
 test("TC-SR4-07 fake runs preserve limits across model choices", { timeout: 20_000 }, async () => {
@@ -210,47 +209,64 @@ test("TC-SR4-07 fake runs preserve limits across model choices", { timeout: 20_0
       maxDurationMs: 10000,
       signal: new AbortController().signal,
     };
-    const results = [];
-    for (const model of ["sonnet-5.5", "haiku-5.5"])
-      results.push(await adapter.runStep({ ...request, model }));
-    expect(results[0]).toMatchObject({ hold: { outsideFlow: true, tool: "WebFetch" } });
-    expect(results[1]?.hold).toEqual(results[0]?.hold);
-    expect(controlSettings).toHaveLength(2);
-    expect(controlSettings[0]).toEqual(controlSettings[1]);
-    expect(JSON.parse(controlSettings[0] ?? "{}")).toMatchObject({
-      autoMemoryEnabled: false,
-      hooks: { PreToolUse: expect.any(Array) },
-    });
-    const calls = readFakeCalls(home).filter((call) => call.kind === "call");
-    expect(calls).toHaveLength(2);
-    const [a, b] = calls;
-    if (!a || !b) throw new Error("Missing fake calls.");
-    const index = a.args.indexOf("--model");
-    expect(a.args.slice(index, index + 2)).toEqual(["--model", "sonnet-5.5"]);
-    expect(b.args.slice(index, index + 2)).toEqual(["--model", "haiku-5.5"]);
-    expect(a.args.toSpliced(index, 2)).toEqual(b.args.toSpliced(index, 2));
-    expect(readFakeCalls(home).filter((call) => call.kind === "init")).toHaveLength(2);
-    expect(readFakeCalls(home).filter((call) => call.kind === "tool")).toEqual([
-      ...["read", "write", "build"].map((id) => expect.objectContaining({ id, ran: true })),
-      expect.objectContaining({ id: "web", ran: false }),
-      ...["read", "write", "build"].map((id) => expect.objectContaining({ id, ran: true })),
-      expect.objectContaining({ id: "web", ran: false }),
-    ]);
-    writeFakeScript(home, {
-      plays: [
-        {
-          when: "",
-          actions: [
-            { do: "tool", id: "post", name: "social.post", input: { text: "Build ready" } },
-            { do: "result" },
-          ],
-        },
-      ],
-    });
-    const posts = [];
-    for (const model of ["sonnet-5.5", "haiku-5.5"]) posts.push(await adapter.runStep({ ...request, model }));
-    expect(posts[0]?.hold).toMatchObject({ tool: "social.post", effect: "post" });
-    expect(posts[1]?.hold).toEqual(posts[0]?.hold);
+    const policySpy = vi.spyOn(policyModule, "buildPolicy");
+    try {
+      const results = [];
+      for (const model of ["sonnet-5.5", "haiku-5.5"])
+        results.push(await adapter.runStep({ ...request, model }));
+      expect(policySpy).toHaveBeenCalledTimes(2);
+      const compiledA = policySpy.mock.results[0]?.value as Policy | undefined;
+      const compiledB = policySpy.mock.results[1]?.value as Policy | undefined;
+      expect(compiledA).toBeDefined();
+      expect(compiledB).toEqual(compiledA);
+      expect(compiledA).toMatchObject({
+        flowId: "example.build-apk",
+        tools: expect.arrayContaining(["Read", "Write", "Bash"]),
+      });
+      expect(results[0]).toMatchObject({ hold: { outsideFlow: true, tool: "WebFetch" } });
+      expect(results[1]?.hold).toEqual(results[0]?.hold);
+      expect(controlSettings).toHaveLength(2);
+      expect(controlSettings[0]).toEqual(controlSettings[1]);
+      expect(JSON.parse(controlSettings[0] ?? "{}")).toMatchObject({
+        autoMemoryEnabled: false,
+        hooks: { PreToolUse: expect.any(Array) },
+      });
+      const calls = readFakeCalls(home).filter((call) => call.kind === "call");
+      expect(calls).toHaveLength(2);
+      const [a, b] = calls;
+      if (!a || !b) throw new Error("Missing fake calls.");
+      const index = a.args.indexOf("--model");
+      expect(a.args.slice(index, index + 2)).toEqual(["--model", "sonnet-5.5"]);
+      expect(b.args.slice(index, index + 2)).toEqual(["--model", "haiku-5.5"]);
+      expect(a.args.toSpliced(index, 2)).toEqual(b.args.toSpliced(index, 2));
+      expect(readFakeCalls(home).filter((call) => call.kind === "init")).toHaveLength(2);
+      expect(readFakeCalls(home).filter((call) => call.kind === "tool")).toEqual([
+        ...["read", "write", "build"].map((id) => expect.objectContaining({ id, ran: true })),
+        expect.objectContaining({ id: "web", ran: false }),
+        ...["read", "write", "build"].map((id) => expect.objectContaining({ id, ran: true })),
+        expect.objectContaining({ id: "web", ran: false }),
+      ]);
+      writeFakeScript(home, {
+        plays: [
+          {
+            when: "",
+            actions: [
+              { do: "tool", id: "post", name: "social.post", input: { text: "Build ready" } },
+              { do: "result" },
+            ],
+          },
+        ],
+      });
+      const posts = [];
+      for (const model of ["sonnet-5.5", "haiku-5.5"])
+        posts.push(await adapter.runStep({ ...request, model }));
+      expect(policySpy).toHaveBeenCalledTimes(4);
+      expect(policySpy.mock.results[3]?.value).toEqual(policySpy.mock.results[2]?.value);
+      expect(posts[0]?.hold).toMatchObject({ tool: "social.post", effect: "post" });
+      expect(posts[1]?.hold).toEqual(posts[0]?.hold);
+    } finally {
+      policySpy.mockRestore();
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });

@@ -192,7 +192,7 @@ test("TC-j24-44 signing in after approval preserves the unused grant", async () 
   });
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
   const tool = "reply";
-  const input = { body: "hello" };
+  const input = { to: ["sam@example.test"], body: "hello" };
   const digest = digestCall(tool, input);
   let book: Store;
   let attempts = 0;
@@ -723,7 +723,7 @@ test("TC-j24-19 batch resumes each held loop item with its exact input once", as
         outputs: { list: [{ id: "one" }, { id: "two" }, { id: "three" }], message: "ok" },
       },
       send: (req) => {
-        const input = { body: `message-${req.itemKey}` };
+        const input = { to: ["sam@example.test"], body: `message-${req.itemKey}` };
         if (!req.approvedCalls)
           return {
             hold: {
@@ -748,7 +748,7 @@ test("TC-j24-19 batch resumes each held loop item with its exact input once", as
   const { callGrant } = await import("../connectors/grants.ts");
   const ids = [first.id, "batch-two", "batch-three"];
   for (const [index, itemKey] of ["one", "two", "three"].entries()) {
-    const input = { body: `message-${itemKey}` };
+    const input = { to: ["sam@example.test"], body: `message-${itemKey}` };
     const row = {
       ...first,
       id: ids[index] ?? "",
