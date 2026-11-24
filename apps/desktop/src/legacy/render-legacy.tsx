@@ -1,6 +1,6 @@
 import { createFixtureRunnerClient, type FixtureRunnerClient, type Scenario } from "@flowdriven/fixtures/v1";
 import { type RenderResult, render } from "@testing-library/react";
-import { App } from "../App";
+import { LegacyApp } from "./LegacyApp";
 import { RunnerProvider } from "./runner-context";
 
 export function renderApp(
@@ -12,7 +12,7 @@ export function renderApp(
   return {
     ...render(
       <RunnerProvider client={client}>
-        <App />
+        <LegacyApp />
       </RunnerProvider>,
     ),
     client,

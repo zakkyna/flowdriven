@@ -1,14 +1,17 @@
-import { createFixtureRunnerClient, type FixtureRunnerClient, type Scenario } from "@flowdriven/fixtures/v1";
+import { createFixtureRunnerClient, type FixtureRunnerClient, type Scenario } from "@flowdriven/fixtures";
 import { cleanup, type RenderResult, render } from "@testing-library/react";
 import { App } from "../App";
 import { languages } from "../i18n/languages";
-import { RunnerProvider } from "../legacy/runner-context";
+import { RunnerProvider } from "../runner/runner-context";
 export function renderApp(
   hash: string,
   options?: { scenario?: Scenario; language?: string },
 ): RenderResult & { client: FixtureRunnerClient } {
   window.location.hash = hash;
-  const client = createFixtureRunnerClient({ scenario: options?.scenario });
+  const client = createFixtureRunnerClient({
+    scenario: options?.scenario,
+    languages: languages.map((language) => language.code),
+  });
   return {
     ...render(
       <RunnerProvider client={client}>

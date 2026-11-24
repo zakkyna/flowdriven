@@ -23,9 +23,10 @@ export interface FixtureRunnerClient extends RunnerClient {
 }
 type Handlers = { [N in LiveOperationName]?: (input: OperationInput<N>) => OperationOutput<N> };
 export function createFixtureRunnerClient(
-  options: { scenario?: Scenario; now?: () => Date } = {},
+  options: { scenario?: Scenario; now?: () => Date; languages?: readonly string[] } = {},
 ): FixtureRunnerClient {
   const state = buildState(options.scenario);
+  const allowedLanguages = options.languages ?? ["en", "id"];
   const calls: FixtureRunnerClient["calls"] = [];
   const revokedRules: typeof state.rules = [];
   const listeners = new Set<(event: RunnerEvent) => void>();
@@ -717,7 +718,7 @@ export function createFixtureRunnerClient(
         if (!(agent.models ?? []).some((m) => m.id === patch.mainAgent?.model))
           throw new RunnerError("invalid_input", "Unknown model.", { reason: "model_unknown" });
       }
-      if (patch.language && !["en", "id"].includes(patch.language))
+      if (patch.language && !allowedLanguages.includes(patch.language))
         throw new RunnerError("invalid_input", "Unknown language.", { reason: "language_unknown" });
       if (patch.agentPermission === "off") {
         for (const item of state.runs.filter((r) =>

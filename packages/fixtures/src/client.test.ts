@@ -196,6 +196,15 @@ test("TC-CON-42 settings reject invalid language without side effects", async ()
   expect((await client.call("runs.status", { runId: "run-timesheet-wait" })).state).toBe("waiting_approval");
 });
 
+test("TC-CON-42 settings accept registered languages when configured", async () => {
+  const client = createFixtureRunnerClient({ languages: ["en", "id", "ms"] });
+  expect((await client.call("settings.update", { patch: { language: "ms" } })).language).toBe("ms");
+  await expect(client.call("settings.update", { patch: { language: "fr" } })).rejects.toMatchObject({
+    code: "invalid_input",
+    reason: "language_unknown",
+  });
+});
+
 test("TC-CON-42 editing an empty decision reports the specified reason", async () => {
   const client = createFixtureRunnerClient();
   const decision = client.state.decisions[0];

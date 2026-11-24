@@ -33,6 +33,9 @@ export function useRunnerClient(): RunnerClient {
   if (!client) throw new Error("RunnerProvider is missing");
   return client;
 }
+export function useHasRunnerProvider(): boolean {
+  return useContext(Context) !== null;
+}
 function asRunnerError(error: unknown): RunnerError {
   return isRunnerError(error)
     ? error
