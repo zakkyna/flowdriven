@@ -87,7 +87,7 @@ export interface Engine {
   beginResume(runId: string): Begun;
   beginRecover(): { runs: RunRow[]; settled: Promise<RunRow[]> };
   sweepExpired(): Promise<void>;
-  stopRun(runId: string, by: "person" | "flow_deleted"): { run: RunRow; changed: boolean };
+  stopRun(runId: string, by: "person" | "flow_deleted" | "permission_off"): { run: RunRow; changed: boolean };
   shutdown(): void;
   registerFlow(manifest: FlowManifest, hash: string, files?: Record<string, string>): FlowRow;
   startRun(flowId: string, options: StartOptions): Promise<RunRow>;
@@ -113,6 +113,7 @@ export function createEngine(input: EngineDeps): Engine {
   const { store, now } = deps;
   const chain = createChain();
   const overlapping = new Set<string>();
+  const skipPromote = new Set<string>();
   let stopping = false;
   function assertRunning() {
     if (stopping) throw new EngineError("unavailable", "The engine is stopping.");
@@ -125,7 +126,9 @@ export function createEngine(input: EngineDeps): Engine {
         run.flowId,
         () => {
           overlapping.delete(run.id);
-          return store.getRun(run.id)?.state === "stopped" ? Promise.resolve(runById(run.id)) : task();
+          return store.getRun(run.id)?.state === "stopped" || skipPromote.delete(run.id)
+            ? Promise.resolve(runById(run.id))
+            : task();
         },
         () => {
           overlapping.delete(run.id);
@@ -243,11 +246,13 @@ export function createEngine(input: EngineDeps): Engine {
   }
   async function checkAndWalk(run: RunRow): Promise<RunRow> {
     try {
+      if (runById(run.id).state === "stopped") return runById(run.id);
       store.updateRun(run.id, { state: "checking" });
       const ready = deps.readiness?.(flowFor(run).manifest as FlowManifest, {
         flowId: run.flowId,
         hash: run.flowHash,
       });
+      if (runById(run.id).state === "stopped") return runById(run.id);
       if (ready && !ready.ready) {
         store.updateRun(run.id, { state: "blocked", blockedReason: ready.reason ?? "Not ready." });
         return runById(run.id);
@@ -951,14 +956,20 @@ export function createEngine(input: EngineDeps): Engine {
       if (["done", "failed", "stopped"].includes(run.state)) return { run, changed: false };
       const pending = store.listApprovals({ runId, state: "pending" });
       const at = now().toISOString();
+      const cause =
+        by === "permission_off" ? ({ code: "permission_off" } as const) : ({ code: "stopped" } as const);
       store.transaction(() => {
-        store.updateRun(runId, { state: "stopped", stoppedBy: by, cause: { code: "stopped" }, endedAt: at });
+        store.updateRun(runId, { state: "stopped", stoppedBy: by, cause, endedAt: at });
         for (const step of store.listSteps(runId)) {
-          if (step.state === "running" || step.state === "retrying")
+          if (step.state === "running" || step.state === "retrying" || step.state === "waiting_approval")
             store.upsertStep({ ...step, state: "stopped" });
         }
         for (const approval of pending) {
-          store.updateApproval(approval.id, { state: "expired", resolvedVia: "stop", resolvedAt: at });
+          store.updateApproval(approval.id, {
+            state: "expired",
+            resolvedVia: by === "permission_off" ? "permission_off" : "stop",
+            resolvedAt: at,
+          });
           store.appendAudit({
             at,
             kind: "decision_expired",
@@ -968,6 +979,11 @@ export function createEngine(input: EngineDeps): Engine {
         }
         store.appendAudit({ at, kind: "run_stopped", runId, detail: { runId, by } });
       });
+      if (by === "permission_off") {
+        for (const id of overlapping) {
+          if (store.getRun(id)?.flowId === run.flowId) skipPromote.add(id);
+        }
+      }
       for (const controller of deps.active.get(runId) ?? []) controller.abort();
       for (const approval of pending) deps.clearNotice?.(`approval:${approval.id}`);
       overlapping.delete(runId);

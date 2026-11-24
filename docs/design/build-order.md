@@ -1014,6 +1014,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/rules/decisions.test.ts` (TC-SR7-01 row 12) | Row 12 asserts only `decision_expired` with `why: "permission_off"` | Row 12 asserts `permission_changed`, then `decision_expired` (`why: "permission_off"`), then `run_stopped` (`by: "permission_off"`), in that order (TC-j12-11, FS-j12.P2) | B-20.T1 |
 | `packages/runner/src/exec/leaf-hold.test.ts` (TC-SR5-15) | A reply without a display recipient creates an approval with raw JSON payload | A reply without `to` blocks with `hold.tooLarge` and creates no decision; a reply with `to` and no subject keeps the full input (B-07.T9) | B-07.T9 |
 | `packages/runner/src/agents/setup.test.ts` (TC-j01-06, TC-AGT-05) | Sign-in recorded `"claude"` without `cwd` | Sign-in records the detected binary path with explicit `cwd` (B-07.T9) | B-07.T9 |
 | `packages/runner/src/claude/model-flag.test.ts` (TC-SR4-07) | Compared `decide()` against a shallow copy of the same policy | Compares the compiled `Policy` outputs from a spy on `buildPolicy` across the two model runs (B-07.T9) | B-07.T9 |

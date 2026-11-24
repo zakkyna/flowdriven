@@ -636,3 +636,28 @@ test("TC-j12-17 a new chat takes the main agent while an open chat and running r
     model: "sonnet-5.5",
   });
 });
+
+test("TC-j12-10 both permission changes are on the record with source window", async () => {
+  const { service } = await setup();
+  await service.call("settings.update", { patch: { agentPermission: "on" } }, "window");
+  await service.call("settings.update", { patch: { agentPermission: "off" } }, "window");
+  await expect(
+    service.call("settings.update", { patch: { agentPermission: "on" } }, "tool"),
+  ).rejects.toMatchObject({
+    code: "not_allowed",
+    reason: "caller_not_allowed",
+  });
+  expect(await service.call("settings.get", {})).toMatchObject({ agentPermission: "off" });
+  const audit = (await service.call("audit.list", {})) as Array<{
+    kind: string;
+    detail: Record<string, unknown>;
+  }>;
+  expect(audit.filter((row) => row.kind === "permission_changed").map((row) => row.detail)).toEqual([
+    { from: "unset", to: "on", source: "window" },
+    { from: "on", to: "off", source: "window" },
+  ]);
+  expect(audit.filter((row) => row.kind === "caller_refused").map((row) => row.detail)).toContainEqual({
+    operation: "settings.update",
+    caller: "tool",
+  });
+});

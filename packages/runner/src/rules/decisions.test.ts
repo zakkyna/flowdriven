@@ -2732,6 +2732,41 @@ test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as const)(
           expect(audit.filter((e) => e.kind === "run_stopped")).toEqual([
             expect.objectContaining({ kind: "run_stopped", runId: row.runId }),
           ]);
+        if (rowNumber === 12) {
+          expect(audit.filter((e) => e.kind === "run_stopped")).toEqual([
+            expect.objectContaining({
+              kind: "run_stopped",
+              runId: row.runId,
+              detail: { runId: row.runId, by: "permission_off" },
+            }),
+          ]);
+          const all = (await service.call("audit.list", {})) as Array<{
+            kind: string;
+            runId?: string;
+            detail: Record<string, unknown>;
+          }>;
+          const sequence = all.filter(
+            (e) =>
+              (e.kind === "permission_changed" && e.detail.to === "off") ||
+              ((e.kind === "decision_expired" || e.kind === "run_stopped") && e.runId === row.runId),
+          );
+          expect(sequence).toEqual([
+            expect.objectContaining({
+              kind: "permission_changed",
+              detail: { from: "on", to: "off", source: "window" },
+            }),
+            expect.objectContaining({
+              kind: "decision_expired",
+              runId: row.runId,
+              detail: { approvalId: row.id, runId: row.runId, why: "permission_off" },
+            }),
+            expect.objectContaining({
+              kind: "run_stopped",
+              runId: row.runId,
+              detail: { runId: row.runId, by: "permission_off" },
+            }),
+          ]);
+        }
         return;
       }
 

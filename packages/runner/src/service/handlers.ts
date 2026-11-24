@@ -399,20 +399,6 @@ export function createSettingsHandlers(
           ? store.listApprovals({ state: "pending" })
           : [];
       store.transaction(() => {
-        for (const approval of expired) {
-          const at = now().toISOString();
-          store.updateApproval(approval.id, {
-            state: "expired",
-            resolvedVia: "permission_off",
-            resolvedAt: at,
-          });
-          store.appendAudit({
-            at,
-            kind: "decision_expired",
-            runId: approval.runId,
-            detail: { approvalId: approval.id, runId: approval.runId, why: "permission_off" },
-          });
-        }
         for (const key of [
           "language",
           "agentPermission",
@@ -451,19 +437,29 @@ export function createSettingsHandlers(
             });
           }
         }
+        for (const approval of expired) {
+          const at = now().toISOString();
+          store.updateApproval(approval.id, {
+            state: "expired",
+            resolvedVia: "permission_off",
+            resolvedAt: at,
+          });
+          store.appendAudit({
+            at,
+            kind: "decision_expired",
+            runId: approval.runId,
+            detail: { approvalId: approval.id, runId: approval.runId, why: "permission_off" },
+          });
+        }
       });
       for (const approval of expired) clearNotice(`approval:${approval.id}`);
       if (patch.agentPermission === "off" && engine) {
-        for (const run of store.listRuns()) {
-          if (
-            ["queued", "checking", "running", "retrying", "waiting_approval", "needs_login"].includes(
-              run.state,
-            )
-          ) {
-            engine.stopRun(run.id, "person");
-            store.updateRun(run.id, { stoppedBy: "permission_off", cause: { code: "permission_off" } });
-          }
-        }
+        const runs = store.listRuns();
+        const first = runs.filter((run) => run.state === "queued" || run.state === "checking");
+        const rest = runs.filter((run) =>
+          ["running", "retrying", "waiting_approval", "needs_login"].includes(run.state),
+        );
+        for (const run of [...first, ...rest]) engine.stopRun(run.id, "permission_off");
       }
       return get();
     },
