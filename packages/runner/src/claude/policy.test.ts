@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
+import { callOf, makePolicy } from "../test-helpers/policy-fixture.ts";
+import { decide } from "./decide.ts";
 import { buildPolicy, isProjectRef } from "./policy.ts";
 
 const roots: string[] = [];
@@ -119,4 +121,153 @@ test("isProjectRef", () => {
     `a${String.fromCodePoint(0)}`,
   ])
     expect(isProjectRef(ref)).toBe(false);
+});
+
+test("TC-SR1-04 step words and input claims cannot change a send", () => {
+  const o = setup();
+  const touch = {
+    id: "reply",
+    sentence: "Reply",
+    effect: "send" as const,
+    rule: "asks_first" as const,
+    covers: ["gmail.reply"],
+  };
+  const compile = (title: string) =>
+    makePolicy({
+      ...o,
+      ...{ title, instructions: "this step only reads" },
+      requirements: [
+        { ...common, id: "gmail", type: "mcp_server", ref: "connector:gmail", tools: ["reply"] },
+      ],
+      routes: [
+        {
+          requirementId: "gmail",
+          routed: true,
+          provider: "claude-ai-connector",
+          type: "mcp_server",
+          providerName: "Gmail",
+          enforcedBy: "FlowDriven hook in Claude Code",
+          label: "official",
+          away: false,
+        },
+      ],
+      connectors: [
+        {
+          name: "claude.ai Gmail",
+          url: "https://gmailmcp.googleapis.com/mcp/v1",
+          id: "fake",
+          status: "connected",
+          tools: [{ name: "reply", readOnly: false }],
+        },
+      ],
+      flowId: "mail",
+      hash: "sha256:test",
+      touches: [touch],
+      onItsOwn: [],
+    });
+  const policy = compile("Just reading your mail");
+  expect(policy.touches?.[0]?.effect).toBe("send");
+  expect(policy.touches).toEqual(compile("Send the reply").touches);
+  const connector = {
+    requirementId: "gmail",
+    label: "Gmail",
+    name: "gmail",
+    url: "https://example.test",
+    id: "fake",
+    prefix: "mcp__claude_ai_Gmail__",
+    tools: ["reply"],
+    read: [],
+    risky: { reply: "send" as const },
+    blocked: [],
+  };
+  for (const input of [
+    { threadId: "thread-sam", body: "Thanks." },
+    { threadId: "thread-sam", body: "Thanks.", kind: "read", description: "read only" },
+  ]) {
+    const result = decide(
+      { ...policy, connector },
+      {
+        ...callOf(`${connector.prefix}reply`, input),
+      },
+      undefined,
+      { calls: 0, granted: () => false },
+    );
+    expect(result).toMatchObject({ allow: false, outcome: "hold", effect: "send", held: { action: "send" } });
+  }
+});
+
+test("touch compilation requires exact coverage and rejects understated effects", () => {
+  const o = setup();
+  const requirements = [{ ...common, id: "other", type: "mcp_server" as const, tools: ["get_status"] }];
+  const touch = {
+    id: "status",
+    sentence: "Status",
+    effect: "change" as const,
+    rule: "asks_first" as const,
+    covers: ["other.get_status"],
+  };
+  const input = { ...o, requirements, flowId: "flow", hash: "hash", touches: [touch] };
+  expect(buildPolicy(input).touches).toMatchObject([
+    { touchId: "status", effect: "change", fixedPlace: false },
+  ]);
+  const claimedPlace = { ...touch, place: { kind: "account" as const, value: "other", label: "Other" } };
+  const unknown = buildPolicy({ ...input, touches: [claimedPlace] }).touches?.[0];
+  expect(unknown).toMatchObject({ fixedPlace: false });
+  expect(unknown?.place).toBeUndefined();
+  expect(() => buildPolicy({ ...input, touches: [] })).toThrow();
+  expect(() => buildPolicy({ ...input, touches: [touch, { ...touch, id: "twice" }] })).toThrow();
+  expect(() => buildPolicy({ ...input, touches: [{ ...touch, effect: "read" }] })).toThrow();
+});
+
+test("a compiled folder touch uses its resolved path and confirmation list", () => {
+  const o = setup();
+  const policy = buildPolicy({
+    ...o,
+    requirements: [path("notes", "read_write")],
+    flowId: "flow",
+    hash: "hash",
+    onItsOwn: ["write"],
+    touches: [
+      {
+        id: "write",
+        sentence: "Write notes",
+        effect: "local_write",
+        rule: "runs_alone",
+        place: { kind: "folder", value: "n", label: "Notes" },
+        covers: [],
+      },
+    ],
+  });
+  expect(policy.touches).toEqual([
+    {
+      touchId: "write",
+      effect: "local_write",
+      matcher: "folder",
+      place: { kind: "folder", value: join(o.project, "notes"), label: "Notes" },
+      fixedPlace: true,
+      list: "on_its_own",
+      covers: [],
+    },
+  ]);
+});
+
+test("a confirmation can leave a local write asking first", () => {
+  const o = setup();
+  const input = {
+    ...o,
+    requirements: [path("notes", "read_write")],
+    touches: [
+      {
+        id: "write",
+        sentence: "Write notes",
+        effect: "local_write" as const,
+        rule: "asks_first" as const,
+        place: { kind: "folder" as const, value: "n", label: "Notes" },
+        covers: [],
+      },
+    ],
+    onItsOwn: [],
+  };
+  expect(buildPolicy(input).touches?.[0]?.list).toBe("asks_first");
+  expect(makePolicy(input).touches?.[0]?.list).toBe("on_its_own");
 });

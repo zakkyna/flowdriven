@@ -1,6 +1,6 @@
-import { RunState } from "@flowdriven/contracts";
+import { RunState } from "@flowdriven/contracts/v1";
 import { type ReactElement, useState } from "react";
-import { useRunnerQuery } from "../../runner/runner-context";
+import { useRunnerQuery } from "../../legacy/runner-context";
 import { Button } from "../../ui/Button";
 import { Page } from "../../ui/Page";
 import { ScreenState } from "../../ui/ScreenState";

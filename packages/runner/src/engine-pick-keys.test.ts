@@ -2,6 +2,7 @@ import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import type { Store } from "./storage.ts";
 import { setup } from "./test-helpers/engine.ts";
+import { legacyGrant } from "./test-helpers/policy-fixture.ts";
 
 const stores: Store[] = [];
 afterEach(() => {
@@ -108,7 +109,7 @@ test("resuming the run after a crash keeps the keys and releases as before", tim
     ["j1", ["host.publish"]],
     ["j1", ["host.publish"]],
   ]);
-  expect(c.store.hasGrant(c.run.id, "host.publish", "j1")).toBe(true);
+  expect(!!c.store.findPickGrant(legacyGrant(c.run.id, "*", "j1", "host.publish"))).toBe(true);
 });
 
 test("the keyless loop over the choice writes no seen keys", timeout, async () => {

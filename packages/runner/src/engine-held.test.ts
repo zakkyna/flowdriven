@@ -1,8 +1,9 @@
 import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
-import { callGrant, digestCall, grantUsedKey } from "./connectors/grants.ts";
+import { callGrant, digestCall } from "./connectors/grants.ts";
 import type { ApprovalRow, Store } from "./storage.ts";
 import { setup } from "./test-helpers/engine.ts";
+import { legacyGrant } from "./test-helpers/policy-fixture.ts";
 
 const stores: Store[] = [];
 afterEach(() => {
@@ -79,8 +80,8 @@ test("approve: the approval is approved, a grant <requirement>.<tool>#<digest> i
     state: "approved",
     resolvedAt: c.clock.now().toISOString(),
   });
-  expect(c.store.hasGrant(c.run.id, grant, "j1")).toBe(true);
-  expect(c.store.hasGrant(c.run.id, grant, "other")).toBe(false);
+  expect(!!c.store.findGrant(legacyGrant(c.run.id, "send", "j1", grant))).toBe(true);
+  expect(!!c.store.findGrant(legacyGrant(c.run.id, "send", "other", grant))).toBe(false);
   expect(c.store.listAudit(c.run.id)).toContainEqual(
     expect.objectContaining({
       kind: "call_approved",
@@ -94,21 +95,40 @@ test("after approve the step is run again by the walk and the run ends done, and
   const c = await ready();
   expect((await c.engine.decide("ap-1", "approve")).state).toBe("done");
   expect(c.harness.calls.map((call) => call.stepId)).toEqual(["send"]);
-  expect(c.store.counter(grantUsedKey(c.run.id, "", grant), "run")).toBe(0);
+  expect(c.store.findGrant(legacyGrant(c.run.id, "send", "", grant))).toBeDefined();
+  expect(c.store.findGrant(legacyGrant(c.run.id, "send", "", grant))?.usedAt).toBeUndefined();
 });
-test("reject: the approval is rejected, the audit has call_rejected, the step is failed with the note You rejected this call., the run is failed, and other pending approvals of the run are expired", async () => {
+test("TC-ENG-12: rejecting a held call skips it and completes the run", async () => {
+  const c = await ready();
+  const result = await c.engine.decide("ap-1", "reject");
+  expect(result.state).toBe("done");
+  expect(c.store.getStep(c.run.id, "send")).toMatchObject({
+    state: "skipped",
+    skipped: { because: "rejected", approvalId: "ap-1" },
+  });
+  expect(c.harness.calls).toHaveLength(0);
+});
+test("TC-ENG-15: a held call still waits after 25 hours", async () => {
+  const c = await ready();
+  c.clock.advance(25 * 3_600_000);
+  await c.engine.sweepExpired();
+  expect(c.store.getApproval("ap-1")?.state).toBe("pending");
+  expect(c.store.getRun(c.run.id)?.state).toBe("waiting_approval");
+  expect(c.harness.calls).toHaveLength(0);
+});
+test("TC-j24-08 reject skips the step and keeps another decision pending", async () => {
   const c = await ready();
   c.store.createApproval({ ...c.approval, id: "ap-2" });
   const result = await c.engine.decide("ap-1", "reject");
-  expect(result).toMatchObject({ state: "failed", endedAt: c.clock.now().toISOString() });
+  expect(result.state).toBe("waiting_approval");
   expect(c.store.getApproval("ap-1")).toMatchObject({
     state: "rejected",
     resolvedAt: c.clock.now().toISOString(),
   });
-  expect(c.store.getApproval("ap-2")?.state).toBe("expired");
+  expect(c.store.getApproval("ap-2")?.state).toBe("pending");
   expect(c.store.getStep(c.run.id, "send")).toMatchObject({
-    state: "failed",
-    note: "You rejected this call.",
+    state: "skipped",
+    skipped: { because: "rejected", approvalId: "ap-1" },
   });
   expect(c.store.listAudit(c.run.id)).toContainEqual(
     expect.objectContaining({
@@ -118,7 +138,7 @@ test("reject: the approval is rejected, the audit has call_rejected, the step is
   );
   expect(c.harness.calls).toHaveLength(0);
 });
-test("reject for a loop item fails that item", async () => {
+test("TC-ENG-14 reject for a loop item skips that item", async () => {
   const c = await ready("j1");
   c.store.upsertItem({
     runId: c.run.id,
@@ -129,15 +149,18 @@ test("reject for a loop item fails that item", async () => {
     status: "running",
   });
   await c.engine.decide("ap-1", "reject");
-  expect(c.store.listItems(c.run.id).at(0)?.status).toBe("failed");
+  expect(c.store.listItems(c.run.id).at(0)).toMatchObject({
+    status: "skipped",
+    skipped: { because: "rejected", approvalId: "ap-1" },
+  });
 });
-test("a second decision and a decision after expiry are refused with the present sentences", async () => {
+test("TC-RUL-04 a second decision is refused and a late approval succeeds", async () => {
   const c = await ready();
   await c.engine.decide("ap-1", "reject");
   expect(() => c.engine.beginDecide("ap-1", "approve")).toThrow("This approval was already decided.");
   const d = await ready();
   d.clock.advance(24 * 3_600_000 + 1);
-  expect(() => d.engine.beginDecide("ap-1", "approve")).toThrow("This approval expired.");
+  expect((await d.engine.decide("ap-1", "approve")).state).toBe("done");
 });
 test("a decision for a run that is not waiting is refused with Run is not waiting for approval.", async () => {
   const c = await ready();
@@ -149,16 +172,14 @@ test("beginDecide on an ask still throws Not a result sign-off.", async () => {
   c.store.updateApproval("ap-1", { kind: "ask" });
   expect(() => c.engine.beginDecide("ap-1", "approve")).toThrow("Not a result sign-off.");
 });
-test("a held call whose approval expires after 24 hours fails the step with The approval expired after 24 hours. and fails the run (sweepExpired)", async () => {
+test("TC-j24-29 a held call remains pending after 24 hours", async () => {
   const c = await ready();
   c.clock.advance(24 * 3_600_000 + 1);
   await c.engine.sweepExpired();
-  expect(c.store.getApproval("ap-1")?.state).toBe("expired");
-  expect(c.store.getStep(c.run.id, "send")).toMatchObject({
-    state: "failed",
-    note: "The approval expired after 24 hours.",
-  });
-  expect(c.store.getRun(c.run.id)?.state).toBe("failed");
+  expect(c.store.getApproval("ap-1")?.state).toBe("pending");
+  expect(c.store.getStep(c.run.id, "send")?.state).toBe("waiting_approval");
+  expect(c.store.getRun(c.run.id)?.state).toBe("waiting_approval");
+  expect(c.harness.calls).toEqual([]);
 });
 test("recoverAfterCrash leaves a run that waits for a held call in waiting_approval with its approval pending", async () => {
   const c = await ready();
@@ -177,9 +198,9 @@ test("beginAnswer stores no grant for a pick whose key starts with # or is empty
     payload: { options: items.map((item) => ({ key: item.id, item })) },
   });
   const begun = c.engine.beginAnswer("ap-1", { picks: ["#0", "", "valid"] });
-  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "#0")).toBe(false);
-  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "")).toBe(false);
-  expect(c.store.hasGrant(c.run.id, "mail.delete_draft", "valid")).toBe(true);
+  expect(!!c.store.findPickGrant(legacyGrant(c.run.id, "*", "#0", "mail.delete_draft"))).toBe(false);
+  expect(!!c.store.findPickGrant(legacyGrant(c.run.id, "*", "", "mail.delete_draft"))).toBe(false);
+  expect(!!c.store.findPickGrant(legacyGrant(c.run.id, "*", "valid", "mail.delete_draft"))).toBe(true);
   expect(c.store.getStep(c.run.id, "send")).toMatchObject({ state: "passed", outputs: { choice: items } });
   expect(c.store.listAudit(c.run.id)).toContainEqual(
     expect.objectContaining({
@@ -188,4 +209,148 @@ test("beginAnswer stores no grant for a pick whose key starts with # or is empty
     }),
   );
   await begun.settled;
+});
+
+test("TC-SR8-06 Quit during a send-capable step records the crash warning", async () => {
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.quit",
+    name: "Quit",
+    kind: "build",
+    requirements: [{ id: "mail", type: "mcp_server", ref: "connector:gmail", tools: ["send_message"] }],
+    steps: [
+      {
+        id: "send",
+        do: "worker",
+        instructions: "Send",
+        uses: ["mail"],
+        checks: [{ type: "contains", pattern: "ok" }],
+      },
+    ],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const c = await setup(parsed.manifest, { steps: { send: { exit: "interrupted" } } });
+  stores.push(c.store);
+  const run = await c.engine.startRun(parsed.manifest.id, { project: "/tmp" });
+  expect(run).toMatchObject({ state: "interrupted", cause: { code: "crash", params: { step: "send" } } });
+  expect(c.store.getStep(run.id, "send")?.state).toBe("interrupted");
+});
+
+test("TC-SR1-27 outside-flow holds create a decision and one audit record", async () => {
+  const tool = "mcp__claude_ai_Gmail__forward";
+  const input = { to: ["x@example.test"], threadId: "thread-sam" };
+  const digest = digestCall(tool, input);
+  const c = await setup(manifest, {
+    steps: {
+      send: {
+        hold: {
+          requirementId: "gmail",
+          tool,
+          input,
+          digest,
+          action: "send",
+          effect: "send",
+          outsideFlow: true,
+          touchId: "never",
+        },
+      },
+    },
+  });
+  stores.push(c.store);
+  const run = await c.engine.startRun(manifest.id, { project: "/tmp" });
+  expect(run.state).toBe("waiting_approval");
+  const row = c.store.listApprovals({ runId: run.id }).at(0);
+  expect(row).toMatchObject({ kind: "outside_flow", effect: "send", call: { tool, input } });
+  expect(row?.similarGroup).toBeUndefined();
+  expect(c.store.listAudit(run.id).filter((a) => a.kind === "call_held")).toMatchObject([
+    { detail: { approvalId: row?.id, tool, effect: "send", digest } },
+  ]);
+  if (!row) throw new Error("Missing approval");
+  const { createRunnerService } = await import("./service/service.ts");
+  const service = createRunnerService({ store: c.store, mode: "demo", dataDir: ".", now: c.clock.now });
+  try {
+    const listed = await service.call("approvals.list", { runId: run.id });
+    expect(listed).toMatchObject([
+      { id: row.id, kind: "outside_flow", effect: "send", canAlwaysAllow: false, editable: false },
+    ]);
+    expect((listed as Array<Record<string, unknown>>)[0]).not.toHaveProperty("similarGroup");
+  } finally {
+    service.stop();
+  }
+});
+
+test.each(["tooLarge", "tooMany"] as const)(
+  "TC-SR1-27 %s records a blocked hold without an approval id",
+  async (branch) => {
+    const tool = "WebFetch";
+    const input = { url: branch === "tooLarge" ? "x".repeat(5000) : "https://example.test" };
+    const digest = digestCall(tool, input);
+    let store: Store;
+    const c = await setup(manifest, {
+      steps: {
+        send: (req) => {
+          if (branch === "tooMany")
+            for (let i = 0; i < 3; i++)
+              store.createApproval({
+                id: `old-${i}`,
+                kind: "outside_flow",
+                runId: req.runId,
+                stepId: req.stepId,
+                itemKey: req.itemKey,
+                summary: "Old",
+                payload: "Old",
+                approves: [`other#${i}`],
+                onExpiry: "fail",
+                createdAt: "2026-11-11T09:00:00.000Z",
+                expiresAt: "2026-11-12T09:00:00.000Z",
+                state: "rejected",
+                effect: "change",
+              });
+          return { hold: { requirementId: tool, tool, input, digest, effect: "change", outsideFlow: true } };
+        },
+      },
+    });
+    store = c.store;
+    stores.push(store);
+    const run = await c.engine.startRun(manifest.id, { project: "/tmp" });
+    expect(run.state).toBe("blocked");
+    const records = store.listAudit(run.id).filter((row) => row.kind === "call_held");
+    expect(records).toMatchObject([{ detail: { tool, effect: "change", digest } }]);
+    expect(records[0]?.detail).not.toHaveProperty("approvalId");
+  },
+);
+
+test("TC-SR1-27 reusing a pending hold writes no duplicate audit", async () => {
+  const tool = "WebFetch";
+  const input = { url: "https://example.test" };
+  const digest = digestCall(tool, input);
+  let store: Store;
+  const c = await setup(manifest, {
+    steps: {
+      send: (req) => {
+        store.createApproval({
+          id: "existing",
+          kind: "outside_flow",
+          runId: req.runId,
+          stepId: req.stepId,
+          itemKey: req.itemKey,
+          summary: "Old",
+          payload: "Old",
+          approves: [`${tool}#${digest}`],
+          onExpiry: "fail",
+          createdAt: "2026-11-11T09:00:00.000Z",
+          expiresAt: "2026-11-12T09:00:00.000Z",
+          state: "pending",
+          effect: "change",
+        });
+        return { hold: { requirementId: tool, tool, input, digest, effect: "change", outsideFlow: true } };
+      },
+    },
+  });
+  store = c.store;
+  stores.push(store);
+  const run = await c.engine.startRun(manifest.id, { project: "/tmp" });
+  expect(run.state).toBe("waiting_approval");
+  expect(store.listApprovals({ runId: run.id })).toHaveLength(1);
+  expect(store.listAudit(run.id).filter((row) => row.kind === "call_held")).toEqual([]);
 });

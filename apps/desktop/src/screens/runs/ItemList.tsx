@@ -1,4 +1,4 @@
-import type { RunItem, SkipReason } from "@flowdriven/contracts";
+import type { RunItem, SkipReason } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { CheckList } from "../../ui/CheckList";
 import { StateIcon } from "../../ui/StatusBadge";

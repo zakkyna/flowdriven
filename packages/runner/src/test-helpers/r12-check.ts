@@ -35,11 +35,19 @@ function kill(pid: number) {
   } catch {}
 }
 try {
-  const cards = await client.call("harnesses.rescan", {});
-  const card = cards.find((c) => c.id === "claude-code");
-  if (!card?.detected || card.login !== "logged_in")
-    throw new Error("Claude Code was not found or is not signed in.");
-  await client.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+  const callAgents = client.call as unknown as (
+    name: "agents.rescan",
+    input: object,
+  ) => Promise<{ agents: { id: string; state: string }[] }>;
+  const { agents } = await callAgents("agents.rescan", {});
+  const card = agents.find((c) => c.id === "claude-code");
+  if (card?.state !== "ready") throw new Error("Claude Code was not found or is not signed in.");
+  await (
+    client.call as unknown as (
+      name: "settings.update",
+      input: { patch: { agentPermission: "on" } },
+    ) => Promise<unknown>
+  )("settings.update", { patch: { agentPermission: "on" } });
   const imported = await client.call("flows.import", { path: flowDir });
   if (!imported.flow) throw new Error("Could not import the check flow.");
   const run = await client.call("flows.run", { flowId: "local.claude-code-check" });

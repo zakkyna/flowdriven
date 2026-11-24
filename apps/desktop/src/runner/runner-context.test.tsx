@@ -12,7 +12,7 @@ function Missing() {
   return <p>{error?.code ?? "none"}</p>;
 }
 function Skipped() {
-  const { data, error, loading } = useRunnerQuery("runs.status", { runId: "run-0001" }, { skip: true });
+  const { data, error, loading } = useRunnerQuery("runs.status", { runId: "run-apk-done" }, { skip: true });
   return <p>{loading ? "loading" : data === undefined && error === undefined ? "skipped" : "ran"}</p>;
 }
 
@@ -24,10 +24,10 @@ test("queries refresh when the runner reports a change", async () => {
       <Missing />
     </RunnerProvider>,
   );
-  expect(await screen.findByText("5 waiting")).toBeTruthy();
+  expect(await screen.findByText("1 waiting")).toBeTruthy();
   expect(await screen.findByText("not_found")).toBeTruthy();
-  await act(() => client.call("approvals.resolve", { approvalId: "ap-0014", decision: "approve" }));
-  expect(await screen.findByText("4 waiting")).toBeTruthy();
+  await act(() => client.call("approvals.resolve", { approvalId: "decision-1", decision: "approve" }));
+  expect(await screen.findByText("0 waiting")).toBeTruthy();
 });
 
 test("a skipped query makes no call and is not loading", async () => {

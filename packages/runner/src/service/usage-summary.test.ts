@@ -1,7 +1,6 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HarnessCard, UsageSummary } from "@flowdriven/contracts";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store, UsageEventRow } from "../storage.ts";
@@ -63,41 +62,26 @@ test("summarizes today and the rolling week and reports quota status", async () 
   expect(summary(() => ({ rejectedUntil: now().getTime() + 1000 }))?.limit.status).toBe("limited");
   expect(summary(() => ({}))?.limit.status).toBe("unknown");
 });
-test("the harness card shows usage and stored windows, and stays unchanged without either", async () => {
+test("TC-AGT-11 retired harness card and usage summary retain usage and stored windows", async () => {
   const store = await rig();
   const dataDir = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven- ")));
   roots.push(dataDir);
   const service = createRunnerService({ store, dataDir, mode: "demo", now });
   services.push(service);
   await service.start().settled;
-  const card: HarnessCard = {
-    id: "claude-code",
-    name: "Claude Code",
-    binary: "claude",
-    detected: true,
-    login: "logged_in",
-    risk: "gray",
-    vendorProhibited: false,
-    consent: "given",
-    sandbox: "none",
-    adapter: "full",
-    quota: { state: "unknown", today: { calls: 0 }, week: { calls: 0 } },
-    inventory: { supported: true, skills: [], plugins: [], mcpServers: [] },
-  };
-  const harnesses = { list: () => [card], rescan: async () => [card], setConsent: () => card };
-  const call = createDispatcher(
-    createHandlers({
+  const call = createDispatcher({
+    v2: {},
+    legacy: createHandlers({
       engine: service.engine,
       store,
       mode: "demo",
       projectDir: dataDir,
       now,
       harnessIdOf: (id) => id,
-      harnesses,
     }),
-    () => {},
-  );
-  expect(await call("harnesses.list", {})).toEqual([card]);
+    audit: () => {},
+  });
+  await expect(call("harnesses.list", {})).rejects.toMatchObject({ code: "unavailable", reason: "retired" });
   store.addUsage(row("2026-11-11T01:00:00.000Z", [model]));
   store.addUsage(
     row("2026-11-11T02:00:00.000Z", [{ ...model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }]),
@@ -105,23 +89,40 @@ test("the harness card shows usage and stored windows, and stays unchanged witho
   store.putSetting("quota:claude-code", {
     sevenDay: { utilization: 0.78, resetsAt: Date.parse("2026-11-14T17:59:00.000Z") / 1000 },
   });
-  expect(await call("harnesses.list", {})).toMatchObject([
-    {
-      quota: {
-        state: "available",
-        today: { calls: 2, tokens: 8998 },
-        week: { calls: 2, tokens: 8998 },
-        windows: [{ name: "seven_day", utilization: 0.78, resetsAt: "2026-11-14T17:59:00.000Z" }],
-      },
-    },
-  ]);
+  expect(
+    summarizeUsage({
+      store,
+      now: now(),
+      quotaOf: () => ({
+        sevenDay: { utilization: 0.78, resetsAt: Date.parse("2026-11-14T17:59:00.000Z") / 1000 },
+      }),
+      lines: { fiveHour: 0.9, sevenDay: 0.9 },
+    }).harnesses[0],
+  ).toMatchObject({
+    today: { calls: 2, input: 4, output: 384, cacheRead: 8454, cacheWrite: 156 },
+    week: { calls: 2, input: 4, output: 384, cacheRead: 8454, cacheWrite: 156 },
+    limit: { status: "ok", sevenDay: { utilization: 0.78, resetsAt: "2026-11-14T17:59:00.000Z" } },
+  });
   store.addUsage(row("2026-11-11T03:00:00.000Z", [{ ...model, input: 1e300, output: 1e300 }]));
-  expect(await call("harnesses.list", {})).toMatchObject([
-    { quota: { today: { tokens: Number.MAX_SAFE_INTEGER }, week: { tokens: Number.MAX_SAFE_INTEGER } } },
-  ]);
-  expect(((await call("usage.summary", {})) as UsageSummary).harnesses[0]?.today.input).toBe(
-    Number.MAX_SAFE_INTEGER,
-  );
+  const capped = summarizeUsage({
+    store,
+    now: now(),
+    quotaOf: () => ({}),
+    lines: { fiveHour: 0.9, sevenDay: 0.9 },
+  }).harnesses[0];
+  expect(capped?.today).toMatchObject({ input: Number.MAX_SAFE_INTEGER, output: Number.MAX_SAFE_INTEGER });
+  expect(capped?.week).toMatchObject({ input: Number.MAX_SAFE_INTEGER, output: Number.MAX_SAFE_INTEGER });
+  const auditBefore = store.listAudit();
+  await expect(call("usage.summary", {})).rejects.toMatchObject({ code: "unavailable", reason: "retired" });
+  await expect(call("usage.summary", { unexpected: 1 })).rejects.toMatchObject({
+    code: "unavailable",
+    reason: "retired",
+  });
+  await expect(service.call("usage.summary", {})).rejects.toMatchObject({
+    code: "unavailable",
+    reason: "retired",
+  });
+  expect(store.listAudit()).toEqual(auditBefore);
 });
 
 test("today and the week start at the owner's local midnight", async () => {

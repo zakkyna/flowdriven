@@ -8,7 +8,7 @@ import {
   RunState,
   SignOffState,
   StepRunState,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import { ICON_NAMES, Icon } from "./icons";

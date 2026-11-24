@@ -2,7 +2,9 @@ import type { RunnerTopic } from "@flowdriven/contracts";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
+import { pendingDecision } from "../test-helpers/builders.ts";
 import { createChangeEmitter, wrapStore } from "./events.ts";
+import { createRunnerService } from "./service.ts";
 
 const stores: Store[] = [];
 afterEach(() => {
@@ -66,16 +68,27 @@ test("each mutating call marks its topics", async () => {
   });
   expect(marks).toEqual([
     "flows",
+    "skills",
     "runs",
+    "activity",
     "runs",
+    "activity",
     "runs",
+    "activity",
     "runs",
+    "activity",
     "approvals",
     "runs",
+    "activity",
+    "chats",
     "approvals",
     "runs",
+    "activity",
+    "chats",
     "flows",
+    "skills",
     "runs",
+    "activity",
   ]);
 });
 test("reads, counters and the audit log mark nothing, and a call that throws marks nothing", async () => {
@@ -89,6 +102,130 @@ test("reads, counters and the audit log mark nothing, and a call that throws mar
   expect(() => store.updateRun("missing", {})).toThrow(expect.objectContaining({ code: "not_found" }));
   expect(marks).toEqual([]);
 });
+
+test("TC-SR7-03 a rolled-back decision emits no changed event", async () => {
+  const original = await openSqliteStore(":memory:");
+  stores.push(original);
+  original.putFlow(flow);
+  original.createRun(run);
+  original.upsertStep(step);
+  original.createApproval(approval);
+  const scheduled: (() => void)[] = [];
+  const events: { type: "changed"; topics: RunnerTopic[] }[] = [];
+  const emitter = createChangeEmitter(
+    (event) => events.push(event),
+    (fn) => scheduled.push(fn),
+  );
+  const store = wrapStore(original, emitter.mark);
+  expect(() =>
+    store.transaction(() => {
+      store.updateApproval("a", { state: "approved" });
+      store.putCallGrant({
+        runId: "r",
+        stepId: "s",
+        itemKey: "",
+        tool: "tool",
+        digest: "d",
+        kind: "approve",
+        createdAt: "2026",
+      });
+      throw new Error("audit insert failed");
+    }),
+  ).toThrow("audit insert failed");
+  for (const callback of scheduled) callback();
+  expect(original.getApproval("a")?.state).toBe("pending");
+  expect(
+    original.findGrant({
+      runId: "r",
+      stepId: "s",
+      itemKey: "",
+      tool: "tool",
+      digest: "d",
+      kind: "approve",
+      createdAt: "",
+    }),
+  ).toBeUndefined();
+  expect(events).toEqual([]);
+  const order: string[] = [];
+  store.transaction(() => {
+    store.updateApproval("a", { state: "approved" });
+    store.putCallGrant({
+      runId: "r",
+      stepId: "s",
+      itemKey: "",
+      tool: "tool",
+      digest: "d",
+      kind: "approve",
+      createdAt: "2026",
+    });
+    store.appendAudit({
+      at: "2026",
+      kind: "decision_made",
+      runId: "r",
+      detail: { decision: "approve", via: "window" },
+    });
+    order.push("write");
+    expect(events).toEqual([]);
+  });
+  order.push("commit");
+  for (const callback of scheduled) callback();
+  if (events.length) order.push("event");
+  expect(order).toEqual(["write", "commit", "event"]);
+  expect(events).toEqual([{ type: "changed", topics: ["runs", "approvals", "chats", "activity"] }]);
+});
+test("TC-SR7-03 an audit insertion failure rolls back the actual handler", async () => {
+  const original = await openSqliteStore(":memory:");
+  stores.push(original);
+  const row = pendingDecision(original, { id: "event-fault", createdAt: "2026-11-21T00:00:00Z" });
+  const tool = "mcp__claude_ai_Gmail__reply";
+  const { callGrant, digestCall } = await import("../connectors/grants.ts");
+  const input = { to: "sam@example.test", body: "Thanks" };
+  const digest = digestCall(tool, input);
+  original.updateApproval(row.id, {
+    kind: "risky_action",
+    riskyAction: "send",
+    effect: "send",
+    call: { tool, input },
+    approves: [callGrant("mail", tool, digest)],
+  });
+  const faulty = new Proxy(original, {
+    get(target, key, receiver) {
+      if (key === "appendAudit")
+        return (entry: Parameters<Store["appendAudit"]>[0]) => {
+          if (entry.kind === "decision_made") throw new Error("audit insert failed");
+          return target.appendAudit(entry);
+        };
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const marks: RunnerTopic[] = [];
+  const service = createRunnerService({
+    store: wrapStore(faulty, (topic) => marks.push(topic)),
+    dataDir: ".",
+    mode: "demo",
+    now: () => new Date("2026-11-21T00:00:00Z"),
+  });
+  try {
+    await expect(
+      service.call("approvals.resolve", { approvalId: row.id, decision: "approve" }),
+    ).rejects.toMatchObject({ code: "unavailable" });
+    expect(original.getApproval(row.id)?.state).toBe("pending");
+    expect(
+      original.findGrant({
+        runId: row.runId,
+        stepId: row.stepId,
+        itemKey: row.itemKey,
+        tool,
+        digest,
+        kind: "approve",
+        createdAt: "",
+      }),
+    ).toBeUndefined();
+    expect(marks).toEqual([]);
+  } finally {
+    service.stop();
+  }
+});
 test("writes in one turn make one event with sorted topics", async () => {
   const callbacks: (() => void)[] = [];
   const events: { type: "changed"; topics: RunnerTopic[] }[] = [];
@@ -100,6 +237,7 @@ test("writes in one turn make one event with sorted topics", async () => {
   emitter.mark("approvals");
   emitter.mark("runs");
   emitter.mark("flows");
+  for (let i = 0; i < 6; i++) emitter.mark("flows");
   expect(callbacks).toHaveLength(1);
   callbacks.shift()?.();
   expect(events).toEqual([{ type: "changed", topics: ["flows", "runs", "approvals"] }]);
@@ -114,16 +252,16 @@ test("writes in one turn make one event with sorted topics", async () => {
   expect(automatic).toEqual([{ type: "changed", topics: ["flows"] }]);
 });
 
-test("putHarnessState marks the harnesses and settings topics", async () => {
+test("putHarnessState marks the agents and settings topics", async () => {
   const { store, marks } = await setup();
   store.putHarnessState({ id: "claude-code", consent: "given" });
-  expect(marks).toEqual(["harnesses", "settings"]);
+  expect(marks).toEqual(["agents", "settings"]);
 });
 
 test("usage and settings mark their topics", async () => {
   const { store, marks } = await setup();
   store.putSetting("weekly:claude-code", {});
-  expect(marks.splice(0)).toEqual(["settings", "approvals"]);
+  expect(marks.splice(0)).toEqual(["settings", "approvals", "activity"]);
   store.putSetting("keeper", {});
   expect(marks.splice(0)).toEqual(["settings"]);
   store.addUsage({
@@ -140,7 +278,7 @@ test("usage and settings mark their topics", async () => {
     queuedMs: 0,
     exit: "ok",
   });
-  expect(marks).toEqual(["runs"]);
+  expect(marks).toEqual(["runs", "settings"]);
 });
 
 test("putTrigger marks the flows topic", async () => {
@@ -162,4 +300,149 @@ test("putCapabilityConsent and deleteCapabilityConsent mark the flows and readin
   expect(marks.splice(0)).toEqual(["flows", "readiness"]);
   store.deleteCapabilityConsent("f");
   expect(marks).toEqual(["flows", "readiness"]);
+});
+
+test("TC-STO-38 store writes mark the topics of their tables", async () => {
+  const { store, marks } = await setup();
+  store.putFlow(flow);
+  expect(marks.splice(0)).toEqual(["flows", "skills"]);
+  store.createRun(run);
+  expect(marks.splice(0)).toEqual(["runs", "activity"]);
+  store.upsertStep(step);
+  expect(marks.splice(0)).toEqual(["runs", "activity"]);
+  store.upsertItem(item);
+  expect(marks.splice(0)).toEqual(["runs", "activity"]);
+  store.createApproval(approval);
+  expect(marks.splice(0)).toEqual(["approvals", "runs", "activity", "chats"]);
+  store.putHarnessState({ id: "claude-code", consent: "given" });
+  expect(marks.splice(0)).toEqual(["agents", "settings"]);
+  store.putSetting("spending-pause", {});
+  expect(marks.splice(0)).toEqual(["settings", "approvals", "activity"]);
+  store.putFlowHead({
+    id: "f",
+    name: "Flow",
+    summary: "",
+    headHash: "h",
+    createdAt: "2026",
+    updatedAt: "2026",
+    origin: { kind: "import" },
+  });
+  expect(marks.splice(0)).toEqual(["flows", "skills"]);
+  store.putConfirmation({
+    flowId: "f",
+    hash: "h",
+    at: "2026",
+    by: "confirm_dialog",
+    onItsOwn: [],
+    pins: { skills: {}, folders: {} },
+  });
+  expect(marks.splice(0)).toEqual(["flows", "activity"]);
+  store.makeRule({ flowId: "f", touchId: "t", effect: "change", place: { kind: "account", value: "a" } });
+  expect(marks.splice(0)).toEqual(["rules", "flows"]);
+  store.putSchedule({
+    flowId: "f",
+    type: "daily",
+    time: "17:00",
+    whenItsTime: "ask",
+    setAt: "2026",
+    setBy: "window",
+    confirmedHash: "h",
+  });
+  expect(marks.splice(0)).toEqual(["flows"]);
+  store.putTrigger({ flowId: "f", index: 0, enabled: false, hash: "h", spec: "{}", enabledAt: "2026" });
+  expect(marks.splice(0)).toEqual(["flows"]);
+  store.putRemembered({
+    flowId: "f",
+    inputId: "i",
+    kind: "last",
+    value: { type: "text", value: "x" },
+    outside: false,
+    savedAt: "2026",
+    runId: "r",
+  });
+  expect(marks.splice(0)).toEqual(["flows"]);
+  store.claimStart({
+    id: "start",
+    flowId: "f",
+    at: "2026",
+    source: "flows",
+    outcome: "started",
+    request: {},
+  });
+  expect(marks.splice(0)).toEqual(["activity"]);
+  store.putChat({
+    id: "chat",
+    title: "",
+    titleSource: "default",
+    createdAt: "2026",
+    updatedAt: "2026",
+    from: "person",
+    language: "en",
+    languageSource: "app",
+    agent: "claude-code",
+    model: "model",
+    agentSource: "person",
+  });
+  expect(marks.splice(0)).toEqual(["chats"]);
+  store.setComposer("chat", "draft text");
+  expect(marks.splice(0)).toEqual([]);
+  store.putMessage({
+    id: "m",
+    chatId: "chat",
+    seq: 1,
+    at: "2026",
+    role: "person",
+    kind: "text",
+    text: "x",
+    outside: false,
+  });
+  expect(marks.splice(0)).toEqual(["chats"]);
+  store.putDraft({
+    id: "draft",
+    chatId: "chat",
+    messageId: "m",
+    kind: "new_flow",
+    state: "drafted",
+    createdAt: "2026",
+    updatedAt: "2026",
+    files: {},
+    hash: "h",
+    name: "Flow",
+    nameAdjusted: false,
+    lists: { onItsOwn: [], asksFirst: [], never: [] },
+    outside: false,
+    assumptions: [],
+  });
+  expect(marks.splice(0)).toEqual(["chats"]);
+  store.putQuestion({
+    id: "q",
+    flowId: "f",
+    chatId: "chat",
+    messageId: "m",
+    kind: "inputs",
+    state: "open",
+    createdAt: "2026",
+    updatedAt: "2026",
+    source: "schedule",
+    proactive: true,
+    flowHash: "h",
+    given: {},
+    missing: [],
+    pendingStart: { startId: "start", source: "schedule", request: {} },
+  });
+  expect(marks.splice(0)).toEqual(["chats", "activity", "flows"]);
+  store.putCallGrant({
+    runId: "r",
+    stepId: "s",
+    itemKey: "",
+    tool: "tool",
+    digest: "d",
+    kind: "approve",
+    createdAt: "2026",
+  });
+  store.appendAudit({ at: "2026", kind: "x", detail: {} });
+  store.markSeen("f", "l", "k", "2026");
+  store.increment("n", "day");
+  store.claimKey("f", 0, "key", "2026");
+  expect(marks).toEqual([]);
 });

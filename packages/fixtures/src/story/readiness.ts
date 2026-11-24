@@ -1,4 +1,4 @@
-import { isReady, type ReadinessItem, type ReadinessReport } from "@flowdriven/contracts";
+import { isReady, type ReadinessItem, type ReadinessReport } from "@flowdriven/contracts/v1";
 import { FIXTURE_NOW, type FlowRecord } from "../state";
 
 export function readiness(flows: FlowRecord[]): Record<string, ReadinessReport> {

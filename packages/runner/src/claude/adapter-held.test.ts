@@ -1,14 +1,17 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Requirement } from "@flowdriven/sdk";
+import { DatabaseSync } from "node:sqlite";
+import { parseManifest, Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
 import { CONNECTORS } from "../connectors/catalog.ts";
-import { callGrant, createGrantBook, digestCall, grantUsedKey, pickGrant } from "../connectors/grants.ts";
+import { callGrant, createGrantBook, digestCall, pickGrant } from "../connectors/grants.ts";
+import { createEngine } from "../engine.ts";
 import type { StepRequest } from "../harness.ts";
 import { routeRequirement } from "../router/route.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
+import { setup as setupEngine } from "../test-helpers/engine.ts";
 import {
   FAKE_CLAUDE_PATH,
   type FakeAction,
@@ -16,6 +19,7 @@ import {
   readFakeCalls,
   writeFakeScript,
 } from "../test-helpers/fake-claude-script.ts";
+import { legacyGrant } from "../test-helpers/policy-fixture.ts";
 import { createClaudeAdapter } from "./adapter.ts";
 import { CONNECTOR_DENY } from "./connector.ts";
 
@@ -37,7 +41,7 @@ const fact = {
   id: `mcpsrv_${"a".repeat(24)}`,
   status: "connected" as const,
   tools: [
-    ...gmail.read.map((name) => ({ name, readOnly: true })),
+    ...["search_threads"].map((name) => ({ name, readOnly: true })),
     ...Object.keys(gmail.risky).map((name) => ({ name, readOnly: false })),
   ],
 };
@@ -62,7 +66,7 @@ const tool = (
   input: Record<string, unknown> = { id: "d1" },
 ): FakeAction => ({ do: "tool", id, name: gmail.prefix + name, input });
 const done: FakeAction = { do: "result", result: "done" };
-async function setup(actions: FakeAction[], withGrants = true) {
+async function setup(actions: FakeAction[], withGrants = true, confirmed = false) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "flowdriven- ")));
   roots.push(root);
   const connectors = { [gmail.name]: { url: fact.url, id: fact.id, tools: fact.tools } };
@@ -70,7 +74,8 @@ async function setup(actions: FakeAction[], withGrants = true) {
   roots.push(home);
   const project = join(root, "project");
   mkdirSync(project);
-  const store = await openSqliteStore(":memory:");
+  const dbPath = join(root, "grants.sqlite");
+  const store = await openSqliteStore(dbPath);
   stores.push(store);
   const audits: { kind: string; detail: unknown }[] = [];
   const options = {
@@ -84,6 +89,36 @@ async function setup(actions: FakeAction[], withGrants = true) {
     exitWaitMs: 30_000,
     connectors: () => [fact],
     ...(withGrants ? { grants: createGrantBook(store) } : {}),
+    ...(confirmed
+      ? {
+          confirmation: () => ({
+            confirmation: {
+              flowId: "example.email-triage",
+              hash: "hash",
+              onItsOwn: [],
+              touches: [
+                ...["search_threads"].map((name) => ({
+                  id: `read-${name.replaceAll("_", "-")}`,
+                  sentence: "Read",
+                  effect: "read" as const,
+                  rule: "runs_alone" as const,
+                  covers: [`gmail.${name}`],
+                })),
+                ...Object.entries(gmail.risky).map(([name, effect]) => ({
+                  id: name.replaceAll("_", "-"),
+                  sentence: "Action",
+                  effect: effect as "send" | "delete",
+                  rule: "asks_first" as const,
+                  covers: [`gmail.${name}`],
+                })),
+              ],
+            },
+            rules: [],
+            source: "chat",
+            earlierNo: false,
+          }),
+        }
+      : {}),
   };
   const request: StepRequest = {
     runId: "r1",
@@ -104,7 +139,17 @@ async function setup(actions: FakeAction[], withGrants = true) {
   };
   const script = (next: FakeAction[]) =>
     writeFakeScript(home, { connectors, plays: [{ when: "Held test", actions: next }] });
-  return { root, home, store, audits, request, script, adapter: createClaudeAdapter(options) };
+  return {
+    root,
+    home,
+    dbPath,
+    store,
+    audits,
+    request,
+    script,
+    options,
+    adapter: createClaudeAdapter(options),
+  };
 }
 const timeout = { timeout: 20_000 };
 const expectedHold = (name = "delete_draft", input = { id: "d1" }, action = "delete") => ({
@@ -146,26 +191,21 @@ test(
   },
 );
 test(
-  "the audit has call_held with the digest and a tool_denied row with the hold sentence, and no later action of the play runs a tool",
+  "TC-SR1-27 the adapter returns the exact held call, counts it, and stops later tools",
   timeout,
   async () => {
     const t = await setup([tool("a"), tool("b", "search_threads"), done]);
-    await t.adapter.runStep(t.request);
-    expect(t.audits).toContainEqual({
-      kind: "call_held",
-      detail: {
-        stepId: "s",
-        itemKey: "j1",
-        attempt: 1,
-        requirementId: "gmail",
-        tool: "delete_draft",
-        digest: digestCall("delete_draft", { id: "d1" }),
-      },
+    const result = await t.adapter.runStep(t.request);
+    expect(result.hold).toMatchObject({
+      requirementId: "gmail",
+      tool: "delete_draft",
+      input: { id: "d1" },
+      digest: digestCall("delete_draft", { id: "d1" }),
     });
     expect(t.audits).toContainEqual(
       expect.objectContaining({
-        kind: "tool_denied",
-        detail: expect.objectContaining({ reason: CONNECTOR_DENY.held }),
+        kind: "tool_calls",
+        detail: expect.objectContaining({ allowed: 0, held: 1, refused: 0 }),
       }),
     );
     expect(readFakeCalls(t.home)).not.toContainEqual(
@@ -187,7 +227,7 @@ test(
   timeout,
   async () => {
     const t = await setup([tool("a"), done]);
-    t.store.addGrant("r1", pickGrant("gmail", "delete_draft"), "j1");
+    t.store.putCallGrant(legacyGrant("r1", "s", "j1", pickGrant("gmail", "delete_draft")));
     expect(await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
       exit: "ok",
     });
@@ -205,7 +245,7 @@ test(
 );
 test("a pick grant allows any input and the audit has grant_used with grant pick", timeout, async () => {
   const t = await setup([tool("a", "delete_draft", { id: "different" }), done]);
-  t.store.addGrant("r1", pickGrant("gmail", "delete_draft"), "j1");
+  t.store.putCallGrant(legacyGrant("r1", "s", "j1", pickGrant("gmail", "delete_draft")));
   expect(await t.adapter.runStep({ ...t.request, pickTools: ["gmail.delete_draft"] })).toMatchObject({
     exit: "ok",
   });
@@ -222,14 +262,22 @@ test("a pick grant allows any input and the audit has grant_used with grant pick
   });
 });
 test(
-  "a call grant allows the call with the same tool and input once: grant_used says call, the counter grant-used:<run>:<item>:<grant> is 1, and a changed input is held again with a different digest",
+  "a call grant allows the call with the same tool and input once: grant_used says call, the grant is used once, and a changed input is held again with a different digest",
   timeout,
   async () => {
     const t = await setup([tool("a"), done]);
     const grant = callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" }));
-    t.store.addGrant("r1", grant, "j1");
+    t.store.putCallGrant(legacyGrant("r1", "s", "j1", grant));
     expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "ok" });
-    expect(t.store.counter(grantUsedKey("r1", "j1", grant), "run")).toBe(1);
+    const db = new DatabaseSync(t.dbPath);
+    const row = db
+      .prepare("SELECT data FROM call_grants WHERE run_id = ? AND step_id = ? AND item_key = ? AND tool = ?")
+      .get("r1", "s", "j1", "gmail.delete_draft");
+    const used = row ? (JSON.parse(String(row.data)) as { usedAt?: string }).usedAt : undefined;
+    db.close();
+    expect(used).toEqual(expect.any(String));
+    expect(t.store.findGrant(legacyGrant("r1", "s", "j1", grant))).toBeUndefined();
+    expect(() => t.store.useGrant(legacyGrant("r1", "s", "j1", grant), "2026-11-22")).toThrow();
     expect(t.audits).toContainEqual(
       expect.objectContaining({
         kind: "grant_used",
@@ -242,15 +290,53 @@ test(
     });
   },
 );
+test("TC-SR1-28 one approved reply runs and a changed reply is held", timeout, async () => {
+  const input = { to: ["sam@example.test"], subject: "Invoice", body: "Thanks." };
+  const changed = { ...input, body: "Thanks!" };
+  const t = await setup([tool("a", "reply", input), tool("b", "reply", changed), done]);
+  const grant = callGrant("gmail", "reply", digestCall("reply", input));
+  t.store.putCallGrant(legacyGrant("r1", "s", "j1", grant));
+  expect(await t.adapter.runStep(t.request)).toMatchObject({
+    hold: {
+      requirementId: "gmail",
+      tool: "reply",
+      input: changed,
+      digest: digestCall("reply", changed),
+      action: "send",
+    },
+  });
+  expect(readFakeCalls(t.home)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: "tool", id: "a", ran: true }),
+      expect.objectContaining({ kind: "tool", id: "b", ran: false }),
+    ]),
+  );
+  const db = new DatabaseSync(t.dbPath);
+  const row = db
+    .prepare("SELECT data FROM call_grants WHERE run_id = ? AND step_id = ? AND item_key = ? AND tool = ?")
+    .get("r1", "s", "j1", "gmail.reply");
+  const used = row ? (JSON.parse(String(row.data)) as { usedAt?: string }).usedAt : undefined;
+  db.close();
+  expect(used).toEqual(expect.any(String));
+  expect(t.audits).toContainEqual(
+    expect.objectContaining({
+      kind: "grant_used",
+      detail: expect.objectContaining({ grant: "call", tool: "reply" }),
+    }),
+  );
+});
 test(
   "a call grant is used once: the second identical call in the same attempt is held",
   timeout,
   async () => {
     const t = await setup([tool("a"), tool("b"), done]);
-    t.store.addGrant(
-      "r1",
-      callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" })),
-      "j1",
+    t.store.putCallGrant(
+      legacyGrant(
+        "r1",
+        "s",
+        "j1",
+        callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" })),
+      ),
     );
     expect(await t.adapter.runStep(t.request)).toMatchObject({ hold: expectedHold() });
     expect(readFakeCalls(t.home)).toEqual(
@@ -263,7 +349,14 @@ test(
 );
 test("a used call grant stays used in a later attempt of the same run, step and item", timeout, async () => {
   const t = await setup([tool("a"), done]);
-  t.store.addGrant("r1", callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" })), "j1");
+  t.store.putCallGrant(
+    legacyGrant(
+      "r1",
+      "s",
+      "j1",
+      callGrant("gmail", "delete_draft", digestCall("delete_draft", { id: "d1" })),
+    ),
+  );
   expect(await t.adapter.runStep(t.request)).toMatchObject({ exit: "ok" });
   expect(await t.adapter.runStep({ ...t.request, attempt: 2 })).toMatchObject({ hold: expectedHold() });
 });
@@ -308,3 +401,183 @@ test(
     );
   },
 );
+
+test("TC-SR1-26 a held reply carries effect and fixed place through the fake hook", timeout, async () => {
+  const t = await setup(
+    [
+      tool("tu-1", "reply", {
+        to: ["sam@example.test"],
+        threadId: "thread-sam",
+        body: "Thanks, I will send the invoice on Monday.",
+      }),
+      done,
+    ],
+    true,
+    true,
+  );
+  const result = await t.adapter.runStep(t.request);
+  expect(result).toMatchObject({ hold: { effect: "send", fixedPlace: false } });
+  expect(readFakeCalls(t.home)).toContainEqual(
+    expect.objectContaining({ kind: "tool", id: "tu-1", hookExit: 2, ran: false }),
+  );
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.mail",
+    name: "Mail",
+    kind: "build",
+    requirements: [requirement],
+    steps: [
+      {
+        id: "s",
+        do: "worker",
+        instructions: "Held test",
+        uses: ["gmail"],
+        checks: [{ type: "contains", pattern: "ok" }],
+      },
+    ],
+  });
+  if (!parsed.ok) throw Error(JSON.stringify(parsed.issues));
+  const c = await setupEngine(parsed.manifest, {});
+  try {
+    const engine = createEngine({
+      store: c.store,
+      harness: t.adapter,
+      now: c.clock.now,
+      routeOf: () => [routed],
+    });
+    const run = await engine.startRun(parsed.manifest.id, { project: t.request.project });
+    expect(run.state).toBe("waiting_approval");
+    expect(c.store.listAudit(run.id)).toContainEqual(
+      expect.objectContaining({
+        kind: "call_held",
+        detail: expect.objectContaining({
+          digest: expect.any(String),
+          tool: gmail.prefix + "reply",
+          effect: "send",
+          approvalId: expect.any(String),
+        }),
+      }),
+    );
+    expect(c.store.listApprovals({ runId: run.id })).toEqual([
+      expect.objectContaining({ kind: "risky_action", state: "pending", effect: "send", fixedPlace: false }),
+    ]);
+  } finally {
+    c.store.close();
+  }
+});
+
+test("TC-SR1-06 grant use records its approval, digest and effect", timeout, async () => {
+  const input = { threadId: "thread-sam", body: "Thanks" };
+  const name = gmail.prefix + "reply";
+  const digest = digestCall(name, input);
+  const t = await setup([tool("a", "reply", input), tool("b", "reply", input), done], true, true);
+  t.store.putCallGrant({
+    runId: "r1",
+    stepId: "s",
+    itemKey: "j1",
+    tool: name,
+    digest,
+    kind: "approve",
+    createdAt: "2026-11-22",
+    approvalId: "ap-1",
+  });
+  expect(await t.adapter.runStep(t.request)).toMatchObject({ hold: { tool: name, digest, effect: "send" } });
+  expect(t.audits).toContainEqual(
+    expect.objectContaining({
+      kind: "grant_used",
+      detail: expect.objectContaining({ approvalId: "ap-1", tool: name, digest, effect: "send" }),
+    }),
+  );
+  expect(readFakeCalls(t.home)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: "tool", id: "a", ran: true }),
+      expect.objectContaining({ kind: "tool", id: "b", ran: false }),
+    ]),
+  );
+});
+
+test("TC-RUL-26 a Reject during a fake Claude session holds the next rule call", timeout, async () => {
+  const { pendingDecision } = await import("../test-helpers/builders.ts");
+  const { earlierNo } = await import("../rules/decisions.ts");
+  const t = await setup([
+    tool("a", "label_thread", { threadId: "t1", add: ["Invoices"] }),
+    tool("b", "label_thread", { threadId: "t2", add: ["Invoices"] }),
+    done,
+  ]);
+  const decision = pendingDecision(t.store, { id: "other-item", createdAt: "2026-11-22T00:00:00.000Z" });
+  const place = { kind: "account" as const, value: "gmail", label: "Gmail" };
+  const rule = {
+    id: "rule",
+    flowId: "mail",
+    touchId: "label",
+    effect: "change" as const,
+    place,
+    state: "active" as const,
+    createdAt: "2026-11-22T00:00:00.000Z",
+    createdBy: "confirm" as const,
+    sentence: "Label",
+    uses: 0,
+  };
+  const labelFact = { ...fact, tools: [...fact.tools, { name: "label_thread", readOnly: false }] };
+  writeFakeScript(t.home, {
+    connectors: { [gmail.name]: { url: fact.url, id: fact.id, tools: labelFact.tools } },
+    plays: [
+      {
+        when: "Held test",
+        actions: [
+          tool("a", "label_thread", { threadId: "t1", add: ["Invoices"] }),
+          tool("b", "label_thread", { threadId: "t2", add: ["Invoices"] }),
+          done,
+        ],
+      },
+    ],
+  });
+  const labelRequirement = Requirement.parse({ ...requirement, tools: ["label_thread"] });
+  const labelRoute = routeRequirement(labelRequirement, {
+    hooks: true,
+    chrome: false,
+    connectors: [labelFact],
+  });
+  if (!labelRoute?.routed) throw new Error("Missing label route");
+  const confirmation = {
+    flowId: "mail",
+    hash: "hash",
+    onItsOwn: ["label"],
+    touches: [
+      {
+        id: "label",
+        sentence: "Label",
+        effect: "change" as const,
+        rule: "runs_alone" as const,
+        place,
+        covers: ["gmail.label_thread"],
+      },
+    ],
+  };
+  const adapter = createClaudeAdapter({
+    ...t.options,
+    connectors: () => [labelFact],
+    confirmation: () => ({
+      confirmation,
+      rules: [rule],
+      source: "chat",
+      earlierNo: earlierNo(t.store, decision.runId),
+    }),
+    recordRule: () => {},
+    afterAllow: () => t.store.updateApproval(decision.id, { state: "rejected" }),
+  });
+  expect(
+    await adapter.runStep({
+      ...t.request,
+      runId: decision.runId,
+      requirements: [labelRequirement],
+      routes: [labelRoute],
+    }),
+  ).toMatchObject({ hold: { tool: gmail.prefix + "label_thread" } });
+  expect(readFakeCalls(t.home)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: "tool", id: "a", ran: true }),
+      expect.objectContaining({ kind: "tool", id: "b", ran: false }),
+    ]),
+  );
+});

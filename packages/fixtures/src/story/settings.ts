@@ -1,4 +1,4 @@
-import { DEFAULT_KEEPER, type Settings } from "@flowdriven/contracts";
+import { DEFAULT_KEEPER, type Settings } from "@flowdriven/contracts/v1";
 export function settings(): Settings {
   return {
     brain: {

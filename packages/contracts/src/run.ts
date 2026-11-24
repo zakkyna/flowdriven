@@ -1,14 +1,28 @@
 import { z } from "zod";
-import { CheckType, Id, IsoDateTime, OutputType, SemVer, StepDo } from "./common.ts";
+import {
+  AgentId,
+  CheckType,
+  ContentHash,
+  Id,
+  IsoDateTime,
+  Line,
+  ModelId,
+  OutputType,
+  SemVer,
+  StartSource,
+  StepDo,
+} from "./common.ts";
 
 export const RunState = z.enum([
   "queued",
   "checking",
-  "blocked",
   "running",
   "waiting_approval",
+  "needs_login",
   "retrying",
+  "blocked",
   "interrupted",
+  "stopped",
   "done",
   "failed",
 ]);
@@ -22,6 +36,7 @@ export const StepRunState = z.enum([
   "failed",
   "skipped",
   "interrupted",
+  "stopped",
 ]);
 export type StepRunState = z.infer<typeof StepRunState>;
 export const CheckVerdict = z.enum(["passed", "failed", "pending"]);
@@ -133,10 +148,53 @@ export const RunItem = z.object({
 export type RunItem = z.infer<typeof RunItem>;
 export const StepRun = LeafStepRun.extend({ items: z.array(RunItem).optional() });
 export type StepRun = z.infer<typeof StepRun>;
-export const RunReport = z.object({
+export const Cause = z.strictObject({
+  code: z.enum([
+    "agent_signed_out",
+    "site_sign_in",
+    "permission_off",
+    "agent_not_set_up",
+    "usage_limit",
+    "spending_limit",
+    "checks_failing",
+    "requirement_missing",
+    "flow_not_confirmed",
+    "limits_not_applied",
+    "crash",
+    "step_failed",
+    "stuck_repeating",
+    "stopped",
+    "flow_deleted",
+    "agent_cannot_be_limited",
+    "daily_limit",
+    "cost_not_reported",
+    "internal_error",
+  ]),
+  params: z.record(z.string(), z.string()).optional(),
+});
+export type Cause = z.infer<typeof Cause>;
+export const InputProblem = z.enum([
+  "empty",
+  "unreadable",
+  "zero",
+  "too_long",
+  "too_long_text",
+  "out_of_range",
+  "not_a_choice",
+  "hidden_characters",
+]);
+export type InputProblem = z.infer<typeof InputProblem>;
+export const FieldProblem = z.strictObject({
+  inputId: Id,
+  problem: InputProblem,
+  params: z.strictObject({ min: z.number().optional(), max: z.number().optional() }).optional(),
+});
+export type FieldProblem = z.infer<typeof FieldProblem>;
+export const RunReport = z.strictObject({
   runId: Id,
-  lines: z.tuple([z.string(), z.string(), z.string()]),
-  saveOffer: z.boolean(),
+  lines: z.array(z.string()).max(3),
+  decisionLines: z.array(Line),
+  result: z.strictObject({ kind: z.enum(["chat", "report"]), answer: z.array(z.string()).optional() }),
 });
 export type RunReport = z.infer<typeof RunReport>;
 export const RunTrigger = z.object({
@@ -144,11 +202,24 @@ export const RunTrigger = z.object({
   words: z.string().min(1).max(200),
 });
 export type RunTrigger = z.infer<typeof RunTrigger>;
-export const RunSummary = z.object({
+export const RunSummary = z.strictObject({
   id: Id,
   flowId: Id,
   flowName: z.string(),
   flowVersion: SemVer,
+  flowHash: ContentHash,
+  source: StartSource,
+  startWords: Line.optional(),
+  agent: AgentId,
+  model: ModelId.optional(),
+  chatId: Id.optional(),
+  startedAfter: z.strictObject({ runId: Id, flowName: z.string() }).optional(),
+  behind: z.strictObject({ runId: Id, needsYou: z.boolean() }).optional(),
+  cause: Cause.optional(),
+  currentStep: z
+    .strictObject({ index: z.number().int().min(1), count: z.number().int().min(1), title: z.string() })
+    .optional(),
+  versionChanged: z.boolean(),
   oneTime: z.boolean(),
   project: z.string(),
   state: RunState,
@@ -178,9 +249,42 @@ export const RunDetail = RunSummary.extend({
   estimatedCostUsd: z.number(),
   report: RunReport.optional(),
   blockedReason: z.string().optional(),
+  notes: z.array(
+    z.strictObject({
+      id: Id,
+      text: z.string(),
+      at: IsoDateTime,
+      fromStep: z.number().int().min(1).optional(),
+      state: z.enum(["waiting", "used", "not_used"]),
+      usedAt: IsoDateTime.optional(),
+      outside: z.boolean(),
+    }),
+  ),
+  skippedStarts: z.array(z.strictObject({ at: IsoDateTime, runId: Id })),
+  attemptLog: z.array(
+    z.strictObject({
+      step: z.number().int().min(1),
+      attempt: z.number().int().min(1),
+      reason: z.enum(["repeated_call", "repeated_error"]),
+      count: z.number().int().min(1),
+      evidence: z.string(),
+      outside: z.boolean(),
+    }),
+  ),
+  decisionLines: z.array(Line),
+  answer: z
+    .strictObject({ lines: z.array(z.string()), chatId: Id.optional(), messageId: Id.optional() })
+    .optional(),
+  costLine: z.discriminatedUnion("kind", [
+    z.strictObject({ kind: z.literal("plan") }),
+    z.strictObject({ kind: z.literal("amount"), usd: z.number().min(0) }),
+    z.strictObject({ kind: z.literal("none") }),
+  ]),
+  canRunAgain: z.boolean(),
+  canTryAgain: z.boolean(),
 });
 export type RunDetail = z.infer<typeof RunDetail>;
-export const RESUMABLE_RUN_STATES: readonly RunState[] = ["blocked", "failed", "interrupted"];
+export const RESUMABLE_RUN_STATES: readonly RunState[] = ["blocked", "interrupted", "needs_login", "failed"];
 export function isResumable(state: RunState): boolean {
   return RESUMABLE_RUN_STATES.includes(state);
 }

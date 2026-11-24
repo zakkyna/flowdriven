@@ -1,6 +1,6 @@
-import type { HarnessCard } from "@flowdriven/contracts";
+import type { HarnessCard } from "@flowdriven/contracts/v1";
 import { type ReactElement, useState } from "react";
-import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
+import { useRunnerAction, useRunnerQuery } from "../../legacy/runner-context";
 import { Button } from "../../ui/Button";
 import { Page } from "../../ui/Page";
 import { ScreenState } from "../../ui/ScreenState";

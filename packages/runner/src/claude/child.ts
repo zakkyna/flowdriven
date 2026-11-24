@@ -13,7 +13,12 @@ export type Child = {
 export function startChild(
   command: string,
   args: readonly string[],
-  options: { cwd: string; env: Record<string, string>; graceMs?: number },
+  options: {
+    cwd: string;
+    env: Record<string, string>;
+    graceMs?: number;
+    killGroup?: (pid: number, signal: NodeJS.Signals) => void;
+  },
 ): Child {
   assertSafeArgs(args);
   if (process.platform === "win32") throw new Error("Windows is not supported.");
@@ -43,7 +48,7 @@ export function startChild(
   function signalGroup(signal: NodeJS.Signals) {
     if (child.pid !== undefined) {
       try {
-        process.kill(-child.pid, signal);
+        (options.killGroup ?? ((pid, sig) => process.kill(-pid, sig)))(child.pid, signal);
       } catch {
         /* The process group could not be signalled. */
       }
@@ -62,7 +67,7 @@ export function startChild(
     },
     stop() {
       signalGroup("SIGTERM");
-      if (timer === undefined) timer = setTimeout(() => signalGroup("SIGKILL"), options.graceMs ?? 2000);
+      if (timer === undefined) timer = setTimeout(() => signalGroup("SIGKILL"), options.graceMs ?? 1000);
     },
     kill() {
       signalGroup("SIGKILL");

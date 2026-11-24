@@ -1,4 +1,4 @@
-import type { BlockedCall } from "@flowdriven/contracts";
+import type { BlockedCall } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { Icon } from "../../ui/icons";
 import { Revealed } from "../inbox/PayloadView";

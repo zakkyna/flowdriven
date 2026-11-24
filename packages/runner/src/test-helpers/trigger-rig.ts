@@ -63,6 +63,7 @@ export async function triggerRig(
     ...(options.readiness ? { readiness: options.readiness } : {}),
   });
   const { store, engine, clock } = base;
+  store.putSetting("agentPermission", "on");
   const hashes = new Map<string, string>();
   flows.forEach((entry, i) => {
     const hash = `sha256:${String(i + 1).repeat(64)}`;

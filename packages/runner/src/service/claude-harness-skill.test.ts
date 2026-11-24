@@ -52,7 +52,7 @@ const base = {
   },
   finished: true,
   fileExists: () => true,
-  consent: "given" as const,
+  permission: "on" as const,
 };
 afterEach(() => {
   for (const service of services.splice(0)) service.stop();
@@ -80,7 +80,7 @@ async function setup(ref = "claude-code:writer") {
   const hs = createHarnessService({ ...common, projectDir: home });
   services.push(hs);
   await hs.start().settled;
-  hs.setConsent(CLAUDE_ID, "given");
+  store.putSetting("agentPermission", "on");
   const m = manifest(ref);
   const files = { "skills/writer/SKILL.md": skillText("Bundled") };
   store.putFlow({

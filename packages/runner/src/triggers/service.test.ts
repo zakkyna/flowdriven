@@ -315,3 +315,48 @@ test("a capped schedule reports more missed slots without changing run counts", 
   expect(r.store.getTrigger("local.capped-none", 0)?.lastFire?.detail).toBe("more than 192 missed");
   expect(r.store.getTrigger("local.capped-once", 0)?.lastFire?.detail).toBe("more than 192 missed");
 });
+
+test("TC-START-09 trigger tick ignores a deleted flow without writing", async () => {
+  const flow = triggerFlow("local.deleted", [{ kind: "schedule", every: "1h" }]);
+  const r = await triggerRig([{ manifest: flow }]);
+  r.enable(flow.id, 0);
+  const row = r.store.getFlow(flow.id);
+  if (!row) throw new Error("Missing flow");
+  r.store.putFlowHead({
+    id: row.id,
+    name: flow.name,
+    summary: flow.summary,
+    headHash: row.hash,
+    createdAt: row.registeredAt,
+    updatedAt: row.registeredAt,
+    origin: { kind: "import" },
+    deletedAt: row.registeredAt,
+  });
+  const before = r.store.getTrigger(flow.id, 0);
+  const audit = r.store.listAudit();
+  r.clock.advance(H);
+  await r.svc.tick();
+  await r.idle();
+  expect(r.runsOf(flow.id)).toEqual([]);
+  expect(r.store.getTrigger(flow.id, 0)).toEqual(before);
+  expect(r.store.listAudit()).toEqual(audit);
+});
+
+test("TC-STO-34 deletion prevents schedule and after-flow triggers", async () => {
+  const { createFlowDeleteHandler } = await import("../service/flows-delete.ts");
+  const upstream = triggerFlow("local.upstream", [{ kind: "manual" }]);
+  const flow = triggerFlow("local.deleted-triggers", [
+    { kind: "schedule", every: "1h" },
+    { kind: "flow_done", flow: "local.upstream" },
+  ]);
+  const r = await triggerRig([{ manifest: upstream }, { manifest: flow }]);
+  r.enable(flow.id, 0);
+  r.enable(flow.id, 1);
+  createFlowDeleteHandler(r.store, r.engine, r.clock.now)({ flowId: flow.id });
+  await r.engine.startRun(upstream.id, { project: r.project });
+  r.clock.advance(H);
+  await r.svc.tick();
+  await r.idle();
+  expect(r.runsOf(flow.id)).toEqual([]);
+  expect(r.store.listTriggers(flow.id).map((row) => row.enabled)).toEqual([false, false]);
+});

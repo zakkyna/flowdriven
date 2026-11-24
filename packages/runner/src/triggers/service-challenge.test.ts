@@ -239,6 +239,7 @@ test("the three-blocked-runs pause of plan 04 still works", async () => {
 });
 test("through the runner service: a run that becomes blocked with exactly the challenge sentence pauses its trigger at once, and one blocked with another sentence does not", async () => {
   const inner = await openSqliteStore(":memory:");
+  inner.putSetting("agentPermission", "on");
   // The service in live mode with a scripted harness blocks every run at the readiness check. This
   // shim swaps the sentence of that block, standing in for the sentence a harness reply would give.
   let sentence: string | undefined;
@@ -310,6 +311,7 @@ test("through the runner service: a run that becomes blocked with exactly the ch
 });
 test("a run blocked by a challenge that pauses its trigger sends one notice, and one that no trigger started sends the present Run blocked notice", async () => {
   const inner = await openSqliteStore(":memory:");
+  inner.putSetting("agentPermission", "on");
   const store: Store = new Proxy(inner, {
     get(target, key, receiver) {
       const value: unknown = Reflect.get(target, key, receiver);
@@ -324,7 +326,7 @@ test("a run blocked by a challenge that pauses its trigger sends one notice, and
   let time = Date.parse("2026-11-12T00:00:00.000Z");
   let next = 0;
   const jobs: (() => void)[] = [];
-  const notices: { kind: string; body: string }[] = [];
+  const notices: { kind: string; body: { key: string } }[] = [];
   const service = createRunnerService({
     store,
     dataDir: dirname(tempPath()),
@@ -361,7 +363,7 @@ test("a run blocked by a challenge that pauses its trigger sends one notice, and
   expect(notices).toEqual([
     {
       kind: "trigger_paused",
-      body: "Test was switched off because a site asked for a login or a robot check.",
+      body: { key: "notice.limitBody" },
     },
   ]);
   notices.length = 0;
@@ -371,5 +373,25 @@ test("a run blocked by a challenge that pauses its trigger sends one notice, and
   await begun.settled;
   await flush();
   expect(inner.getRun(begun.run.id)).toMatchObject({ state: "blocked", blockedReason: STOP.challenge });
-  expect(notices).toEqual([{ kind: "run_blocked", body: "Test is blocked and needs a look." }]);
+  expect(notices).toEqual([{ kind: "run_blocked", body: { key: "notice.problemBody" } }]);
+});
+
+test("B-03.T7 TC-SR2-12 refused flow_done is claimed and never replayed", async () => {
+  const up = "local.permission-up";
+  const down = "local.permission-down";
+  const r = await triggerRig([
+    { manifest: triggerFlow(up, [{ kind: "manual" }]) },
+    { manifest: triggerFlow(down, [{ kind: "flow_done", flow: up, status: "done" }]) },
+  ]);
+  r.enable(down, 0);
+  const run = r.engine.beginStart(up, { project: r.project });
+  await run.settled;
+  r.store.updateRun(run.run.id, { state: "done", endedAt: r.clock.now().toISOString() });
+  r.store.putSetting("agentPermission", "unset");
+  for (let i = 0; i < 3; i++) await r.svc.tick();
+  expect(r.store.claimKey(down, 0, run.run.id, r.clock.now().toISOString())).toBe(false);
+  r.store.putSetting("agentPermission", "on");
+  await r.svc.tick();
+  await r.idle();
+  expect(r.runsOf(down)).toHaveLength(0);
 });

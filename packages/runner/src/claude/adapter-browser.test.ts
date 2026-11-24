@@ -317,3 +317,57 @@ test("unreadable or invalid page counts block before a child starts", async () =
   expect(await t.adapter.runStep(t.request)).toMatchObject({ block: LIMITS_NOT_APPLIED });
   expect(readFakeCalls(t.home)).toEqual([]);
 });
+
+test("TC-SR5-14 an approved outside address is read and counted once", { timeout: 20000 }, async () => {
+  const { createGrantBook, digestCall } = await import("../connectors/grants.ts");
+  const target = "https://www.upwork.com/jobs/~bad";
+  const input = { tabId: 1001, url: target };
+  const name = CHROME_PREFIX + "navigate";
+  const t = await setup();
+  writeFakeScript(t.home, {
+    chrome: true,
+    pages: { [target]: { title: "Job", text: "Approved page text" } },
+    plays: [
+      {
+        when: "",
+        actions: [
+          context(),
+          tool("first", "navigate", input),
+          tool("read", "get_page_text", { tabId: 1001 }),
+          tool("second", "navigate", input),
+          result,
+        ],
+      },
+    ],
+  });
+  t.store.putCallGrant({
+    runId: "r1",
+    stepId: "s",
+    itemKey: "",
+    tool: name,
+    digest: digestCall(name, input),
+    kind: "approve",
+    createdAt: "2026-11-22",
+    approvalId: "ap-1",
+  });
+  const adapter = createClaudeAdapter({
+    ...t.options,
+    grants: createGrantBook(t.store),
+    confirmation: () => ({ confirmation: { flowId: "flow", hash: "hash", onItsOwn: [], touches: [] } }),
+  });
+  expect(await adapter.runStep(t.request)).toMatchObject({
+    outside: true,
+    hold: { outsideFlow: true, tool: name, input, digest: digestCall(name, input) },
+  });
+  expect(t.pages.count("r1", "jobs_web")).toEqual({ run: 1, day: 1 });
+  expect(t.audits).toContainEqual(
+    expect.objectContaining({ kind: "page_read", detail: expect.objectContaining({ address: target }) }),
+  );
+  expect(toolCalls(t.home)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: "first", ran: true }),
+      expect.objectContaining({ id: "read", ran: true }),
+      expect.objectContaining({ id: "second", hookExit: 2, ran: false }),
+    ]),
+  );
+});

@@ -9,7 +9,7 @@ const contracts = fileURLToPath(new URL("../../contracts/", import.meta.url));
 
 test("the contracts load on plain Node from the runner package", () => {
   const code =
-    "const m = await import('@flowdriven/contracts'); process.stdout.write(typeof m.operations['flows.list'] + ' ' + new m.RunnerError('not_found', 'x').code)";
+    "const m = await import('@flowdriven/contracts/v1'); process.stdout.write(typeof m.operations['flows.list'] + ' ' + new m.RunnerError('not_found', 'x').code)";
   const out = spawnSync(process.execPath, ["--input-type=module", "-e", code], {
     cwd: runner,
     encoding: "utf8",

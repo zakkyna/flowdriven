@@ -9,15 +9,17 @@ test("the four waiting reasons of spec 21.8, with a time when one is known", () 
   expect(Waiting.parse({ reason: "ceiling", running: 4, ceiling: 4 }).running).toBe(4);
   expect(Waiting.safeParse({ reason: "disk" }).success).toBe(false);
 });
-test("there is no new run state", () => {
+test("the eleven run states", () => {
   expect(RunState.options).toEqual([
     "queued",
     "checking",
-    "blocked",
     "running",
     "waiting_approval",
+    "needs_login",
     "retrying",
+    "blocked",
     "interrupted",
+    "stopped",
     "done",
     "failed",
   ]);
@@ -28,6 +30,10 @@ test("a run summary may carry a waiting reason", () => {
     flowId: "f",
     flowName: "F",
     flowVersion: "1.0.0",
+    flowHash: `sha256:${"a".repeat(64)}`,
+    source: "flows",
+    agent: "claude-code",
+    versionChanged: false,
     oneTime: false,
     project: "/p",
     state: "queued",

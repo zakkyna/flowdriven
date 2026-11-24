@@ -1,5 +1,5 @@
 import { commandLineAllowed, parseCommandLine } from "@flowdriven/sdk";
-import { commandRefusal } from "../router/commands-route.ts";
+import { commandRefusal, unsafeShellLine } from "../router/commands-route.ts";
 
 export type CommandPolicy = { patterns: string[] };
 export const COMMAND_DENY = {
@@ -14,8 +14,9 @@ export const COMMAND_STOP = {
 export function decideCommand(
   policy: CommandPolicy | undefined,
   input: Record<string, unknown>,
+  scope?: { roots: string[]; projectRoot?: string },
 ): { allow: true } | { allow: false; reason: string } {
-  if (input.run_in_background === true) return { allow: false, reason: COMMAND_DENY.background };
+  if (!scope && input.run_in_background === true) return { allow: false, reason: COMMAND_DENY.background };
   if (
     Object.keys(input).some(
       (key) =>
@@ -30,14 +31,18 @@ export function decideCommand(
         !Number.isInteger(input.timeout) ||
         input.timeout < 1 ||
         input.timeout > 600000)) ||
-    ("run_in_background" in input && input.run_in_background !== false) ||
+    ("run_in_background" in input && typeof input.run_in_background !== "boolean") ||
     ("dangerouslyDisableSandbox" in input && input.dangerouslyDisableSandbox !== false)
   )
     return { allow: false, reason: COMMAND_DENY.badInput };
+  if (scope && unsafeShellLine(input.command, scope)) return { allow: false, reason: COMMAND_DENY.badInput };
+  if (input.run_in_background === true) return { allow: false, reason: COMMAND_DENY.background };
   const parsed = parseCommandLine(input.command);
-  if (!parsed.ok) return { allow: false, reason: COMMAND_DENY.badInput };
+  if (!parsed.ok) return { allow: false, reason: scope ? COMMAND_DENY.notDeclared : COMMAND_DENY.badInput };
   if (!policy || !commandLineAllowed(policy.patterns, parsed.words))
     return { allow: false, reason: COMMAND_DENY.notDeclared };
-  const reason = commandRefusal(parsed.words.join(" "));
+  const matched = policy.patterns.filter((pattern) => commandLineAllowed([pattern], parsed.words));
+  const reason =
+    commandRefusal(parsed.words.join(" ")) ?? matched.map(commandRefusal).find((item) => item !== undefined);
   return reason ? { allow: false, reason } : { allow: true };
 }

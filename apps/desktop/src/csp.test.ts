@@ -1,5 +1,22 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { CONTENT_SECURITY_POLICY } from "./csp.mjs";
+
+const EXPECTED_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'";
+
+test("TC-ELE-03 the content security policy is exact and both copies match", () => {
+  const json = JSON.parse(readFileSync("apps/desktop/electron/csp.json", "utf8")) as { policy: string };
+  expect(json.policy).toBe(EXPECTED_CSP);
+  expect(CONTENT_SECURITY_POLICY).toBe(EXPECTED_CSP);
+  const split = (policy: string) => policy.split(";").map((part) => part.trim());
+  expect(split(json.policy)).toEqual(split(EXPECTED_CSP));
+  expect(split(CONTENT_SECURITY_POLICY)).toEqual(split(EXPECTED_CSP));
+  for (const copy of [json.policy, CONTENT_SECURITY_POLICY]) {
+    expect(copy).not.toMatch(/unsafe-inline|unsafe-eval|\*|https?:|ws:/);
+    expect(split(copy)).toContain("img-src 'self' data:");
+  }
+});
 
 test("the policy allows only the app's own files", () => {
   expect(CONTENT_SECURITY_POLICY).toContain("script-src 'self'");

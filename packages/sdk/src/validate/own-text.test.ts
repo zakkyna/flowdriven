@@ -34,3 +34,8 @@ test("hasHiddenText finds a zero-width space, a right-to-left override and a for
     expect(hasHiddenText(`a${String.fromCodePoint(code)}b`)).toBe(true);
   expect(hasHiddenText("a\nb\tc")).toBe(false);
 });
+
+test.each([0xfff9, 0x0600, 0x13430])("TC-INP-11 format character %i is hidden", (code) => {
+  expect(hasHiddenText(String.fromCodePoint(code))).toBe(true);
+  expect(hasHiddenText("a\nb\tc")).toBe(false);
+});

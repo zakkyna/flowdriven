@@ -31,7 +31,13 @@ test("uses the data folder, the demo flag and the runner entry of its environmen
   const { spawn, bridge } = setup();
   const args = spawn.mock.calls.at(0)?.at(1) as string[] | undefined;
   expect(args?.at(0)).toMatch(/packages\/runner\/src\/main\.ts$/);
-  expect(args?.slice(1)).toEqual(["--stdio", "--data-dir", "/a/FlowDriven-demo", "--demo"]);
+  expect(args?.slice(1)).toEqual([
+    "--stdio",
+    "--data-dir",
+    "/a/FlowDriven-demo",
+    "--demo",
+    "--languages=en,id",
+  ]); // TC-ELE-28
   expect(bridge.dataDir).toBe("/a/FlowDriven-demo");
 });
 test("registers the call handler and forwards runner events to the windows", () => {

@@ -10,7 +10,7 @@ import {
 import { startChild } from "./child.ts";
 
 const homes: string[] = [];
-function setup(script: FakeScript) {
+function setup(script: FakeScript, killGroup?: (pid: number, signal: NodeJS.Signals) => void) {
   const h = makeFakeHome(script);
   homes.push(h);
   const settings = join(h, "settings.json");
@@ -26,7 +26,7 @@ function setup(script: FakeScript) {
   const child = startChild(FAKE_CLAUDE_PATH, ["-p", "--settings", settings], {
     cwd: h,
     env: { HOME: h, PATH: process.env.PATH ?? "" },
-    graceMs: 200,
+    ...(killGroup ? { killGroup } : { graceMs: 200 }),
   });
   child.send("hello");
   return { h, child };
@@ -93,4 +93,28 @@ test("done resolves on close: every byte of standard output has arrived", { time
   });
   await child.done;
   expect(bytes).toBe(300001);
+});
+
+test("TC-SR8-01 default stop signals the process group with a one-second grace", {
+  timeout: 20_000,
+}, async () => {
+  const signals: string[] = [];
+  const { h, child } = setup(
+    { plays: [{ when: "", actions: [{ do: "ignore_sigterm" }, { do: "pause", ms: 30000 }] }] },
+    (pid, signal) => {
+      signals.push(signal);
+      process.kill(-pid, signal);
+    },
+  );
+  try {
+    await waitInit(h);
+    const started = performance.now();
+    child.stop();
+    expect(signals).toEqual(["SIGTERM"]);
+    await child.done;
+    expect(signals).toEqual(["SIGTERM", "SIGKILL"]);
+    expect(performance.now() - started).toBeLessThan(1500);
+  } finally {
+    child.kill();
+  }
 });

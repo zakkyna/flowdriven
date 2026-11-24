@@ -1,90 +1,15 @@
-import {
-  DEFAULT_KEEPER,
-  FlowDetail,
-  FlowManifest,
-  FlowSummary,
-  isReady,
-  ReadinessReport,
-  Settings,
-} from "@flowdriven/contracts";
-import {
-  type Check,
-  type LeafStep,
-  type Requirement,
-  FlowManifest as SdkManifest,
-  type Step,
-  type Trigger,
-} from "@flowdriven/sdk";
-import { catalogEntry } from "../connectors/catalog.ts";
-import { isExtraRef } from "../folders/extra.ts";
-import { UNOFFICIAL_SENTENCE } from "../router/route.ts";
-import type { FlowRow, RunRow, StepRow } from "../storage.ts";
-import { connectorReadiness } from "./readiness-connector.ts";
-import { WEB_FIX, webReadiness } from "./readiness-web.ts";
+import { FlowDetail, FlowSummary } from "@flowdriven/contracts";
+import { FlowManifest as SdkManifest, type Trigger } from "@flowdriven/sdk";
+import { flowState } from "../flow-state.ts";
+import { placeTouches } from "../rules/standing.ts";
+import type { FlowRow, Store } from "../storage.ts";
+import { toFlowManifest } from "./map-flow-v1.ts";
+import { toRunSummary } from "./map-run.ts";
 
 export function coreVersion(version: string): string {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:[-+].*)?$/.exec(version);
   if (!match) throw new Error("Invalid version");
   return `${match[1]}.${match[2]}.${match[3]}`;
-}
-export function describeCheck(check: Check): string {
-  switch (check.type) {
-    case "command":
-      return `Runs ${[check.cmd, ...check.args].join(" ")}`.trim();
-    case "files":
-      return `Files exist: ${check.paths.join(", ")}`;
-    case "schema":
-      return `Matches ${check.file}`;
-    case "contains":
-      return `Contains ${(check.patterns ?? [check.pattern ?? ""]).join(", ")}`;
-    case "not_contains":
-      return `Does not contain ${(check.patterns ?? [check.pattern ?? ""]).join(", ")}`;
-    case "judge":
-      return `A reviewer approves it (${check.rubric})`;
-    case "user":
-      return "You approve the result";
-    case "probe":
-      return `${check.tool} answers`;
-  }
-}
-function leaf(step: LeafStep) {
-  return {
-    ...step,
-    title: step.title ?? step.id,
-    instructions: "instructions" in step ? step.instructions : step.do === "ask" ? step.ask.question : "",
-    checks:
-      step.do === "ask"
-        ? []
-        : step.checks.map((check) => ({
-            type: check.type,
-            required: check.required,
-            summary: check.summary ?? describeCheck(check),
-            ...("of" in check && check.of !== undefined ? { of: check.of } : {}),
-            ...(check.type === "command" ? { cmd: check.cmd, args: check.args } : {}),
-          })),
-  };
-}
-function stepModel(step: Step) {
-  if ("do" in step) return leaf(step);
-  return {
-    id: step.id,
-    title: step.title ?? step.id,
-    do: "loop" as const,
-    instructions: "",
-    when: step.when,
-    uses: [],
-    outputs: [],
-    checks: [],
-    retry: 0,
-    loop: {
-      for_each: step.for_each,
-      as: step.as,
-      key: step.key,
-      max: step.max,
-      on_item_fail: step.on_item_fail,
-      steps: step.steps.map(leaf),
-    },
-  };
 }
 export function triggerSummary(t: Trigger): string {
   switch (t.kind) {
@@ -105,168 +30,205 @@ export function triggerSummary(t: Trigger): string {
       return `After ${t.flow}`;
   }
 }
-export function toFlowManifest(manifest: SdkManifest): FlowManifest {
-  return FlowManifest.parse({
-    ...manifest,
-    version: coreVersion(manifest.version),
-    requirements: manifest.requirements.map((r) => ({ ...r, ref: r.ref ?? r.id, routes: r.routes ?? [] })),
-    defaults: {
-      ...manifest.defaults,
-      worker: manifest.defaults.worker === undefined ? undefined : { prefer: [manifest.defaults.worker] },
-    },
-    inputs: manifest.inputs.map((input) => {
-      const { default: value, ...rest } = input;
-      return typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean" ||
-        (Array.isArray(value) && value.every((v) => typeof v === "string"))
-        ? { ...rest, default: value }
-        : rest;
-    }),
-    params: Object.fromEntries(
-      Object.entries(manifest.params).map(([key, param]) => {
-        const { default: value, ...rest } = param;
-        return [
-          key,
-          typeof value === "string" || typeof value === "number" || typeof value === "boolean"
-            ? { ...rest, default: value }
-            : rest,
-        ];
-      }),
-    ),
-    triggers: manifest.triggers.map((t) => ({ kind: t.kind, summary: triggerSummary(t) })),
-    steps: manifest.steps.map(stepModel),
-  });
-}
-function manifestOf(row: FlowRow): SdkManifest {
-  return SdkManifest.parse(row.manifest);
-}
-export function toFlowSummary(row: FlowRow, runs: RunRow[]): FlowSummary {
-  const m = manifestOf(row);
-  const last = runs
-    .filter((r) => r.flowId === row.id)
-    .reduce<RunRow | undefined>((a, b) => (!a || b.startedAt >= a.startedAt ? b : a), undefined);
+export function toFlowSummary(row: FlowRow, store: Store): FlowSummary {
+  const manifest = SdkManifest.parse(row.manifest);
+  const head = store.getFlowHead(row.id);
+  const runs = store.listRuns({ flowId: row.id }).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  const last = runs[0];
+  const schedule = store.getSchedule(row.id);
+  const remembered = store.listRemembered(row.id).filter((item) => item.kind === "remember");
+  const hasPending =
+    store.listApprovals({ state: "pending" }).some((a) => runs.some((r) => r.id === a.runId)) ||
+    store.listQuestions().some((q) => q.flowId === row.id && q.state === "open");
   return FlowSummary.parse({
-    id: m.id,
-    name: m.name,
-    summary: m.summary,
-    version: coreVersion(m.version),
-    kind: m.kind,
-    saved: true,
-    signOff: { state: "approved", version: coreVersion(m.version) },
-    stepCount: m.steps.length,
-    lastRun: last && { runId: last.id, state: last.state, startedAt: last.startedAt },
+    id: row.id,
+    name: head?.name ?? manifest.name,
+    summary: head?.summary ?? manifest.summary,
+    state: flowState(store, row.id),
+    live: hasPending ? "needs_you" : runs.some((r) => r.state === "running") ? "running" : null,
+    steps: manifest.steps.map((s) => ({ id: s.id, title: s.title ?? s.id })),
+    schedule: schedule
+      ? {
+          type: schedule.type,
+          time: schedule.time,
+          day: schedule.day,
+          whenItsTime: schedule.whenItsTime,
+          needsAnswers: false,
+          canUseLast: false,
+          ...(schedule.afterFlowId
+            ? {
+                afterFlow: {
+                  id: schedule.afterFlowId,
+                  name: store.getFlowHead(schedule.afterFlowId)?.name ?? schedule.afterFlowId,
+                },
+              }
+            : {}),
+        }
+      : { type: "manual", whenItsTime: "ask", needsAnswers: false, canUseLast: false },
+    result: ("result" in manifest ? manifest.result?.kind : undefined) ?? "report",
+    asksFor: manifest.inputs
+      .filter(
+        (i) =>
+          i.required &&
+          i.default === undefined &&
+          !remembered.some((item) => item.inputId === i.id && i.type !== "date" && i.type !== "time"),
+      )
+      .map((i) => i.label),
+    ...(last ? { lastRun: { runId: last.id, state: last.state, at: last.startedAt } } : {}),
+    format: manifest.format,
+    createdAt: head?.createdAt ?? row.registeredAt,
+    ...(head?.origin.kind === "skill"
+      ? { madeFromSkill: { skillId: head.origin.skillId, name: head.origin.skillId } }
+      : {}),
   });
 }
-export function toFlowDetail(row: FlowRow, runs: RunRow[], lastRunSteps: StepRow[]): FlowDetail {
-  const m = manifestOf(row);
-  const summary = toFlowSummary(row, runs);
-  const all = m.steps.flatMap((s) => ("do" in s ? [s] : s.steps));
-  return FlowDetail.parse({
-    manifest: toFlowManifest(m),
-    hash: row.hash,
-    saved: true,
-    signOff: summary.signOff,
-    playback: {
-      goal: m.summary || m.name,
-      touches: m.requirements.map((r) => r.ref ?? r.id),
-      asksApprovalFor: all.flatMap((s) => [
-        ...(s.do === "ask" ? [s.ask.question] : []),
-        ...(s.checks.some((c) => c.type === "user") ? [`Approving the result of "${s.title ?? s.id}"`] : []),
-      ]),
-    },
-    conversation: [],
-    canUndo: false,
-    stepStatus: Object.fromEntries(
-      m.steps.map((s) => [
-        s.id,
-        lastRunSteps.find((r) => r.stepId === s.id && r.itemKey === "" && r.runId === summary.lastRun?.runId)
-          ?.state ?? "pending",
-      ]),
-    ),
+
+export function toFlowDetail(row: FlowRow, store: Store): FlowDetail {
+  const manifest = SdkManifest.parse(row.manifest);
+  const confirmation = store.getConfirmation(row.id);
+  const active = store
+    .listRules()
+    .filter(
+      (r) =>
+        r.flowId === row.id &&
+        r.state === "active" &&
+        ["local_write", "run_command", "change"].includes(r.effect),
+    );
+  const touches = "touches" in manifest ? (manifest.touches ?? []) : [];
+  const defaults = placeTouches(touches, {
+    origin:
+      (row.savedBy?.kind === "save_flow" || row.savedBy?.kind === "save_change") &&
+      ["chat", "skill"].includes(store.getFlowHead(row.id)?.origin.kind ?? "")
+        ? "chat"
+        : "market",
   });
-}
-export type LocalChecks = Record<
-  "skill" | "command" | "folder",
-  (req: Requirement) => {
-    state: "ok" | "missing" | "needs_login";
-    detail: string;
-  }
->;
-export function toReadinessReport(
-  row: FlowRow,
-  checkedAt: string,
-  web?: { chromeFlag: boolean; hostFile: boolean },
-  connectors?: { name: string; url: string; status: string }[],
-  local?: LocalChecks,
-): ReadinessReport {
-  const m = manifestOf(row);
-  const items = m.requirements.map((r) => {
-    const entry =
-      r.type === "mcp_server" && (r.connect === undefined || r.connect === "native")
-        ? catalogEntry(r.ref)
-        : undefined;
-    const connector = entry && connectors !== undefined ? connectorReadiness(entry, connectors) : undefined;
-    const checked =
-      local &&
-      (r.type === "skill"
-        ? local.skill(r)
-        : r.type === "cli_tool"
-          ? local.command(r)
-          : r.type === "path" && isExtraRef(r.ref)
-            ? local.folder(r)
-            : undefined);
+  const lists = { onItsOwn: [] as string[], asksFirst: [] as string[], never: [] as string[] };
+  const views = touches.map((touch) => {
+    const rule = active.find(
+      (r) =>
+        r.touchId === touch.id &&
+        r.effect === touch.effect &&
+        r.place.kind === touch.place?.kind &&
+        r.place.value === touch.place.value,
+    );
+    const alwaysAsks = ["send", "post", "pay", "delete", "merge"].includes(touch.effect);
+    const list =
+      touch.rule === "not_allowed"
+        ? "never"
+        : !alwaysAsks && (touch.effect === "read" || rule !== undefined)
+          ? "on_its_own"
+          : "asks_first";
+    lists[list === "on_its_own" ? "onItsOwn" : list === "asks_first" ? "asksFirst" : "never"].push(touch.id);
     return {
-      requirementId: r.id,
-      name: r.ref ?? r.id,
-      type: r.type,
-      why: r.why,
-      required: r.required,
-      sensitive: r.sensitive,
-      state: "unchecked" as const,
-      detail: "Not checked yet. Checking requirements arrives with the readiness engine.",
-      route: { via: "FlowDriven", risk: "official" as const },
-      autoInstall: "guided" as const,
-      guide: { steps: ["Nothing to do yet."], commands: [], verified: false },
-      checkedAt,
-      ...(checked
-        ? {
-            ...checked,
-            ...(checked.state !== "ok"
-              ? { guide: { steps: [checked.detail], commands: [], verified: false } }
-              : {}),
-          }
-        : {}),
-      ...(connector && entry
-        ? {
-            ...connector,
-            route: { via: `${entry.label} connector in Claude Code`, risk: "official" as const },
-            ...(connector.state !== "ok"
-              ? { guide: { steps: [connector.detail], commands: [], verified: false } }
-              : {}),
-          }
-        : {}),
-      ...(web && r.type === "web" && r.mode === "read" && r.session === "own"
-        ? {
-            ...webReadiness(web),
-            route: {
-              via: "Claude in Chrome inside Claude Code",
-              risk: "unofficial" as const,
-              note: UNOFFICIAL_SENTENCE,
-            },
-            guide: { steps: [WEB_FIX], commands: ["claude --chrome"], verified: false },
-          }
-        : {}),
+      ...touch,
+      declared: touch.rule,
+      list,
+      alwaysAsks,
+      fixedPlace: touch.place !== undefined,
+      ...(rule ? { byRule: rule.id } : {}),
     };
   });
-  return ReadinessReport.parse({ flowId: m.id, flowName: m.name, checkedAt, ready: isReady(items), items });
-}
-export function defaultSettings(now: string): Settings {
-  return Settings.parse({
-    brain: { main: null, subscriptionOrder: [], apiKeyOrder: [] },
-    backends: [],
-    budget: { month: now.slice(0, 7), capUsd: 0, perRunCapUsd: null, spentUsd: 0 },
-    offerSaveOneTime: true,
-    keeper: DEFAULT_KEEPER,
+  const remembered = store.listRemembered(row.id).filter((item) => item.kind === "remember");
+  const inputs = manifest.inputs.map((i) => {
+    const answer =
+      i.type === "date" || i.type === "time" ? undefined : remembered.find((item) => item.inputId === i.id);
+    return {
+      id: i.id,
+      label: i.label,
+      type: i.type,
+      required: i.required,
+      example: "example" in i ? i.example : undefined,
+      choices: "choices" in i ? i.choices : undefined,
+      remember: "remember" in i ? i.remember : false,
+      ...(answer ? { remembered: String(answer.value.value) } : {}),
+      line: answer ? "remembers" : i.default !== undefined ? "default" : i.required ? "asks" : "optional",
+      ...(i.default === undefined
+        ? {}
+        : {
+            default:
+              i.default === "today" && i.type === "date"
+                ? { kind: "today" }
+                : i.default === "now" && i.type === "time"
+                  ? { kind: "now" }
+                  : { kind: "value", value: String(i.default) },
+          }),
+    };
+  });
+  const previous =
+    confirmation && confirmation.hash !== row.hash ? store.getFlow(row.id, confirmation.hash) : undefined;
+  const changes: { sign: "+" | "-" | "~"; text: string }[] = [];
+  if (previous) {
+    const oldManifest = SdkManifest.parse(previous.manifest);
+    const oldTouches = "touches" in oldManifest ? (oldManifest.touches ?? []) : [];
+    for (const [before, after] of [
+      [oldManifest.steps, manifest.steps],
+      [oldTouches, touches],
+    ] as const) {
+      for (const item of before) {
+        const next = after.find((candidate) => candidate.id === item.id);
+        if (!next)
+          changes.push({ sign: "-", text: "sentence" in item ? item.sentence : (item.title ?? item.id) });
+        else if (JSON.stringify(item) !== JSON.stringify(next))
+          changes.push({ sign: "~", text: "sentence" in next ? next.sentence : (next.title ?? next.id) });
+      }
+      for (const item of after) {
+        if (!before.some((candidate) => candidate.id === item.id))
+          changes.push({ sign: "+", text: "sentence" in item ? item.sentence : (item.title ?? item.id) });
+      }
+    }
+  }
+  const legacyManifest = toFlowManifest({ ...manifest, format: "flowdriven-flow/1.1", inputs: [] });
+  return FlowDetail.parse({
+    summary: toFlowSummary(row, store),
+    description: manifest.description,
+    hash: row.hash,
+    ...(confirmation ? { confirmed: { hash: confirmation.hash, at: confirmation.at } } : {}),
+    version: coreVersion(manifest.version),
+    steps: manifest.steps.map((s) => ({
+      id: s.id,
+      title: s.title ?? s.id,
+      kind: "do" in s ? s.do : "loop",
+      asksFirst: "do" in s && s.do === "ask",
+      judgedOnly:
+        "do" in s && s.do !== "ask" && s.checks.length > 0 && s.checks.every((c) => c.type === "judge"),
+    })),
+    inputs,
+    result: ("result" in manifest ? manifest.result : undefined) ?? { kind: "report" },
+    touches: views.map(({ rule: _rule, covers: _covers, ...view }) => view),
+    lists,
+    confirmLists: defaults,
+    rules: active.map(
+      ({ id, flowId, touchId, sentence, effect, place, createdAt, createdBy, lastUsedAt }) => ({
+        id,
+        flowId,
+        touchId,
+        sentence,
+        effect,
+        place,
+        createdAt,
+        createdBy,
+        ...(lastUsedAt ? { lastUsedAt } : {}),
+      }),
+    ),
+    pinsNeeded: manifest.requirements
+      .filter((r) => r.type === "path")
+      .map((r) => ({
+        requirementId: r.id,
+        label: r.ref ?? r.id,
+        access: r.type === "path" ? r.access : "read",
+      })),
+    ...(previous ? { changes } : {}),
+    recentRuns: store
+      .listRuns({ flowId: row.id })
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .slice(0, 5)
+      .map((r) => toRunSummary(r, manifest.name)),
+    manifest: {
+      ...legacyManifest,
+      inputs: manifest.inputs,
+      format: manifest.format,
+      ...("touches" in manifest ? { touches: manifest.touches } : {}),
+      ...("result" in manifest && manifest.result ? { result: manifest.result } : {}),
+    },
   });
 }

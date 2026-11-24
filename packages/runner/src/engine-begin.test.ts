@@ -122,7 +122,12 @@ test("begin variants refuse bad input at once and write nothing", { timeout: 20_
   const d = await choice();
   const b = d.engine.beginAnswer(d.ap.id, { picks: ["j1"] });
   expect(() => d.engine.beginAnswer(d.ap.id, { picks: ["j1"] })).toThrow(
-    expect.objectContaining({ code: "not_allowed", message: "This decision was already made." }),
+    expect.objectContaining({
+      code: "conflict",
+      reason: "already_answered",
+      params: { via: "window" },
+      message: "This decision was already made.",
+    }),
   );
   await vi.waitFor(() => expect(d.g.calls).toHaveLength(2));
   d.g.release("run-1");
@@ -139,7 +144,9 @@ test("beginAnswer commits the decision before it returns", { timeout: 20_000 }, 
   c.g.release("run-1");
   expect((await b.settled).state).toBe("done");
 });
-test("beginDecide approves in the background and rejects at once", { timeout: 20_000 }, async () => {
+test("TC-j24-08 beginDecide continues in the background for either decision", {
+  timeout: 20_000,
+}, async () => {
   for (const decision of ["approve", "reject"] as const) {
     const g = gated();
     const c = await setup([worker("a", [{ type: "user" }]), worker("b")], g.harness);
@@ -150,13 +157,11 @@ test("beginDecide approves in the background and rejects at once", { timeout: 20
     const ap = c.store.listApprovals({ state: "pending" }).at(0);
     if (!ap) throw new Error("Missing approval");
     const b = c.engine.beginDecide(ap.id, decision);
-    expect(b.run.state).toBe(decision === "approve" ? "running" : "failed");
-    if (decision === "approve") {
-      expect(g.calls).toHaveLength(1);
-      await vi.waitFor(() => expect(g.calls).toHaveLength(2));
-      g.release("run-1");
-    }
-    expect((await b.settled).state).toBe(decision === "approve" ? "done" : "failed");
+    expect(b.run.state).toBe("running");
+    expect(g.calls).toHaveLength(1);
+    await vi.waitFor(() => expect(g.calls).toHaveLength(2));
+    g.release("run-1");
+    expect((await b.settled).state).toBe("done");
   }
 });
 test("beginResume returns the run in checking and settles when the walk ends", {
@@ -244,14 +249,14 @@ test("settled never rejects", { timeout: 20_000 }, async () => {
   g.release("run-1");
   await expect(b.settled).resolves.toMatchObject({ id: "run-1" });
 });
-test("sweepExpired expires an approval without any read, through the flow's chain", {
+test("TC-j24-31 sweepExpired leaves a choice waiting without a deadline", {
   timeout: 20_000,
 }, async () => {
   const c = await choice();
   c.advance(24 * 3600000 + 1);
   await c.engine.sweepExpired();
-  expect(c.store.getApproval(c.ap.id)?.state).toBe("expired");
-  expect(c.store.getRun("run-1")?.state).toBe("done");
+  expect(c.store.getApproval(c.ap.id)?.state).toBe("pending");
+  expect(c.store.getRun("run-1")?.state).toBe("waiting_approval");
 });
 test("shutdown refuses new work and drops walks that have not begun", { timeout: 20_000 }, async () => {
   const g = gated();
@@ -268,4 +273,57 @@ test("shutdown refuses new work and drops walks that have not begun", { timeout:
   expect((await b.settled).state).toBe("queued");
   await tick();
   expect(g.calls).toEqual(["run-1:a"]);
+});
+
+test("TC-START-09 deleted flow cannot start or write a run", async () => {
+  const c = await setup();
+  const row = c.store.getFlow("local.test");
+  if (!row) throw new Error("Missing flow");
+  c.store.putFlowHead({
+    id: row.id,
+    name: "Test",
+    summary: "Test",
+    headHash: row.hash,
+    createdAt: row.registeredAt,
+    updatedAt: row.registeredAt,
+    origin: { kind: "import" },
+    deletedAt: row.registeredAt,
+  });
+  expect(() => c.engine.beginStart(row.id, { project: "/tmp" })).toThrow(
+    expect.objectContaining({ code: "not_found", reason: "flow_deleted" }),
+  );
+  expect(c.store.listRuns({ flowId: row.id })).toEqual([]);
+});
+
+test("TC-START-09 a failed run of a deleted flow cannot resume", async () => {
+  const c = await setup();
+  const row = c.store.getFlow("local.test");
+  if (!row) throw new Error("Missing flow");
+  c.store.createRun({
+    id: "failed-run",
+    flowId: row.id,
+    flowHash: row.hash,
+    flowVersion: row.version,
+    state: "failed",
+    project: "/tmp",
+    inputs: {},
+    params: {},
+    requirements: [],
+    startedAt: row.registeredAt,
+  });
+  c.store.putFlowHead({
+    id: row.id,
+    name: "Test",
+    summary: "Test",
+    headHash: row.hash,
+    createdAt: row.registeredAt,
+    updatedAt: row.registeredAt,
+    origin: { kind: "import" },
+    deletedAt: row.registeredAt,
+  });
+  const before = c.store.getRun("failed-run");
+  expect(() => c.engine.beginResume("failed-run")).toThrow(
+    expect.objectContaining({ code: "not_found", reason: "flow_deleted" }),
+  );
+  expect(c.store.getRun("failed-run")).toEqual(before);
 });

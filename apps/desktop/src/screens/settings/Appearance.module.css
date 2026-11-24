@@ -1,0 +1,15 @@
+.group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}

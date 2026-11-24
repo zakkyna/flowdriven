@@ -34,7 +34,7 @@ export const CHANNEL = {
   reused: "This tool call was already seen.",
   checkFailed: "FlowDriven could not check this call.",
 };
-export type CallRecord = { decision: Decision; toolUseId?: string };
+export type CallRecord = { decision: Decision; toolUseId?: string; reused?: true };
 export type Channel = {
   stop(): void;
   allowedIds: ReadonlySet<string>;
@@ -47,6 +47,8 @@ export function startChannel(options: {
   dir: ControlDir;
   decide: (call: unknown) => Decision;
   onCall?: (record: CallRecord) => void;
+  beforeAllow?: () => void;
+  afterAllow?: () => void;
   post?: (call: unknown) => { text: string; line: string } | undefined;
   onPost?: (record: { toolUseId: string; text: string }) => void;
   onUnanswered?: (record: { toolUseId?: string; tool?: string }) => void;
@@ -64,16 +66,20 @@ export function startChannel(options: {
   let allowed = 0;
   let denied = 0;
   let stopped = false;
-  function record(decision: Decision, toolUseId?: string) {
+  function record(decision: Decision, toolUseId?: string, reused = false) {
     if (decision.allow) {
       allowed++;
       if (toolUseId !== undefined) allowedIds.add(toolUseId);
     } else denied++;
     try {
-      options.onCall?.({ decision, ...(toolUseId === undefined ? {} : { toolUseId }) });
+      options.onCall?.({
+        decision,
+        ...(toolUseId === undefined ? {} : { toolUseId }),
+        ...(reused ? { reused: true as const } : {}),
+      });
     } catch {}
   }
-  const deny = (reason: string): Decision => ({ allow: false, tool: "unknown", reason });
+  const deny = (reason: string): Decision => ({ allow: false, outcome: "refuse", tool: "unknown", reason });
   function poll() {
     if (stopped) return;
     let entries: string[];
@@ -96,6 +102,7 @@ export function startChannel(options: {
       const name = file.slice(0, -5);
       let decision: Decision;
       let id: string | undefined;
+      let reused = false;
       try {
         const previous = answers.get(name);
         if (previous !== undefined) {
@@ -171,8 +178,10 @@ export function startChannel(options: {
               typeof (call as Record<string, unknown>).tool_use_id === "string"
             )
               id = (call as { tool_use_id: string }).tool_use_id;
-            if (id !== undefined && ids.has(id)) decision = deny(CHANNEL.reused);
-            else {
+            if (id !== undefined && ids.has(id)) {
+              reused = true;
+              decision = deny(CHANNEL.reused);
+            } else {
               if (id !== undefined) ids.add(id);
               try {
                 decision = options.decide(call);
@@ -201,7 +210,8 @@ export function startChannel(options: {
             }
           }
         }
-        record(decision, id);
+        if (decision.allow) options.beforeAllow?.();
+        record(decision, id, reused);
         const answer = decision.allow
           ? "allow\n"
           : `deny\n${decision.reason.replace(/[\r\n]/g, " ").slice(0, 300)}\n`;
@@ -209,6 +219,7 @@ export function startChannel(options: {
         const tmp = join(dir.res, `.${name}.tmp`);
         writeFileSync(tmp, answer, { mode: 0o600 });
         renameSync(tmp, join(dir.res, name));
+        if (decision.allow) options.afterAllow?.();
         rmSync(path, { recursive: true, force: true });
       } catch {
         /* A missing or unreadable file must never produce an allow. */

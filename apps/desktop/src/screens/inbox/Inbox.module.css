@@ -41,6 +41,7 @@
   padding: 10px 8px 6px;
 }
 .tab {
+  overflow-wrap: anywhere;
   position: relative;
   height: 28px;
   padding: 0 10px;

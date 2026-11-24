@@ -1,10 +1,19 @@
 import { lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { parseTemplate, type Requirement, type UrlTemplate, webRates } from "@flowdriven/sdk";
+import {
+  classifyCommand,
+  parseTemplate,
+  type Requirement,
+  type Touch,
+  type UrlTemplate,
+  webRates,
+} from "@flowdriven/sdk";
 import { CONNECTORS, type ConnectorEntry, catalogEntry } from "../connectors/catalog.ts";
 import { fold, isExtraRef, resolveExtraFolder } from "../folders/extra.ts";
 import type { Routed } from "../router/types.ts";
+import { EFFECT_RANK, EFFECTS, type Effect, type EffectEntry, effectOf } from "../rules/effects.ts";
+import type { RuleRow } from "../storage.ts";
 import type { BrowserPolicy } from "./browser.ts";
 import { COMMAND_STOP, type CommandPolicy } from "./commands.ts";
 import { CONNECTOR_STOP, type ConnectorPolicy } from "./connector.ts";
@@ -13,7 +22,32 @@ import { hasParentPart, isInside, resolveDeep } from "./paths.ts";
 import { visible } from "./text.ts";
 
 export type Folder = { path: string; write: boolean };
+export type CompiledTouch = {
+  touchId: string;
+  effect: Effect;
+  matcher: "folder" | "command" | "exact";
+  place?: NonNullable<Touch["place"]>;
+  fixedPlace: boolean;
+  list: "on_its_own" | "asks_first" | "never";
+  covers: string[];
+};
 export type Policy = {
+  rejectedCalls?: { tool: string; digest: string }[];
+  projectRoot?: string;
+  protectedRoots?: string[];
+  noCommands?: true;
+  flowId?: string;
+  hash?: string;
+  startedAt?: string;
+  touches?: CompiledTouch[];
+  declaredTools?: { tool: string; cover: string }[];
+  effectCatalog?: EffectEntry[];
+  rules?: RuleRow[];
+  runId?: string;
+  stepId?: string;
+  itemKey?: string;
+  source?: string;
+  earlierNo?: boolean;
   tools: string[];
   folders: Folder[];
   cwd: string;
@@ -47,6 +81,11 @@ export const FOLDER_STOP = {
 
 export function buildPolicy(input: {
   kind: "worker" | "agent";
+  flowId?: string;
+  hash?: string;
+  touches?: Touch[];
+  onItsOwn?: string[];
+  effectCatalog?: EffectEntry[];
   requirements: Requirement[];
   routes?: Routed[];
   connectors?: ConnectorFact[];
@@ -70,6 +109,77 @@ export function buildPolicy(input: {
     schema: input.schema,
     sessionId: input.sessionId,
   };
+  if (input.touches !== undefined) {
+    policy.projectRoot = resolveDeep(input.project);
+    const root = resolveDeep(input.controlRoot);
+    if (root) policy.protectedRoots = [root, dirname(root)];
+    if (input.takesOutside === true) policy.noCommands = true;
+    const catalog = input.effectCatalog ?? EFFECTS;
+    policy.effectCatalog = catalog;
+    policy.declaredTools = [];
+    const declared = input.requirements.flatMap((req) => {
+      if (req.type === "mcp_server") {
+        const prefix = catalogEntry(req.ref, input.catalog ?? CONNECTORS)?.prefix ?? "";
+        return (req.tools ?? []).map((tool) => {
+          const cover = `${req.id}.${tool}`;
+          const identity = prefix ? prefix + tool : `mcp__${req.id}__${tool}`;
+          policy.declaredTools?.push({ tool: identity, cover });
+          if (!prefix) policy.declaredTools?.push({ tool: cover, cover });
+          return {
+            cover: `${req.id}.${tool}`,
+            entry: catalog.find((entry) => entry.tool === identity) ?? effectOf(cover, catalog),
+            unknown: !catalog.some((entry) => entry.tool === identity || entry.tool === cover),
+          };
+        });
+      }
+      if (req.type === "cli_tool")
+        return (req.commands ?? []).map((command) => ({
+          cover: command,
+          entry: {
+            effect: classifyCommand(command) ?? ("run_command" as Effect),
+            place: undefined,
+            tool: command,
+          },
+          unknown: false,
+        }));
+      return [];
+    });
+    for (const item of declared) {
+      const matches = input.touches.filter((touch) => touch.covers.includes(item.cover));
+      const match = matches[0];
+      if (
+        matches.length !== 1 ||
+        !match ||
+        EFFECT_RANK[match.effect] < EFFECT_RANK[item.entry.effect] ||
+        (EFFECT_RANK[item.entry.effect] === 3 && match.effect !== item.entry.effect)
+      )
+        throw new Error(`Invalid touch coverage: ${item.cover}`);
+    }
+    for (const touch of input.touches)
+      for (const cover of touch.covers)
+        if (!declared.some((item) => item.cover === cover))
+          throw new Error(`Invalid touch coverage: ${cover}`);
+    policy.flowId = input.flowId ?? "";
+    policy.hash = input.hash ?? "";
+    policy.touches = input.touches.map((touch) => {
+      const unknown = declared.some((item) => touch.covers.includes(item.cover) && item.unknown);
+      const place = unknown ? undefined : touch.place;
+      return {
+        touchId: touch.id,
+        effect: touch.effect,
+        matcher: place?.kind === "folder" ? "folder" : place?.kind === "command" ? "command" : "exact",
+        ...(place ? { place } : {}),
+        fixedPlace: place !== undefined,
+        list:
+          touch.rule === "not_allowed"
+            ? "never"
+            : input.onItsOwn?.includes(touch.id)
+              ? "on_its_own"
+              : "asks_first",
+        covers: [...touch.covers],
+      };
+    });
+  }
   if (input.kind === "agent") return policy;
   const commands = input.requirements.filter((r) => r.type === "cli_tool");
   if (
@@ -118,6 +228,15 @@ export function buildPolicy(input: {
         new Error(`This step uses something FlowDriven cannot enforce yet (${requirement.id}).`);
       const entry = catalogEntry(requirement.ref, input.catalog ?? CONNECTORS);
       const route = input.routes?.find((item) => item.requirementId === requirement.id);
+      if (
+        !entry &&
+        input.touches !== undefined &&
+        (requirement.tools?.length ?? 0) > 0 &&
+        (requirement.tools ?? []).every((tool) =>
+          input.touches?.some((touch) => touch.covers.includes(`${requirement.id}.${tool}`)),
+        )
+      )
+        return false;
       if (
         !entry ||
         (requirement.connect !== undefined && requirement.connect !== "native") ||
@@ -285,6 +404,21 @@ export function buildPolicy(input: {
       });
     return index(a.path) - index(b.path);
   });
+  for (const touch of policy.touches ?? []) {
+    if (touch.place?.kind !== "folder" || touch.effect === "change") continue;
+    const requirement = paths.find((item) => item.type === "path" && item.id === touch.place?.value);
+    if (!requirement || requirement.type !== "path") throw new Error("Invalid touch folder");
+    const resolved =
+      grantedPaths.get(requirement.id) ??
+      resolveDeep(
+        requirement.ref === undefined || requirement.ref === "."
+          ? input.project
+          : join(input.project, requirement.ref),
+      );
+    if (!resolved || !policy.folders.some((folder) => folder.path === resolved))
+      throw new Error("Invalid touch folder");
+    touch.place = { ...touch.place, value: resolved };
+  }
   // Compare resolved paths only: on macOS /var is a symlink to /private/var, so the unresolved
   // skill folder can differ from the entry pushed below.
   const skillPath = input.skillFolder === undefined ? undefined : resolveDeep(input.skillFolder);

@@ -1,0 +1,199 @@
+import { expect, test } from "vitest";
+import { heldPayload } from "./held.ts";
+
+test("TC-SR1-12 shows a non-ASCII domain in ASCII", () => {
+  const address = `sam@b${String.fromCodePoint(0xfc)}cher.example.test`;
+  expect(heldPayload({ to: [address] })).toContain("sam@xn--bcher-kva.example.test");
+});
+
+test("TC-SR1-12 the held place uses sorted lower-case ASCII recipients", async () => {
+  const { decide } = await import("../claude/decide.ts");
+  const name = "mcp__claude_ai_Gmail__send_message";
+  const address = `Sam@B${String.fromCodePoint(0xfc)}cher.example.test`;
+  const policy = {
+    tools: [name],
+    folders: [],
+    cwd: "/tmp",
+    addDirs: [],
+    schema: false,
+    sessionId: "s",
+    declaredTools: [{ tool: name, cover: "gmail.send_message" }],
+    touches: [
+      {
+        touchId: "send",
+        effect: "send" as const,
+        matcher: "exact" as const,
+        fixedPlace: false,
+        list: "asks_first" as const,
+        covers: ["gmail.send_message"],
+      },
+    ],
+  };
+  const call = {
+    hook_event_name: "PreToolUse",
+    session_id: "s",
+    tool_use_id: "id",
+    tool_name: name,
+    tool_input: { to: [address], cc: "z@example.test", bcc: ["a@example.test"] },
+  };
+  expect(decide(policy, call)).toMatchObject({
+    outcome: "hold",
+    held: {
+      place: { kind: "address", value: "a@example.test, sam@xn--bcher-kva.example.test, z@example.test" },
+    },
+  });
+  expect(decide(policy, { ...call, tool_input: {} })).toMatchObject({
+    outcome: "hold",
+    held: { fixedPlace: false },
+  });
+});
+
+for (const tool of ["mcp__claude_ai_Gmail__send_message", "mcp__gmail__reply"]) {
+  for (const field of ["to", "cc", "bcc"] as const) {
+    test(`TC-SR1-12 ${tool} displays ASCII for ${field}`, () => {
+      const address = `sam@b${String.fromCodePoint(0xfc)}cher.example.test`;
+      const homograph = `sam@${String.fromCodePoint(0x430)}pple.example.test`;
+      const input = {
+        to: ["sam@example.test"],
+        subject: "Hello",
+        body: "Hello",
+        [field]: [address, homograph, "sam@example.test"],
+      };
+      expect(heldPayload(input, tool)).toMatchObject({
+        [field]: [
+          `${address} (sam@xn--bcher-kva.example.test)`,
+          `${homograph} (sam@xn--pple-43d.example.test)`,
+          "sam@example.test",
+        ],
+      });
+    });
+  }
+}
+
+test("TC-SR1-12 shows ASCII for a named recipient", () => {
+  const address = `sam@b${String.fromCodePoint(0xfc)}cher.example.test`;
+  expect(
+    heldPayload({ to: [`Sam <${address}>`], subject: "Hi", body: "Hi" }, "mcp__gmail__reply"),
+  ).toMatchObject({ to: [`Sam <${address}> (sam@xn--bcher-kva.example.test)`] });
+});
+
+test("TC-SR1-12 splits recipients and shows each ASCII form", () => {
+  const address = `b@b${String.fromCodePoint(0xfc)}cher.example.test`;
+  expect(
+    heldPayload({ to: [`a@x.test, ${address}`], subject: "Hi", body: "Hi" }, "mcp__gmail__reply"),
+  ).toMatchObject({ to: ["a@x.test", `${address} (b@xn--bcher-kva.example.test)`] });
+});
+
+test("TC-SR1-12 trims a recipient before domain conversion", () => {
+  const address = `sam@b${String.fromCodePoint(0xfc)}cher.example.test`;
+  expect(heldPayload({ to: [` ${address} `], subject: "Hi", body: "Hi" }, "mcp__gmail__reply")).toMatchObject(
+    { to: [`${address} (sam@xn--bcher-kva.example.test)`] },
+  );
+});
+
+test("TC-SR1-12 blocks a domain that cannot be converted", () => {
+  expect(
+    heldPayload({ to: ["sam@bad domain.test"], subject: "Hi", body: "Hi" }, "mcp__gmail__reply"),
+  ).toBeUndefined();
+});
+
+test.each(["mcp__gmail__forward", "mcp__gmail__reply"])(
+  "TC-SR1-12 generic %s shows named recipient ASCII",
+  (tool) => {
+    const address = `Sam <sam@b${String.fromCodePoint(0xfc)}cher.example.test>`;
+    expect(heldPayload({ to: address, subject: "Hi", body: "Hi", threadId: "t" }, tool)).toContain(
+      "sam@xn--bcher-kva.example.test",
+    );
+  },
+);
+test("TC-SR1-12 generic recipient with invalid domain is blocked", () => {
+  expect(
+    heldPayload({ to: "Sam <sam@bad domain.test>", threadId: "t" }, "mcp__gmail__forward"),
+  ).toBeUndefined();
+});
+
+test("hidden recipients on send_message (draftId) and reply (no to or replyAll) return undefined and record no place", async () => {
+  expect(
+    heldPayload(
+      { draftId: "draft-1", to: ["sam@example.test"], subject: "Hi", body: "Hi" },
+      "mcp__claude_ai_Gmail__send_message",
+    ),
+  ).toBeUndefined();
+  expect(heldPayload({ draftId: "draft-1" }, "mcp__claude_ai_Gmail__send_message")).toBeUndefined();
+  expect(heldPayload({ threadId: "t-1", body: "Thanks." }, "mcp__claude_ai_Gmail__reply")).toBeUndefined();
+  expect(
+    heldPayload(
+      { threadId: "t-1", cc: ["lee@example.test"], body: "Thanks." },
+      "mcp__claude_ai_Gmail__reply",
+    ),
+  ).toBeUndefined();
+  expect(
+    heldPayload(
+      { to: ["sam@example.test"], subject: "Re: Hi", body: "Thanks.", replyAll: true },
+      "mcp__claude_ai_Gmail__reply",
+    ),
+  ).toBeUndefined();
+  expect(
+    heldPayload(
+      { to: ["sam@example.test"], subject: "Re: Hi", body: "Thanks." },
+      "mcp__claude_ai_Gmail__reply",
+    ),
+  ).toEqual({
+    kind: "email",
+    to: ["sam@example.test"],
+    subject: "Re: Hi",
+    body: "Thanks.",
+  });
+  expect(
+    heldPayload({ to: "sam@example.test", threadId: "t-1", body: "Thanks." }, "mcp__claude_ai_Gmail__reply"),
+  ).toContain("sam@example.test");
+
+  const { decide } = await import("../claude/decide.ts");
+  const sendName = "mcp__claude_ai_Gmail__send_message";
+  const replyName = "mcp__claude_ai_Gmail__reply";
+  const policy = {
+    tools: [sendName, replyName],
+    folders: [],
+    cwd: "/tmp",
+    addDirs: [],
+    schema: false,
+    sessionId: "s",
+    declaredTools: [
+      { tool: sendName, cover: "gmail.send_message" },
+      { tool: replyName, cover: "gmail.reply" },
+    ],
+    touches: [
+      {
+        touchId: "send",
+        effect: "send" as const,
+        matcher: "exact" as const,
+        fixedPlace: true,
+        place: { kind: "address" as const, value: "sam@example.test", label: "Sam" },
+        list: "asks_first" as const,
+        covers: ["gmail.send_message", "gmail.reply"],
+      },
+    ],
+  };
+  const call = (tool: string, input: Record<string, unknown>) => ({
+    hook_event_name: "PreToolUse",
+    session_id: "s",
+    tool_use_id: "id",
+    tool_name: tool,
+    tool_input: input,
+  });
+
+  for (const [tool, input] of [
+    [sendName, { draftId: "draft-1", to: ["sam@example.test"], subject: "Hi", body: "Hi" }],
+    [replyName, { threadId: "t-1", cc: ["sam@example.test"], body: "Thanks." }],
+    [replyName, { to: ["sam@example.test"], replyAll: true, body: "Thanks." }],
+  ] as const) {
+    const res = decide(policy, call(tool, input));
+    expect(res).toMatchObject({ outcome: "hold", held: { fixedPlace: false } });
+    if ("held" in res && res.held) expect("place" in res.held).toBe(false);
+  }
+
+  expect(decide(policy, call(replyName, { to: ["sam@example.test"], body: "Thanks." }))).toMatchObject({
+    outcome: "hold",
+    held: { place: { kind: "address", value: "sam@example.test" } },
+  });
+});

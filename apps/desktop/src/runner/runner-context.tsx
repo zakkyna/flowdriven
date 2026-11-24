@@ -1,7 +1,7 @@
 import {
   isRunnerError,
+  type LiveOperationName,
   type OperationInput,
-  type OperationName,
   type OperationOutput,
   operations,
   type RunnerClient,
@@ -28,6 +28,9 @@ export function RunnerProvider({
 }): ReactElement {
   return <Context.Provider value={client}>{children}</Context.Provider>;
 }
+export function useOptionalRunnerClient(): RunnerClient | null {
+  return useContext(Context);
+}
 export function useRunnerClient(): RunnerClient {
   const client = useContext(Context);
   if (!client) throw new Error("RunnerProvider is missing");
@@ -38,7 +41,7 @@ function asRunnerError(error: unknown): RunnerError {
     ? error
     : new RunnerError("unavailable", error instanceof Error ? error.message : "Unknown error");
 }
-export function useRunnerQuery<N extends OperationName>(
+export function useRunnerQuery<N extends LiveOperationName>(
   name: N,
   input: OperationInput<N>,
   options?: { skip?: boolean },
@@ -101,13 +104,13 @@ export function useRunnerQuery<N extends OperationName>(
     return { data: undefined, error: undefined, loading: true, reload };
   return { data: result.data, error: result.error, loading: result.loading, reload };
 }
-export function useRunnerAction(): <N extends OperationName>(
+export function useRunnerAction(): <N extends LiveOperationName>(
   name: N,
   input: OperationInput<N>,
 ) => Promise<{ ok: true; data: OperationOutput<N> } | { ok: false; error: RunnerError }> {
   const client = useRunnerClient();
   return useCallback(
-    async <N extends OperationName>(name: N, input: OperationInput<N>) => {
+    async <N extends LiveOperationName>(name: N, input: OperationInput<N>) => {
       try {
         return { ok: true as const, data: await client.call(name, input) };
       } catch (error) {

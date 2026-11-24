@@ -39,7 +39,12 @@ export function cutText(text: string): { text: string; cut: boolean } {
   }
   return { text: kept, cut: false };
 }
-export function decidePost(browser: BrowserPolicy, sessionId: string, call: unknown): PostResult | undefined {
+export function decidePost(
+  browser: BrowserPolicy,
+  sessionId: string,
+  call: unknown,
+  approvedAddress?: string,
+): PostResult | undefined {
   if (
     !object(call) ||
     call.hook_event_name !== "PostToolUse" ||
@@ -108,7 +113,9 @@ export function decidePost(browser: BrowserPolicy, sessionId: string, call: unkn
   const title = header[1].toLowerCase();
   const address = header[2];
   const body = block.slice(header[0].length);
-  const onTemplate = browser.templates.some((template) => matchTemplate(template, address) !== undefined);
+  const onTemplate =
+    address === approvedAddress ||
+    browser.templates.some((template) => matchTemplate(template, address) !== undefined);
   const titles = [
     "just a moment",
     "attention required",

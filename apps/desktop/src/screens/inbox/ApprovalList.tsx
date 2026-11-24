@@ -1,4 +1,4 @@
-import type { Approval } from "@flowdriven/contracts";
+import type { Approval } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { formatDateTime } from "../../ui/format";
 import { Icon, type IconName } from "../../ui/icons";

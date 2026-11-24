@@ -1,8 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { expect, test } from "vitest";
+import { findNetworkUse } from "./test-helpers/network-rules.ts";
 
 const pkgs = fileURLToPath(new URL("../../", import.meta.url));
 const sources = (pkg: string) =>
@@ -51,4 +53,102 @@ test("nothing in the runner spawns process.execPath", () => {
         .startsWith("test-helpers/"),
   ))
     expect(readFileSync(file, "utf8")).not.toContain("process.execPath");
+});
+
+test("TC-REPO-08 real V1 sources use no network", async () => {
+  const { findNetworkUse } = await import("./test-helpers/network-rules.ts");
+  const root = join(pkgs, "..");
+  const folders = [
+    "packages/contracts/src",
+    "packages/sdk/src",
+    "packages/runner/src",
+    "packages/fixtures/src",
+    "apps/desktop/electron",
+    "apps/desktop/src",
+  ];
+  const findings: string[] = [];
+  for (const folder of folders) {
+    for (const path of readdirSync(join(root, folder), { recursive: true, encoding: "utf8" })) {
+      if (!/\.(?:ts|tsx|mts)$/.test(path) || /\.test\.(?:ts|tsx|mts)$/.test(path)) continue;
+      const file = join(root, folder, path);
+      for (const finding of findNetworkUse(readFileSync(file, "utf8"))) {
+        findings.push(`${relative(root, file)}: ${finding}`);
+      }
+    }
+  }
+  expect(
+    findings,
+    "V1 has no exemptions; only phone/transport.ts and market/transport.ts may use network in later releases",
+  ).toEqual([]);
+});
+
+function scanNetworkSources(
+  baseDir: string,
+  roots: readonly string[],
+  allowList: ReadonlySet<string> = new Set(),
+): string[] {
+  const findings: string[] = [];
+  for (const folder of roots) {
+    for (const entry of readdirSync(join(baseDir, folder), { recursive: true, encoding: "utf8" })) {
+      const normalized = entry.split(sep).join("/");
+      if (!normalized.endsWith(".ts") || normalized.endsWith(".test.ts")) continue;
+      if (normalized.split("/").includes("test-helpers")) continue;
+      const file = join(baseDir, folder, entry);
+      const rel = relative(baseDir, file).split(sep).join("/");
+      if (allowList.has(rel)) continue;
+      const source = readFileSync(file, "utf8");
+      const matches = findNetworkUse(source);
+      if (/(?<![\w$])net\.connect(?![\w$])/.test(source) && !matches.includes("net.connect")) {
+        matches.push("net.connect");
+      }
+      for (const finding of matches) findings.push(`${rel}: ${finding}`);
+    }
+  }
+  return findings;
+}
+
+test("TC-SR6-10 V1 runner, contracts, sdk and electron main open no network connection of their own", () => {
+  const allowList = new Set<string>([]);
+  const roots = [
+    "packages/runner/src",
+    "packages/contracts/src",
+    "packages/sdk/src",
+    "apps/desktop/electron",
+  ];
+  expect(scanNetworkSources(join(pkgs, ".."), roots, allowList)).toEqual([]);
+
+  const tempRoot = mkdtempSync(join(tmpdir(), "flowdriven-sr6-10-"));
+  try {
+    mkdirSync(join(tempRoot, "sample", "test-helpers"), { recursive: true });
+    writeFileSync(
+      join(tempRoot, "sample", "bad.ts"),
+      'export const go = () => fetch("https://example.test");\n',
+    );
+    writeFileSync(
+      join(tempRoot, "sample", "bad-net.ts"),
+      "export const c = (net: { connect: (port: number) => void }) => net.connect(443);\n",
+    );
+    writeFileSync(
+      join(tempRoot, "sample", "ok.ts"),
+      'export const prefetch = (x: string) => x;\nexport const word = "fetch";\n',
+    );
+    writeFileSync(
+      join(tempRoot, "sample", "ignored.test.ts"),
+      'export const t = () => fetch("https://example.test");\n',
+    );
+    writeFileSync(
+      join(tempRoot, "sample", "test-helpers", "helper.ts"),
+      'export const h = () => fetch("https://example.test");\n',
+    );
+
+    expect(scanNetworkSources(tempRoot, ["sample"], allowList)).toEqual([
+      "sample/bad-net.ts: net.connect",
+      "sample/bad.ts: fetch",
+    ]);
+    expect(scanNetworkSources(tempRoot, ["sample"], new Set(["sample/bad.ts", "sample/bad-net.ts"]))).toEqual(
+      [],
+    );
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 });

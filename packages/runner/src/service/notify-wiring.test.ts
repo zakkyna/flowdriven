@@ -85,7 +85,7 @@ test("a pending approval made by the engine sends one approval notice with the f
   expect(r.notices).toHaveLength(1);
   expect(r.notices[0]).toMatchObject({
     kind: "approval_waiting",
-    body: "Test flow: an approval is waiting.",
+    body: { key: "notice.decisionBody" },
   });
 });
 test("an approval created inside a transaction that then throws sends nothing", async () => {
@@ -121,7 +121,7 @@ test("a run that ends blocked sends one blocked notice; running, checking, done 
   r.store.updateRun("run-1", { state: "blocked" });
   await Promise.resolve();
   expect(r.notices).toHaveLength(1);
-  expect(r.notices[0]).toMatchObject({ kind: "run_blocked", body: "Test flow is blocked and needs a look." });
+  expect(r.notices[0]).toMatchObject({ kind: "run_blocked", body: { key: "notice.problemBody" } });
 });
 test("a flood event sends one notice and a second the same local day sends none; a paused event sends one trigger_paused notice", async () => {
   const r = await rig();
@@ -179,7 +179,8 @@ test("a flow name with control and bidi characters is cleaned in the notice", as
   const r = await rig(`Hello${String.fromCodePoint(0x202e)}\nworld`);
   await r.engine.beginStart("local.test", { project: "/tmp" }).settled;
   await Promise.resolve();
-  expect(r.notices[0]?.body).toBe("Hello world: an approval is waiting.");
+  expect(r.notices[0]?.body).toEqual({ key: "notice.decisionBody" });
+  expect(JSON.stringify(r.notices[0])).not.toContain("Hello");
 });
 test("a putSetting of a new weekly window (resetsAt in seconds) sends one weekly notice naming the weekday; the same value again, the owner's answer (a value with answer), the weekly-index setting and a reset time that moves by a minute inside 24 hours send none", async () => {
   const r = await rig();
@@ -188,9 +189,7 @@ test("a putSetting of a new weekly window (resetsAt in seconds) sends one weekly
   r.store.putSetting("weekly:claude-code", value);
   await Promise.resolve();
   expect(r.notices).toHaveLength(1);
-  expect(r.notices[0]?.body).toBe(
-    "Claude Code's weekly limit is 95% used and resets on Sunday. Keep running triggered flows?",
-  );
+  expect(r.notices[0]?.body).toEqual({ key: "notice.limitBody" });
   for (const [key, v] of [
     ["weekly:claude-code", value],
     ["weekly:claude-code", { ...value, answer: "keep" }],
@@ -201,4 +200,36 @@ test("a putSetting of a new weekly window (resetsAt in seconds) sends one weekly
     await Promise.resolve();
   }
   expect(r.notices).toHaveLength(1);
+});
+
+test("TC-j24-41 an oversized held call sends no notice", async () => {
+  const r = await rig();
+  r.store.createRun({
+    id: "run-oversize",
+    flowId: "local.test",
+    flowHash: `sha256:${"0".repeat(64)}`,
+    flowVersion: "1.0.0",
+    state: "running",
+    project: "/tmp",
+    inputs: {},
+    params: {},
+    requirements: [],
+    startedAt: "2026-11-12T00:00:00Z",
+  });
+  r.store.upsertStep({
+    runId: "run-oversize",
+    stepId: "a",
+    itemKey: "",
+    state: "failed",
+    attempts: [],
+    outputs: {},
+    checks: [],
+    noteLine: { key: "hold.tooLarge" },
+  });
+  r.store.updateRun("run-oversize", {
+    state: "blocked",
+    cause: { code: "step_failed", params: { step: "a" } },
+  });
+  await Promise.resolve();
+  expect(r.notices).toEqual([]);
 });

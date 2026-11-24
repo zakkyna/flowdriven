@@ -8,6 +8,7 @@ import {
 } from "@flowdriven/sdk";
 import type { ResolvedDeps } from "../engine.ts";
 import type { ItemRow, RunRow } from "../storage.ts";
+import { skippedDependency } from "./held.ts";
 import { runLeaf } from "./leaf.ts";
 import { loopsOverChoice, pickKeysOf } from "./pick-keys.ts";
 import { itemScope } from "./scope.ts";
@@ -45,15 +46,17 @@ export async function runLoop(
       }
       const list = resolveValue(step.for_each, scope);
       if (!Array.isArray(list)) throw new Error("for_each is not a list.");
-      const ask =
-        step.key === undefined
-          ? manifest.steps.find(
-              (candidate) =>
-                "do" in candidate &&
-                candidate.do === "ask" &&
-                loopsOverChoice(manifest, candidate.id).includes(step.id),
-            )
-          : undefined;
+      const choice = manifest.steps.find(
+        (candidate) =>
+          "do" in candidate &&
+          candidate.do === "ask" &&
+          loopsOverChoice(manifest, candidate.id).includes(step.id),
+      );
+      if (choice && list.length === 0 && pickKeysOf(store, run.id, choice.id)?.length === 0) {
+        store.upsertStep({ ...row, state: "skipped", skipped: { because: "no_picks" } });
+        return "skipped";
+      }
+      const ask = step.key === undefined ? choice : undefined;
       const pickKeys = ask ? pickKeysOf(store, run.id, ask.id) : undefined;
       if (ask && list.length > 0 && (!pickKeys || pickKeys.length !== list.length))
         throw new Error(`The picks of ${ask.id} cannot be matched to this loop.`);
@@ -121,6 +124,24 @@ export async function runLoop(
     for (const nested of step.steps) {
       const existing = store.getStep(run.id, nested.id, item.key);
       if (existing?.state === "passed" || existing?.state === "skipped") continue;
+      const dependency = skippedDependency(nested, item.key, store.listSteps(run.id));
+      if (dependency) {
+        const prior = manifest.steps
+          .flatMap((candidate) => ("for_each" in candidate ? candidate.steps : [candidate]))
+          .find((candidate) => candidate.id === dependency.stepId);
+        store.upsertStep({
+          runId: run.id,
+          stepId: nested.id,
+          itemKey: item.key,
+          state: "skipped",
+          attempts: [],
+          outputs: {},
+          checks: [],
+          skipped: { because: "needs_skipped_result", stepId: dependency.stepId },
+          note: `Skipped because ${prior?.title ?? dependency.stepId} was not done.`,
+        });
+        continue;
+      }
       const outcome = await runLeaf(nested, {
         deps,
         run,

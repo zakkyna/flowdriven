@@ -1,5 +1,7 @@
 import { parseManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test } from "vitest";
+import { COMMAND_STOP } from "../claude/commands.ts";
+import { buildPolicy } from "../claude/policy.ts";
 import type { Script } from "../scripted-harness.ts";
 import type { Store } from "../storage.ts";
 import { setup } from "../test-helpers/engine.ts";
@@ -146,4 +148,58 @@ test("a sign-off approval of a step marked outside carries outside true, and one
     expect(Object.hasOwn(approval, "outside")).toBe(outside);
     if (outside) expect(approval.outside).toBe(true);
   }
+});
+
+test("TC-SR5-18 connector output marks the next step and its command is refused", async () => {
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.mail",
+    name: "Mail",
+    kind: "build",
+    requirements: [
+      { id: "gmail", type: "mcp_server", ref: "connector:gmail", tools: ["get_thread"] },
+      { id: "cli", type: "cli_tool", commands: ["flutter build apk"] },
+    ],
+    steps: [
+      { ...source, uses: ["gmail"] },
+      { ...worker, uses: ["cli"], instructions: "${steps.source.outputs.body}" },
+    ],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  let commandsRun = 0;
+  const c = await setup(parsed.manifest, {
+    steps: {
+      source: (req) => {
+        req.onOutside?.();
+        return reply(false);
+      },
+      work: (req) => {
+        try {
+          buildPolicy({
+            kind: "worker",
+            requirements: req.requirements,
+            takesOutside: req.takesOutside,
+            project: "/tmp",
+            controlRoot: "/tmp/fd-control",
+            controlCwd: "/tmp/fd-control/cwd",
+            sessionId: "s",
+            schema: false,
+          });
+          commandsRun++;
+          return { text: "ok" };
+        } catch (error) {
+          return { block: error instanceof Error ? error.message : "error" };
+        }
+      },
+    },
+  });
+  stores.push(c.store);
+  const run = await c.engine.startRun("local.mail", { project: "/tmp" });
+  expect(c.store.getStep(run.id, "work")?.outside).toBe(true);
+  expect(JSON.stringify(c.store.getStep(run.id, "work"))).toContain(COMMAND_STOP.outside);
+  expect(commandsRun).toBe(0);
+  const plain = await ready([source, { ...worker, instructions: "${steps.source.outputs.body}" }], {
+    steps: { source: reply(true), work: { text: "ok" } },
+  });
+  expect((await plain.engine.startRun("local.test", { project: "/tmp" })).state).toBe("done");
 });

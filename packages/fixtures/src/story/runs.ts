@@ -1,4 +1,4 @@
-import type { RunDetail, StepRun, StepRunState } from "@flowdriven/contracts";
+import type { RunDetail, StepRun, StepRunState } from "@flowdriven/contracts/v1";
 import type { FlowRecord } from "../state";
 
 const evidence: Record<string, string[]> = {

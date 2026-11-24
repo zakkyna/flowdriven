@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
-import { CLAUDE_ID, createHarnessService } from "./claude-harness.ts";
+import { CLAUDE_ID } from "./claude-harness.ts";
+import { createRunnerService } from "./service.ts";
 
 const roots: string[] = [];
 const stores: Store[] = [];
@@ -22,25 +23,19 @@ test("S7 a revoke is stored even when Claude Code is not detected", { timeout: 2
   stores.push(s);
   s.putHarnessState({ id: CLAUDE_ID, consent: "given", consentAt: "2026-11-10T00:00:00.000Z" });
   let n = 0;
-  const hs = createHarnessService({
+  const service = createRunnerService({
     store: s,
     dataDir,
-    projectDir: dataDir,
+    mode: "live",
     env: { HOME: dataDir, PATH: "/usr/bin:/bin", USER: "u" },
     claudePath: join(dataDir, "missing"),
     now: () => new Date("2026-11-11T00:00:00.000Z"),
     newId: (p) => `${p}-${++n}`,
   });
-  await hs.start().settled;
-  let error = "";
-  try {
-    hs.setConsent(CLAUDE_ID, "revoked");
-  } catch (e) {
-    error = e instanceof Error ? e.message : String(e);
-  }
-  hs.stop();
-  expect({ error, consent: s.getHarnessState(CLAUDE_ID)?.consent }).toEqual({
-    error: "",
-    consent: "revoked",
-  });
+  await service.start().settled;
+  await service.call("settings.update", { patch: { agentPermission: "on" } });
+  await service.call("settings.update", { patch: { agentPermission: "off" } });
+  expect(s.getSetting("agentPermission")).toBe("off");
+  expect(s.getHarnessState(CLAUDE_ID)?.consent).toBe("given");
+  service.stop();
 });

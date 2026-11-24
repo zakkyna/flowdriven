@@ -1,4 +1,4 @@
-import { approvalExpiresAt } from "@flowdriven/contracts";
+import { approvalExpiresAt } from "@flowdriven/contracts/v1";
 import { FIXTURE_NOW, type FixtureState } from "../state";
 import { makeFlow } from "./flows";
 import { readiness } from "./readiness";

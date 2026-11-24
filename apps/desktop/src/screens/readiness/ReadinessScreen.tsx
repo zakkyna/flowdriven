@@ -4,11 +4,11 @@ import {
   type OperationOutput,
   type ReadinessItem,
   type RunnerError,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import { type ReactElement, useEffect, useState } from "react";
+import { useRunnerAction, useRunnerQuery } from "../../legacy/runner-context";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";
-import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { formatDateTime } from "../../ui/format";

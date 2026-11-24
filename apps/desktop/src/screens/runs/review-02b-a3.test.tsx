@@ -1,6 +1,6 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { renderApp } from "../../test/render";
+import { renderApp } from "../../legacy/render-legacy";
 
 test("review: the full report button is usable again after leaving a run while its report loads and coming back", async () => {
   const { client } = renderApp("#/runs/run-0006");

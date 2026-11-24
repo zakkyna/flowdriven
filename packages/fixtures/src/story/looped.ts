@@ -4,7 +4,7 @@ import {
   type LeafStepRun,
   type Step,
   type StepRunState,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import type { FixtureState } from "../state";
 import { makeFlow } from "./flows";
 import { readiness } from "./readiness";

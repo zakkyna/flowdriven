@@ -9,7 +9,8 @@ import {
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Notice, operations } from "@flowdriven/contracts";
+import { Notice } from "@flowdriven/contracts";
+import { operations } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Keeper } from "./keeper/types.ts";
 import { createRunnerService, type RunnerService } from "./service/service.ts";
@@ -46,7 +47,10 @@ const id = "local.review04";
 async function rig(consent = false) {
   const dataDir = dirname(tempPath());
   const home = makeFakeHome();
+  const agentPath = join(dataDir, "claude");
+  symlinkSync(FAKE_CLAUDE_PATH, agentPath);
   const store = await openSqliteStore(":memory:");
+  store.putSetting("agentPermission", "on");
   let time = Date.parse("2026-11-12T00:00:00.000Z");
   let nextId = 0;
   const jobs: (() => void)[] = [];
@@ -57,7 +61,7 @@ async function rig(consent = false) {
     dataDir,
     mode: "live",
     env: { HOME: home, PATH: process.env.PATH, USER: "u" },
-    claudePath: FAKE_CLAUDE_PATH,
+    claudePath: agentPath,
     now: () => new Date(time),
     newId: (p) => `${p}-${++nextId}`,
     keeper: {
@@ -84,7 +88,7 @@ async function rig(consent = false) {
   });
   active.push({ service, store, home });
   await service.start().settled;
-  if (consent) await service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+  if (consent) await service.call("settings.update", { patch: { agentPermission: "on" } });
   const project = join(dataDir, "project");
   mkdirSync(join(project, "inbox"), { recursive: true });
   const flow = triggerFlow(id, [{ kind: "schedule", every: "1m" }]);
@@ -105,7 +109,7 @@ async function rig(consent = false) {
     if (wait) await Promise.all(begun.map((b) => b.settled));
     for (let i = 0; i < 100; i++) await Promise.resolve();
   }
-  return { service, store, notices, project, flow, enable, tick, home, begun, signals };
+  return { service, store, notices, project, flow, enable, tick, home, begun, signals, agentPath };
 }
 
 test("only triggers.setEnabled switches a trigger on: both trigger operations are mcp no, .setEnabled( is called only from service/handlers.ts, and a row with enabled: true is written only from triggers/service.ts", () => {
@@ -303,16 +307,17 @@ test("R7 end to end: 40 schedule fires against a cap of 3 give 3 runs, 37 droppe
   expect(r.notices.filter((n) => n.kind === "flood_cap")).toHaveLength(1);
 });
 
-test("a fire reaches the same checks as a manual run: a flow whose readiness is not ready ends blocked and notifies once, and with consent it runs", {
+test("a fire reaches the same checks as a manual run: a missing agent blocks and notifies once, and runs when restored (FS-j31.E2)", {
   timeout: 20_000,
 }, async () => {
   const r = await rig();
   fakeOutput(r.home, "x");
   await r.enable();
+  rmSync(r.agentPath);
   await r.tick();
   expect(r.store.listRuns({ flowId: id }).at(0)?.state).toBe("blocked");
   expect(r.notices.filter((n) => n.kind === "run_blocked")).toHaveLength(1);
-  await r.service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+  symlinkSync(FAKE_CLAUDE_PATH, r.agentPath);
   await r.tick();
   expect(r.store.listRuns({ flowId: id }).some((run) => run.state === "done")).toBe(true);
 });
@@ -321,6 +326,7 @@ test("three blocked runs in a row pause the trigger", { timeout: 20_000 }, async
   const r = await rig();
   fakeOutput(r.home, "x");
   await r.enable();
+  rmSync(r.agentPath);
   for (let i = 0; i < 3; i++) await r.tick();
   await r.tick();
   expect(r.store.getTrigger(id, 0)).toMatchObject({ enabled: false, pausedAt: expect.any(String) });
@@ -330,7 +336,7 @@ test("three blocked runs in a row pause the trigger", { timeout: 20_000 }, async
   ]);
   for (let i = 0; i < 2; i++) await r.tick();
   expect(r.store.listRuns({ flowId: id })).toHaveLength(3);
-  await r.service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+  symlinkSync(FAKE_CLAUDE_PATH, r.agentPath);
   await r.enable();
   await r.tick();
   expect(r.store.listRuns({ flowId: id })).toHaveLength(4);
@@ -373,6 +379,7 @@ test("no notice text carries step output, a payload value or a file name", { tim
   fakeOutput(r.home, "x SECRET-OUT");
   writeFileSync(join(r.project, "inbox", "PAYLOAD-NAME.txt"), "SECRET-OUT");
   await r.enable();
+  rmSync(r.agentPath);
   for (let i = 0; i < 4; i++) await r.tick();
   expect(r.notices.some((n) => n.kind === "run_blocked")).toBe(true);
   expect(r.notices.some((n) => n.kind === "trigger_paused")).toBe(true);
@@ -472,6 +479,6 @@ test("no notice text carries step output, a payload value or a file name", { tim
     expect(Notice.safeParse(notice).success).toBe(true);
     expect(JSON.stringify(notice)).not.toContain("SECRET-OUT");
     expect(JSON.stringify(notice)).not.toContain("PAYLOAD-NAME.txt");
-    if (notice.kind !== "weekly_limit") expect(notice.body).toContain("Clean name");
+    expect(JSON.stringify(notice)).not.toContain("Clean name");
   }
 });

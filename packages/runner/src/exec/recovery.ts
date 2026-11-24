@@ -2,6 +2,7 @@ import type { FlowManifest } from "@flowdriven/sdk";
 import type { Begun, ResolvedDeps } from "../engine.ts";
 import { EngineError } from "../errors.ts";
 import type { RunRow, StepRow } from "../storage.ts";
+import { sendCapable } from "./held.ts";
 
 export function createRecovery(ctx: {
   deps: ResolvedDeps;
@@ -18,7 +19,7 @@ export function createRecovery(ctx: {
     ctx.sweep();
     const run = store.getRun(id);
     if (!run) throw new EngineError("not_found", "Run not found.");
-    if (!["blocked", "failed", "interrupted"].includes(run.state))
+    if (!["blocked", "failed", "interrupted", "needs_login"].includes(run.state))
       throw new EngineError("not_allowed", "This run cannot be resumed.");
     try {
       ctx.flowFor(run);
@@ -79,10 +80,15 @@ export function createRecovery(ctx: {
                 !pending.some((a) => a.stepId === row.stepId && a.itemKey === row.itemKey)),
           );
         const previouslyInterrupted = store.listSteps(run.id).filter((row) => row.state === "interrupted");
-        const safe = [...interrupted, ...previouslyInterrupted].every((row) => isIdempotent(row, manifest));
+        const all = [...interrupted, ...previouslyInterrupted];
+        const risky = all.find((row) => sendCapable(store, row, manifest));
+        const safe = !risky && all.every((row) => isIdempotent(row, manifest));
         store.transaction(() => {
           for (const row of interrupted) store.upsertStep({ ...row, state: "interrupted" });
-          store.updateRun(run.id, { state: "interrupted" });
+          store.updateRun(run.id, {
+            state: "interrupted",
+            cause: { code: "crash", ...(risky ? { params: { step: risky.stepId } } : {}) },
+          });
           store.appendAudit({ at: now().toISOString(), kind: "run_interrupted", runId: run.id, detail: {} });
         });
         if (safe) resumed.push(beginResume(run.id));

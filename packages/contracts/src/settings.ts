@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Id, RiskLabel } from "./common.ts";
+import { AgentId, Id, LanguageCode, ModelId, RiskLabel } from "./common.ts";
 import { ConsentState, LoginState, QuotaState } from "./harness.ts";
 
 export const BrainBackend = z.object({
@@ -38,35 +38,43 @@ export const KeeperSettings = z.object({
 });
 export type KeeperSettings = z.infer<typeof KeeperSettings>;
 export const DEFAULT_KEEPER = KeeperSettings.parse({});
-export const Settings = z.object({
-  brain: z.object({ main: Id.nullable(), subscriptionOrder: z.array(Id), apiKeyOrder: z.array(Id) }),
-  backends: z.array(BrainBackend),
-  budget: Budget,
-  offerSaveOneTime: z.boolean(),
+const MainAgent = z.strictObject({ agent: AgentId, model: ModelId });
+const spendingLimit = z.number().gt(0).max(10000);
+export const Settings = z.strictObject({
+  language: LanguageCode,
+  agentPermission: z.enum(["unset", "on", "off"]),
+  mainAgent: MainAgent.nullable(),
+  busyFallback: z.boolean(),
+  spendingLimit,
+  spending: z.strictObject({
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+    spentUsd: z.number().min(0),
+    limitUsd: z.number().min(0),
+    state: z.enum(["ok", "warning", "reached"]),
+    allOnPlans: z.boolean(),
+  }),
   keeper: KeeperSettings,
 });
 export type Settings = z.infer<typeof Settings>;
-export const SettingsPatch = z.object({
-  brain: z
-    .object({
-      main: Id.optional(),
-      subscriptionOrder: z.array(Id).optional(),
-      apiKeyOrder: z.array(Id).optional(),
-    })
-    .optional(),
-  budget: z
-    .object({ capUsd: z.number().min(0).optional(), perRunCapUsd: z.number().min(0).nullable().optional() })
-    .optional(),
-  offerSaveOneTime: z.boolean().optional(),
-  keeper: z
-    .object({
-      ceiling: ceilingField.optional(),
-      reserveMb: reserveField.optional(),
-      quotaLines: z.object({ fiveHour: lineField.optional(), sevenDay: lineField.optional() }).optional(),
-      effortModels: effortField.optional(),
-    })
-    .optional(),
-});
+export const SettingsPatch = z
+  .strictObject({
+    language: LanguageCode.optional(),
+    agentPermission: z.enum(["on", "off"]).optional(),
+    mainAgent: MainAgent.nullable().optional(),
+    busyFallback: z.boolean().optional(),
+    spendingLimit: spendingLimit.optional(),
+    keeper: z
+      .strictObject({
+        ceiling: ceilingField.optional(),
+        reserveMb: reserveField.optional(),
+        quotaLines: z
+          .strictObject({ fiveHour: lineField.optional(), sevenDay: lineField.optional() })
+          .optional(),
+        effortModels: effortField.optional(),
+      })
+      .optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0);
 export type SettingsPatch = z.infer<typeof SettingsPatch>;
 export const BUDGET_WARN_RATIO = 0.8;
 export const BUDGET_STOP_RATIO = 1;

@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { APP_NAME, runnerNote } from "../app-info";
-import { useRunnerQuery } from "../runner/runner-context";
+import { useRunnerQuery } from "../legacy/runner-context";
 import { shellKind } from "../shell";
 import { flowState } from "../ui/flow-state";
 import { Icon, type IconName } from "../ui/icons";

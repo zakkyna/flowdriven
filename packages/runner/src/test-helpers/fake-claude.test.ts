@@ -204,6 +204,13 @@ test("an ungated tool runs without asking", () => {
   run(h, ["-p", "--settings", settings(h, "true", "touch marker")], "x");
   expect(existsSync(join(h, "effect"))).toBe(true);
   expect(existsSync(join(h, "marker"))).toBe(false);
+  expect(readFakeCalls(h)).toContainEqual({
+    kind: "tool",
+    id: "u",
+    name: "Write",
+    hookExit: null,
+    ran: true,
+  });
 });
 test("auth_failure ends with exit 1, the event text and a result with is_error true", () => {
   const h = home({ plays: [{ when: "", actions: [{ do: "auth_failure" }] }] });

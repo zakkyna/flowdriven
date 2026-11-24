@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import { readyState, renderApp } from "../../test/render";
+import { readyState, renderApp } from "../../legacy/render-legacy";
 
 const row = (name: string) => screen.getByRole("listitem", { name });
 

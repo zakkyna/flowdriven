@@ -1,4 +1,5 @@
 export const FORMAT_ID = "flowdriven-flow/1.1";
+export const FORMAT_ID_V12 = "flowdriven-flow/1.2";
 export const RISKY_ACTIONS = ["send", "post", "pay", "delete", "merge"] as const;
 export type RiskyAction = (typeof RISKY_ACTIONS)[number];
 export const CHECK_TYPES = [

@@ -1,4 +1,4 @@
-import type { FlowCapabilities, Requirement, Step } from "@flowdriven/contracts";
+import type { FlowCapabilities, Requirement, Step } from "@flowdriven/contracts/v1";
 import type { FlowRecord } from "../state";
 
 // The fixtures package has no dependency on the runner, so this small table repeats the router's

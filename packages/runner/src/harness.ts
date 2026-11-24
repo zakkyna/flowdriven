@@ -4,11 +4,16 @@ import type { ExitClass, RiskyAction } from "./states.ts";
 import type { ModelUsage } from "./storage.ts";
 export type LimitWindow = { utilization?: number; resetsAt?: number; status?: string };
 export type HeldCall = {
+  outsideFlow?: true;
   requirementId: string;
   tool: string;
   input: Value;
   digest: string;
-  action: RiskyAction;
+  action?: RiskyAction;
+  effect?: import("./rules/effects.ts").Effect;
+  touchId?: string;
+  place?: NonNullable<import("@flowdriven/sdk").Touch["place"]>;
+  fixedPlace?: boolean;
 };
 export type RateLimit = {
   status: string;
@@ -33,7 +38,14 @@ export class HarnessCallError extends Error {
     this.call = call;
   }
 }
+export type StepEvent = {
+  tool: string;
+  input: Value;
+  resultDigest: string;
+  error?: string;
+};
 export type StepRequest = {
+  model?: string;
   pickTools?: string[];
   runId: string;
   stepId: string;
@@ -47,9 +59,12 @@ export type StepRequest = {
   project: string;
   requirements: Requirement[];
   routes?: Routed[];
-  approvedCalls?: { tool: string; input: Value }[];
+  approvedCalls?: { tool: string; input: Value; outsideFlow?: true }[];
+  rejectedCalls?: { tool: string; digest: string }[];
+  anotherWay?: { text: string };
   takesOutside?: boolean;
   onOutside?: () => void;
+  onEvent?: (event: StepEvent) => void;
   effort?: "low" | "medium" | "high";
   skill?: string;
   outputs: { id: string; type: string }[];
@@ -64,7 +79,10 @@ export type StepResult = {
   text: string;
   outputs: Record<string, Value>;
   workFolder?: string;
+  site?: string;
   block?: string;
+  cause?: import("./storage.ts").RunRow["cause"];
+  noteLine?: import("./storage.ts").StepRow["noteLine"];
   noRetry?: string;
   hold?: HeldCall;
   outside?: boolean;
@@ -79,6 +97,7 @@ export type ReplanRequest = {
   signal: AbortSignal;
 };
 export type JudgeRequest = {
+  model?: string;
   runId: string;
   stepId: string;
   itemKey?: string;
@@ -104,4 +123,11 @@ export interface HarnessAdapter {
   replan(req: ReplanRequest): Promise<{ instructions: string } | undefined>;
   judge(req: JudgeRequest): Promise<JudgeResult>;
   probe(req: ProbeRequest): Promise<ProbeResult>;
+}
+
+export interface AgentAdapter extends HarnessAdapter {
+  readonly maker: string;
+  readonly catalog: import("./agents/catalog.ts").CatalogEntry;
+  detect(): Promise<import("./agents/registry.ts").Detection>;
+  signInStatus(): Promise<Pick<import("./agents/registry.ts").Detection, "state" | "billing" | "problem">>;
 }

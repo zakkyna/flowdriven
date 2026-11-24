@@ -1,5 +1,4 @@
 import {
-  AuditRecord,
   type BlockedCall,
   CheckResult,
   LeafStepRun,
@@ -78,17 +77,40 @@ export function skipReason(note: string | undefined): SkipReason | undefined {
       return undefined;
   }
 }
+export function currentStep(view: RunView): RunSummary["currentStep"] {
+  const { manifest, steps } = view;
+  const states = manifest.steps.map(
+    (step) => steps.find((row) => row.stepId === step.id && row.itemKey === "")?.state ?? "pending",
+  );
+  let index = states.findIndex((state) =>
+    ["running", "retrying", "waiting_approval", "interrupted"].includes(state),
+  );
+  if (index < 0) index = states.indexOf("pending");
+  if (index < 0) index = manifest.steps.length - 1;
+  const step = manifest.steps[index];
+  return step ? { index: index + 1, count: manifest.steps.length, title: step.title ?? step.id } : undefined;
+}
 export function toRunSummary(
   run: RunRow,
   flowName: string,
   reportFirstLine?: string,
   waiting?: import("../keeper/types.ts").Waiting,
   trigger?: { kind: string; words: string },
+  currentHash?: string,
+  current?: RunSummary["currentStep"],
 ): RunSummary {
   return RunSummary.parse({
     id: run.id,
     flowId: run.flowId,
-    flowName,
+    flowName: run.flowName ?? flowName,
+    flowHash: run.flowHash,
+    source: run.start?.source ?? "flows",
+    agent: run.agent?.agent ?? "claude-code",
+    model: run.agent?.model,
+    chatId: run.start?.chatId,
+    cause: run.cause,
+    versionChanged: currentHash !== undefined && currentHash !== run.flowHash,
+    currentStep: current,
     flowVersion: coreVersion(run.flowVersion),
     oneTime: false,
     project: run.project,
@@ -104,6 +126,8 @@ export function toRunDetail(
   view: RunView,
   harnessIdOf: (workerName: string) => string,
   flowNameOf: (id: string) => string | undefined = () => undefined,
+  flowExists = true,
+  currentHash?: string,
 ): RunDetail {
   const { run, manifest } = view;
   const lines = reportLines(view);
@@ -221,10 +245,40 @@ export function toRunDetail(
       ...(costs.length ? { estimatedCostUsd: costs.reduce((a, b) => a + b, 0) } : {}),
     };
   });
+  const billedRows = usageRows.filter((row) => row.billing !== "plan");
+  const billedCost = billedRows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0);
+  const attemptLog: RunDetail["attemptLog"] = [];
+  for (const [index, step] of manifest.steps.entries()) {
+    const position = index + 1;
+    if ("do" in step) {
+      const row = view.steps.find((r) => r.stepId === step.id && r.itemKey === "");
+      for (const entry of row?.attemptLog ?? []) attemptLog.push({ step: position, ...entry });
+      continue;
+    }
+    for (const item of view.items
+      .filter((i) => i.loopId === step.id && i.note !== "skipped: duplicate key")
+      .toSorted((a, b) => a.position - b.position)) {
+      for (const nested of step.steps) {
+        const row = view.steps.find((r) => r.stepId === nested.id && r.itemKey === item.key);
+        for (const entry of row?.attemptLog ?? []) attemptLog.push({ step: position, ...entry });
+      }
+    }
+  }
   return RunDetail.parse({
-    ...toRunSummary(run, manifest.name, lines[0], view.waiting?.run, runTrigger(run, flowNameOf)),
+    ...toRunSummary(
+      run,
+      manifest.name,
+      lines[0],
+      view.waiting?.run,
+      runTrigger(run, flowNameOf),
+      currentHash,
+      currentStep(view),
+    ),
     inputs,
     steps,
+    notes: [],
+    skippedStarts: [],
+    attemptLog,
     approvalIds: view.approvals.map((a) => a.id),
     outputs,
     usage: harnesses,
@@ -242,13 +296,25 @@ export function toRunDetail(
       queuedSeconds: queuedMs / 1000,
     })),
     estimatedCostUsd: usageRows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0),
-    report: { runId: run.id, lines, saveOffer: false },
+    report: {
+      runId: run.id,
+      lines,
+      decisionLines: run.decisionLines ?? [],
+      result: { kind: run.result?.kind ?? "report" },
+    },
+    decisionLines: run.decisionLines ?? [],
+    costLine:
+      usageRows.length > 0 && billedRows.length === 0
+        ? { kind: "plan" }
+        : billedCost > 0
+          ? { kind: "amount", usd: billedCost }
+          : { kind: "none" },
+    canRunAgain: flowExists,
+    canTryAgain: run.state === "blocked" || run.state === "interrupted" || run.state === "needs_login",
     blockedReason: run.blockedReason,
   });
 }
-export function toAuditRecord(entry: AuditEntry): AuditRecord {
-  return AuditRecord.parse({ ...entry, detail: JSON.stringify(entry.detail) });
-}
+export { toAuditRecord } from "./map-run-v1.ts";
 
 export function runTrigger(
   run: RunRow,

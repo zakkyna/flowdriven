@@ -1,4 +1,4 @@
-import type { QueueRow, QueueView } from "@flowdriven/contracts";
+import type { QueueRow, QueueView } from "@flowdriven/contracts/v1";
 import type { KeeperSnapshot } from "../keeper/types.ts";
 
 export function toQueueView(o: {

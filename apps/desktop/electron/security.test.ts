@@ -24,7 +24,32 @@ describe("Electron security helpers", () => {
       navigateOnDragDrop: false,
       spellcheck: false,
     });
-    expect(MIN_WINDOW).toEqual({ width: 1100, height: 720 });
+    expect(MIN_WINDOW).toEqual({ width: 480, height: 600 });
+  });
+  test("TC-ELE-01 the web preferences keep every lockdown flag", () => {
+    const base = {
+      contextIsolation: true,
+      nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
+      navigateOnDragDrop: false,
+      spellcheck: false,
+      preload: "/preload.js",
+    };
+    const withoutRunner = secureWebPreferences("/preload.js");
+    const withRunner = secureWebPreferences("/preload.js", { runner: true });
+    expect(withoutRunner).toEqual(base);
+    expect(Object.keys(withoutRunner).sort()).toEqual(Object.keys(base).sort());
+    expect(withRunner).toEqual({ ...base, additionalArguments: ["--flowdriven-runner=on"] });
+    expect(Object.keys(withRunner).sort()).toEqual([...Object.keys(base), "additionalArguments"].sort());
+    expect(withoutRunner.webSecurity).toBe(true);
+    for (const forbidden of ["nodeIntegrationInSubFrames", "enableRemoteModule", "experimentalFeatures"]) {
+      expect(forbidden in withoutRunner).toBe(false);
+      expect(forbidden in withRunner).toBe(false);
+    }
   });
   test("navigation stays inside the app", () => {
     expect(isAllowedNavigation(`${APP_ORIGIN}/index.html#/runs`)).toBe(true);

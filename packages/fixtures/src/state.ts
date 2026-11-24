@@ -1,94 +1,35 @@
-import type {
-  Approval,
-  ChatMessage,
-  ContentHash,
-  FlowManifest,
-  FlowSignOff,
-  HarnessCard,
-  Playback,
-  QueueView,
-  ReadinessReport,
-  RunDetail,
-  Settings,
-  UsageSummary,
-} from "@flowdriven/contracts";
-import { approvals } from "./story/approvals";
-import { flows } from "./story/flows";
-import { harnesses } from "./story/harnesses";
-import { addLong } from "./story/long";
-import { addLooped } from "./story/looped";
-import { queue, usage } from "./story/queue";
-import { readiness } from "./story/readiness";
-import { runs } from "./story/runs";
-import { emptySettings, settings } from "./story/settings";
+import type { AuditRecord } from "@flowdriven/contracts";
+import { buildStoryV2, STORY_V2_NOW } from "./story-v2";
 
-export const FIXTURE_NOW = "2026-11-10T09:30:00.000Z";
-export type Scenario = "story" | "empty" | "long" | "looped";
-export interface FlowRecord {
-  manifest: FlowManifest;
-  hash: ContentHash;
-  saved: boolean;
-  signOff: FlowSignOff;
-  playback: Playback;
-  conversation: ChatMessage[];
-  history: { manifest: FlowManifest; hash: ContentHash; signOff: FlowSignOff }[];
-  retiredStepIds: string[];
-}
-export interface FixtureState {
-  flows: FlowRecord[];
-  runs: RunDetail[];
-  approvals: Approval[];
-  readiness: Record<string, ReadinessReport>;
-  harnesses: HarnessCard[];
-  settings: Settings;
-  queue: QueueView;
-  usage: UsageSummary;
-  triggerSwitches: Record<string, { hash: string } | undefined>;
-  capabilityConsents: Record<string, { hash: string } | undefined>;
-  nextRunNumber: number;
-  nextHashNumber: number;
-}
-export function buildStory(): FixtureState {
-  const records = flows();
+export type Scenario = "story-v2" | "empty";
+export const FIXTURE_NOW = STORY_V2_NOW;
+export function buildState(scenario: Scenario = "story-v2") {
+  const story = buildStoryV2();
+  if (scenario === "empty") {
+    story.flows = [];
+    story.chats = [];
+    story.runs = [];
+    story.runSummaries = [];
+    story.decisions = [];
+    story.rules = [];
+  }
   return {
-    flows: records,
-    runs: runs(records),
-    approvals: approvals(),
-    readiness: readiness(records),
-    harnesses: harnesses(),
-    settings: settings(),
-    queue: queue(),
-    usage: usage(),
-    triggerSwitches: {},
-    capabilityConsents: {},
-    nextRunNumber: 8,
-    nextHashNumber: 6,
+    ...story,
+    decisions: structuredClone(story.decisions),
+    rules: structuredClone(story.rules),
+    audit: [] as AuditRecord[],
+    decisionTouches: { "decision-1": { id: "log-hours", sentence: "Log hours" } } as Record<
+      string,
+      { id: string; sentence: string }
+    >,
+    counters: { chat: 0, message: 0, run: 0, start: 0, question: 0 },
+    triggerSwitches: {} as Record<string, { hash: string }>,
+    resumeBlockers: Object.fromEntries(
+      story.runs
+        .filter((run) => run.state === "blocked" || run.state === "needs_login")
+        .map((run) => [run.id, true]),
+    ) as Record<string, boolean>,
   };
 }
-export function buildEmpty(): FixtureState {
-  return {
-    flows: [],
-    runs: [],
-    approvals: [],
-    readiness: {},
-    harnesses: [],
-    settings: emptySettings(),
-    queue: { running: 0, waiting: 0, ceiling: 1, rows: [] },
-    usage: { harnesses: [] },
-    triggerSwitches: {},
-    capabilityConsents: {},
-    nextRunNumber: 1,
-    nextHashNumber: 1,
-  };
-}
-export function buildLong(): FixtureState {
-  const state = buildStory();
-  addLong(state);
-  return state;
-}
-
-export function buildLooped(): FixtureState {
-  const state = buildStory();
-  addLooped(state);
-  return state;
-}
+export type { FixtureState, FlowRecord } from "./v1/state";
+export type FixtureStateV2 = ReturnType<typeof buildState>;

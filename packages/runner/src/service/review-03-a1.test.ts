@@ -42,7 +42,7 @@ test("a flow with a skill step that names no requirement is refused by the gate,
     scan,
     finished: true,
     fileExists: () => true,
-    consent: "given",
+    permission: "on",
     manifest,
   });
   // The adapter blocks every skill step at run time with "Skill steps are not run yet.", after step a has run.

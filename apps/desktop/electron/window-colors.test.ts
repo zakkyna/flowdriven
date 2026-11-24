@@ -10,7 +10,9 @@ test("the window is painted with the page colour of each theme", () => {
     surfaceApp(/:root\s*\{[^}]*--surface-app:\s*(#[0-9a-f]{6})/i),
   );
   expect(WINDOW_BACKGROUND.dark.toLowerCase()).toBe(
-    surfaceApp(/:root\[data-theme="dark"\]\s*\{[^}]*--surface-app:\s*(#[0-9a-f]{6})/i),
+    surfaceApp(
+      /@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*:root\s*\{[^}]*--surface-app:\s*(#[0-9a-f]{6})/i,
+    ),
   );
   expect(windowBackground(false)).toBe(WINDOW_BACKGROUND.light);
   expect(windowBackground(true)).toBe(WINDOW_BACKGROUND.dark);

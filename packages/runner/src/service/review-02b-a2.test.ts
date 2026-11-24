@@ -1,6 +1,6 @@
 import { parseManifest } from "@flowdriven/sdk";
 import { expect, test } from "vitest";
-import { toFlowManifest } from "./map-flow.ts";
+import { toFlowManifest } from "./map-flow-v1.ts";
 
 function flowWithParam(param: Record<string, unknown>) {
   const parsed = parseManifest({

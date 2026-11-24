@@ -3,6 +3,7 @@ import type { Requirement } from "../format/requirements.ts";
 import type { Step } from "../format/steps.ts";
 import type { Issue } from "../issues.ts";
 import { isValidHost, parseTemplate } from "../web/template.ts";
+import { hasHiddenText } from "./hidden.ts";
 import { checkRefs } from "./refs.ts";
 import { commandAllowed } from "./risky.ts";
 import { unattendedRisk } from "./unattended.ts";
@@ -44,6 +45,76 @@ export function validateManifest(
   const issues: Issue[] = [];
   const add = (code: string, path: string, severity: Issue["severity"] = "error") =>
     issues.push({ code, path, severity, message: code.replaceAll("_", " ") });
+  if (manifest.format === "flowdriven-flow/1.2") {
+    if (manifest.schedule?.type === "after" && manifest.schedule.afterFlowId === manifest.id)
+      add("schedule_self", "schedule.afterFlowId");
+    const hidden = (value: string | undefined, path: string) => {
+      if (value !== undefined && hasHiddenText(value)) add("hidden_text", path);
+    };
+    hidden(manifest.name, "name");
+    manifest.inputs.forEach((input, i) => {
+      hidden(input.label, `inputs.${i}.label`);
+      hidden(input.example, `inputs.${i}.example`);
+      if (typeof input.default === "string") hidden(input.default, `inputs.${i}.default`);
+      if (Array.isArray(input.default))
+        input.default.forEach((value: unknown, k: number) => {
+          if (typeof value === "string") hidden(value, `inputs.${i}.default.${k}`);
+        });
+      input.choices?.forEach((choice, j) => {
+        hidden(choice.key, `inputs.${i}.choices.${j}.key`);
+        hidden(choice.label, `inputs.${i}.choices.${j}.label`);
+      });
+    });
+    manifest.touches?.forEach((touch, i) => {
+      const path = `touches.${i}`;
+      hidden(touch.sentence, `${path}.sentence`);
+      if (touch.place) {
+        hidden(touch.place.label, `${path}.place.label`);
+        hidden(touch.place.value, `${path}.place.value`);
+        if (
+          (touch.place.kind === "account" || touch.place.kind === "folder") &&
+          !manifest.requirements.some(
+            (req) => req.id === touch.place?.value && (touch.place.kind !== "folder" || req.type === "path"),
+          )
+        )
+          add("touch_place_undeclared", `${path}.place`);
+        if (touch.rule === "not_allowed") add("touch_never_has_place", path, "warning");
+      }
+      if (touch.rule === "runs_alone" && ["send", "post", "pay", "delete", "merge"].includes(touch.effect))
+        add("risky_claims_runs_alone", path, "warning");
+    });
+    const outputs = new Set(manifest.outputs.map((output) => output.id));
+    for (const step of manifest.steps) {
+      const leaves = "steps" in step ? step.steps : [step];
+      for (const leaf of leaves) for (const output of leaf.outputs) outputs.add(output.id);
+    }
+    const checkLines = (lines: string[], prefix: string) =>
+      lines.forEach((line, i) => {
+        const path = `${prefix}[${i}]`;
+        hidden(line, path);
+        let rest = line;
+        while (rest.includes("{") || rest.includes("}")) {
+          const match = /^[^{}]*\{([^{}]+)\}/.exec(rest);
+          if (!match) {
+            add("answer_bad_placeholder", path);
+            break;
+          }
+          const key = match[1] ?? "";
+          if (
+            !(
+              manifest.inputs.some((input) => input.id === key) ||
+              (key.startsWith("outputs.") && outputs.has(key.slice(8)))
+            )
+          )
+            add("answer_unknown_placeholder", path);
+          rest = rest.slice(match[0].length);
+        }
+      });
+    const answer = manifest.result?.answer;
+    if (Array.isArray(answer)) checkLines(answer, "result.answer");
+    else if (answer)
+      for (const [lang, lines] of Object.entries(answer)) checkLines(lines, `result.answer.${lang}`);
+  }
   for (const [id, param] of Object.entries(manifest.params)) {
     const value = param.default;
     if (value === undefined) continue;

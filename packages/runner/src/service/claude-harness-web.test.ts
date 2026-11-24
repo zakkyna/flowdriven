@@ -43,7 +43,7 @@ const base = {
   scan,
   finished: true,
   fileExists: () => true,
-  consent: "given" as const,
+  permission: "on" as const,
 };
 const ask = { id: "ask", do: "ask", ask: { question: "Choose", choose_from: "items" } };
 

@@ -1,7 +1,8 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Notice, RunSummary, TriggerStatus } from "@flowdriven/contracts";
+import type { Notice } from "@flowdriven/contracts";
+import { RunSummary, TriggerStatus } from "@flowdriven/contracts/v1";
 import { FlowManifest } from "@flowdriven/sdk";
 import { createRunnerService, DEMO_HASH } from "../service/service.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
@@ -18,6 +19,7 @@ export async function runTriggerDemo(): Promise<string[]> {
     ],
   });
   const store = await openSqliteStore(":memory:");
+  store.putSetting("agentPermission", "on");
   const notices: Notice[] = [];
   const ids = new Map<string, number>();
   let time = Date.parse("2026-11-12T00:00:00.000Z");
@@ -105,7 +107,7 @@ export async function runTriggerDemo(): Promise<string[]> {
       service.engine.registerFlow(flow, DEMO_HASH, {});
     }
     await service.start().settled;
-    await service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+    await service.call("settings.update", { patch: { agentPermission: "on" } });
     const hourly = TriggerStatus.parse(
       await service.call("triggers.setEnabled", {
         flowId: "local.hourly",

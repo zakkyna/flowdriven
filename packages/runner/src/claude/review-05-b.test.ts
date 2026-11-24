@@ -201,7 +201,7 @@ test("B-4: a page text over 2 MiB is withheld and gives exactly one page_withhel
   expect(of(t.audits, "page_read")).toEqual([]);
   expect(of(t.audits, "tool_denied")).toEqual([]);
   expect(of(t.audits, "tool_calls")).toEqual([
-    { kind: "tool_calls", detail: expect.objectContaining({ allowed: 3, denied: 0 }) },
+    { kind: "tool_calls", detail: expect.objectContaining({ allowed: 3, held: 0, refused: 0 }) },
   ]);
 });
 
@@ -224,7 +224,7 @@ test("B-4: a post request over 8 MiB gets no answer, counts nothing, and gives o
   expect(of(t.audits, "tool_denied")).toEqual([]);
   expect(of(t.audits, "tool_unchecked")).toEqual([]);
   expect(of(t.audits, "tool_calls")).toEqual([
-    { kind: "tool_calls", detail: expect.objectContaining({ allowed: 3, denied: 0 }) },
+    { kind: "tool_calls", detail: expect.objectContaining({ allowed: 3, held: 0, refused: 0 }) },
   ]);
 });
 

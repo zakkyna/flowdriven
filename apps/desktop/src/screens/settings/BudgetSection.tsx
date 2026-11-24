@@ -1,6 +1,6 @@
-import { type Budget, budgetStatus } from "@flowdriven/contracts";
+import { type Budget, budgetStatus } from "@flowdriven/contracts/v1";
 import { type ReactElement, useEffect, useRef, useState } from "react";
-import { useRunnerAction } from "../../runner/runner-context";
+import { useRunnerAction } from "../../legacy/runner-context";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { formatUsd } from "../../ui/format";

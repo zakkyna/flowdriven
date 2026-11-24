@@ -54,3 +54,38 @@ test("the keeper's bounds", () => {
 test("settings carry the keeper", () => {
   expect(Settings.shape.keeper).toBeDefined();
 });
+
+test("TC-CON-20 version 2 settings and patch", () => {
+  const settings = {
+    language: "en",
+    agentPermission: "unset",
+    mainAgent: null,
+    busyFallback: false,
+    spendingLimit: 10,
+    spending: { month: "2026-11", spentUsd: 0, limitUsd: 10, state: "ok", allOnPlans: false },
+    keeper: DEFAULT_KEEPER,
+  };
+  expect(Settings.safeParse(settings).success).toBe(true);
+  for (const state of ["ok", "warning", "reached"])
+    expect(Settings.safeParse({ ...settings, spending: { ...settings.spending, state } }).success).toBe(true);
+  for (const patch of [
+    { agentPermission: "off" },
+    { mainAgent: { agent: "codex", model: "gpt-6.1-terra" } },
+    { spendingLimit: 25 },
+    { spendingLimit: 10000 },
+  ])
+    expect(SettingsPatch.safeParse(patch).success).toBe(true);
+  for (const patch of [
+    {},
+    { agentPermission: "unset" },
+    { mainAgent: { agent: "codex", model: "gpt 6" } },
+    { spendingLimit: 10001 },
+    { spendingLimit: 0 },
+    { spendingLimit: -5 },
+    { spendingLimit: NaN },
+    { language: "EN" },
+    { background: { keepRunning: false } },
+    { unknown: true },
+  ])
+    expect(SettingsPatch.safeParse(patch).success).toBe(false);
+});

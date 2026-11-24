@@ -9,7 +9,9 @@ import {
   truthy,
   type Value,
 } from "@flowdriven/sdk";
+import { visible } from "../claude/text.ts";
 import type { ResolvedDeps } from "../engine.ts";
+import { validChoicePayload } from "../service/choice-payload.ts";
 import type { RunRow, StepRow } from "../storage.ts";
 import { takesOutsideText } from "./outside.ts";
 
@@ -82,6 +84,17 @@ export function runAsk(
     });
     if (new Set(options.map((o) => o.key)).size !== options.length)
       throw new Error("Choice option keys must be unique.");
+    if (
+      options.length &&
+      !validChoicePayload({
+        kind: "choice",
+        question,
+        options: options.map(({ key, label }) => ({ key, label })),
+        maxPick,
+        approves: step.ask.approves,
+      })
+    )
+      throw new Error("The choices are too many or too long to show.");
     writing = true;
     if (!options.length) {
       if (run.trigger && run.trigger.kind !== "manual") {
@@ -108,7 +121,7 @@ export function runAsk(
           runId: run.id,
           stepId: step.id,
           itemKey: "",
-          summary: question,
+          summary: visible(question, 200),
           payload: { question, options, maxPick },
           maxPick,
           approves: step.ask.approves,

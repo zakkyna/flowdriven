@@ -1,4 +1,4 @@
 export type { FixtureRunnerClient } from "./client";
-export { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "./client";
-export type { FixtureState, FlowRecord, Scenario } from "./state";
-export { buildEmpty, buildLong, buildLooped, buildStory, FIXTURE_NOW } from "./state";
+export { createFixtureRunnerClient } from "./client";
+export type { FixtureStateV2 as FixtureState, Scenario } from "./state";
+export { buildState, FIXTURE_NOW } from "./state";

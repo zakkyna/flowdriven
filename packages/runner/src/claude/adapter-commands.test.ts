@@ -77,7 +77,7 @@ test("an allowed and a refused Bash call are written to the audit log, and the r
     expect.objectContaining({ kind: "tool_denied", detail: expect.objectContaining({ tool: "Bash" }) }),
   );
   expect(audits).toContainEqual(
-    expect.objectContaining({ kind: "tool_calls", detail: expect.objectContaining({ denied: 1 }) }),
+    expect.objectContaining({ kind: "tool_calls", detail: expect.objectContaining({ held: 0, refused: 1 }) }),
   );
 });
 test("the gate passes a step with a routed cli_tool, and Bash in a step without one is refused as today", () => {
@@ -118,7 +118,7 @@ test("the gate passes a step with a routed cli_tool, and Bash in a step without 
       scan,
       finished: true,
       fileExists: () => true,
-      consent: "given",
+      permission: "on",
       manifest,
       facts: { hooks: true, chrome: false },
       allowed: true,

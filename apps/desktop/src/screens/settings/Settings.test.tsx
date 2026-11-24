@@ -1,228 +1,224 @@
-// apps/desktop/src/screens/settings/Settings.test.tsx
-import { readFileSync } from "node:fs";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
-import { readyState, renderApp } from "../../test/render";
+import { WINDOW_CALLS, WindowPrefs } from "@flowdriven/contracts";
+import { createFixtureRunnerClient } from "@flowdriven/fixtures";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, expect, test } from "vitest";
+import { RunnerProvider } from "../../runner/runner-context";
+import { LanguageProvider } from "../../shell/language";
+import { readyState, renderApp, renderAppBoth } from "../../test/render";
+import { ToastProvider } from "../../ui/Toast";
+import { Settings } from "./Settings";
 
-test("Settings is one narrow column of four plain sections", async () => {
-  const { container } = renderApp("#/settings");
-  await screen.findByRole("radiogroup", { name: "Main brain" });
-  expect(container.querySelector("[data-screen='settings'] [data-size='narrow']")).not.toBeNull();
-  expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
-    "Brain",
-    "Fallback order",
-    "Monthly API-key budget",
-    "One-time flows",
-  ]);
-});
-test("settings styles: sections have a hairline, no card, and the meter uses state colours", () => {
-  const css = readFileSync("apps/desktop/src/screens/settings/Settings.module.css", "utf8");
-  expect(css).toMatch(/\.panel\s*\+\s*\.panel\s*\{[^}]*border-top:\s*1px solid var\(--border\)/s);
-  expect(css).not.toMatch(/\.panel\s*\{[^}]*(border-radius|background)/s);
-  expect(css).toMatch(/\.track\s*\{[^}]*background:\s*var\(--surface-sunken\)/s);
-  expect(css).toMatch(/\.fill\s*\{[^}]*background:\s*var\(--text-muted\)/s);
-  expect(css).toMatch(/\.warn\s*\{[^}]*background:\s*var\(--wait\)/s);
-  expect(css).toMatch(/\.stopped\s*\{[^}]*background:\s*var\(--bad\)/s);
-  expect(css).toMatch(/overflow-wrap:\s*anywhere/);
-  expect(css).toMatch(/min-width:\s*0\b/);
+afterEach(() => {
+  cleanup();
 });
 
-test("keeps the long brain option in a control and details row", async () => {
-  renderApp("#/settings");
-  const radio = await screen.findByRole("radio", { name: "Antigravity CLI" });
-  const row = radio.closest("label");
-  const details = screen.getByText("Needs consent on the Harnesses screen").parentElement;
-  expect(row?.children).toHaveLength(2);
-  expect(details?.parentElement).toBe(row);
-  const css = readFileSync("apps/desktop/src/screens/settings/Settings.module.css", "utf8");
-  expect(css).toMatch(/\.brain\s*\{[^}]*display:\s*flex/s);
-  expect(css).not.toMatch(/\.brain\s*\{[^}]*flex-wrap:\s*wrap/s);
-  expect(css).toMatch(/\.brainDetails\s*\{[^}]*flex-wrap:\s*wrap/s);
-});
-test("aligns both risk tags to the name baseline", async () => {
-  renderApp("#/settings");
-  const radio = await screen.findByRole("radio", { name: "Antigravity CLI" });
-  const brainTag = within(radio.closest("label") as HTMLElement).getByText("Unofficial").parentElement;
-  const fallback = screen.getByRole("heading", { name: "Fallback order" }).closest("section");
-  const fallbackTag = within(fallback as HTMLElement).getAllByText("Official")[0]?.parentElement;
-  expect(brainTag?.parentElement?.className).toContain("risk");
-  expect(fallbackTag?.parentElement?.className).toContain("risk");
-  const css = readFileSync("apps/desktop/src/screens/settings/Settings.module.css", "utf8");
-  expect(css).toMatch(/\.risk\s*>\s*span\s*\{[^}]*align-items:\s*baseline/s);
-});
-test("sets fallback subheadings one size below section headings", async () => {
-  renderApp("#/settings");
-  expect(await screen.findByRole("heading", { name: "Subscription harnesses", level: 3 })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "API keys", level: 3 })).toBeTruthy();
-  const css = readFileSync("apps/desktop/src/screens/settings/Settings.module.css", "utf8");
-  expect(css).toMatch(/\.panel h3\s*\{[^}]*font-size:\s*var\(--text-m\)/s);
-  expect(css).toMatch(/\.panel h3\s*\{[^}]*font-weight:\s*600/s);
-});
+test("TC-j12-01 Settings shows its sections in order and reads settings and agents", async () => {
+  await renderAppBoth("#/settings", { scenario: "story-v2" }, async ({ language, container, client }) => {
+    const words =
+      language === "en"
+        ? {
+            appearance: "Appearance",
+            light: "Light",
+            auto: "Auto",
+            matches: "Matches your computer",
+            dark: "Dark",
+            raiseLimit: "Raise limit",
+            notifications: "Notifications",
+            notificationsBody:
+              "FlowDriven only notifies you when it needs a decision or something went wrong. It never notifies you about progress or success.",
+            moreLater: "Other items appear when their release ships.",
+            background: "Background",
+            expectedHeadings: [
+              "Appearance",
+              "Language",
+              "AI agents",
+              "Permission",
+              "Main AI agent",
+              "Spending limit",
+              "Notifications",
+            ],
+          }
+        : {
+            appearance: "Tampilan",
+            light: "Terang",
+            auto: "Otomatis",
+            matches: "Ikut komputer Anda",
+            dark: "Gelap",
+            raiseLimit: "Naikkan batas",
+            notifications: "Pemberitahuan",
+            notificationsBody:
+              "FlowDriven hanya memberi tahu saat perlu keputusan Anda atau ada masalah. Tidak ada pemberitahuan untuk perkembangan atau keberhasilan.",
+            moreLater: "Item lain muncul saat rilisnya tersedia.",
+            background: "Latar belakang",
+            expectedHeadings: [
+              "Tampilan",
+              "Bahasa",
+              "Agen AI",
+              "Izin",
+              "Agen AI utama",
+              "Batas biaya",
+              "Pemberitahuan",
+            ],
+          };
 
-describe("Settings", () => {
-  test("lists brains official first, with reasons for disabled ones", async () => {
-    renderApp("#/settings");
-    const group = await screen.findByRole("radiogroup", { name: "Main brain" });
-    expect(
-      within(group)
-        .getAllByRole("radio")
-        .map((r) => r.getAttribute("aria-label")),
-    ).toEqual(["Codex CLI", "Anthropic API key", "OpenAI API key", "Claude Code CLI", "Antigravity CLI"]);
-    expect((within(group).getByRole("radio", { name: "Codex CLI" }) as HTMLInputElement).checked).toBe(true);
-    expect(within(group).getByRole("radio", { name: "Antigravity CLI" })).toHaveProperty("disabled", true);
-    expect(within(group).getByText("Needs consent on the Harnesses screen")).toBeTruthy();
-    expect(within(group).getByText("No API key stored")).toBeTruthy();
-  });
-  test("choosing a brain saves at once", async () => {
-    const { client } = renderApp("#/settings");
-    fireEvent.click(await screen.findByRole("radio", { name: "Anthropic API key" }));
-    expect(await screen.findByText("Main brain set to Anthropic API key.")).toBeTruthy();
-    expect((await client.call("settings.get", {})).brain.main).toBe("anthropic-api");
-  });
-  test("fallback order moves", async () => {
-    const { client } = renderApp("#/settings");
-    fireEvent.click(await screen.findByRole("button", { name: "Move Claude Code CLI up" }));
-    await waitFor(async () =>
-      expect((await client.call("settings.get", {})).brain.subscriptionOrder).toEqual([
-        "claude-cli",
-        "codex-cli",
-      ]),
-    );
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Move Claude Code CLI up" })).toHaveProperty(
-        "disabled",
-        true,
-      ),
-    );
-  });
-  test("budget shows the estimate and asks before raising the cap", async () => {
-    const { client } = renderApp("#/settings");
-    expect(await screen.findByText("Spent this month: $16.40 of $20.00 (estimate)")).toBeTruthy();
-    expect(screen.getByText("82% used")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Monthly cap (USD)"), { target: { value: "30" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
-    fireEvent.click(
-      within(screen.getByRole("dialog", { name: "Raise the monthly cap to $30.00?" })).getByRole("button", {
-        name: "Raise cap",
-      }),
-    );
-    expect(await screen.findByText("Budget saved.")).toBeTruthy();
-    expect((await client.call("settings.get", {})).budget.capUsd).toBe(30);
-  });
-  test("lowering the cap needs no dialog; a negative cap is refused", async () => {
-    const { client } = renderApp("#/settings");
-    const cap = await screen.findByLabelText("Monthly cap (USD)");
-    fireEvent.change(cap, { target: { value: "-5" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
-    expect(screen.getByText("Enter an amount of 0 or more.")).toBeTruthy();
-    fireEvent.change(cap, { target: { value: "10" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
-    expect(await screen.findByText("Budget saved.")).toBeTruthy();
-    expect((await client.call("settings.get", {})).budget.capUsd).toBe(10);
-  });
-  test("one-time save offer toggles", async () => {
-    const { client } = renderApp("#/settings");
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Offer to save one-time flows as flows" }));
-    await screen.findByRole("checkbox", { name: "Offer to save one-time flows as flows", checked: false });
-    expect((await client.call("settings.get", {})).offerSaveOneTime).toBe(false);
-  });
-  test("consent given on the Harnesses screen unlocks the brain option", async () => {
-    const { client } = renderApp("#/settings");
-    const antigravity = await screen.findByRole("radio", { name: "Antigravity CLI" });
-    expect(antigravity).toHaveProperty("disabled", true);
-    await client.call("harnesses.setConsent", { harnessId: "antigravity", consent: "given" });
-    await waitFor(() =>
-      expect(screen.getByRole("radio", { name: "Antigravity CLI" })).toHaveProperty("disabled", false),
-    );
-  });
-  test("is not ready until its data has arrived", async () => {
-    const { container } = renderApp("#/settings");
-    expect(readyState(container, "settings")).toBe("false");
-    await screen.findByRole("radiogroup", { name: "Main brain" });
+    await screen.findByRole("heading", { level: 2, name: words.appearance });
     await waitFor(() => expect(readyState(container, "settings")).toBe("true"));
+
+    expect(
+      within(screen.getByRole("main"))
+        .getAllByRole("heading", { level: 2 })
+        .map((el) => el.textContent),
+    ).toEqual(words.expectedHeadings);
+    expect(screen.getByRole("button", { name: words.raiseLimit })).toBeTruthy();
+
+    expect(client.calls).toContainEqual({ operation: "settings.get", input: {} });
+    expect(client.calls).toContainEqual({ operation: "agents.list", input: {} });
+    expect(client.calls.some((call) => call.operation === "usage.summary")).toBe(false);
+    const settings = await client.call("settings.get", {});
+    expect(typeof settings.spending.spentUsd).toBe("number");
+
+    expect(screen.getByRole("radio", { name: words.light })).toBeTruthy();
+    const autoRadio = screen.getByRole("radio", { name: new RegExp(words.auto) });
+    expect(within(autoRadio).getByText(words.auto)).toBeTruthy();
+    expect(within(autoRadio).getByText(words.matches)).toBeTruthy();
+    expect(screen.getByRole("radio", { name: words.dark })).toBeTruthy();
+
+    expect(screen.getByRole("heading", { level: 2, name: words.notifications })).toBeTruthy();
+    expect(screen.getByText(words.notificationsBody)).toBeTruthy();
+    expect(screen.getByText(words.moreLater)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: words.background })).toBeNull();
   });
-  test("empty", async () => {
-    renderApp("#/settings", { scenario: "empty" });
-    expect(await screen.findByText("No brain found. Install a harness or add an API key.")).toBeTruthy();
-    expect(screen.getByText("API keys are off")).toBeTruthy();
+
+  renderApp("#/settings", {
+    scenario: "story-v2",
+    setup(client) {
+      for (const agent of client.state.agents) agent.state = "not_installed";
+    },
   });
-});
-test("does not round a warning up to the stopped percentage", async () => {
-  const { client } = renderApp("#/settings");
-  client.state.settings.budget.capUsd = 1000;
-  client.state.settings.budget.spentUsd = 996;
-  expect(await screen.findByText("99% used")).toBeTruthy();
-  expect(screen.queryByText("100% used")).toBeNull();
-});
-test("turns API keys off at the cap and explains why", async () => {
-  const { client } = renderApp("#/settings");
-  client.state.settings.budget.spentUsd = client.state.settings.budget.capUsd;
-  expect(await screen.findByText("Cap reached. API-key calls are stopped.")).toBeTruthy();
-  expect(await screen.findByText("Cap reached", { exact: true })).toBeTruthy();
-  expect(screen.getByRole("radio", { name: "Anthropic API key" })).toHaveProperty("disabled", true);
-});
-test("updates untouched budget fields when stored values change", async () => {
-  const { client } = renderApp("#/settings");
-  const input = await screen.findByLabelText("Monthly cap (USD)");
-  await client.call("settings.update", { patch: { budget: { capUsd: 50 } } });
-  await waitFor(() => expect(input).toHaveProperty("value", "50"));
-});
-test("asks before removing a per-run cap", async () => {
-  const { client } = renderApp("#/settings");
-  client.state.settings.budget.perRunCapUsd = 5;
-  const input = await screen.findByLabelText("Per-run cap (USD, optional)");
-  fireEvent.change(input, { target: { value: "" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
-  expect(screen.getByRole("dialog")).toBeTruthy();
-});
-test("marks a selected and fallback harness when consent is missing", async () => {
-  const { client } = renderApp("#/settings");
-  client.state.settings.brain.main = "claude-cli";
-  const claude = client.state.settings.backends.find((item) => item.id === "claude-cli");
-  if (!claude) throw new Error("Missing Claude fixture");
-  claude.consent = "revoked";
+  await screen.findByRole("heading", { level: 2, name: "Appearance" });
   expect(
-    await screen.findByText("Needs consent. This brain is not used until you give consent."),
+    within(screen.getByRole("main"))
+      .getAllByRole("heading", { level: 2 })
+      .map((el) => el.textContent),
+  ).toEqual([
+    "Appearance",
+    "Language",
+    "AI agents",
+    "Permission",
+    "Main AI agent",
+    "Spending limit",
+    "Notifications",
+  ]);
+  expect(screen.getByRole("heading", { level: 2, name: "Notifications" })).toBeTruthy();
+  expect(screen.getByText("Other items appear when their release ships.")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+
+  const standaloneClient = createFixtureRunnerClient({ scenario: "story-v2" });
+  render(
+    <RunnerProvider client={standaloneClient}>
+      <LanguageProvider language="en">
+        <ToastProvider>
+          <Settings />
+        </ToastProvider>
+      </LanguageProvider>
+    </RunnerProvider>,
+  );
+  await screen.findAllByRole("heading", { level: 2, name: "Appearance" });
+  expect(standaloneClient.calls.map((call) => call.operation).sort()).toEqual([
+    "agents.list",
+    "settings.get",
+  ]);
+  expect(standaloneClient.calls.some((call) => call.operation === "activity.summary")).toBe(false);
+});
+
+test("TC-j12-29 Notifications section is one fixed sentence", async () => {
+  renderApp("#/settings", { scenario: "story-v2" });
+  const heading = await screen.findByRole("heading", { level: 2, name: "Notifications" });
+  const section = heading.closest("section");
+  expect(section).not.toBeNull();
+  if (!section) return;
+  expect(
+    within(section).getByText(
+      "FlowDriven only notifies you when it needs a decision or something went wrong. It never notifies you about progress or success.",
+    ),
   ).toBeTruthy();
-  expect(screen.getByText("Needs consent before use.")).toBeTruthy();
+  expect(within(section).queryAllByRole("switch")).toEqual([]);
+  expect(within(section).queryAllByRole("checkbox")).toEqual([]);
+  expect(within(section).queryAllByRole("button")).toEqual([]);
 });
-test("disables movement after the last visible fallback", async () => {
-  const { client } = renderApp("#/settings");
-  client.state.settings.brain.subscriptionOrder.push("unknown-backend");
-  expect(await screen.findByRole("button", { name: "Move Claude Code CLI down" })).toHaveProperty(
-    "disabled",
-    true,
+
+test("TC-j12-30 V1 has no Background section and no background setting", async () => {
+  const { client } = renderApp("#/settings", { scenario: "story-v2" });
+  await screen.findByRole("heading", { level: 2, name: "Appearance" });
+
+  expect(screen.queryByRole("heading", { name: "Background" })).toBeNull();
+  expect(screen.queryByRole("switch", { name: /menu bar/i })).toBeNull();
+  expect(screen.queryByRole("switch", { name: /Open at login/i })).toBeNull();
+
+  const settings = await client.call("settings.get", {});
+  expect("background" in settings).toBe(false);
+
+  expect([...WINDOW_CALLS]).toEqual(["getPrefs", "setColorMode", "openLink", "quit"]);
+  expect(WindowPrefs.safeParse({ colorMode: "system", platform: "darwin" }).success).toBe(true);
+  expect(WindowPrefs.safeParse({ colorMode: "system", platform: "darwin", background: true }).success).toBe(
+    false,
   );
 });
-test("shows a settings update failure", async () => {
-  const { client } = renderApp("#/settings");
-  const option = await screen.findByRole("radio", { name: "Anthropic API key" });
-  vi.spyOn(client, "call").mockRejectedValueOnce(new Error("Save failed"));
-  fireEvent.click(option);
-  expect((await screen.findByRole("alert")).textContent).toBe("Save failed");
+
+test('TC-j12-33 A failed save shows "Could not save. Try again." and restores the control', async () => {
+  renderApp("#/settings", {
+    scenario: "story-v2",
+    language: "en",
+    failSettingsUpdate: true,
+    setup(client) {
+      const codex = client.state.agents.find((agent) => agent.id === "codex");
+      if (codex) codex.state = "ready";
+      client.state.settings.busyFallback = false;
+    },
+  });
+
+  const heading = await screen.findByRole("heading", { level: 2, name: "Main AI agent" });
+  const section = heading.closest("section");
+  expect(section).not.toBeNull();
+  if (!section) return;
+
+  const toggle = within(section).getByRole("switch", { name: "If Claude Code is busy, use Codex" });
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+  fireEvent.click(toggle);
+
+  expect(await screen.findByText("Could not save. Try again.")).toBeTruthy();
+  await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("false"));
 });
-test("exposes both login and quota states through the brain description", async () => {
-  const { client } = renderApp("#/settings");
-  const claude = client.state.settings.backends.find((item) => item.id === "claude-cli");
-  if (!claude) throw new Error("Missing Claude fixture");
-  claude.login = "logged_out";
-  claude.quota = "exhausted";
-  const radio = await screen.findByRole("radio", { name: "Claude Code CLI" });
-  const description = document.getElementById(radio.getAttribute("aria-describedby") ?? "");
-  expect(description?.textContent).toContain("Logged out");
-  expect(description?.textContent).toContain("Quota exhausted");
-});
-test("shows an off budget on a populated setup", async () => {
-  const { client } = renderApp("#/settings");
-  client.state.settings.budget.capUsd = 0;
-  expect(await screen.findByText("API keys are off. Set a monthly cap to turn them on.")).toBeTruthy();
-  expect(screen.getByRole("radio", { name: "Anthropic API key" })).toHaveProperty("disabled", true);
-});
-test("can reorder visible fallbacks when an unknown id is present", async () => {
-  const { client } = renderApp("#/settings");
-  client.state.settings.brain.subscriptionOrder.unshift("unknown-backend");
-  fireEvent.click(await screen.findByRole("button", { name: "Move Claude Code CLI up" }));
-  await waitFor(() =>
-    expect(client.state.settings.brain.subscriptionOrder).toEqual(["claude-cli", "codex-cli"]),
-  );
+
+test("TC-j31-32 Settings line under Main AI agent", async () => {
+  const { client } = renderApp("#/settings", { scenario: "story-v2" });
+
+  const heading = await screen.findByRole("heading", { level: 2, name: "Main AI agent" });
+  const section = heading.closest("section");
+  expect(section).not.toBeNull();
+  if (!section) return;
+
+  expect(within(section).getByText("New chats start with this agent and its default model.")).toBeTruthy();
+
+  const codex = client.state.agents.find((agent) => agent.id === "codex");
+  if (codex) codex.state = "ready";
+  client.emit({ type: "changed", topics: ["agents"] });
+
+  const group = within(section).getByRole("radiogroup", { name: "Main AI agent" });
+  await waitFor(() => {
+    expect(within(group).getByRole("radio", { name: "Codex" })).toHaveProperty("disabled", false);
+  });
+
+  fireEvent.click(within(group).getByRole("radio", { name: "Codex" }));
+
+  await waitFor(() => {
+    expect(client.calls.filter((call) => call.operation === "settings.update")).toEqual([
+      {
+        operation: "settings.update",
+        input: { patch: { mainAgent: { agent: "codex", model: "gpt-6.1-sol" } } },
+      },
+    ]);
+  });
+  expect(client.calls.some((call) => call.operation === "agents.models")).toBe(false);
 });

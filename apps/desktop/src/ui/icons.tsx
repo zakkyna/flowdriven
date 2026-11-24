@@ -64,6 +64,7 @@ export function Icon({
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
+      data-icon={name}
       data-spin={spin ? "true" : undefined}
     >
       <path d={paths[name]} strokeDasharray={name === "dash" ? "2.2 2.4" : undefined} />

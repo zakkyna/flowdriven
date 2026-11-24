@@ -2,14 +2,21 @@ import { z } from "zod";
 import {
   CheckType,
   ContentHash,
+  Effect,
   Id,
+  InputType,
   IsoDateTime,
   OutputType,
+  Place,
   RouteOption,
+  RuleEffect,
   SemVer,
   StepDo,
+  TouchId,
+  TouchRule,
+  Weekday,
 } from "./common.ts";
-import { RunState, StepRunState } from "./run.ts";
+import { RunState, RunSummary } from "./run.ts";
 
 export const FlowKind = z.enum(["build", "light"]);
 export type FlowKind = z.infer<typeof FlowKind>;
@@ -37,19 +44,6 @@ export const OutputDecl = z.object({
   from_step: Id.optional(),
 });
 export type OutputDecl = z.infer<typeof OutputDecl>;
-export const InputType = z.enum([
-  "text",
-  "number",
-  "bool",
-  "enum",
-  "date",
-  "url",
-  "file",
-  "folder",
-  "secret_ref",
-  "list<text>",
-]);
-export type InputType = z.infer<typeof InputType>;
 export const InputDecl = z.object({
   id: Id,
   type: InputType,
@@ -57,6 +51,8 @@ export const InputDecl = z.object({
   required: z.boolean().default(false),
   default: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]).optional(),
   remember: z.boolean().optional(),
+  example: z.string().optional(),
+  choices: z.array(z.strictObject({ key: z.string(), label: z.string() })).optional(),
 });
 export type InputDecl = z.infer<typeof InputDecl>;
 export const RequirementType = z.enum([
@@ -196,9 +192,49 @@ export const Limits = z.object({
   max_attempts: z.number().int().min(1).optional(),
 });
 export type Limits = z.infer<typeof Limits>;
-export const FLOW_FORMATS = ["flowdriven-flow/1", "flowdriven-flow/1.1"] as const;
+export const FLOW_FORMATS = ["flowdriven-flow/1", "flowdriven-flow/1.1", "flowdriven-flow/1.2"] as const;
+const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const whenItsTime = z.enum(["ask", "last"]);
+export const ScheduleSpec = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("manual") }),
+  z.strictObject({ type: z.literal("daily"), time, whenItsTime: whenItsTime.optional() }),
+  z.strictObject({ type: z.literal("weekdays"), time, whenItsTime: whenItsTime.optional() }),
+  z.strictObject({ type: z.literal("weekly"), day: Weekday, time, whenItsTime: whenItsTime.optional() }),
+  z.strictObject({ type: z.literal("after"), afterFlowId: Id, whenItsTime: whenItsTime.optional() }),
+]);
+export type ScheduleSpec = z.infer<typeof ScheduleSpec>;
+export const ScheduleView = z.strictObject({
+  type: z.enum(["manual", "daily", "weekdays", "weekly", "after"]),
+  time: time.optional(),
+  day: Weekday.optional(),
+  afterFlow: z.strictObject({ id: Id, name: z.string() }).optional(),
+  whenItsTime,
+  needsAnswers: z.boolean(),
+  canUseLast: z.boolean(),
+  nextAt: IsoDateTime.optional(),
+});
+export type ScheduleView = z.infer<typeof ScheduleView>;
 export const FlowManifest = z.object({
   format: z.enum(FLOW_FORMATS),
+  result: z
+    .strictObject({
+      kind: z.enum(["chat", "report"]),
+      answer: z.union([z.array(z.string()), z.record(z.string(), z.array(z.string()))]).optional(),
+    })
+    .optional(),
+  touches: z
+    .array(
+      z.strictObject({
+        id: TouchId,
+        sentence: z.string(),
+        effect: Effect,
+        place: Place.optional(),
+        rule: TouchRule,
+        covers: z.array(z.string()),
+      }),
+    )
+    .optional(),
+  schedule: ScheduleSpec.optional(),
   triggers: z.array(Trigger).optional(),
   params: z.record(z.string(), ParamDecl).optional(),
   limits: Limits.optional(),
@@ -245,29 +281,134 @@ export const ChatMessage = z.object({
   questions: z.array(ClarifyQuestion).max(3).optional(),
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
-export const FlowSummary = z.object({
+export const FlowState = z.enum(["new", "changed", "confirmed"]);
+export type FlowState = z.infer<typeof FlowState>;
+export const FlowSummary = z.strictObject({
   id: Id,
   name: z.string(),
   summary: z.string(),
-  version: SemVer,
-  kind: FlowKind,
-  saved: z.boolean(),
-  signOff: FlowSignOff,
-  stepCount: z.number(),
-  lastRun: z.object({ runId: Id, state: RunState, startedAt: IsoDateTime }).optional(),
+  state: FlowState,
+  live: z.enum(["running", "needs_you"]).nullable(),
+  steps: z.array(z.strictObject({ id: Id, title: z.string() })).max(50),
+  schedule: ScheduleView,
+  result: z.enum(["chat", "report"]),
+  asksFor: z.array(z.string()),
+  lastRun: z.strictObject({ runId: Id, state: RunState, at: IsoDateTime }).optional(),
+  madeFromSkill: z.strictObject({ skillId: Id, name: z.string() }).optional(),
+  format: z.enum(["flowdriven-flow/1.1", "flowdriven-flow/1.2"]),
+  createdAt: IsoDateTime,
 });
 export type FlowSummary = z.infer<typeof FlowSummary>;
-export const FlowDetail = z.object({
-  manifest: FlowManifest,
+export const InputView = z.strictObject({
+  id: Id,
+  label: z.string(),
+  type: InputType,
+  required: z.boolean(),
+  example: z.string().optional(),
+  choices: z.array(z.strictObject({ key: z.string(), label: z.string() })).optional(),
+  default: z
+    .discriminatedUnion("kind", [
+      z.strictObject({ kind: z.literal("value"), value: z.string() }),
+      z.strictObject({ kind: z.literal("today") }),
+      z.strictObject({ kind: z.literal("now") }),
+    ])
+    .optional(),
+  remember: z.boolean(),
+  remembered: z.string().optional(),
+  line: z.enum(["remembers", "default", "asks", "optional"]),
+});
+export type InputView = z.infer<typeof InputView>;
+export const TouchView = z.strictObject({
+  id: TouchId,
+  sentence: z.string(),
+  effect: Effect,
+  place: Place.optional(),
+  fixedPlace: z.boolean(),
+  alwaysAsks: z.boolean(),
+  declared: TouchRule,
+  list: z.enum(["on_its_own", "asks_first", "never"]),
+  byRule: Id.optional(),
+});
+export type TouchView = z.infer<typeof TouchView>;
+export const StandingRuleView = z
+  .strictObject({
+    id: Id,
+    flowId: Id,
+    touchId: TouchId,
+    sentence: z.string(),
+    effect: RuleEffect,
+    place: Place,
+    createdAt: IsoDateTime,
+    createdBy: z.enum(["always_allow", "confirm"]),
+    lastUsedAt: IsoDateTime.optional(),
+  })
+  .refine((rule) =>
+    rule.effect === "change"
+      ? ["account", "folder"].includes(rule.place.kind)
+      : rule.effect === "local_write"
+        ? rule.place.kind === "folder"
+        : rule.place.kind === "command",
+  );
+export type StandingRuleView = z.infer<typeof StandingRuleView>;
+const touchLists = z.strictObject({
+  onItsOwn: z.array(TouchId),
+  asksFirst: z.array(TouchId),
+  never: z.array(TouchId),
+});
+export const FlowDetail = z.strictObject({
+  summary: FlowSummary,
+  description: z.string(),
   hash: ContentHash,
-  saved: z.boolean(),
-  signOff: FlowSignOff,
-  playback: Playback,
-  conversation: z.array(ChatMessage),
-  stepStatus: z.record(z.string(), StepRunState),
-  canUndo: z.boolean(),
+  confirmed: z.strictObject({ hash: ContentHash, at: IsoDateTime }).optional(),
+  version: SemVer,
+  steps: z
+    .array(
+      z.strictObject({
+        id: Id,
+        title: z.string(),
+        kind: StepDo,
+        asksFirst: z.boolean(),
+        skill: z.string().optional(),
+        judgedOnly: z.boolean(),
+      }),
+    )
+    .max(50),
+  inputs: z.array(InputView),
+  result: z.strictObject({ kind: z.enum(["chat", "report"]), answer: z.array(z.string()).optional() }),
+  touches: z.array(TouchView),
+  lists: touchLists,
+  confirmLists: touchLists,
+  rules: z.array(StandingRuleView),
+  pinsNeeded: z.array(
+    z.strictObject({ requirementId: Id, label: z.string(), access: z.enum(["read", "read_write"]) }),
+  ),
+  changes: z.array(z.strictObject({ sign: z.enum(["+", "-", "~"]), text: z.string() })).optional(),
+  recentRuns: z.array(RunSummary).max(5),
+  manifest: FlowManifest,
 });
 export type FlowDetail = z.infer<typeof FlowDetail>;
+export const FlowsConfirmInput = z
+  .strictObject({
+    flowId: Id,
+    hash: ContentHash,
+    onItsOwn: z.array(TouchId).max(100),
+    pins: z.record(z.string().min(1).max(100), z.string().min(1).max(600)).optional(),
+  })
+  .refine((v) => new Set(v.onItsOwn).size === v.onItsOwn.length && Object.keys(v.pins ?? {}).length <= 50);
+export type FlowsConfirmInput = z.infer<typeof FlowsConfirmInput>;
+export const FlowsConfirmOutput = z.strictObject({
+  flow: FlowDetail,
+  rules: z.strictObject({ created: z.array(Id), kept: z.array(Id), ended: z.array(Id) }),
+});
+export type FlowsConfirmOutput = z.infer<typeof FlowsConfirmOutput>;
+export const FlowsSetScheduleInput = z.strictObject({
+  flowId: Id,
+  hash: ContentHash,
+  schedule: ScheduleSpec,
+});
+export type FlowsSetScheduleInput = z.infer<typeof FlowsSetScheduleInput>;
+export const FlowsSetScheduleOutput = z.strictObject({ schedule: ScheduleView });
+export type FlowsSetScheduleOutput = z.infer<typeof FlowsSetScheduleOutput>;
 export const FlowEdit = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("move"), stepId: Id, direction: z.enum(["up", "down"]) }),
   z.object({ kind: z.literal("duplicate"), stepId: Id }),

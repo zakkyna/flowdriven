@@ -1,6 +1,12 @@
 import { type LeafStep, parseManifest } from "@flowdriven/sdk";
 import { expect, test } from "vitest";
+import { COMMAND_STOP } from "../claude/commands.ts";
+import { buildPolicy } from "../claude/policy.ts";
 import type { RunRow, StepRow } from "../storage.ts";
+import { ownTextHash } from "./own-text.ts";
+
+const commonCommand = { required: true, sensitive: false, why: "" };
+
 import { checkTexts, stepTakesOutsideText, takesOutsideText } from "./outside.ts";
 
 const source = { id: "source", do: "worker", instructions: "Read", checks: [] };
@@ -134,4 +140,62 @@ test("a loop over unmarked text does not mark a later step that takes its items"
   expect(
     takesOutsideText("Use ${steps.loop.items}", "work", m, run, "", [{ ...row, outside: false }, nested]),
   ).toBe(false);
+});
+
+test("TC-SR5-13 outside text, approval, altered text, loops and malformed expressions", () => {
+  const approved = {
+    ...row,
+    outputs: { body: "Approved" },
+    ownerApproved: { output: "body", hash: ownTextHash("Approved"), approvalId: "a", at: "now" },
+  };
+  const step = leaf([], "${steps.source.outputs.body}");
+  const m = manifest([source, step]);
+  const loop = manifest([
+    source,
+    {
+      id: "loop",
+      for_each: "${steps.source.outputs.body}",
+      as: "item",
+      steps: [{ ...worker, instructions: "${item}" }],
+    },
+  ]);
+  const rows = [row, approved, { ...approved, outputs: { body: "Approved!" } }];
+  const flags = [
+    ...rows.map((r) => stepTakesOutsideText(step, m, run, "", [r])),
+    takesOutsideText("${item}", "work", loop, run, "x", [approved]),
+    takesOutsideText("${steps.source.outputs.}", "work", m, run, "", [row]),
+  ];
+  expect(flags).toEqual([true, false, true, true, true]);
+  const command = { ...commonCommand, id: "cli", type: "cli_tool" as const, commands: ["flutter build apk"] };
+  const base = {
+    kind: "worker" as const,
+    requirements: [
+      command,
+      { ...commonCommand, id: "project", type: "path" as const, access: "read_write" as const },
+    ],
+    routes: [
+      {
+        requirementId: "cli",
+        routed: true as const,
+        type: "cli_tool",
+        provider: "claude-code-commands" as const,
+        providerName: "Claude",
+        enforcedBy: "FlowDriven hook in Claude Code" as const,
+        label: "official" as const,
+        away: false,
+      },
+    ],
+    project: process.cwd(),
+    controlRoot: "/tmp/fd-control",
+    controlCwd: "/tmp/fd-control/cwd",
+    sessionId: "s",
+    schema: false,
+  };
+  for (const outside of flags) {
+    if (outside) expect(() => buildPolicy({ ...base, takesOutside: outside })).toThrow(COMMAND_STOP.outside);
+    else
+      expect(buildPolicy({ ...base, takesOutside: outside }).commands?.patterns).toEqual([
+        "flutter build apk",
+      ]);
+  }
 });

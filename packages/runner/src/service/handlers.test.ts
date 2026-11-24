@@ -1,9 +1,11 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Approval, FlowDetail, RunDetail, RunSummary } from "@flowdriven/contracts";
+import { Approval, FlowDetail, RunDetail, RunSummary as RunSummaryV2 } from "@flowdriven/contracts";
+import { RunSummary } from "@flowdriven/contracts/v1";
 import { Requirement } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
+import { createFixtureRunnerClient } from "../../../fixtures/src/client.ts";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
@@ -25,7 +27,7 @@ afterEach(() => {
   }
   for (const p of dirs.splice(0)) rmSync(p, { recursive: true, force: true });
 });
-async function setup(mode: "demo" | "live" = "demo") {
+async function setup(mode: "demo" | "live" = "demo", notify = vi.fn()) {
   const dataDir = dir();
   const store = await openSqliteStore(":memory:");
   let n = 0;
@@ -33,6 +35,7 @@ async function setup(mode: "demo" | "live" = "demo") {
     store,
     dataDir,
     mode,
+    notify,
     claudePath: join(dataDir, "no-claude"),
     now: fixed,
     newId: (prefix) => `${prefix}-${++n}`,
@@ -72,11 +75,19 @@ async function finish(s: RunnerService, pick: string) {
   return detail;
 }
 
-test("flows.list and flows.get show the demo flow as approved, with four steps and no run yet", async () => {
+test("TC-STO-36 flows.list and flows.get show the demo flow as new, with four steps and no run yet", async () => {
   const { service: s } = await setup();
   const list = await s.call("flows.list", {});
   expect(list).toEqual([
-    expect.objectContaining({ signOff: expect.objectContaining({ state: "approved" }), stepCount: 4 }),
+    expect.objectContaining({
+      state: "new",
+      steps: expect.arrayContaining([
+        { id: "alerts", title: "alerts" },
+        { id: "review", title: "review" },
+        { id: "pick", title: "pick" },
+        { id: "build", title: "build" },
+      ]),
+    }),
   ]);
   const flow = FlowDetail.parse(await s.call("flows.get", { flowId: demoFlow().manifest.id }));
   expect(list).toEqual([expect.not.objectContaining({ lastRun: expect.anything() })]);
@@ -90,7 +101,7 @@ test("flows.run answers at once with a queued run and the run reaches the choice
   await expect(
     s.call("flows.run", { flowId: demoFlow().manifest.id, inputs: { project: "/etc" } }),
   ).rejects.toMatchObject({ code: "invalid_input", message: "Unknown input project." });
-  const rows = RunSummary.array().parse(await s.call("runs.list", {}));
+  const rows = RunSummaryV2.array().parse(await s.call("runs.list", {}));
   expect(rows).toHaveLength(1);
   expect(rows.at(0)?.project).toBe(join(dataDir, "demo-project"));
 });
@@ -116,7 +127,7 @@ test("the demo story end to end", async () => {
     "Items: 2 processed, 2 skipped as seen, 0 failed.",
   );
 });
-test("approvals.resolve refuses a choice, an edit and a batch, and approvals.answer shows the engine's refusals", async () => {
+test("TC-RUL-21 approvals.resolve refuses a choice, an edit and a batch, and approvals.answer shows the engine's refusals", async () => {
   const { service: s } = await setup();
   await run(s);
   const ask = await pending(s, "ask");
@@ -125,13 +136,15 @@ test("approvals.resolve refuses a choice, an edit and a batch, and approvals.ans
   ).rejects.toMatchObject({ code: "invalid_input", message: "This is a choice. Pick from its options." });
   await expect(
     s.call("approvals.resolve", { approvalId: ask.id, decision: "approve", applyToSimilar: true }),
-  ).rejects.toMatchObject({ code: "not_allowed", message: "Nothing here can be approved as a batch." });
+  ).rejects.toMatchObject({ code: "invalid_input", message: 'Unrecognized key: "applyToSimilar"' });
   await expect(s.call("approvals.answer", { approvalId: ask.id, picks: ["bad"] })).rejects.toMatchObject({
     code: "invalid_input",
   });
   await s.call("approvals.answer", { approvalId: ask.id, picks: ["j1"] });
   await expect(s.call("approvals.answer", { approvalId: ask.id, picks: ["j1"] })).rejects.toMatchObject({
-    code: "not_allowed",
+    code: "conflict",
+    reason: "already_answered",
+    params: { via: "window" },
     message: "This decision was already made.",
   });
   const sign = await pending(s, "result_sign_off");
@@ -159,7 +172,7 @@ test("live mode blocks a run when Claude Code is not found, and resume checks ag
   if (!row) throw new Error("Missing run");
   store.createRun({ ...row, id: "manual", blockedReason: undefined });
   expect(
-    RunSummary.array()
+    RunSummaryV2.array()
       .parse(await s.call("runs.list", {}))
       .find((x) => x.id === "manual")?.reportFirstLine,
   ).toBeUndefined();
@@ -173,36 +186,35 @@ test("live mode blocks a run when Claude Code is not found, and resume checks ag
 test("the six not-built operations answer unavailable with their sentences", async () => {
   const { service: s } = await setup();
   const cases = [
-    ["flows.build", { message: "x" }, "Building a flow from chat arrives with the agent."],
-    [
-      "flows.update",
-      { flowId: "x", edit: { kind: "undo" } },
-      "Editing a flow in the app arrives with the agent.",
-    ],
+    ["flows.build", { message: "x" }, "Operation retired."],
+    ["flows.update", { flowId: "x", edit: { kind: "undo" } }, "Operation retired."],
     [
       "readiness.install",
       { flowId: "x", requirementId: "x" },
       "Installing a requirement arrives with the readiness engine.",
     ],
-    ["harnesses.rescan", {}, "Looking for harnesses arrives with the harness adapters."],
-    [
-      "harnesses.setConsent",
-      { harnessId: "x", consent: "given" },
-      "Harness consent arrives with the harness adapters.",
-    ],
-    ["settings.update", { patch: {} }, "Changing settings arrives with the agent."],
+    ["harnesses.rescan", {}, "Operation retired."],
+    ["harnesses.setConsent", { harnessId: "x", consent: "given" }, "Operation retired."],
   ] as const;
   for (const [name, input, message] of cases)
     await expect(s.call(name, input)).rejects.toMatchObject({ code: "unavailable", message });
+  await expect(s.call("settings.update", { patch: {} })).rejects.toMatchObject({ code: "invalid_input" });
 });
-test("harnesses.list is empty, settings.get has the defaults and readiness.check has one unchecked row per requirement", async () => {
+test("TC-AGT-11 harnesses.list is retired, settings.get has the defaults and readiness.check has one unchecked row per requirement", async () => {
   const { service: s } = await setup();
   const d = demoFlow();
   d.manifest.requirements = [Requirement.parse({ id: "server", type: "mcp_server", tools: ["read"] })];
   s.engine.registerFlow(d.manifest, DEMO_HASH, d.files);
-  expect(await s.call("harnesses.list", {})).toEqual([]);
+  await expect(s.call("harnesses.list", {})).rejects.toMatchObject({
+    code: "unavailable",
+    reason: "retired",
+  });
   expect(await s.call("settings.get", {})).toMatchObject({
-    budget: { month: "2026-11", capUsd: 0, spentUsd: 0 },
+    language: "en",
+    agentPermission: "unset",
+    mainAgent: null,
+    busyFallback: false,
+    spendingLimit: 10,
   });
   expect(await s.call("readiness.check", { flowId: d.manifest.id })).toMatchObject({
     items: [{ requirementId: "server", state: "unchecked" }],
@@ -227,7 +239,11 @@ test("an output that does not parse becomes Internal error and an audit entry", 
       throw new Error("boom");
     },
   ]) {
-    const dispatch = createDispatcher({ "runner.info": fn } as unknown as Handlers, audit);
+    const dispatch = createDispatcher({
+      v2: {},
+      legacy: { "runner.info": fn } as unknown as Handlers,
+      audit,
+    });
     await expect(dispatch("runner.info", {})).rejects.toMatchObject({
       code: "unavailable",
       message: "Internal error",
@@ -236,7 +252,7 @@ test("an output that does not parse becomes Internal error and an audit entry", 
   expect(audit).toHaveBeenCalledTimes(2);
   expect(audit).toHaveBeenCalledWith("internal_error", expect.objectContaining({ method: "runner.info" }));
 });
-test("flows.import registers a valid folder, reports the issues of an invalid one and refuses a relative path", async () => {
+test("TC-STO-37 flows.import registers a valid folder, reports the issues of an invalid one and refuses a relative path", async () => {
   const { service: s } = await setup("live");
   const yaml = `format: flowdriven-flow/1.1\nid: local.import-test\nname: Import test\nkind: build\nsteps:\n  - id: a\n    do: worker\n    instructions: Hello\n    checks:\n      - type: contains\n        pattern: Hello\n`;
   const good = dir(),
@@ -253,7 +269,7 @@ test("flows.import registers a valid folder, reports the issues of an invalid on
   expect(invalid).not.toHaveProperty("flow");
   expect(await s.call("flows.list", {})).toEqual([]);
   expect(await s.call("flows.import", { path: good })).toMatchObject({
-    flow: expect.objectContaining({ manifest: expect.objectContaining({ id: "local.import-test" }) }),
+    flow: expect.objectContaining({ id: "local.import-test", state: "new" }),
     hash: expect.any(String),
   });
   expect(await s.call("flows.list", {})).toHaveLength(1);
@@ -278,4 +294,370 @@ test("queue.move refuses a run that is running", async () => {
     message: "This run is not waiting.",
   });
   await expect(service.call("queue.move", { runId: "missing" })).rejects.toMatchObject({ code: "not_found" });
+});
+
+test("TC-SR2-02 refuses person-only calls before parsing and audits each caller", async () => {
+  const notify = vi.fn();
+  const { service, store } = await setup("demo", notify);
+  notify.mockClear();
+  const call = service.call as (name: string, input: unknown, caller: string) => Promise<unknown>;
+  const rows: [string, unknown][] = [
+    ["approvals.resolve", { approvalId: "ap-1", decision: "approve" }],
+    ["approvals.answer", {}],
+    ["approvals.resolveSimilar", {}],
+    ["rules.revoke", { ruleId: "rule-1" }],
+    ["settings.update", { patch: { agentPermission: "off" } }],
+    ["settings.update", { patch: { spendingLimit: 500 } }],
+    ["flows.confirm", {}],
+    ["flows.setSchedule", { schedule: { type: "daily", time: "17:00" } }],
+    ["flows.delete", {}],
+    ["chats.act", {}],
+    ["agents.setUp", {}],
+    ["triggers.setEnabled", {}],
+  ];
+  const before = {
+    runs: store.listRuns({}),
+    flows: store.listFlows(),
+    approvals: store.listApprovals(),
+    settings: store.getSetting("keeper"),
+  };
+  for (const caller of ["tool", "phone"])
+    for (const [name, input] of rows) {
+      await expect(call(name, input, caller)).rejects.toMatchObject({
+        code: "not_allowed",
+        reason: "caller_not_allowed",
+      });
+    }
+  expect({
+    runs: store.listRuns({}),
+    flows: store.listFlows(),
+    approvals: store.listApprovals(),
+    settings: store.getSetting("keeper"),
+  }).toEqual(before);
+  expect(
+    store
+      .listAudit()
+      .filter((r) => r.kind === "caller_refused")
+      .map((r) => r.detail),
+  ).toEqual(["tool", "phone"].flatMap((caller) => rows.map(([operation]) => ({ operation, caller }))));
+  expect(notify).not.toHaveBeenCalled();
+  await expect(call("runner.info", {}, "tool")).resolves.toHaveProperty("contractVersion");
+});
+
+test("TC-SR7-10 audits handler failures and rolls back handler transactions", async () => {
+  const { store } = await setup();
+  const audit = vi.fn();
+  const make = createDispatcher as unknown as (
+    opts: unknown,
+  ) => (name: string, input: unknown) => Promise<unknown>;
+  for (const handler of [
+    () =>
+      store.transaction(() => {
+        store.putSetting("rollback", "value");
+        throw new Error("disk");
+      }),
+    () => ({ mode: "wrong" }),
+  ]) {
+    const dispatch = make({ v2: { "runner.info": handler }, legacy: {}, audit });
+    await expect(dispatch("runner.info", {})).rejects.toMatchObject({
+      code: "unavailable",
+      reason: "internal_error",
+      message: "Internal error",
+    });
+  }
+  expect(store.getSetting("rollback")).toBeUndefined();
+  expect(audit).toHaveBeenCalledTimes(2);
+  expect(audit).toHaveBeenCalledWith("internal_error", expect.objectContaining({ method: "runner.info" }));
+});
+
+test("TC-ENG-25 retires build and update and preserves structured handler errors", async () => {
+  const { RunnerError } = await import("@flowdriven/contracts");
+  const audit = vi.fn();
+  const handler = vi.fn(() => {
+    throw new RunnerError("conflict", "x", { reason: "card_answered", params: { id: "a" } });
+  });
+  const make = createDispatcher as unknown as (
+    opts: unknown,
+  ) => (name: string, input: unknown) => Promise<unknown>;
+  const dispatch = make({
+    v2: { "runner.info": handler },
+    legacy: { "flows.build": handler, "flows.update": handler },
+    audit,
+  });
+  for (const name of ["flows.build", "flows.update"])
+    await expect(dispatch(name, {})).rejects.toMatchObject({ code: "unavailable", reason: "retired" });
+  expect(handler).not.toHaveBeenCalled();
+  await expect(dispatch("flows.nothing", {})).rejects.toMatchObject({ code: "not_found" });
+  await expect(dispatch("runner.info", {})).rejects.toMatchObject({
+    code: "conflict",
+    reason: "card_answered",
+    params: { id: "a" },
+  });
+});
+
+test("TC-ENG-25 selects version 2 before legacy and validates each map with its own schemas", async () => {
+  const legacy = vi.fn(() => ({ contractVersion: 1, mode: "demo" as const }));
+  const v2 = vi.fn(() => ({
+    contractVersion: 2,
+    appVersion: "1.0.0",
+    storeVersion: 6,
+    mode: "demo" as const,
+  }));
+  const audit = vi.fn();
+  const both = createDispatcher({ v2: { "runner.info": v2 }, legacy: { "runner.info": legacy }, audit });
+  await expect(both("runner.info", {})).resolves.toMatchObject({ contractVersion: 2 });
+  expect(legacy).not.toHaveBeenCalled();
+  const old = createDispatcher({ v2: {}, legacy: { "runner.info": legacy }, audit });
+  await expect(old("runner.info", {})).resolves.toEqual({ contractVersion: 1, mode: "demo" });
+  await expect(old("agents.list", {})).rejects.toMatchObject({ code: "unavailable" });
+});
+
+test("TC-SR2-02 retired operations refuse tool and phone but reach window handlers", async () => {
+  const audit = vi.fn();
+  const reached = vi.fn(() => {
+    throw new Error("reached legacy handler");
+  });
+  const dispatch = createDispatcher({
+    v2: {},
+    legacy: {
+      "harnesses.setConsent": reached,
+      "flows.allowCapabilities": reached,
+      "flows.withdrawCapabilities": reached,
+    },
+    audit,
+  });
+  const rows = [
+    ["harnesses.setConsent", { harnessId: "h", consent: "given" }],
+    ["flows.allowCapabilities", { flowId: "f", hash: `sha256:${"a".repeat(64)}` }],
+    ["flows.withdrawCapabilities", { flowId: "f" }],
+  ] as const;
+  for (const [name, input] of rows) {
+    for (const caller of ["tool", "phone"] as const) {
+      await expect(dispatch(name, input, caller)).rejects.toMatchObject({
+        code: "not_allowed",
+        reason: "caller_not_allowed",
+      });
+      expect(audit).toHaveBeenCalledWith("caller_refused", { operation: name, caller });
+    }
+    await expect(dispatch(name, input, "window")).rejects.toMatchObject({
+      code: "unavailable",
+      reason: name === "harnesses.setConsent" ? "retired" : "internal_error",
+    });
+  }
+  expect(reached).toHaveBeenCalledTimes(2);
+});
+
+test("TC-AGT-32 runner.info reports live, demo and sample modes", async () => {
+  for (const mode of ["live", "demo"] as const) {
+    const { service } = await setup(mode);
+    const info = await service.call("runner.info", {});
+    expect(info).toEqual({
+      contractVersion: 2,
+      appVersion: expect.stringMatching(/^\d+\.\d+\.\d+/),
+      storeVersion: 7,
+      mode,
+    });
+  }
+  await expect(createFixtureRunnerClient().call("runner.info", {})).resolves.toEqual({
+    contractVersion: 2,
+    appVersion: "0.1.0",
+    storeVersion: 7,
+    mode: "sample",
+  });
+});
+
+test("TC-j12-32 settings defaults and choices survive a restart", async () => {
+  const { mkdirSync, symlinkSync } = await import("node:fs");
+  const { AGENT_PROFILES } = await import("../test-helpers/agent-profiles.ts");
+  const { FAKE_CODEX_PATH, writeFakeCodexScript } = await import("../test-helpers/fake-codex-script.ts");
+  const dataDir = dir();
+  const bin = join(dataDir, "bin");
+  mkdirSync(bin);
+  symlinkSync(FAKE_CODEX_PATH, join(bin, "codex"));
+  writeFakeCodexScript(dataDir, { profile: AGENT_PROFILES.codex, signedIn: true });
+  const path = join(dataDir, "store.sqlite");
+  const store = await openSqliteStore(path);
+  const make = (s: Store) =>
+    createRunnerService({
+      store: s,
+      dataDir,
+      mode: "demo",
+      env: { HOME: dataDir, PATH: `${bin}:${process.env.PATH}` },
+      agents: { extraDirs: [], codexPath: join(bin, "codex") },
+      now: fixed,
+      languages: ["en", "id"],
+    });
+  const first = make(store);
+  await first.start().settled;
+  expect(await first.call("settings.get", {})).toMatchObject({
+    language: "en",
+    agentPermission: "unset",
+    mainAgent: null,
+    busyFallback: false,
+    spendingLimit: 10,
+  });
+  const patch = {
+    language: "id",
+    agentPermission: "on",
+    mainAgent: { agent: "codex", model: "gpt-6.1-terra" },
+    busyFallback: true,
+    spendingLimit: 40,
+  };
+  const updated = await first.call("settings.update", { patch });
+  first.stop();
+  store.close();
+  const reopened = await openSqliteStore(path);
+  const second = make(reopened);
+  services.push({ service: second, store: reopened });
+  await second.start().settled;
+  expect(await second.call("settings.get", {})).toEqual(updated);
+});
+
+test("TC-j28-40 background is rejected without changes or audit", async () => {
+  const { service, store } = await setup();
+  const before = await service.call("settings.get", {});
+  expect(before).not.toHaveProperty("background");
+  const audit = store.listAudit().filter((row) => row.kind === "setting_changed");
+  await expect(
+    service.call("settings.update", { patch: { background: { keepRunning: false, openAtLogin: false } } }),
+  ).rejects.toMatchObject({ code: "invalid_input" });
+  expect(await service.call("settings.get", {})).toEqual(before);
+  expect(store.listAudit().filter((row) => row.kind === "setting_changed")).toEqual(audit);
+});
+
+test("settings updates validate limits, round cents and audit changed keys", async () => {
+  const { service, store } = await setup();
+  for (const value of [10, 5, 10.001])
+    await expect(service.call("settings.update", { patch: { spendingLimit: value } })).rejects.toMatchObject({
+      code: "invalid_input",
+      reason: "limit_not_above",
+    });
+  await expect(service.call("settings.update", { patch: { spendingLimit: 10001 } })).rejects.toMatchObject({
+    code: "invalid_input",
+  });
+  expect(
+    await service.call("settings.update", { patch: { spendingLimit: 25.004, agentPermission: "on" } }),
+  ).toMatchObject({
+    spendingLimit: 25,
+    spending: { month: "2026-11", spentUsd: 0, limitUsd: 25, state: "ok", allOnPlans: false },
+  });
+  expect(
+    store.listAudit().filter((row) => ["setting_changed", "permission_changed"].includes(row.kind)),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        kind: "setting_changed",
+        detail: expect.objectContaining({ key: "spendingLimit", from: 10, to: 25 }),
+      }),
+      expect.objectContaining({
+        kind: "permission_changed",
+        detail: expect.objectContaining({
+          from: "unset",
+          to: "on",
+          source: "window",
+        }),
+      }),
+    ]),
+  );
+});
+
+test("TC-j12-17 a new chat takes the main agent while an open chat and running run keep theirs", async () => {
+  const { mkdirSync, symlinkSync } = await import("node:fs");
+  const { AGENT_PROFILES } = await import("../test-helpers/agent-profiles.ts");
+  const { seedSampleFlow } = await import("../test-helpers/builders.ts");
+  const { FAKE_CLAUDE_PATH, writeFakeScript } = await import("../test-helpers/fake-claude-script.ts");
+  const { FAKE_CODEX_PATH, writeFakeCodexScript } = await import("../test-helpers/fake-codex-script.ts");
+
+  const dataDir = dir();
+  const bin = join(dataDir, "bin");
+  mkdirSync(bin);
+  symlinkSync(FAKE_CLAUDE_PATH, join(bin, "claude"));
+  symlinkSync(FAKE_CODEX_PATH, join(bin, "codex"));
+  writeFakeScript(dataDir, {});
+  writeFakeCodexScript(dataDir, { profile: AGENT_PROFILES.codex, signedIn: true });
+  const store = await openSqliteStore(":memory:");
+  let n = 0;
+  const service = createRunnerService({
+    store,
+    dataDir,
+    mode: "demo",
+    env: { HOME: dataDir, PATH: `${bin}:${process.env.PATH}` },
+    now: fixed,
+    agents: { extraDirs: [], claudePath: join(bin, "claude"), codexPath: join(bin, "codex") },
+    newId: (prefix) => `${prefix}-${String(++n).padStart(12, "0")}`,
+  });
+  services.push({ service, store });
+  await service.start().settled;
+  await service.call("settings.update", {
+    patch: { mainAgent: { agent: "claude-code", model: "sonnet-5.5" } },
+  });
+
+  const a = (await service.call("chats.create", {})) as { chatId: string };
+  store.putMessage({
+    id: "msg-000000000001",
+    chatId: a.chatId,
+    seq: 1,
+    at: fixed().toISOString(),
+    role: "person",
+    kind: "text",
+    outside: false,
+    text: "Start run",
+  });
+  const { manifest, hash } = seedSampleFlow(store, "example.fill-timesheet");
+  const runId = "run-000000000001";
+  store.createRun({
+    id: runId,
+    flowId: manifest.id,
+    flowHash: hash,
+    flowVersion: manifest.version,
+    state: "running",
+    project: dataDir,
+    inputs: {},
+    params: {},
+    requirements: [],
+    startedAt: fixed().toISOString(),
+    agent: { agent: "claude-code", model: "sonnet-5.5", choice: "chat" },
+    start: { source: "chat", chatId: a.chatId },
+  });
+
+  await service.call("settings.update", {
+    patch: { mainAgent: { agent: "codex", model: "gpt-6.1-sol" } },
+  });
+  const b = (await service.call("chats.create", {})) as { chatId: string };
+
+  expect(await service.call("chats.get", { chatId: a.chatId })).toMatchObject({
+    chat: { id: a.chatId, agent: "claude-code", model: "sonnet-5.5" },
+  });
+  expect(await service.call("chats.get", { chatId: b.chatId })).toMatchObject({
+    chat: { id: b.chatId, agent: "codex", model: "gpt-6.1-sol" },
+  });
+  expect(await service.call("runs.status", { runId })).toMatchObject({
+    agent: "claude-code",
+    model: "sonnet-5.5",
+  });
+});
+
+test("TC-j12-10 both permission changes are on the record with source window", async () => {
+  const { service } = await setup();
+  await service.call("settings.update", { patch: { agentPermission: "on" } }, "window");
+  await service.call("settings.update", { patch: { agentPermission: "off" } }, "window");
+  await expect(
+    service.call("settings.update", { patch: { agentPermission: "on" } }, "tool"),
+  ).rejects.toMatchObject({
+    code: "not_allowed",
+    reason: "caller_not_allowed",
+  });
+  expect(await service.call("settings.get", {})).toMatchObject({ agentPermission: "off" });
+  const audit = (await service.call("audit.list", {})) as Array<{
+    kind: string;
+    detail: Record<string, unknown>;
+  }>;
+  expect(audit.filter((row) => row.kind === "permission_changed").map((row) => row.detail)).toEqual([
+    { from: "unset", to: "on", source: "window" },
+    { from: "on", to: "off", source: "window" },
+  ]);
+  expect(audit.filter((row) => row.kind === "caller_refused").map((row) => row.detail)).toContainEqual({
+    operation: "settings.update",
+    caller: "tool",
+  });
 });

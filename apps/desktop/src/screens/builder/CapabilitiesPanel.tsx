@@ -1,6 +1,6 @@
-import type { CapabilityRow, FlowCapabilities } from "@flowdriven/contracts";
+import type { CapabilityRow, FlowCapabilities } from "@flowdriven/contracts/v1";
 import { type ReactElement, useRef, useState } from "react";
-import { useRunnerAction } from "../../runner/runner-context";
+import { useRunnerAction } from "../../legacy/runner-context";
 import { Button } from "../../ui/Button";
 import { Icon } from "../../ui/icons";
 import { Badge, ToneIcon } from "../../ui/StatusBadge";

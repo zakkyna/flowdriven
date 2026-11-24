@@ -1,4 +1,4 @@
-import { Approval, Payload } from "@flowdriven/contracts";
+import { Approval, Payload } from "@flowdriven/contracts/v1";
 import type { FlowManifest } from "@flowdriven/sdk";
 import type { ApprovalRow, RunRow } from "../storage.ts";
 export function toApproval(row: ApprovalRow, run: RunRow, manifest: FlowManifest): Approval {

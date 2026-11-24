@@ -1,7 +1,7 @@
-import { RunnerError } from "@flowdriven/contracts";
+import { RunnerError } from "@flowdriven/contracts/v1";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { renderApp } from "../../test/render";
+import { renderApp } from "../../legacy/render-legacy";
 
 const builder = "#/builder/dev.example.job-review";
 async function row(name: string) {

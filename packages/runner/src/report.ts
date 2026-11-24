@@ -123,7 +123,14 @@ export function renderRunReport(view: RunView): string {
         (c) => `- ${e(s.stepId)}${s.itemKey ? `@${e(s.itemKey)}` : ""} ${e(c.type)}: ${e(c.evidence ?? "-")}`,
       ),
   );
-  lines.push(...(evidence.length ? evidence : ["- none"]));
+  const attemptEvidence = steps.flatMap((s) =>
+    (s.attemptLog ?? []).map(
+      (entry) =>
+        `- ${e(s.stepId)}${s.itemKey ? `@${e(s.itemKey)}` : ""} attempt ${entry.attempt} ${e(entry.reason)} (${entry.count}): ${e(entry.evidence || "-")}`,
+    ),
+  );
+  const allEvidence = [...evidence, ...attemptEvidence];
+  lines.push(...(allEvidence.length ? allEvidence : ["- none"]));
   for (const loop of manifest.steps.filter((s) => "for_each" in s)) {
     lines.push(
       "",

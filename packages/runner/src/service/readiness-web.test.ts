@@ -87,7 +87,7 @@ test("readiness.check marks the own-browser web row ok or missing with the unoff
   for (const flag of [true, false]) {
     const service = await setup(true, () => ({ chromeFlag: flag, hostFile: true }));
     const result = await service.call("readiness.check", { flowId: "local.readiness" });
-    const { ReadinessReport } = await import("@flowdriven/contracts");
+    const { ReadinessReport } = await import("@flowdriven/contracts/v1");
     const rows = ReadinessReport.parse(result).items;
     expect(rows.at(0)).toMatchObject({
       state: flag ? "ok" : "missing",
@@ -106,7 +106,7 @@ test("readiness.check marks the own-browser web row ok or missing with the unoff
 });
 test("without a check function the report is the present one", async () => {
   const service = await setup();
-  const { ReadinessReport } = await import("@flowdriven/contracts");
+  const { ReadinessReport } = await import("@flowdriven/contracts/v1");
   const rows = ReadinessReport.parse(
     await service.call("readiness.check", { flowId: "local.readiness" }),
   ).items;

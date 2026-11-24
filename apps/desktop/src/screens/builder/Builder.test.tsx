@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
-import { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "@flowdriven/fixtures";
+import { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "@flowdriven/fixtures/v1";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { App } from "../../App";
-import { RunnerProvider, useRunnerQuery } from "../../runner/runner-context";
-import { readyState, renderApp } from "../../test/render";
+import { readyState, renderApp } from "../../legacy/render-legacy";
+import { RunnerProvider, useRunnerQuery } from "../../legacy/runner-context";
 
 const FIGMA = "#/builder/dev.example.figma-to-flutter";
 const rows = () => within(screen.getByRole("list", { name: "Steps" })).getAllByRole("listitem");

@@ -3,6 +3,7 @@ import { createNoticePolicy, type NoticeEvent } from "../notify/policy.ts";
 import type { RunState } from "../states.ts";
 import type { ApprovalRow, Store } from "../storage.ts";
 import type { FloodEvent, PausedEvent } from "../triggers/service.ts";
+import { appLanguage } from "./settings.ts";
 
 type Weekly = { percent: number; resetsAtMs: number };
 type Hooks = {
@@ -67,10 +68,14 @@ export function observeStore(store: Store, hooks: Hooks): Store {
 }
 export function createNotifier(o: {
   store: Store;
+  languages?: readonly string[];
   now: () => Date;
   send: (notice: Notice) => void;
 }): Hooks & { onFlood(event: FloodEvent): void; onPaused(event: PausedEvent): void } {
-  const policy = createNoticePolicy({ nowMs: () => o.now().getTime() });
+  const policy = createNoticePolicy({
+    nowMs: () => o.now().getTime(),
+    language: () => appLanguage(o.store, o.languages ?? ["en"]),
+  });
   function send(event: NoticeEvent) {
     try {
       const notice = policy.decide(event);
@@ -98,9 +103,14 @@ export function createNotifier(o: {
     },
     onRunState(id, state) {
       try {
-        if (state !== "blocked") return;
+        if (state !== "blocked" && state !== "needs_login") return;
+        if (
+          state === "blocked" &&
+          o.store.listSteps(id).some((step) => step.noteLine?.key === "hold.tooLarge")
+        )
+          return;
         const info = runInfo(id);
-        if (info?.run.state === "blocked")
+        if (info?.run.state === state)
           send({ kind: "run_blocked", runId: id, flowId: info.run.flowId, flowName: info.flowName });
       } catch {}
     },

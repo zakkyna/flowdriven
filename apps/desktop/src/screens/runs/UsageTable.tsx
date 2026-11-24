@@ -1,4 +1,4 @@
-import type { UsageRow } from "@flowdriven/contracts";
+import type { UsageRow } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { formatDuration, formatUsd } from "../../ui/format";
 import styles from "./Runs.module.css";

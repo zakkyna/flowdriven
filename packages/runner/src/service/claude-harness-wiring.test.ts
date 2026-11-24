@@ -88,7 +88,7 @@ async function setup(script: FakeScript = {}) {
   const hs = createHarnessService({ ...common, projectDir: dir, dayOf });
   services.push(hs);
   await hs.start().settled;
-  hs.setConsent(CLAUDE_ID, "given");
+  store.putSetting("agentPermission", "on");
   const m = flow();
   const addRun = (id: string, hash = DEMO_HASH) =>
     store.createRun({

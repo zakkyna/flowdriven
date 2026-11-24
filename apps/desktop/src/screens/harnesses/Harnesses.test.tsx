@@ -1,9 +1,9 @@
 // apps/desktop/src/screens/harnesses/Harnesses.test.tsx
 import { readFileSync } from "node:fs";
-import type { HarnessCard } from "@flowdriven/contracts";
+import type { HarnessCard } from "@flowdriven/contracts/v1";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import { readyState, renderApp } from "../../test/render";
+import { readyState, renderApp } from "../../legacy/render-legacy";
 import { HarnessCardView } from "./HarnessCardView";
 
 const card = (name: string) => screen.getByRole("article", { name });

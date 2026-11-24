@@ -1,4 +1,6 @@
 import {
+  type ErrorParams,
+  type ErrorReason,
   encodeFrame,
   FrameError,
   LineFramer,
@@ -10,10 +12,10 @@ import {
   RpcRequest,
   RUNNER_ERROR_CODES,
   type RunnerErrorCode,
-  type RunnerEvent,
   rpcFailure,
   rpcResult,
 } from "@flowdriven/contracts";
+import type { RunnerEvent } from "@flowdriven/contracts/v1";
 export type RpcServerOptions = {
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream & { readonly writableNeedDrain?: boolean };
@@ -24,6 +26,7 @@ export type RpcServerOptions = {
 };
 export type RpcServer = {
   notice(notice: Notice): void;
+  clearNotice(id: string): void;
   notify(event: RunnerEvent): void;
   done: Promise<"end" | "protocol_error">;
 };
@@ -85,9 +88,11 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
     if (stopped) return;
     stopped = true;
     input.removeListener("data", onData);
-    void write(rpcFailure(null, "invalid_input", "Invalid frame", RPC_INVALID_REQUEST), undefined, true).then(
-      () => finish("protocol_error"),
-    );
+    void write(
+      rpcFailure(null, "invalid_input", "Invalid frame", { number: RPC_INVALID_REQUEST }),
+      undefined,
+      true,
+    ).then(() => finish("protocol_error"));
   }
   function handle(line: string) {
     let frame: Record<string, unknown>;
@@ -99,13 +104,17 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
     }
     const parsed = RpcRequest.safeParse(frame);
     if (!parsed.success) {
-      void write(rpcFailure(null, "invalid_input", "Invalid request", RPC_INVALID_REQUEST), undefined, true);
+      void write(
+        rpcFailure(null, "invalid_input", "Invalid request", { number: RPC_INVALID_REQUEST }),
+        undefined,
+        true,
+      );
       return;
     }
     const { id, method, params } = parsed.data;
     if (id === undefined) return;
     if (!options.knows(method)) {
-      void write(rpcFailure(id, "not_found", "Method not found", RPC_METHOD_NOT_FOUND), id, true);
+      void write(rpcFailure(id, "not_found", "Method not found", { number: RPC_METHOD_NOT_FOUND }), id, true);
       return;
     }
     const task = Promise.resolve()
@@ -117,14 +126,25 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
             id,
           ),
         (error: unknown) => {
-          const candidate = error as { code?: unknown; message?: unknown } | null;
+          const candidate = error as {
+            code?: unknown;
+            message?: unknown;
+            reason?: ErrorReason;
+            params?: ErrorParams;
+          } | null;
           const code = candidate?.code;
           if (
             typeof code === "string" &&
             (RUNNER_ERROR_CODES as readonly string[]).includes(code) &&
             typeof candidate?.message === "string"
           )
-            return write(rpcFailure(id, code as RunnerErrorCode, candidate.message), id);
+            return write(
+              rpcFailure(id, code as RunnerErrorCode, candidate.message, {
+                reason: candidate.reason,
+                params: candidate.params,
+              }),
+              id,
+            );
           return write(rpcFailure(id, "unavailable", "Internal error"), id, true);
         },
       )
@@ -178,6 +198,11 @@ export function serveRpc(options: RpcServerOptions): RpcServer {
       if (output.writableNeedDrain || pendingNotices.length > 0) {
         if (pendingNotices.length < 20) pendingNotices.push(notice);
       } else void write({ jsonrpc: "2.0", method: "notice", params: notice });
+    },
+    clearNotice(id) {
+      const index = pendingNotices.findIndex((notice) => notice.id === id);
+      if (index >= 0) pendingNotices.splice(index, 1);
+      if (!resolved) void write({ jsonrpc: "2.0", method: "notice_clear", params: { id } });
     },
     notify(event) {
       if (resolved) return;

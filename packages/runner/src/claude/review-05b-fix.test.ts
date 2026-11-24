@@ -94,7 +94,15 @@ async function real(steps: unknown[], plays: FakePlay[], tools: string[]) {
   });
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
   engine.registerFlow(parsed.manifest, hash);
-  return { root, home, store, engine, start: () => engine.startRun("local.proof", { project: root }) };
+  return {
+    root,
+    home,
+    store,
+    engine,
+    adapter,
+    facts,
+    start: () => engine.startRun("local.proof", { project: root }),
+  };
 }
 function pending(store: Store) {
   const a = store.listApprovals({ state: "pending" }).at(0);
@@ -103,7 +111,7 @@ function pending(store: Store) {
 }
 
 test(
-  "R-1: a held send with a long body and a bcc after it cannot be approved: there is no card, and the send never runs",
+  "TC-j24-41 R-1: a held send with a long body and a bcc after it cannot be approved: there is no card, and the send never runs",
   timeout,
   async () => {
     const input = { to: "client@example.com", body: "Thanks. ".repeat(500), bcc: "attacker@example.net" };
@@ -115,7 +123,7 @@ test(
     const run = await c.start();
     expect(run).toMatchObject({
       state: "blocked",
-      blockedReason: "This call is too large to show for your approval.",
+      blockedReason: "FlowDriven could not show the whole text, so it did not ask.",
     });
     expect(c.store.listApprovals()).toEqual([]);
     expect(readFakeCalls(c.home)).not.toContainEqual(
@@ -199,3 +207,130 @@ test(
     );
   },
 );
+
+test("TC-j24-04 approving a held reply runs the exact call once on fake Claude", timeout, async () => {
+  const input = { threadId: "thread-sam", to: "sam@example.test", subject: "Re: Invoice", body: "Thanks." };
+  const c = await real(
+    [worker("send", "Send")],
+    [{ when: "Send", actions: [invoke("reply", "reply", input), result] }],
+    ["reply"],
+  );
+  const { createRunnerService } = await import("../service/service.ts");
+  const service = createRunnerService({
+    store: c.store,
+    dataDir: c.root,
+    mode: "demo",
+    harness: c.adapter,
+    now,
+  });
+  try {
+    const run = await c.start();
+    expect(run.state).toBe("waiting_approval");
+    expect(
+      readFakeCalls(c.home).filter((call) => call.kind === "tool" && call.id === "reply" && call.ran),
+    ).toHaveLength(0);
+    const a = pending(c.store);
+    expect(await service.call("approvals.resolve", { approvalId: a.id, decision: "approve" })).toMatchObject({
+      decision: { state: "approved" },
+      stepWaiting: 0,
+    });
+    const end = Date.now() + 10000;
+    while (Date.now() < end && c.store.getRun(run.id)?.state !== "done")
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(c.store.getRun(run.id)?.state).toBe("done");
+    expect(
+      readFakeCalls(c.home).filter((call) => call.kind === "tool" && call.id === "reply" && call.ran),
+    ).toHaveLength(1);
+    expect(c.store.getRun(run.id)?.decisionLines).toContainEqual({
+      key: "report.youApproved",
+      params: { title: a.summary },
+    });
+    expect(c.store.listAudit(run.id).map((item) => item.kind)).toEqual(
+      expect.arrayContaining(["call_held", "grant_used"]),
+    );
+  } finally {
+    service.stop();
+  }
+});
+
+test("TC-j24-01 TC-SR1-12 one held reply appears in Activity, chat and a fixed notice", timeout, async () => {
+  const input = { to: "Sam Example <sam@example.test>", subject: "Re: Invoice", body: "Thanks." };
+  const c = await real(
+    [worker("send", "Send")],
+    [{ when: "Send", actions: [invoke("reply", "reply", input), result] }],
+    ["reply"],
+  );
+  const { createRunnerService } = await import("../service/service.ts");
+  const { createNotifier, observeStore } = await import("../service/notify-wiring.ts");
+  const notices: unknown[] = [];
+  const notifier = createNotifier({ store: c.store, now, send: (notice) => notices.push(notice) });
+  const store = observeStore(c.store, notifier);
+  store.putChat({
+    id: "chat-7",
+    title: "Chat",
+    titleSource: "flowdriven",
+    createdAt: now().toISOString(),
+    updatedAt: now().toISOString(),
+    from: "flowdriven",
+    language: "en",
+    languageSource: "app",
+    agent: "claude-code",
+    model: "default",
+    agentSource: "main_default",
+  });
+  const runStep = c.adapter.runStep.bind(c.adapter);
+  c.adapter.runStep = (request) => {
+    store.updateRun(request.runId, { start: { source: "chat", chatId: "chat-7" } });
+    return runStep(request);
+  };
+  let id = 0;
+  const engine = createEngine({
+    store,
+    harness: c.adapter,
+    now,
+    newId: (prefix) => `test-${prefix}-${++id}`,
+    routeOf: (reqs) => routeAll(reqs, c.facts, [gmail]),
+  });
+  const service = createRunnerService({
+    store: c.store,
+    dataDir: c.root,
+    mode: "demo",
+    harness: c.adapter,
+    now,
+  });
+  try {
+    const run = await engine.startRun("local.proof", { project: c.root });
+    await Promise.resolve();
+    expect(run.state).toBe("waiting_approval");
+    const a = pending(c.store);
+    expect(await service.call("approvals.list", { state: "pending" })).toEqual([
+      expect.objectContaining({
+        id: a.id,
+        kind: "risky_action",
+        riskyAction: "send",
+        summary: "Send reply to Sam Example <sam@example.test>?",
+        canAlwaysAllow: false,
+      }),
+    ]);
+    expect(await service.call("activity.summary", {})).toMatchObject({
+      needsYouCount: 1,
+      needsYou: [{ kind: "decision", decision: { id: a.id } }],
+    });
+    expect(c.store.listMessages("chat-7")).toContainEqual(
+      expect.objectContaining({ card: { type: "decision", state: "open", approvalId: a.id } }),
+    );
+    expect(notices).toEqual([
+      expect.objectContaining({
+        kind: "approval_waiting",
+        title: { key: "notice.decisionTitle" },
+        body: { key: "notice.decisionBody" },
+      }),
+    ]);
+    expect(
+      readFakeCalls(c.home).filter((call) => call.kind === "tool" && call.id === "reply" && call.ran),
+    ).toHaveLength(0);
+  } finally {
+    service.stop();
+    engine.shutdown();
+  }
+});

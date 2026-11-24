@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from "no
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type KeeperSettings, operations, type RunDetail } from "@flowdriven/contracts";
+import { type KeeperSettings, operations, type RunDetail } from "@flowdriven/contracts/v1";
 import { FlowManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Keeper, KeeperConfig } from "./keeper/types.ts";
@@ -85,7 +85,7 @@ async function liveRig(options: { keeper?: Partial<KeeperSettings> } = {}) {
   const keeper = captured.keeper;
   if (!config || !keeper) throw new Error("Keeper was not created");
   await service.start().settled;
-  await service.call("harnesses.setConsent", { harnessId: "claude-code", consent: "given" });
+  await service.call("settings.update", { patch: { agentPermission: "on" } });
   let count = 0;
   async function runAsk(text: string, result?: { text: string; usage?: ResultAction["usage"] }) {
     const marker = `R19-MARKER-${++count}`;

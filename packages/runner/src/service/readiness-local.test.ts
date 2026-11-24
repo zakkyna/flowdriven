@@ -10,14 +10,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ReadinessReport } from "@flowdriven/contracts";
+import { ReadinessReport } from "@flowdriven/contracts/v1";
 import { FlowManifest } from "@flowdriven/sdk";
 import { afterEach, expect, test, vi } from "vitest";
 import { scriptedHarness } from "../scripted-harness.ts";
 import { bundledSkill, readSkillFolder } from "../skills/skill-folder.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
-import { toReadinessReport } from "./map-flow.ts";
+import { toReadinessReport } from "./map-flow-v1.ts";
 import { createRunnerService, type RunnerService } from "./service.ts";
 
 const paths = vi.hoisted(() => ({ home: "" }));

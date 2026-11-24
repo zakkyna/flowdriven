@@ -1,5 +1,5 @@
 import { PassThrough } from "node:stream";
-import { RunnerError } from "@flowdriven/contracts";
+import { RunnerError } from "@flowdriven/contracts/v1";
 import { expect, test } from "vitest";
 import { connectRpcClient } from "../test-helpers/rpc-client.ts";
 import { serveRpc } from "./server.ts";
@@ -227,8 +227,9 @@ test("a notice is written as a notice frame; under back-pressure 20 wait and are
   const notice = {
     id: "n",
     kind: "run_blocked" as const,
-    title: "Run blocked",
-    body: "Blocked",
+    title: { key: "notice.problemTitle" },
+    body: { key: "notice.problemBody" },
+    language: "en",
     target: { screen: "run" as const, runId: "r" },
   };
   server.notice(notice);
@@ -258,4 +259,34 @@ test("a notice is written as a notice frame; under back-pressure 20 wait and are
   const before = text;
   server.notice(notice);
   expect(text).toBe(before);
+});
+
+test("TC-j24-04 notice_clear removes a queued notice and sends its id", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough({ highWaterMark: 1 });
+  const server = serveRpc({ input, output, call: async () => ({}), knows: () => true });
+  const notice = {
+    id: "approval:ap-1",
+    kind: "approval_waiting" as const,
+    title: { key: "notice.decisionTitle" },
+    body: { key: "notice.decisionBody" },
+    language: "en",
+    target: { screen: "run" as const, runId: "run-1", approvalId: "ap-1" },
+  };
+  server.notice({ ...notice, id: "approval:earlier" });
+  server.notice(notice);
+  server.clearNotice(notice.id);
+  let text = "";
+  output.on("data", (chunk: Buffer) => {
+    text += chunk.toString();
+  });
+  await tick();
+  const frames = text
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(frames).toContainEqual({ jsonrpc: "2.0", method: "notice_clear", params: { id: notice.id } });
+  expect(frames).not.toContainEqual({ jsonrpc: "2.0", method: "notice", params: notice });
+  input.end();
+  await server.done;
 });

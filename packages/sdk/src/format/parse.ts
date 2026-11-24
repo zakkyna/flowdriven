@@ -9,6 +9,17 @@ const object = (v: unknown): v is Record<string, unknown> =>
 export function parseManifest(
   raw: unknown,
 ): { ok: true; manifest: FlowManifest } | { ok: false; issues: Issue[] } {
+  if (object(raw) && raw.format === "flowdriven-flow/1.1") {
+    const issues: Issue[] = ["touches", "result", "schedule"]
+      .filter((key) => Object.hasOwn(raw, key))
+      .map((key) => ({
+        severity: "error",
+        code: "needs_format_1_2",
+        path: key,
+        message: "Requires format 1.2",
+      }));
+    if (issues.length) return { ok: false, issues };
+  }
   const nested: Issue[] = [];
   if (object(raw) && Array.isArray(raw.steps))
     raw.steps.forEach((step: unknown, i: number) => {
@@ -58,7 +69,12 @@ export function parseManifest(
     }
     issues.push({
       severity: "error",
-      code: path.length === 1 && path[0] === "format" ? "unsupported_format" : "schema",
+      code:
+        issue.code === "custom" && typeof issue.params?.code === "string"
+          ? issue.params.code
+          : path.length === 1 && path[0] === "format"
+            ? "unsupported_format"
+            : "schema",
       path: path.join("."),
       message: issue.message,
     });

@@ -1,7 +1,8 @@
 import type { Value } from "@flowdriven/sdk";
 import type { GrantBook } from "../connectors/grants.ts";
 import { isCallGrant } from "../connectors/grants.ts";
-import type { CallInfo, HeldCall, RateLimit } from "../harness.ts";
+import { cleanErrorLine, digestResult } from "../exec/stuck.ts";
+import type { CallInfo, HeldCall, RateLimit, StepEvent } from "../harness.ts";
 import { buildClaudeArgs, type ClaudeModel } from "./args.ts";
 import { BROWSER_DENY, CHROME_PREFIX, closeSentence } from "./browser.ts";
 import { decidePost, POST_TEXT, type PostResult, postLine, STOP } from "./browser-post.ts";
@@ -32,10 +33,29 @@ import {
 import { visible } from "./text.ts";
 export const MAX_DENIED_ENTRIES = 50;
 const MAX_PAGE_ROWS = 50;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toolResultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const part of content) {
+      if (typeof part === "string") parts.push(part);
+      else if (isRecord(part) && typeof part.text === "string") parts.push(part.text);
+      else if (part !== undefined) parts.push(JSON.stringify(part));
+    }
+    return parts.join("\n");
+  }
+  return content === undefined ? "" : JSON.stringify(content);
+}
 export type RunInput = {
   pickTools?: string[];
   runId: string;
   stepId: string;
+  ruleTitle?: string;
   itemKey: string;
   attempt: number;
   model: ClaudeModel;
@@ -45,6 +65,8 @@ export type RunInput = {
   browser?: boolean;
   connectorPrefix?: string;
   onOutside?: () => void;
+  onEvent?: (event: StepEvent) => void;
+  books?: { grants?: GrantBook; rules?: () => import("../storage.ts").RuleRow[]; earlierNo?: () => boolean };
   makePolicy: (control: { root: string; cwd: string }, sessionId: string) => Policy;
   makePrompt: (policy: Policy) => string;
 };
@@ -53,7 +75,12 @@ export type Outcome =
   | { kind: "auth" }
   | { kind: "quota" }
   | { kind: "interrupted" }
-  | { kind: "block"; sentence: string }
+  | {
+      kind: "block";
+      sentence: string;
+      cause?: import("../harness.ts").StepResult["cause"];
+      noteLine?: import("../harness.ts").StepResult["noteLine"];
+    }
   | { kind: "stop"; sentence: string }
   | { kind: "hold"; held: HeldCall }
   | { kind: "failed"; text: string };
@@ -71,10 +98,14 @@ export type RunDeps = {
   rounds: number;
   pollMs: number;
   graceMs: number;
+  killGroup?: (pid: number, signal: NodeJS.Signals) => void;
   exitWaitMs: number;
   closeWaitMs?: number;
   maxLineBytes: number;
   maxDeniedEntries?: number;
+  recordRule?: (ruleId: string, tool: string, at: string) => void;
+  beforeAllow?: () => void;
+  afterAllow?: () => void;
   register?: (stop: (sentence?: string) => void) => () => void;
 };
 export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome> {
@@ -97,6 +128,9 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
   let stopTimer: ReturnType<typeof setTimeout> | undefined;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let result: ResultInfo | undefined;
+  const counts = { allowed: 0, held: 0, refused: 0 };
+  const approvedPages = new Map<number, string>();
+  let notListed = 0;
   const limits: RateLimit[] = [];
   const nowMs = deps.nowMs ?? Date.now;
   let startedAt: number | undefined;
@@ -194,12 +228,23 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           }
           return decide(policy, call, attempt?.state());
         }
-        const decision = decide(policy, call, attempt?.state(), {
-          calls: connectorCalls,
-          granted: (grant) =>
-            (isCallGrant(grant) || (input.pickTools?.includes(grant) ?? false)) &&
-            (deps.grants?.has(input.runId, grant, input.itemKey) ?? false),
-        });
+        const decision = decide(
+          policy,
+          call,
+          attempt?.state(),
+          {
+            calls: connectorCalls,
+            granted: (grant) =>
+              (isCallGrant(grant) || (input.pickTools?.includes(grant) ?? false)) &&
+              ((input.books?.grants ?? deps.grants)?.has(input.runId, grant, input.itemKey, input.stepId) ??
+                false),
+          },
+          {
+            grants: input.books?.grants ?? deps.grants,
+            rules: input.books?.rules?.(),
+            earlierNo: input.books?.earlierNo,
+          },
+        );
         if (
           !decision.allow &&
           decision.held &&
@@ -208,22 +253,64 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           "tool_use_id" in call &&
           typeof call.tool_use_id === "string"
         ) {
-          const held = decision.held;
+          const held: HeldCall = {
+            ...(decision.held.outsideFlow ? { outsideFlow: true as const } : {}),
+            requirementId: decision.held.requirementId,
+            tool: decision.held.tool,
+            input: decision.held.input,
+            digest: decision.held.digest,
+            ...(decision.held.action === undefined ? {} : { action: decision.held.action }),
+            ...("effect" in decision.held
+              ? {
+                  effect: decision.held.effect,
+                  fixedPlace: decision.held.fixedPlace,
+                  ...(decision.held.touchId === undefined ? {} : { touchId: decision.held.touchId }),
+                  ...(decision.held.place === undefined ? {} : { place: decision.held.place }),
+                }
+              : {}),
+          };
           pendingStop = { id: call.tool_use_id, outcome: { kind: "hold", held } };
           stopTimer = setTimeout(() => {
             forced = pendingStop?.outcome;
             child?.kill();
           }, deps.exitWaitMs);
-          audit("call_held", {
-            ...detail,
-            requirementId: held.requirementId,
-            tool: held.tool,
-            digest: held.digest,
-          });
         }
-        if (decision.allow && decision.effect === "connector" && decision.connector) {
+        if (decision.allow && decision.by === "rule" && decision.ruleId) {
+          try {
+            if (!deps.recordRule) throw new Error("Rule recording is unavailable.");
+            deps.recordRule(decision.ruleId, decision.tool, new Date(nowMs()).toISOString());
+          } catch {
+            return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
+          }
+        }
+        if (decision.allow && decision.by === "grant" && decision.grant) {
+          try {
+            (input.books?.grants ?? deps.grants)?.useGrant(decision.grant, new Date(nowMs()).toISOString());
+            audit("grant_used", {
+              ...detail,
+              tool: decision.grant.tool,
+              grant: "call",
+              ...(decision.grant.approvalId ? { approvalId: decision.grant.approvalId } : {}),
+              digest: decision.grant.digest,
+              ...(decision.effect ? { effect: decision.effect } : {}),
+            });
+          } catch {
+            return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
+          }
+        }
+        if (decision.allow && decision.connector) {
           const grant = decision.connector.grant;
-          if (grant?.kind === "call" && !(deps.grants?.use(input.runId, grant.key, input.itemKey) ?? false))
+          if (
+            grant?.kind === "call" &&
+            !(
+              (input.books?.grants ?? deps.grants)?.use(
+                input.runId,
+                grant.key,
+                input.itemKey,
+                input.stepId,
+              ) ?? false
+            )
+          )
             return { allow: false, tool: decision.tool, reason: CONNECTOR_DENY.held };
           if (grant)
             audit("grant_used", {
@@ -254,6 +341,21 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           typeof call.tool_input.command === "string"
         )
           audit("command_run", { ...detail, command: visible(call.tool_input.command, 300) });
+        if (
+          decision.allow &&
+          decision.by === "grant" &&
+          decision.effect === "page" &&
+          call !== null &&
+          typeof call === "object" &&
+          "tool_input" in call &&
+          call.tool_input !== null &&
+          typeof call.tool_input === "object" &&
+          "tabId" in call.tool_input &&
+          typeof call.tool_input.tabId === "number" &&
+          "url" in call.tool_input &&
+          typeof call.tool_input.url === "string"
+        )
+          approvedPages.set(call.tool_input.tabId, call.tool_input.url);
         if (decision.allow && decision.effect === "page" && policy.browser && deps.pages && attempt) {
           deps.pages.take(input.runId, policy.browser.requirementId);
           attempt.takePage();
@@ -283,7 +385,21 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           connectorPosts.set(call.tool_use_id, connectorResult);
           return { text: connectorResult.text, line: postLine(connectorResult.text) };
         }
-        const r = policy.browser ? decidePost(policy.browser, sessionId, call) : undefined;
+        const tabId =
+          call !== null &&
+          typeof call === "object" &&
+          "tool_name" in call &&
+          call.tool_name === `${CHROME_PREFIX}get_page_text` &&
+          "tool_input" in call &&
+          call.tool_input !== null &&
+          typeof call.tool_input === "object" &&
+          "tabId" in call.tool_input &&
+          typeof call.tool_input.tabId === "number"
+            ? call.tool_input.tabId
+            : undefined;
+        const approvedAddress = tabId === undefined ? undefined : approvedPages.get(tabId);
+        if (tabId !== undefined) approvedPages.delete(tabId);
+        const r = policy.browser ? decidePost(policy.browser, sessionId, call, approvedAddress) : undefined;
         if (
           !r ||
           call === null ||
@@ -400,9 +516,26 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           });
         } catch {}
       },
+      beforeAllow: deps.beforeAllow,
+      afterAllow: deps.afterAllow,
       pollMs: deps.pollMs,
       onCall: ({ decision }) => {
-        if (!decision.allow && deniedEntries < (deps.maxDeniedEntries ?? MAX_DENIED_ENTRIES)) {
+        if (decision.allow) counts.allowed++;
+        else if (decision.outcome === "hold" || decision.held) counts.held++;
+        else counts.refused++;
+        if (
+          !decision.allow &&
+          decision.outcome !== "hold" &&
+          !decision.held &&
+          deniedEntries >= (deps.maxDeniedEntries ?? MAX_DENIED_ENTRIES)
+        )
+          notListed++;
+        if (
+          !decision.allow &&
+          decision.outcome !== "hold" &&
+          !decision.held &&
+          deniedEntries < (deps.maxDeniedEntries ?? MAX_DENIED_ENTRIES)
+        ) {
           deniedEntries++;
           audit("tool_denied", {
             ...detail,
@@ -427,6 +560,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       cwd: policy.cwd,
       env: childEnv(deps.env),
       graceMs: deps.graceMs,
+      killGroup: deps.killGroup,
     });
     if (child.pid !== undefined) {
       startedAt = nowMs();
@@ -437,6 +571,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
       channel.allowedIds,
       policy.browser || policy.connector ? { ids: channel.chromeIds, posted: channel.posted } : undefined,
     );
+    const pendingTools = new Map<string, { tool: string; input: Value }>();
     let first = true;
     let startEvents = 0;
     let auth = false;
@@ -450,12 +585,18 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         if (policy.browser || policy.connector) {
           // A line over the limit may hold a result that was never checked: block, never retry.
           audit("tool_unchecked", { ...detail, tool: "unknown" });
-          forced = { kind: "block", sentence: tripSentence("unknown") };
+          forced = {
+            kind: "block",
+            sentence: tripSentence("unknown"),
+            cause: { code: "step_failed", params: { step: input.stepId } },
+            noteLine: { key: "step.toolRanUnchecked" },
+          };
         } else forced = { kind: "failed", text: "Claude Code sent a line that was too long." };
         child?.kill();
         return;
       }
       for (const line of read.lines) {
+        if (forced || interrupted) break;
         if (line.trim() === "") continue;
         const event = parseEvent(line);
         if (first) {
@@ -482,6 +623,7 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
             });
             forced = {
               kind: "block",
+              cause: { code: "limits_not_applied", params: { agent: "Claude Code" } },
               sentence:
                 proof.why === STOP.chromeDown ||
                 (policy.connector &&
@@ -499,7 +641,12 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
         const trip = tripwire.check(event);
         if (trip.tripped) {
           audit("tool_unchecked", { ...detail, tool: trip.tool });
-          forced = { kind: "block", sentence: tripSentence(trip.tool) };
+          forced = {
+            kind: "block",
+            sentence: tripSentence(trip.tool),
+            cause: { code: "step_failed", params: { step: input.stepId } },
+            noteLine: { key: "step.toolRanUnchecked" },
+          };
           child?.kill();
           break;
         }
@@ -522,6 +669,36 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
           forced = pendingStop.outcome;
           child?.kill();
           break;
+        }
+        if (!abort && input.onEvent && isRecord(event.message) && Array.isArray(event.message.content)) {
+          for (const block of event.message.content as unknown[]) {
+            if (abort || forced || interrupted) break;
+            if (!isRecord(block)) continue;
+            if (
+              event.type === "assistant" &&
+              block.type === "tool_use" &&
+              typeof block.id === "string" &&
+              typeof block.name === "string"
+            ) {
+              pendingTools.set(block.id, { tool: block.name, input: (block.input ?? {}) as Value });
+            } else if (
+              event.type === "user" &&
+              block.type === "tool_result" &&
+              typeof block.tool_use_id === "string"
+            ) {
+              const started = pendingTools.get(block.tool_use_id);
+              if (!started) continue;
+              pendingTools.delete(block.tool_use_id);
+              const text = toolResultText(block.content);
+              const error = block.is_error === true ? cleanErrorLine(text) : undefined;
+              input.onEvent({
+                tool: started.tool,
+                input: started.input,
+                resultDigest: digestResult(text),
+                ...(error === undefined ? {} : { error }),
+              });
+            }
+          }
         }
         auth ||= isAuthFailure(event);
         quota ||= isRateLimited(event);
@@ -564,8 +741,8 @@ export async function runClaude(input: RunInput, deps: RunDeps): Promise<Outcome
     channel?.stop();
     audit("tool_calls", {
       ...detail,
-      ...(channel?.counts() ?? { allowed: 0, denied: 0 }),
-      refused: result?.denials ?? 0,
+      ...counts,
+      ...(notListed ? { notListed } : {}),
     });
     if (startedAt !== undefined)
       deps.onCall?.({

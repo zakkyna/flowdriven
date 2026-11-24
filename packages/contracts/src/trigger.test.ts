@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { Notice } from "./notice.ts";
+import { Notice, NoticeTarget } from "./notice.ts";
 import { operations } from "./operations.ts";
 import { RunSummary } from "./run.ts";
 import { TriggerStatus } from "./trigger.ts";
@@ -22,6 +22,10 @@ const run = {
   flowId: "flow",
   flowName: "Flow",
   flowVersion: "1.0.0",
+  flowHash: `sha256:${"a".repeat(64)}`,
+  source: "flows",
+  agent: "claude-code",
+  versionChanged: false,
   oneTime: false,
   project: "project",
   state: "done",
@@ -30,8 +34,9 @@ const run = {
 const notice = {
   id: "notice",
   kind: "run_blocked",
-  title: "Blocked",
-  body: "A run is blocked.",
+  title: { key: "notice.problemTitle" },
+  body: { key: "notice.problemBody" },
+  language: "en",
   target: { screen: "run", runId: "run" },
 };
 
@@ -72,16 +77,20 @@ test("a run summary carries its trigger in words and is still valid without it",
   ).toBe(true);
   expect(RunSummary.safeParse({ ...run, trigger: { kind: "schedule", words: "" } }).success).toBe(false);
 });
-test("a notice has a kind, a short title and body, and an allow-listed target", () => {
+test("a notice has fixed lines, language and an allow-listed target", () => {
   for (const target of [
-    { screen: "inbox", approvalId: "approval" },
+    { screen: "chat", chatId: "chat" },
     { screen: "run", runId: "run" },
-    { screen: "builder", flowId: "flow" },
+    { screen: "flow", flowId: "flow" },
+    { screen: "activity" },
+    { screen: "settings" },
   ]) {
     expect(Notice.safeParse({ ...notice, target }).success).toBe(true);
   }
-  expect(Notice.safeParse({ ...notice, target: { screen: "settings" } }).success).toBe(false);
-  expect(Notice.safeParse({ ...notice, body: "x".repeat(300) }).success).toBe(false);
+  expect(NoticeTarget.safeParse({ screen: "inbox" }).success).toBe(false);
+  expect(Notice.safeParse({ ...notice, body: { key: "notice.problemBody", params: {} } }).success).toBe(
+    false,
+  );
   expect(Notice.safeParse({ ...notice, target: { screen: "run", runId: "a/b" } }).success).toBe(false);
   expect(Notice.safeParse({ ...notice, extra: true }).success).toBe(false);
 });

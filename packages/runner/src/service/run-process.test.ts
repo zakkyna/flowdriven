@@ -1,8 +1,9 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { CONTRACT_VERSION, type RunnerEvent } from "@flowdriven/contracts";
+import { CONTRACT_VERSION } from "@flowdriven/contracts";
+import type { RunnerEvent } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
@@ -77,7 +78,14 @@ test("serves runner.info and the demo flow and returns 0 when its input ends, wi
 }, async () => {
   const dir = temp();
   const p = start(dir);
-  expect(await p.client.call("runner.info", {})).toEqual({ contractVersion: CONTRACT_VERSION, mode: "demo" });
+  expect(await p.client.call("runner.info", {})).toEqual({
+    contractVersion: CONTRACT_VERSION,
+    appVersion: (
+      JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
+    ).version,
+    storeVersion: 7,
+    mode: "demo",
+  });
   expect(await p.client.call("flows.list", {})).toEqual(
     expect.arrayContaining([expect.objectContaining({ id: "local.sample-job-review" })]),
   );
@@ -145,7 +153,9 @@ test("a run that was walking is found at the next start", { timeout: 20_000 }, a
   const p = start(dir);
   expect((await p.client.call("runs.status", { runId: "run-old" })).state).toBe("interrupted");
 });
-test("the sweep runs on its timer and sends a changed event", { timeout: 20_000 }, async () => {
+test("TC-j24-31 the sweep leaves a choice pending and emits no expiry event", {
+  timeout: 20_000,
+}, async () => {
   let time = new Date("2026-11-11T00:00:00.000Z").getTime();
   const p = start(temp(), { now: () => new Date(time), sweepEveryMs: 20 });
   const events: RunnerEvent[] = [];
@@ -157,11 +167,10 @@ test("the sweep runs on its timer and sends a changed event", { timeout: 20_000 
   await new Promise((resolve) => setTimeout(resolve, 30));
   events.length = 0;
   time += 24 * 60 * 60 * 1000 + 1;
-  await until(async () =>
-    events.some((e) => e.type === "changed" && e.topics.includes("approvals")) ? true : undefined,
-  );
-  expect(await p.client.call("approvals.list", { state: "expired" })).toEqual(
-    expect.arrayContaining([expect.objectContaining({ id: approval.id, state: "expired" })]),
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(events.some((e) => e.type === "changed" && e.topics.includes("approvals"))).toBe(false);
+  expect(await p.client.call("approvals.list", { state: "pending" })).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: approval.id, state: "pending" })]),
   );
 });
 
@@ -182,8 +191,11 @@ test("runProcess in live mode takes its environment and claudePath", { timeout: 
     claudePath: FAKE_CLAUDE_PATH,
   });
   active.push({ input, done });
-  await client.call("harnesses.rescan", {});
-  expect((await client.call("harnesses.list", {})).at(0)?.version).toBe("2.1.318");
+  const callAgents = client.call as unknown as (
+    name: "agents.rescan",
+    input: object,
+  ) => Promise<{ agents: { version?: string }[] }>;
+  expect((await callAgents("agents.rescan", {})).agents.at(0)?.version).toBe("2.1.318");
 });
 
 test("a notice sink holds up to 20 notices raised before the server is attached, writes them in order on attach and sends later ones directly; the 21st early notice is dropped", () => {
@@ -192,12 +204,32 @@ test("a notice sink holds up to 20 notices raised before the server is attached,
   const notice = {
     id: "n",
     kind: "run_blocked" as const,
-    title: "Run blocked",
-    body: "Blocked",
+    title: { key: "notice.problemTitle" },
+    body: { key: "notice.problemBody" },
+    language: "en",
     target: { screen: "run" as const, runId: "r" },
   };
   for (let i = 0; i < 21; i++) sink.send({ ...notice, id: `n${i}` });
-  sink.attach({ notice: (n) => received.push(n.id) });
+  sink.attach({ notice: (n) => received.push(n.id), clearNotice: () => {} });
   sink.send({ ...notice, id: "later" });
   expect(received).toEqual([...Array.from({ length: 20 }, (_, i) => `n${i}`), "later"]);
+});
+
+test("TC-j24-04 clearing an early notice prevents it being sent after attach", () => {
+  const sink = createNoticeSink();
+  const sent: string[] = [];
+  const cleared: string[] = [];
+  sink.send({
+    id: "approval:ap-1",
+    kind: "approval_waiting",
+    title: { key: "notice.decisionTitle" },
+    body: { key: "notice.decisionBody" },
+    language: "en",
+    target: { screen: "run", runId: "run-1", approvalId: "ap-1" },
+  });
+  sink.clear("approval:ap-1");
+  sink.attach({ notice: (notice) => sent.push(notice.id), clearNotice: (id) => cleared.push(id) });
+  expect(sent).toEqual([]);
+  sink.clear("approval:ap-2");
+  expect(cleared).toEqual(["approval:ap-2"]);
 });

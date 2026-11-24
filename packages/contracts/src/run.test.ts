@@ -15,11 +15,13 @@ test("run states are the spec's lifecycle", () => {
   expect(RunState.options).toEqual([
     "queued",
     "checking",
-    "blocked",
     "running",
     "waiting_approval",
+    "needs_login",
     "retrying",
+    "blocked",
     "interrupted",
+    "stopped",
     "done",
     "failed",
   ]);
@@ -32,6 +34,7 @@ test("run states are the spec's lifecycle", () => {
     "failed",
     "skipped",
     "interrupted",
+    "stopped",
   ]);
 });
 test("blocked, failed and interrupted runs can resume", () => {
@@ -52,8 +55,11 @@ test("first unpassed step skips passed and skipped steps", () => {
   expect(firstUnpassedStep(run)?.index).toBe(3);
   expect(firstUnpassedStep(run)?.step.stepId).toBe("c");
 });
-test("a report has exactly three lines", () => {
-  expect(RunReport.safeParse({ runId: "r", lines: ["a", "b"], saveOffer: false }).success).toBe(false);
+test("a report has up to three lines and version 2 results", () => {
+  const report = { runId: "r", lines: ["a", "b"], decisionLines: [], result: { kind: "report" } };
+  expect(RunReport.safeParse(report).success).toBe(true);
+  expect(RunReport.safeParse({ ...report, lines: ["a", "b", "c", "d"] }).success).toBe(false);
+  expect(RunReport.safeParse({ ...report, saveOffer: false }).success).toBe(false);
 });
 
 test("a looped step run lists items with a state and a skip reason", () => {
@@ -101,4 +107,197 @@ test("a step run can list blocked calls, each with a count of at least one, at m
   expect(StepRun.parse({ ...step, blocked: [row] }).blocked).toEqual([row]);
   expect(StepRun.safeParse({ ...step, blocked: [{ ...row, count: 0 }] }).success).toBe(false);
   expect(StepRun.safeParse({ ...step, blocked: Array.from({ length: 21 }, () => row) }).success).toBe(false);
+});
+
+test("TC-CON-12 and TC-CON-45 version 2 states", async () => {
+  const c = await import("./index.ts");
+  expect(c.RunState.options).toEqual([
+    "queued",
+    "checking",
+    "running",
+    "waiting_approval",
+    "needs_login",
+    "retrying",
+    "blocked",
+    "interrupted",
+    "stopped",
+    "done",
+    "failed",
+  ]);
+  expect(c.StepRunState.options).toEqual([
+    "pending",
+    "running",
+    "retrying",
+    "waiting_approval",
+    "passed",
+    "failed",
+    "skipped",
+    "interrupted",
+    "stopped",
+  ]);
+  expect(c.ApprovalState.options).toEqual([
+    "pending",
+    "approved",
+    "approved_edited",
+    "rejected",
+    "expired",
+    "allowed_always",
+    "another_way",
+  ]);
+  expect(c.ApprovalDecision.options).toEqual(["approve", "edit", "reject", "always_allow", "another_way"]);
+  expect(c.ResolvedVia.options).toEqual(["window", "chat", "phone", "rule", "stop", "permission_off"]);
+  expect(c.AgentState.options).toEqual([
+    "not_installed",
+    "installing",
+    "waiting_login",
+    "needs_login",
+    "ready",
+    "unknown",
+  ]);
+  expect(c.FlowState.options).toEqual(["new", "changed", "confirmed"]);
+  for (const state of ["paused", "approved_always", "waiting_login"])
+    expect(c.RunState.safeParse(state).success).toBe(false);
+  expect(c.isResumable("needs_login")).toBe(true);
+  expect(c.isResumable("stopped")).toBe(false);
+});
+test("TC-CON-25 causes and input problems", async () => {
+  const c = await import("./run.ts");
+  for (const code of [
+    "agent_signed_out",
+    "site_sign_in",
+    "permission_off",
+    "agent_not_set_up",
+    "usage_limit",
+    "spending_limit",
+    "checks_failing",
+    "requirement_missing",
+    "flow_not_confirmed",
+    "limits_not_applied",
+    "crash",
+    "step_failed",
+    "stopped",
+    "flow_deleted",
+    "agent_cannot_be_limited",
+    "daily_limit",
+    "cost_not_reported",
+    "internal_error",
+  ])
+    expect(c.Cause.safeParse({ code }).success).toBe(true);
+  expect(c.Cause.safeParse({ code: "unknown" }).success).toBe(false);
+  expect(c.Cause.safeParse({ code: "crash", params: { x: 1 } }).success).toBe(false);
+  for (const problem of [
+    "empty",
+    "unreadable",
+    "zero",
+    "too_long",
+    "too_long_text",
+    "out_of_range",
+    "not_a_choice",
+    "hidden_characters",
+  ])
+    expect(c.FieldProblem.safeParse({ inputId: "n", problem }).success).toBe(true);
+  expect(
+    c.FieldProblem.safeParse({ inputId: "n", problem: "out_of_range", params: { min: 1, max: 10 } }).success,
+  ).toBe(true);
+  expect(c.FieldProblem.safeParse({ inputId: "n", problem: "invalid" }).success).toBe(false);
+  expect(c.FieldProblem.safeParse({ inputId: "n", problem: "zero", params: { min: "1" } }).success).toBe(
+    false,
+  );
+});
+test("TC-CON-26 and TC-CON-46 version 2 run models", async () => {
+  const c = await import("./run.ts");
+  const run = {
+    id: "r",
+    flowId: "f",
+    flowName: "F",
+    flowVersion: "1.0.0",
+    flowHash: `sha256:${"a".repeat(64)}`,
+    oneTime: false,
+    project: "p",
+    state: "stopped",
+    source: "schedule",
+    agent: "claude-code",
+    model: "sonnet-5.5",
+    cause: { code: "permission_off" },
+    versionChanged: false,
+    startedAt: "2026-11-12T00:00:00Z",
+  };
+  expect(c.RunSummary.safeParse(run).success).toBe(true);
+  expect(c.RunSummary.safeParse({ ...run, source: "voice" }).success).toBe(false);
+  expect(
+    c.RunSummary.safeParse({
+      ...run,
+      model: undefined,
+      currentStep: { index: 2, count: 4, title: "Log the hours" },
+    }).success,
+  ).toBe(true);
+  expect(c.RunSummary.safeParse({ ...run, currentStep: { index: 0, count: 4, title: "x" } }).success).toBe(
+    false,
+  );
+  const detail = {
+    ...run,
+    notes: [],
+    skippedStarts: [],
+    attemptLog: [],
+    inputs: [],
+    steps: [],
+    approvalIds: [],
+    outputs: [],
+    usage: [],
+    estimatedCostUsd: 0,
+    decisionLines: [],
+    canRunAgain: true,
+    canTryAgain: false,
+  };
+  for (const costLine of [{ kind: "plan" }, { kind: "amount", usd: 0.42 }, { kind: "none" }])
+    expect(c.RunDetail.safeParse({ ...detail, costLine }).success).toBe(true);
+  expect(c.RunDetail.safeParse({ ...detail, costLine: { kind: "amount" } }).success).toBe(false);
+});
+
+test("TC-CON-46 note and repetition contract shapes", async () => {
+  const { RunDetail, Cause } = await import("./run.ts");
+  const at = "2026-11-23T00:00:00Z";
+  const note = { id: "n", text: "words", at, outside: true, state: "used", fromStep: 1, usedAt: at };
+  const detail = {
+    id: "r",
+    flowId: "f",
+    flowName: "F",
+    flowVersion: "1.0.0",
+    flowHash: `sha256:${"a".repeat(64)}`,
+    source: "chat",
+    agent: "claude",
+    versionChanged: false,
+    oneTime: false,
+    project: "/p",
+    state: "blocked",
+    startedAt: at,
+    inputs: [],
+    steps: [],
+    approvalIds: [],
+    outputs: [],
+    usage: [],
+    estimatedCostUsd: 0,
+    decisionLines: [],
+    costLine: { kind: "none" },
+    canRunAgain: true,
+    canTryAgain: true,
+    notes: [note],
+    skippedStarts: [{ at, runId: "r2" }],
+    attemptLog: [
+      { step: 1, attempt: 1, reason: "repeated_error", count: 3, evidence: "error", outside: true },
+    ],
+  };
+  expect(RunDetail.safeParse(detail).success).toBe(true);
+  for (const state of ["waiting", "used", "not_used"])
+    expect(RunDetail.safeParse({ ...detail, notes: [{ ...note, state }] }).success).toBe(true);
+  for (const bad of [
+    { ...note, state: "bad" },
+    { ...note, outside: undefined },
+    { ...note, at: "bad" },
+  ])
+    expect(RunDetail.safeParse({ ...detail, notes: [bad] }).success).toBe(false);
+  for (const key of ["notes", "skippedStarts", "attemptLog"])
+    expect(RunDetail.safeParse({ ...detail, [key]: undefined }).success).toBe(false);
+  expect(Cause.safeParse({ code: "stuck_repeating" }).success).toBe(true);
+  expect(Cause.safeParse({ code: "unknown" }).success).toBe(false);
 });

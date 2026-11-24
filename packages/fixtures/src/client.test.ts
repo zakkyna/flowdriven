@@ -1,471 +1,540 @@
-import { Approval, isRunnerError } from "@flowdriven/contracts";
-import { describe, expect, test, vi } from "vitest";
-import { createFixtureRunnerClient, PREVIEW_AGENT_REPLY } from "./index";
+import { operations } from "@flowdriven/contracts";
+import { expect, test } from "vitest";
+import { createFixtureRunnerClient } from "./client";
 
-const FIGMA = "dev.example.figma-to-flutter";
-const fails = async (p: Promise<unknown>, code: string, message?: string) => {
-  const e = await p.then(
-    () => undefined,
-    (err: unknown) => err,
-  );
-  expect(isRunnerError(e) && e.code).toBe(code);
-  if (message) expect((e as Error).message).toBe(message);
-};
-
-describe("FixtureRunnerClient", () => {
-  test("lists flows and validates input", async () => {
-    const c = createFixtureRunnerClient();
-    expect((await c.call("flows.list", {})).map((f) => f.id)[1]).toBe(FIGMA);
-    await fails(c.call("runs.status", {} as never), "invalid_input");
-    await fails(c.call("runs.status", { runId: "run-9999" }), "not_found", "There is no run run-9999.");
-    await fails(c.call("flows.get", { flowId: "nope" }), "not_found", "There is no flow nope.");
-    expect((await c.call("runs.list", { project: "~/Reports/q3-suppliers" })).map((r) => r.id)).toEqual([
-      "run-0005",
-      "run-0001",
-    ]);
-  });
-  test("approving the last waiting item resumes the run and notifies", async () => {
-    const c = createFixtureRunnerClient();
-    const listener = vi.fn();
-    c.subscribe(listener);
-    const [resolved] = await c.call("approvals.resolve", { approvalId: "ap-0014", decision: "approve" });
-    expect(resolved?.state).toBe("approved");
-    expect((await c.call("runs.status", { runId: "run-0004" })).state).toBe("running");
-    expect(listener).toHaveBeenCalledWith({ type: "changed", topics: ["approvals", "runs", "flows"] });
-  });
-  test("approve all similar resolves the three sends together", async () => {
-    const c = createFixtureRunnerClient();
-    const done = await c.call("approvals.resolve", {
-      approvalId: "ap-0011",
-      decision: "approve",
-      applyToSimilar: true,
-    });
-    expect(done.map((a) => a.id).sort()).toEqual(["ap-0011", "ap-0012", "ap-0013"]);
-    expect((await c.call("runs.status", { runId: "run-0007" })).state).toBe("running");
-  });
-  test("reject fails the run; a decision is made once", async () => {
-    const c = createFixtureRunnerClient();
-    await c.call("approvals.resolve", { approvalId: "ap-0014", decision: "reject" });
-    expect((await c.call("runs.status", { runId: "run-0004" })).state).toBe("failed");
-    await fails(
-      c.call("approvals.resolve", { approvalId: "ap-0014", decision: "approve" }),
-      "not_allowed",
-      "This decision was already made.",
-    );
-  });
-  test("edit writes the new text; diffs cannot be edited", async () => {
-    const c = createFixtureRunnerClient();
-    const [a] = await c.call("approvals.resolve", {
-      approvalId: "ap-0012",
-      decision: "edit",
-      editedText: "Hi Tomás, it ships Friday.",
-    });
-    expect(a?.payload).toMatchObject({ kind: "email", body: "Hi Tomás, it ships Friday." });
-    await fails(
-      c.call("approvals.resolve", { approvalId: "ap-0015", decision: "edit", editedText: "x" }),
-      "invalid_input",
-      "Only text can be edited.",
-    );
-  });
-  test("step edits bump the version, go stale and undo", async () => {
-    const c = createFixtureRunnerClient();
-    await fails(
-      c.call("flows.update", {
-        flowId: FIGMA,
-        edit: { kind: "move", stepId: "read-design", direction: "up" },
-      }),
-      "not_allowed",
-      "The first step can't move up.",
-    );
-    const moved = await c.call("flows.update", {
-      flowId: FIGMA,
-      edit: { kind: "move", stepId: "plan-widgets", direction: "up" },
-    });
-    expect(moved.manifest.steps.map((s) => s.id).slice(0, 2)).toEqual(["plan-widgets", "read-design"]);
-    expect(moved.manifest.version).toBe("1.0.1");
-    expect(moved.signOff).toEqual({ state: "stale", version: "1.0.0" });
-    const undone = await c.call("flows.update", { flowId: FIGMA, edit: { kind: "undo" } });
-    expect(undone.manifest.version).toBe("1.0.0");
-    expect(undone.signOff.state).toBe("approved");
-    expect(undone.canUndo).toBe(false);
-  });
-  test("deleted step ids are never reused", async () => {
-    const c = createFixtureRunnerClient();
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "duplicate", stepId: "open-pr" } });
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "delete", stepId: "open-pr-2" } });
-    const again = await c.call("flows.update", {
-      flowId: FIGMA,
-      edit: { kind: "duplicate", stepId: "open-pr" },
-    });
-    expect(again.manifest.steps.map((s) => s.id)).toContain("open-pr-3");
-  });
-  test("blocked run reason uses singular and plural", async () => {
-    const c = createFixtureRunnerClient();
-    const single = await c.call("flows.run", { flowId: FIGMA });
-    const plural = await c.call("flows.run", { flowId: "dev.example.social-posts" });
-    expect((await c.call("runs.status", { runId: single.id })).blockedReason).toBe(
-      "Not ready: 1 required item needs attention.",
-    );
-    expect((await c.call("runs.status", { runId: plural.id })).blockedReason).toBe(
-      "Not ready: 4 required items need attention.",
-    );
-  });
-  test("running a flow that is not ready opens a blocked run", async () => {
-    const c = createFixtureRunnerClient();
-    expect(await c.call("flows.run", { flowId: FIGMA })).toMatchObject({ id: "run-0008", state: "blocked" });
-    expect(await c.call("flows.run", { flowId: "dev.example.documents-and-reports" })).toMatchObject({
-      id: "run-0009",
-      state: "queued",
-    });
-  });
-  test("a flow whose sign-off is not approved cannot run", async () => {
-    const c = createFixtureRunnerClient();
-    await fails(
-      c.call("flows.run", { flowId: "dev.example.lead-follow-up" }),
-      "not_allowed",
-      "This version needs your approval before it runs.",
-    );
-    await c.call("approvals.resolve", { approvalId: "ap-0015", decision: "approve" });
-    expect(await c.call("flows.run", { flowId: "dev.example.lead-follow-up" })).toMatchObject({
-      id: "run-0008",
-      state: "queued",
-    });
-  });
-  test("install for me marks the item ok, only for catalog items", async () => {
-    const c = createFixtureRunnerClient();
-    const report = await c.call("readiness.install", {
-      flowId: "dev.example.social-posts",
-      requirementId: "ffmpeg",
-    });
-    expect(report.items.find((i) => i.requirementId === "ffmpeg")).toMatchObject({
-      state: "ok",
-      detail: "Sample data: nothing was installed.",
-    });
-    await fails(
-      c.call("readiness.install", { flowId: "dev.example.social-posts", requirementId: "wordpress" }),
-      "not_allowed",
-    );
-  });
-  test("consent and settings follow their rules", async () => {
-    const c = createFixtureRunnerClient();
-    await fails(
-      c.call("settings.update", { patch: { brain: { main: "agy-cli" } } }),
-      "not_allowed",
-      "Antigravity CLI can't be the brain yet.",
-    );
-    expect(
-      (await c.call("harnesses.setConsent", { harnessId: "antigravity", consent: "given" })).consent,
-    ).toBe("given");
-    expect((await c.call("settings.get", {})).backends.find((b) => b.id === "agy-cli")?.consent).toBe(
-      "given",
-    );
-    expect((await c.call("settings.update", { patch: { brain: { main: "agy-cli" } } })).brain.main).toBe(
-      "agy-cli",
-    );
-    await fails(c.call("harnesses.setConsent", { harnessId: "codex", consent: "given" }), "not_allowed");
-    expect((await c.call("settings.update", { patch: { budget: { capUsd: 30 } } })).budget.capUsd).toBe(30);
-    await fails(
-      c.call("settings.update", { patch: { brain: { subscriptionOrder: ["nope"] } } }),
-      "invalid_input",
-      "Unknown brain nope.",
-    );
-  });
-  test("chat appends the preview reply; the empty and long scenarios load", async () => {
-    const c = createFixtureRunnerClient();
-    const { reply } = await c.call("flows.build", { flowId: FIGMA, message: "Add a Slack step" });
-    expect(reply.text).toBe(PREVIEW_AGENT_REPLY);
-    expect((await c.call("flows.get", { flowId: FIGMA })).conversation.at(-2)?.text).toBe("Add a Slack step");
-    expect(await createFixtureRunnerClient({ scenario: "empty" }).call("approvals.list", {})).toEqual([]);
-    expect(await createFixtureRunnerClient({ scenario: "long" }).call("flows.list", {})).toHaveLength(6);
-  });
-  test("stale edits create one review, undo clears it, and approval permits a run", async () => {
-    const c = createFixtureRunnerClient();
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "add", title: "Review" } });
-    let pending = (await c.call("approvals.list", { state: "pending" })).filter((a) => a.flowId === FIGMA);
-    expect(pending).toHaveLength(1);
-    expect(pending[0]?.payload.kind).toBe("diff");
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "undo" } });
-    expect(
-      (await c.call("approvals.list", { state: "pending" })).filter((a) => a.flowId === FIGMA),
-    ).toHaveLength(0);
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "add", title: "Review" } });
-    pending = (await c.call("approvals.list", { state: "pending" })).filter((a) => a.flowId === FIGMA);
-    await c.call("approvals.resolve", { approvalId: pending[0]?.id ?? "", decision: "approve" });
-    expect((await c.call("flows.run", { flowId: FIGMA })).flowId).toBe(FIGMA);
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "undo" } });
-    expect(
-      (await c.call("approvals.list", { state: "pending" })).filter((a) => a.flowId === FIGMA),
-    ).toHaveLength(1);
-  });
-  test("approval expiration occurs at 24 hours and fails its step", async () => {
-    let time = new Date("2026-11-10T16:19:00.000Z");
-    const c = createFixtureRunnerClient({ now: () => time });
-    expect((await c.call("approvals.list", { state: "pending" })).some((a) => a.id === "ap-0014")).toBe(true);
-    time = new Date("2026-11-10T16:20:00.000Z");
-    expect(
-      (await c.call("approvals.list", { state: "expired" })).find((a) => a.id === "ap-0014")?.resolvedAt,
-    ).toBe(time.toISOString());
-    const run = await c.call("runs.status", { runId: "run-0004" });
-    expect(run.state).toBe("failed");
-    expect(run.steps.find((s) => s.state === "failed")?.note).toBe("The approval expired after 24 hours.");
-    await fails(
-      c.call("approvals.resolve", { approvalId: "ap-0014", decision: "approve" }),
-      "not_allowed",
-      "This approval expired.",
-    );
-  });
-  test("approving remaining decisions cannot restart a failed run", async () => {
-    const c = createFixtureRunnerClient();
-    await c.call("approvals.resolve", { approvalId: "ap-0013", decision: "reject" });
-    await fails(c.call("approvals.resolve", { approvalId: "ap-0011", decision: "approve" }), "not_allowed");
-    expect((await c.call("approvals.list", { state: "pending" })).some((a) => a.id === "ap-0012")).toBe(
-      false,
-    );
-    expect((await c.call("runs.status", { runId: "run-0007" })).state).toBe("failed");
-  });
-  test("equal timestamps put newer runs and approvals first", async () => {
-    const c = createFixtureRunnerClient();
-    await c.call("flows.run", { flowId: FIGMA });
-    await c.call("flows.run", { flowId: FIGMA });
-    expect((await c.call("runs.list", { flowId: FIGMA }))[0]?.id).toBe("run-0009");
-    expect((await c.call("flows.list", {})).find((f) => f.id === FIGMA)?.lastRun?.runId).toBe("run-0009");
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "add", title: "One" } });
-    await c.call("flows.update", {
-      flowId: "dev.example.documents-and-reports",
-      edit: { kind: "add", title: "Two" },
-    });
-    const list = await c.call("approvals.list", { state: "pending" });
-    expect(list[0]?.flowId).toBe("dev.example.documents-and-reports");
-  });
-  test("edits must be nonblank and cannot apply to similar approvals", async () => {
-    const c = createFixtureRunnerClient();
-    await fails(
-      c.call("approvals.resolve", {
-        approvalId: "ap-0011",
-        decision: "edit",
-        editedText: "hello",
-        applyToSimilar: true,
-      }),
-      "not_allowed",
-    );
-    await fails(
-      c.call("approvals.resolve", { approvalId: "ap-0011", decision: "edit", editedText: "   " }),
-      "invalid_input",
-    );
-  });
-  test("settings ignore undefined and reject duplicate orders atomically", async () => {
-    const c = createFixtureRunnerClient();
-    const before = await c.call("settings.get", {});
-    expect(
-      await c.call("settings.update", {
-        patch: { brain: { main: undefined }, budget: { capUsd: undefined } },
-      }),
-    ).toEqual(before);
-    await fails(
-      c.call("settings.update", { patch: { brain: { subscriptionOrder: ["codex-cli", "codex-cli"] } } }),
-      "invalid_input",
-    );
-    expect(await c.call("settings.get", {})).toEqual(before);
-  });
-  test("revocation moves the main brain to an allowed fallback or refuses", async () => {
-    const c = createFixtureRunnerClient();
-    await c.call("harnesses.setConsent", { harnessId: "antigravity", consent: "given" });
-    await c.call("settings.update", { patch: { brain: { main: "agy-cli" } } });
-    await c.call("harnesses.setConsent", { harnessId: "antigravity", consent: "revoked" });
-    expect((await c.call("settings.get", {})).brain.main).toBe("codex-cli");
-    await fails(c.call("harnesses.setConsent", { harnessId: "copilot", consent: "given" }), "not_allowed");
-    await c.call("harnesses.setConsent", { harnessId: "antigravity", consent: "given" });
-    await c.call("settings.update", {
-      patch: { brain: { main: "agy-cli", subscriptionOrder: [], apiKeyOrder: [] } },
-    });
-    await fails(
-      c.call("harnesses.setConsent", { harnessId: "antigravity", consent: "revoked" }),
-      "not_allowed",
-    );
-    expect((await c.call("settings.get", {})).brain.main).toBe("agy-cli");
-  });
-  test("new runs use the flow project and blank step titles are rejected", async () => {
-    const c = createFixtureRunnerClient();
-    expect((await c.call("flows.run", { flowId: FIGMA })).project).toBeTruthy();
-    const before = await c.call("flows.get", { flowId: FIGMA });
-    await fails(
-      c.call("flows.update", { flowId: FIGMA, edit: { kind: "add", title: "   " } }),
-      "invalid_input",
-    );
-    expect(await c.call("flows.get", { flowId: FIGMA })).toEqual(before);
-  });
-  test("undo across multiple edits keeps the newest approval stale until reviewed", async () => {
-    const c = createFixtureRunnerClient();
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "add", title: "One" } });
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "add", title: "Two" } });
-    const approval = (await c.call("approvals.list", { state: "pending" })).find((a) => a.flowId === FIGMA);
-    await c.call("approvals.resolve", { approvalId: approval?.id ?? "", decision: "approve" });
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "undo" } });
-    const result = await c.call("flows.update", { flowId: FIGMA, edit: { kind: "undo" } });
-    expect(result.signOff).toEqual({ state: "stale", version: "1.0.2" });
-    expect(
-      (await c.call("approvals.list", { state: "pending" })).filter((a) => a.flowId === FIGMA),
-    ).toHaveLength(1);
-  });
-  test("refreshing a pending sign-off preserves its id", async () => {
-    const c = createFixtureRunnerClient();
-    await c.call("flows.update", { flowId: FIGMA, edit: { kind: "add", title: "One" } });
-    await c.call("flows.update", {
-      flowId: "dev.example.lead-follow-up",
-      edit: { kind: "add", title: "Two" },
-    });
-    expect(
-      (await c.call("approvals.list", { state: "pending" })).find(
-        (a) => a.flowId === "dev.example.lead-follow-up",
-      )?.id,
-    ).toBe("ap-0015");
-  });
+test("TC-IPC-22 fixture reports version 2 and sample mode", async () => {
+  const client = createFixtureRunnerClient({ scenario: "story-v2" });
+  const info = await client.call("runner.info", {});
+  expect(info).toMatchObject({ contractVersion: 2, mode: "sample" });
+  expect(operations["runner.info"].output.safeParse(info).success).toBe(true);
 });
 
-test("refreshed sign-off patches show readable version and step changes", async () => {
-  for (const flowId of [FIGMA, "dev.example.lead-follow-up"]) {
-    const c = createFixtureRunnerClient();
-    const updated = await c.call("flows.update", { flowId, edit: { kind: "add", title: "Review changes" } });
-    const a = (await c.call("approvals.list", { state: "pending" })).find((item) => item.flowId === flowId);
-    if (a?.payload.kind !== "diff") throw new Error("Missing diff");
-    const lines = a.payload.files[0]?.patch.split("\n") ?? [];
-    expect(a.summary).toContain(`version ${updated.manifest.version}`);
-    expect(lines).toContain(`+version: ${updated.manifest.version}`);
-    expect(lines.some((line) => line.includes("Review changes"))).toBe(true);
-    expect(lines.every((line) => line.length <= 200 && !line.includes('{"'))).toBe(true);
-    if (flowId.endsWith("lead-follow-up")) expect(lines).not.toContain("+version: 1.3.0");
+test("TC-CON-42 kept operations use version 2 shapes and preserve writes", async () => {
+  const client = createFixtureRunnerClient({ scenario: "story-v2" });
+  const info = await client.call("runner.info", {});
+  expect(operations["runner.info"].output.safeParse(info).success).toBe(true);
+  const settings = await client.call("settings.get", {});
+  expect(operations["settings.get"].output.safeParse(settings).success).toBe(true);
+  const flows = await client.call("flows.list", {});
+  expect(operations["flows.list"].output.safeParse(flows).success).toBe(true);
+  for (const flow of flows) {
+    expect(
+      operations["flows.get"].output.safeParse(await client.call("flows.get", { flowId: flow.id })).success,
+    ).toBe(true);
+    expect(
+      operations["triggers.list"].output.safeParse(await client.call("triggers.list", { flowId: flow.id }))
+        .success,
+    ).toBe(true);
+    expect(
+      operations["readiness.check"].output.safeParse(
+        await client.call("readiness.check", { flowId: flow.id }),
+      ).success,
+    ).toBe(true);
   }
-});
-test("every run and flow read applies expiry before returning", async () => {
-  for (const name of ["runs.list", "runs.status", "flows.list", "flows.get"] as const) {
-    const c = createFixtureRunnerClient({ now: () => new Date("2026-11-11T20:00:00Z") });
-    if (name === "runs.list") await c.call(name, {});
-    else if (name === "runs.status") await c.call(name, { runId: "run-0004" });
-    else if (name === "flows.list") await c.call(name, {});
-    else await c.call(name, { flowId: "dev.example.social-posts" });
-    const run = c.state.runs.find((r) => r.id === "run-0004");
-    expect(run?.state).toBe("failed");
-    expect(run?.endedAt).toBe(c.state.approvals.find((a) => a.id === "ap-0014")?.expiresAt);
+  const runs = await client.call("runs.list", {});
+  expect(operations["runs.list"].output.safeParse(runs).success).toBe(true);
+  for (const run of runs) {
+    expect(
+      operations["runs.status"].output.safeParse(await client.call("runs.status", { runId: run.id })).success,
+    ).toBe(true);
+    expect(
+      operations["runs.report"].output.safeParse(await client.call("runs.report", { runId: run.id })).success,
+    ).toBe(true);
   }
+  const approvals = await client.call("approvals.list", {});
+  expect(operations["approvals.list"].output.safeParse(approvals).success).toBe(true);
+  expect(operations["audit.list"].output.safeParse(await client.call("audit.list", {})).success).toBe(true);
+  expect(
+    operations["settings.update"].output.safeParse(
+      await client.call("settings.update", { patch: { busyFallback: true } }),
+    ).success,
+  ).toBe(true);
+  const approval = approvals.find((item) => item.state === "pending" && item.kind !== "ask");
+  expect(approval).toBeDefined();
+  if (!approval) return;
+  const resolved = await client.call("approvals.resolve", { approvalId: approval.id, decision: "approve" });
+  expect(operations["approvals.resolve"].output.safeParse(resolved).success).toBe(true);
+  expect((await client.call("approvals.list", {})).find((item) => item.id === approval.id)?.state).toBe(
+    "approved",
+  );
+  const resumable = runs.find((item) => item.state === "blocked");
+  expect(resumable).toBeDefined();
+  if (!resumable) return;
+  expect(
+    operations["runs.resume"].output.safeParse(await client.call("runs.resume", { runId: resumable.id }))
+      .success,
+  ).toBe(true);
+  expect(client.calls.map((call) => call.operation)).toEqual([
+    "runner.info",
+    "settings.get",
+    "flows.list",
+    ...flows.flatMap(() => ["flows.get", "triggers.list", "readiness.check"]),
+    "runs.list",
+    ...runs.flatMap(() => ["runs.status", "runs.report"]),
+    "approvals.list",
+    "audit.list",
+    "settings.update",
+    "approvals.resolve",
+    "approvals.list",
+    "runs.resume",
+  ]);
 });
-test("pending approval of a run that is no longer waiting is refused", async () => {
-  const c = createFixtureRunnerClient();
-  const r = c.state.runs.find((run) => run.id === "run-0007");
-  if (!r) throw new Error("Missing run");
-  r.state = "failed";
-  await fails(
-    c.call("approvals.resolve", { approvalId: "ap-0011", decision: "approve" }),
-    "not_allowed",
-    "This run is no longer waiting for approval.",
+
+test("TC-CON-42 permission off stops active runs and expires decisions", async () => {
+  const client = createFixtureRunnerClient();
+  await client.call("settings.update", { patch: { agentPermission: "off" } });
+  expect((await client.call("runs.status", { runId: "run-timesheet-wait" })).state).toBe("stopped");
+  expect((await client.call("approvals.list", {}))[0]).toMatchObject({
+    state: "expired",
+    resolvedVia: "permission_off",
+  });
+  expect((await client.call("audit.list", {})).some((record) => record.kind === "permission_changed")).toBe(
+    true,
   );
 });
 
-test("runner.info says sample data", async () => {
-  expect(await createFixtureRunnerClient().call("runner.info", {})).toEqual({
-    contractVersion: 1,
-    mode: "sample",
+test("TC-CON-42 refusal and unfinished operations (TC-CON-44)", async () => {
+  const client = createFixtureRunnerClient();
+  await expect(client.call("runs.resume", { runId: "run-apk-stopped" })).rejects.toMatchObject({
+    code: "not_allowed",
+    reason: "not_resumable",
   });
-});
-test("runs.export writes the steps and, for a looped step, its items", async () => {
-  const c = createFixtureRunnerClient();
-  const initial = await c.call("runs.export", { runId: "run-0006" });
-  expect(initial.markdown).toContain("# Figma to Flutter: run run-0006");
-  expect(initial.markdown).toContain("- Build the screens: failed");
-  const r = c.state.runs.at(0);
-  if (!r) throw new Error("Missing run");
-  r.steps.push({
-    stepId: "loop",
-    title: "Loop",
-    do: "loop",
-    state: "passed",
-    attempts: [],
-    maxAttempts: 1,
-    checks: [],
-    items: [{ key: "j1", label: "Job one", state: "passed", steps: [] }],
+  expect((await client.call("agents.list", {})).map((agent) => [agent.id, agent.state])).toEqual([
+    ["claude-code", "ready"],
+    ["codex", "not_installed"],
+  ]);
+  expect(
+    operations["runs.export"].output.safeParse(await client.call("runs.export", { runId: "run-apk-done" }))
+      .success,
+  ).toBe(true);
+  await expect(client.call("flows.import", { path: "/example" })).rejects.toMatchObject({
+    code: "unavailable",
   });
-  expect((await c.call("runs.export", { runId: r.id })).markdown).toContain("  - j1: passed");
-});
-test("flows.import needs the engine, audit.list is empty and a decision that is not a choice cannot be answered", async () => {
-  const c = createFixtureRunnerClient();
-  await fails(c.call("flows.import", { path: "/flow" }), "unavailable", "Importing a flow needs the engine.");
-  expect(await c.call("audit.list", {})).toEqual([]);
-  await fails(
-    c.call("approvals.answer", { approvalId: "ap-0014", picks: [] }),
-    "invalid_input",
-    "This decision is not a choice.",
-  );
-  await fails(
-    c.call("approvals.answer", { approvalId: "missing", picks: [] }),
-    "not_found",
-    "There is no approval missing.",
-  );
+  await expect(
+    client.call("readiness.install", { flowId: "example.fill-timesheet", requirementId: "missing" }),
+  ).rejects.toMatchObject({ code: "unavailable" });
 });
 
-function choice(overrides: Record<string, unknown> = {}): Approval {
-  return Approval.parse({
-    id: "ap-choice",
-    kind: "ask",
-    flowId: FIGMA,
-    flowName: "Figma to Flutter",
-    runId: "run-0006",
-    stepId: "pick",
-    summary: "Which jobs get a prototype?",
-    payload: {
-      kind: "choice",
-      question: "Which jobs?",
-      options: [
-        { key: "j1", label: "Job one" },
-        { key: "j2", label: "Job two" },
-      ],
-      maxPick: 1,
+test("TC-CON-42 rejection is visible in the run report", async () => {
+  const client = createFixtureRunnerClient();
+  await client.call("approvals.resolve", { approvalId: "decision-1", decision: "reject" });
+  const report = await client.call("runs.report", { runId: "run-timesheet-wait" });
+  expect(report.decisionLines).toContainEqual({ key: "report.youSaidNo", params: { title: "Log hours" } });
+});
+
+test("TC-CON-42 export masks sensitive text and marks hidden characters", async () => {
+  const client = createFixtureRunnerClient();
+  const run = client.state.runs.find((item) => item.id === "run-apk-done");
+  if (!run) throw new Error("Missing sample run");
+  const marker = String.fromCodePoint(0x200b);
+  run.report = {
+    runId: run.id,
+    lines: [`Bearer ${"example-token"} ${marker}`],
+    decisionLines: [],
+    result: { kind: "report" },
+  };
+  const output = await client.call("runs.export", { runId: run.id });
+  expect(output.summary[0]?.text).toBe("[hidden] [U+200B hidden character]");
+});
+
+test("TC-CON-42 resume rechecks a blocker and preserves passed steps", async () => {
+  const client = createFixtureRunnerClient();
+  const run = client.state.runs.find((item) => item.id === "run-supplier-blocked");
+  if (!run) throw new Error("Missing blocked sample run");
+  run.steps = [
+    {
+      stepId: "done",
+      title: "Done",
+      do: "worker",
+      state: "passed",
+      attempts: [],
+      maxAttempts: 1,
+      checks: [],
     },
-    editable: false,
-    createdAt: "2026-11-10T09:00:00.000Z",
-    expiresAt: "2026-11-12T09:00:00.000Z",
-    state: "pending",
-    ...overrides,
+    {
+      stepId: "retry",
+      title: "Retry",
+      do: "worker",
+      state: "failed",
+      attempts: [],
+      maxAttempts: 1,
+      checks: [],
+    },
+  ];
+  expect((await client.call("runs.resume", { runId: run.id })).outcome).toBe("still_stuck");
+  expect(run.state).toBe("blocked");
+  delete client.state.resumeBlockers[run.id];
+  const result = await client.call("runs.resume", { runId: run.id });
+  expect(result.outcome).toBe("resumed");
+  expect(result.run.state).toBe("running");
+  expect(run.steps.map((step) => step.state)).toEqual(["passed", "pending"]);
+  expect((await client.call("audit.list", { runId: run.id })).some((row) => row.kind === "run_resumed")).toBe(
+    true,
+  );
+});
+
+test("TC-CON-42 always allow reuses the matching rule and updates flow views", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  if (!decision) throw new Error("Missing decision");
+  const result = await client.call("approvals.resolve", {
+    approvalId: decision.id,
+    decision: "always_allow",
   });
-}
-function choiceClient(overrides: Record<string, unknown> = {}) {
-  const c = createFixtureRunnerClient();
-  const run = c.state.runs.find((r) => r.id === "run-0006");
-  if (!run) throw new Error("Missing run");
-  run.state = "waiting_approval";
-  const step = run.steps.at(0);
-  if (!step) throw new Error("Missing step");
-  step.stepId = "pick";
-  step.state = "waiting_approval";
-  c.state.approvals.push(choice(overrides));
-  return { c, run, step };
-}
-test("answering a choice approves it, records the picks and lets the run go on", async () => {
-  const { c, run, step } = choiceClient();
-  const result = await c.call("approvals.answer", { approvalId: "ap-choice", picks: ["j1"] });
-  expect(result).toHaveLength(1);
-  expect(result.at(0)).toMatchObject({ state: "approved", picks: ["j1"], resolvedAt: expect.any(String) });
-  expect(step).toMatchObject({ state: "passed", picks: [{ key: "j1", label: "Job one" }] });
-  expect(run.state).toBe("running");
+  expect(result.decision.state).toBe("allowed_always");
+  expect(result.ruleId).toBe("rule-1");
+  expect(client.state.rules).toHaveLength(1);
+  const flow = await client.call("flows.get", { flowId: "example.fill-timesheet" });
+  expect(flow.rules.map((rule) => rule.id)).toContain(result.ruleId);
 });
-test("picks outside the options, too many picks and a second answer are refused", async () => {
-  const { c } = choiceClient();
-  for (const picks of [["bad"], ["j1", "j2"], ["j1", "j1"]])
-    await fails(
-      c.call("approvals.answer", { approvalId: "ap-choice", picks }),
-      "invalid_input",
-      "Those picks are not allowed.",
-    );
-  await c.call("approvals.answer", { approvalId: "ap-choice", picks: [] });
-  await fails(
-    c.call("approvals.answer", { approvalId: "ap-choice", picks: [] }),
-    "not_allowed",
-    "This decision was already made.",
-  );
+
+test("TC-CON-42 settings reject invalid language without side effects", async () => {
+  const client = createFixtureRunnerClient();
+  await expect(
+    client.call("settings.update", { patch: { language: "fr", agentPermission: "off" } }),
+  ).rejects.toMatchObject({ code: "invalid_input", reason: "language_unknown" });
+  expect((await client.call("runs.status", { runId: "run-timesheet-wait" })).state).toBe("waiting_approval");
 });
-test("an expired choice cannot be answered", async () => {
-  const { c } = choiceClient({ expiresAt: "2026-11-10T09:01:00.000Z" });
-  await fails(
-    c.call("approvals.answer", { approvalId: "ap-choice", picks: [] }),
-    "not_allowed",
-    "This approval expired.",
+
+test("TC-CON-42 settings accept registered languages when configured", async () => {
+  const client = createFixtureRunnerClient({ languages: ["en", "id", "ms"] });
+  expect((await client.call("settings.update", { patch: { language: "ms" } })).language).toBe("ms");
+  await expect(client.call("settings.update", { patch: { language: "fr" } })).rejects.toMatchObject({
+    code: "invalid_input",
+    reason: "language_unknown",
+  });
+});
+
+test("TC-CON-42 editing an empty decision reports the specified reason", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  if (!decision) throw new Error("Missing decision");
+  decision.editable = true;
+  await expect(
+    client.call("approvals.resolve", { approvalId: decision.id, decision: "edit", editedText: "" }),
+  ).rejects.toMatchObject({ code: "invalid_input", reason: "empty_text" });
+});
+
+test("TC-CON-42 always allow requires the confirmed touch and place", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  if (!decision || !decision.place) throw new Error("Missing decision place");
+  decision.place.value = "other-account";
+  await expect(
+    client.call("approvals.resolve", { approvalId: decision.id, decision: "always_allow" }),
+  ).rejects.toMatchObject({ code: "not_allowed", reason: "place_not_fixed" });
+  expect(client.state.rules).toHaveLength(1);
+});
+
+test("TC-CON-42 readiness reports requirements in the manifest", async () => {
+  const client = createFixtureRunnerClient();
+  const flow = client.state.flows[0];
+  if (!flow) throw new Error("Missing flow");
+  flow.manifest.requirements.push({
+    id: "sample-tool",
+    type: "cli_tool",
+    ref: "sample",
+    required: true,
+    sensitive: false,
+    why: "Needed",
+    routes: [],
+  });
+  const report = await client.call("readiness.check", { flowId: flow.summary.id });
+  expect(report.ready).toBe(false);
+  expect(report.items[0]).toMatchObject({ requirementId: "sample-tool", state: "unchecked" });
+  expect(operations["readiness.check"].output.safeParse(report).success).toBe(true);
+});
+
+test("TC-CON-43 new operations return contract shapes and retain writes", async () => {
+  const client = createFixtureRunnerClient({ scenario: "story-v2" });
+  const expectedCalls: { operation: string; input: unknown }[] = [];
+  const check = async <N extends import("@flowdriven/contracts").LiveOperationName>(
+    name: N,
+    input: import("@flowdriven/contracts").OperationInput<N>,
+  ) => {
+    expectedCalls.push({ operation: name, input });
+    const output = await client.call(name, input);
+    expect(operations[name].output.safeParse(output).success, name).toBe(true);
+    return output;
+  };
+  const flows = await check("flows.list", {});
+  expect(flows.map((item) => item.id).sort()).toEqual([
+    "example.build-apk",
+    "example.email-triage",
+    "example.fill-timesheet",
+    "example.job-review",
+    "example.weekly-supplier-report",
+  ]);
+  const firstFlow = flows[0];
+  if (!firstFlow) throw new Error("Missing flow");
+  const f = await check("flows.get", { flowId: firstFlow.id });
+  const agents = await check("agents.list", {});
+  const agent = agents.find((item) => item.state === "ready");
+  if (!agent || !agent.defaultModel) throw new Error("Missing ready agent");
+  await check("agents.setUp", { agentId: agent.id });
+  await check("agents.signIn", { agentId: agent.id });
+  await check("agents.rescan", {});
+  await check("agents.models", { agentId: agent.id });
+  await check("chats.list", {});
+  const { chatId } = await check("chats.create", {});
+  await check("chats.setAgent", { chatId, agent: agent.id, model: agent.defaultModel });
+  await check("chats.setComposer", { chatId, text: "draft" });
+  const sent = await check("chats.send", { chatId, text: "Hello fixture" });
+  expect(
+    (await check("chats.get", { chatId })).messages.some(
+      (m) => m.id === sent.messageId && m.text === "Hello fixture",
+    ),
+  ).toBe(true);
+  const chat = client.state.chats.find((item) => item.chat.id === chatId);
+  if (!chat) throw new Error("Missing chat");
+  chat.messages.push({
+    id: "test-card",
+    seq: 10,
+    at: "2026-11-20T03:00:00.000Z",
+    role: "flowdriven",
+    kind: "card",
+    outside: false,
+    card: { type: "ask_run", state: "open", flowId: f.summary.id, name: f.summary.name, values: [] },
+  });
+  await check("chats.act", { chatId, messageId: "test-card", action: "not_now" });
+  await check("flows.confirm", { flowId: f.summary.id, hash: f.hash, onItsOwn: [] });
+  await check("flows.start", { flowId: f.summary.id, source: "flows" });
+  await check("flows.setSchedule", {
+    flowId: f.summary.id,
+    hash: f.hash,
+    schedule: { type: "weekly", day: "mon", time: "17:00", whenItsTime: "ask" },
+  });
+  await check("flows.tryNextRun", { flowId: f.summary.id });
+  const decisions = await check("approvals.list", {});
+  const decision = decisions[0];
+  if (!decision || !decision.runId) throw new Error("Missing decision");
+  const originals = client.state.decisions;
+  originals.push(
+    {
+      ...decision,
+      id: "batch-1",
+      effect: "send",
+      riskyAction: "send",
+      canAlwaysAllow: false,
+      similarGroup: "batch",
+    },
+    {
+      ...decision,
+      id: "batch-2",
+      effect: "send",
+      riskyAction: "send",
+      canAlwaysAllow: false,
+      similarGroup: "batch",
+    },
   );
+  await check("approvals.resolveSimilar", {
+    runId: decision.runId,
+    group: "batch",
+    approvalIds: ["batch-1", "batch-2"],
+  });
+  const rules = await check("rules.list", {});
+  await check("activity.summary", {});
+  await check("search.query", { text: "" });
+  await check("search.query", { text: "invoice" });
+  const skills = await check("skills.list", {});
+  const skill = skills[0];
+  const rule = rules[0];
+  if (!skill || !rule) throw new Error("Missing skill or rule");
+  await check("skills.makeFlow", { skillId: skill.id });
+  const runs = await check("runs.list", {});
+  const firstRun = runs[0];
+  if (!firstRun) throw new Error("Missing run");
+  await check("runs.stop", { runId: firstRun.id });
+  await check("rules.revoke", { ruleId: rule.id });
+  expect((await check("rules.list", {})).map((rule) => rule.id)).not.toContain(rule.id);
+  await check("chats.delete", { chatId });
+  const deletable = flows.find(
+    (item) => !runs.some((r) => r.flowId === item.id && ["running", "waiting_approval"].includes(r.state)),
+  );
+  if (!deletable) throw new Error("Missing deletable flow");
+  await check("flows.delete", { flowId: deletable.id });
+  expect(client.calls).toEqual(expectedCalls);
+});
+
+test("TC-CON-43 card actions check the card and permission before answering", async () => {
+  const client = createFixtureRunnerClient();
+  const chat = client.state.chats[0];
+  if (!chat) throw new Error("Missing chat");
+  chat.messages.push({
+    id: "card-test",
+    seq: 2,
+    at: "2026-11-20T03:00:00.000Z",
+    role: "flowdriven",
+    kind: "card",
+    outside: false,
+    card: { type: "ask_run", state: "open", flowId: "example.build-apk", name: "Build APK", values: [] },
+  });
+  const input = { chatId: chat.chat.id, messageId: "card-test" };
+  await expect(client.call("chats.act", { ...input, action: "use_form" })).rejects.toMatchObject({
+    code: "invalid_input",
+    reason: "unknown_action",
+  });
+  client.state.settings.agentPermission = "off";
+  await expect(client.call("chats.act", { ...input, action: "run" })).rejects.toMatchObject({
+    code: "not_allowed",
+    reason: "permission_off",
+  });
+  expect(chat.messages[2]?.card?.state).toBe("open");
+  await client.call("chats.act", { ...input, action: "not_now" });
+  await expect(client.call("chats.act", { ...input, action: "not_now" })).rejects.toMatchObject({
+    code: "conflict",
+    reason: "card_answered",
+  });
+});
+
+test("TC-CON-43 a start needing inputs posts and reuses its question", async () => {
+  const client = createFixtureRunnerClient();
+  const input = { flowId: "example.fill-timesheet", source: "flows" } as const;
+  const first = await client.call("flows.start", input);
+  const second = await client.call("flows.start", input);
+  expect(first.outcome).toBe("asked");
+  if (first.outcome !== "asked" || second.outcome !== "asked") throw new Error("Missing question");
+  expect(second).toMatchObject({ chatId: first.chatId, questionId: first.questionId, reused: true });
+  const chat = await client.call("chats.get", { chatId: first.chatId });
+  expect(chat.messages.some((m) => m.id === first.questionId && m.card?.type === "inputs_ask")).toBe(true);
+});
+
+test("TC-CON-42 decisions resume only waiting runs with permission on", async () => {
+  for (const method of ["resolve", "answer"] as const) {
+    for (const [runState, permission, expected] of [
+      ["waiting_approval", "on", "running"],
+      ["waiting_approval", "off", "waiting_approval"],
+      ["needs_login", "on", "needs_login"],
+      ["stopped", "on", "stopped"],
+    ] as const) {
+      const client = createFixtureRunnerClient();
+      const decision = client.state.decisions[0];
+      const run = client.state.runs.find((item) => item.id === decision?.runId);
+      if (!decision || !run) throw new Error("Missing sample decision or run");
+      run.state = runState;
+      client.state.settings.agentPermission = permission;
+      if (method === "answer") {
+        decision.kind = "ask";
+        decision.canAlwaysAllow = false;
+        decision.payload = {
+          kind: "choice",
+          question: "Choose",
+          options: [{ key: "one", label: "One" }],
+          maxPick: 1,
+          approves: [],
+        };
+        await client.call("approvals.answer", { approvalId: decision.id, picks: ["one"] });
+      } else {
+        await client.call("approvals.resolve", { approvalId: decision.id, decision: "approve" });
+      }
+      expect(run.state, `${method} ${runState} ${permission}`).toBe(expected);
+    }
+  }
+});
+
+test("TC-CON-42 permission off stops needs_login runs and expires their decisions", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  const run = client.state.runs.find((item) => item.id === decision?.runId);
+  if (!decision || !run) throw new Error("Missing sample decision or run");
+  run.state = "needs_login";
+  await client.call("settings.update", { patch: { agentPermission: "off" } });
+  expect(run.state).toBe("stopped");
+  expect(decision).toMatchObject({ state: "expired", resolvedVia: "permission_off", canAlwaysAllow: false });
+});
+
+test("TC-CON-42 edited subjects reject bidi and zero-width characters", async () => {
+  for (const code of [0x202e, 0x200b]) {
+    const client = createFixtureRunnerClient();
+    const decision = client.state.decisions[0];
+    if (!decision) throw new Error("Missing sample decision");
+    decision.editable = true;
+    decision.payload = { kind: "text", text: "Original" };
+    await expect(
+      client.call("approvals.resolve", {
+        approvalId: decision.id,
+        decision: "edit",
+        editedText: "Safe",
+        editedSubject: `Subject${String.fromCodePoint(code)}`,
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input", reason: "hidden_characters" });
+    expect(decision.state).toBe("pending");
+  }
+});
+
+test("TC-CON-42 always allow uses the held touch and its sentence", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  if (!decision) throw new Error("Missing sample decision");
+  decision.stepId = "different-step";
+  decision.stepTitle = "Different title";
+  client.state.rules.length = 0;
+  const result = await client.call("approvals.resolve", {
+    approvalId: decision.id,
+    decision: "always_allow",
+  });
+  expect(client.state.rules.find((rule) => rule.id === result.ruleId)).toMatchObject({
+    touchId: "log-hours",
+    sentence: "Log hours",
+  });
+});
+
+test("TC-CON-42 rule ids never repeat after revocation", async () => {
+  const client = createFixtureRunnerClient();
+  const decision = client.state.decisions[0];
+  if (!decision) throw new Error("Missing sample decision");
+  client.state.rules.length = 0;
+  const first = await client.call("approvals.resolve", { approvalId: decision.id, decision: "always_allow" });
+  if (!first.ruleId) throw new Error("Missing rule");
+  await client.call("rules.revoke", { ruleId: first.ruleId });
+  decision.state = "pending";
+  decision.canAlwaysAllow = true;
+  const second = await client.call("approvals.resolve", {
+    approvalId: decision.id,
+    decision: "always_allow",
+  });
+  expect(first.ruleId).toMatch(/^rule-fixture-\d+$/);
+  expect(second.ruleId).not.toBe(first.ruleId);
+});
+
+test("TC-CON-44 fixture decisions wait beyond 25 hours and can be answered", async () => {
+  const client = createFixtureRunnerClient({ now: () => new Date("2026-11-22T04:00:00.000Z") });
+  const decisions = await client.call("approvals.list", {});
+  expect(decisions.length).toBeGreaterThan(0);
+  expect(decisions.every((decision) => !("expiresAt" in decision))).toBe(true);
+  const decision = decisions.find((item) => item.id === "decision-1");
+  expect(decision?.state).toBe("pending");
+  expect((await client.call("runs.status", { runId: "run-timesheet-wait" })).state).toBe("waiting_approval");
+  expect(
+    (await client.call("approvals.resolve", { approvalId: "decision-1", decision: "approve" })).decision
+      .state,
+  ).toBe("approved");
+});
+
+test("TC-CON-45 fixture records another way and its text", async () => {
+  const client = createFixtureRunnerClient({ scenario: "story-v2" });
+  const { decision } = await client.call("approvals.resolve", {
+    approvalId: "decision-1",
+    decision: "another_way",
+    anotherWayText: "Try this",
+  });
+  expect(decision.state).toBe("another_way");
+  expect(decision.anotherWayText).toBe("Try this");
+  expect(decision.ruleId).toBeUndefined();
+  const run = await client.call("runs.status", { runId: "run-timesheet-wait" });
+  expect(run.decisionLines).toContainEqual({ key: "report.anotherWay", params: { text: "Try this" } });
+  expect(run.decisionLines.some((line) => line.key === "report.youApproved")).toBe(false);
+});
+
+test("fixture client supports initial permission and failSettingsUpdate options", async () => {
+  for (const permission of ["on", "off", "unset"] as const) {
+    const client = createFixtureRunnerClient({ scenario: "story-v2", permission });
+    expect((await client.call("settings.get", {})).agentPermission).toBe(permission);
+  }
+
+  const failing = createFixtureRunnerClient({ scenario: "story-v2", failSettingsUpdate: true });
+  await expect(failing.call("settings.update", { patch: { busyFallback: true } })).rejects.toMatchObject({
+    code: "unavailable",
+  });
+  expect((await failing.call("settings.get", {})).busyFallback).toBe(false);
 });

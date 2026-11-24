@@ -2,12 +2,15 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { describeTemplate, type Value } from "@flowdriven/sdk";
+import { describeTemplate, type Touch, type Value } from "@flowdriven/sdk";
+import { AGENT_CATALOG } from "../agents/catalog.ts";
+import { detect, signInStatus } from "../agents/registry.ts";
 import { CONNECTORS, type ConnectorEntry } from "../connectors/catalog.ts";
 import type { GrantBook } from "../connectors/grants.ts";
-import { type CallInfo, type HarnessAdapter, HarnessCallError, type StepRequest } from "../harness.ts";
+import { type AgentAdapter, type CallInfo, HarnessCallError, type StepRequest } from "../harness.ts";
+import type { EffectEntry } from "../rules/effects.ts";
 import { type LoadedSkill, skillSource } from "../skills/skill-folder.ts";
-import type { ConsentPins } from "../storage.ts";
+import type { Confirmation, ConsentPins, RuleRow } from "../storage.ts";
 import { CONNECTOR_DENY } from "./connector.ts";
 import type { ConnectorFact } from "./connector-scan.ts";
 import type { PageCounter } from "./pages.ts";
@@ -25,6 +28,26 @@ import { MAX_DENIED_ENTRIES, type RunInput, runClaude } from "./run.ts";
 import { prepareSkillStep, SKILL_STOP } from "./skill-step.ts";
 import { MAX_LINE_BYTES } from "./stream.ts";
 export type ClaudeAdapterOptions = {
+  confirmation?: (runId: string) =>
+    | {
+        confirmation: Pick<Confirmation, "flowId" | "hash" | "onItsOwn"> & { touches: Touch[] };
+        rules?: RuleRow[];
+        grants?: GrantBook;
+        source?: string;
+        earlierNo?: boolean;
+        startedAt?: string;
+      }
+    | undefined;
+  rules?: (flowId: string) => RuleRow[];
+  recordRule?: (input: {
+    ruleId: string;
+    runId: string;
+    stepId: string;
+    itemKey: string;
+    tool: string;
+    title: string;
+    at: string;
+  }) => void;
   grantedFolders?: (runId: string) => ConsentPins["folders"] | undefined;
   skillPin?: (runId: string, requirementId: string) => string | undefined;
   home?: string;
@@ -35,6 +58,7 @@ export type ClaudeAdapterOptions = {
   grants?: GrantBook;
   connectors?: () => ConnectorFact[];
   catalog?: ConnectorEntry[];
+  effectCatalog?: EffectEntry[];
   effortModels?: () => { low: string; medium: string; high: string } | undefined;
   nowMs?: () => number;
   claudePath: () => string | undefined;
@@ -47,14 +71,18 @@ export type ClaudeAdapterOptions = {
   rounds?: number;
   pollMs?: number;
   graceMs?: number;
+  killGroup?: (pid: number, signal: NodeJS.Signals) => void;
   exitWaitMs?: number;
   closeWaitMs?: number;
   maxLineBytes?: number;
   maxDeniedEntries?: number;
   allowed?: () => string | undefined;
+  afterAllow?: () => void;
 };
-export type ClaudeAdapter = HarnessAdapter & { interrupt(sentence: string): void };
+export type ClaudeAdapter = AgentAdapter & { interrupt(sentence: string): void };
 export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapter {
+  const claudeCatalog = AGENT_CATALOG.find((entry) => entry.id === "claude-code");
+  if (!claudeCatalog) throw new Error("Claude catalog entry missing");
   const active = new Set<(sentence?: string) => void>();
   let stopped = false;
   const guard = () => (stopped ? "FlowDriven is stopping." : options.allowed?.());
@@ -67,6 +95,18 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       grants: options.grants,
       onCall,
       nowMs: options.nowMs ?? Date.now,
+      recordRule: (ruleId, tool, at) => {
+        if (!options.recordRule) throw new Error("Rule recording is unavailable.");
+        options.recordRule({
+          ruleId,
+          runId: input.runId,
+          stepId: input.stepId,
+          itemKey: input.itemKey,
+          tool,
+          title: input.ruleTitle ?? input.stepId,
+          at,
+        });
+      },
       env: options.env(),
       controlRoot: options.controlRoot,
       audit: options.audit,
@@ -74,11 +114,13 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       newSessionId: options.newSessionId ?? randomUUID,
       rounds: options.rounds ?? 50,
       pollMs: options.pollMs ?? 25,
-      graceMs: options.graceMs ?? 2000,
+      graceMs: options.graceMs ?? 1000,
+      killGroup: options.killGroup,
       exitWaitMs: options.exitWaitMs ?? 10000,
       closeWaitMs: options.closeWaitMs ?? 8000,
       maxLineBytes: options.maxLineBytes ?? MAX_LINE_BYTES,
       maxDeniedEntries: options.maxDeniedEntries ?? MAX_DENIED_ENTRIES,
+      afterAllow: options.afterAllow,
       register: (stop) => {
         active.add(stop);
         return () => active.delete(stop);
@@ -87,6 +129,20 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
   return {
     id: "claude-code",
     name: "Claude Code",
+    maker: "Anthropic",
+    catalog: claudeCatalog,
+    async detect() {
+      return detect(claudeCatalog, {
+        explicit: options.claudePath() ?? "",
+        env: options.env(),
+        cwd: dirname(options.controlRoot),
+      });
+    },
+    async signInStatus() {
+      const path = options.claudePath();
+      if (!path) return { state: "not_installed", billing: "unknown" };
+      return signInStatus(claudeCatalog, path, { env: options.env(), cwd: dirname(options.controlRoot) });
+    },
     stop() {
       stopped = true;
       for (const stop of active) stop();
@@ -121,6 +177,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
         .flatMap((r) => (r.type === "mcp_server" ? catalog.filter((entry) => entry.ref === r.ref) : []))
         .at(0)?.prefix;
       const schema = outputSchema(req.outputs);
+      const confirmed = options.confirmation?.(req.runId);
       let call: CallInfo | undefined;
       let outside = false;
       let workFolder: string | undefined;
@@ -130,10 +187,11 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
             {
               runId: req.runId,
               stepId: req.stepId,
+              ruleTitle: req.title,
               itemKey: req.itemKey,
               pickTools: req.pickTools,
               attempt: req.attempt,
-              model: options.effortModels?.()?.[req.effort ?? "medium"] ?? modelFor(req.effort),
+              model: req.model ?? options.effortModels?.()?.[req.effort ?? "medium"] ?? modelFor(req.effort),
               ...(schema === undefined ? {} : { schema }),
               signal: req.signal,
               onStart: req.onStart,
@@ -143,16 +201,50 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                 outside = true;
                 req.onOutside?.();
               },
+              ...(req.onEvent === undefined ? {} : { onEvent: req.onEvent }),
+              books: {
+                grants: confirmed?.grants ?? options.grants,
+                earlierNo: () => options.confirmation?.(req.runId)?.earlierNo ?? false,
+                rules: confirmed
+                  ? () => options.rules?.(confirmed.confirmation.flowId) ?? confirmed.rules ?? []
+                  : undefined,
+              },
               makePolicy: (control, sessionId) => {
                 const id = basename(control.cwd === "" ? "" : dirname(control.cwd));
                 const folder = source ? join(copyRoot, id, source.name) : undefined;
+                const covers = new Set(
+                  req.requirements.flatMap((requirement) => {
+                    if (requirement.type === "mcp_server")
+                      return (requirement.tools ?? []).map((tool) => `${requirement.id}.${tool}`);
+                    if (requirement.type === "cli_tool") return requirement.commands ?? [];
+                    return [];
+                  }),
+                );
+                const touches = confirmed?.confirmation.touches.flatMap((touch) => {
+                  const inStep = touch.covers.filter((cover) => covers.has(cover));
+                  const folderInStep =
+                    touch.place?.kind === "folder" &&
+                    req.requirements.some(
+                      (requirement) => requirement.type === "path" && requirement.id === touch.place?.value,
+                    );
+                  return inStep.length || folderInStep ? [{ ...touch, covers: inStep }] : [];
+                });
                 const policy = buildPolicy({
                   kind: req.kind === "agent" ? "agent" : "worker",
+                  ...(confirmed
+                    ? {
+                        flowId: confirmed.confirmation.flowId,
+                        hash: confirmed.confirmation.hash,
+                        touches,
+                        onItsOwn: confirmed.confirmation.onItsOwn,
+                      }
+                    : {}),
                   requirements: req.requirements,
                   takesOutside: req.takesOutside,
                   routes: req.routes ?? [],
                   connectors: options.connectors?.() ?? [],
                   catalog,
+                  effectCatalog: options.effectCatalog,
                   project: req.project,
                   itemKey: req.itemKey,
                   home,
@@ -163,6 +255,16 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   schema: schema !== undefined,
                   ...(folder ? { skillFolder: folder } : {}),
                 });
+                if (confirmed)
+                  Object.assign(policy, {
+                    runId: req.runId,
+                    stepId: req.stepId,
+                    itemKey: req.itemKey,
+                    source: confirmed.source,
+                    earlierNo: confirmed.earlierNo,
+                    startedAt: confirmed.startedAt,
+                  });
+                if (req.rejectedCalls?.length) policy.rejectedCalls = req.rejectedCalls;
                 workFolder = policy.workFolder;
                 if (skillRequirement) {
                   const result = prepareSkillStep({
@@ -197,7 +299,29 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                       );
                   } catch {}
                 }
+                let anotherWay: { text: string; token: string } | undefined;
+                if (req.anotherWay !== undefined) {
+                  const haystacks = [
+                    req.instructions,
+                    req.anotherWay.text,
+                    req.lastFailure ?? "",
+                    prepared?.skill.body ?? "",
+                  ];
+                  for (let i = 0; i < 3; i++) {
+                    const candidate = (options.newToken ?? (() => randomBytes(8).toString("hex")))();
+                    if (
+                      /^[a-f0-9]{16}$/.test(candidate) &&
+                      haystacks.every((part) => !part.includes(candidate))
+                    ) {
+                      anotherWay = { text: req.anotherWay.text, token: candidate };
+                      break;
+                    }
+                  }
+                  if (anotherWay === undefined)
+                    throw new Error("FlowDriven could not mark the owner's words.");
+                }
                 return buildPrompt({
+                  approved: (req.approvedCalls ?? []).filter((call) => call.outsideFlow),
                   ...(policy.commands
                     ? { commands: { patterns: policy.commands.patterns, cwd: policy.cwd } }
                     : {}),
@@ -211,7 +335,9 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                           ),
                           labelHold: (policy.connector.labelTools?.length ?? 0) > 0,
                           approved: (req.approvedCalls ?? [])
-                            .filter((call) => policy.connector?.tools.includes(call.tool))
+                            .filter(
+                              (call) => !call.outsideFlow && policy.connector?.tools.includes(call.tool),
+                            )
                             .map((call) => ({
                               ...call,
                               tool: `${policy.connector?.prefix ?? ""}${call.tool}`,
@@ -227,6 +353,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
                   instructions: req.instructions,
                   outputs: req.outputs,
                   ...(req.lastFailure === undefined ? {} : { lastFailure: req.lastFailure }),
+                  ...(anotherWay === undefined ? {} : { anotherWay }),
                 });
               },
             },
@@ -272,7 +399,15 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
       }
       if (result.kind === "block")
         return withCall(
-          { exit: "failed", text: result.sentence, outputs: {}, block: result.sentence, ...mark },
+          {
+            exit: "failed",
+            text: result.sentence,
+            outputs: {},
+            block: result.sentence,
+            ...(result.cause ? { cause: result.cause } : {}),
+            ...(result.noteLine ? { noteLine: result.noteLine } : {}),
+            ...mark,
+          },
           call,
         );
       if (result.kind === "stop")
@@ -308,7 +443,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions): ClaudeAdapte
           stepId: req.stepId,
           itemKey: req.itemKey ?? "",
           attempt: 0,
-          model: options.effortModels?.()?.medium ?? "sonnet",
+          model: req.model ?? options.effortModels?.()?.medium ?? "sonnet",
           schema: JUDGE_SCHEMA,
           signal: req.signal,
           onStart: req.onStart,

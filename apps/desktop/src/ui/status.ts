@@ -7,7 +7,7 @@ import type {
   RunState,
   SignOffState,
   StepRunState,
-} from "@flowdriven/contracts";
+} from "@flowdriven/contracts/v1";
 import type { IconName } from "./icons";
 export type Tone = "ok" | "bad" | "info" | "neutral" | "wait";
 export type StatusDomain =

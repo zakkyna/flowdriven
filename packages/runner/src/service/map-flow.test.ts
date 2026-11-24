@@ -1,17 +1,17 @@
-import { FlowDetail, FlowManifest, FlowSummary, ReadinessReport, Settings } from "@flowdriven/contracts";
+import { FlowDetail, FlowManifest, FlowSummary, ReadinessReport, Settings } from "@flowdriven/contracts/v1";
 import { Check, Requirement, Trigger } from "@flowdriven/sdk";
 import { expect, test } from "vitest";
 import { demoFlow } from "../demo/demo-flow.ts";
 import type { FlowRow, RunRow } from "../storage.ts";
+import { coreVersion } from "./map-flow.ts";
 import {
-  coreVersion,
   defaultSettings,
   describeCheck,
   toFlowDetail,
   toFlowManifest,
   toFlowSummary,
   toReadinessReport,
-} from "./map-flow.ts";
+} from "./map-flow-v1.ts";
 
 const date = "2026-11-11T00:00:00.000Z";
 function row(): FlowRow {
@@ -120,4 +120,91 @@ test("toReadinessReport gives one unchecked row per requirement and is ready onl
 });
 test("defaultSettings validates against Settings and names the month", () => {
   expect(Settings.parse(defaultSettings(date)).budget.month).toBe("2026-11");
+});
+
+test("TC-STO-36 root flow model shows live state, required inputs and rule placement", async () => {
+  const { openSqliteStore } = await import("../sqlite-store.ts");
+  const { flowWithRules } = await import("../test-helpers/builders.ts");
+  const { toFlowDetail: rootDetail } = await import("./map-flow.ts");
+  const store = await openSqliteStore(":memory:");
+  try {
+    const place = { kind: "account" as const, value: "account", label: "Account" };
+    const { manifest, hash } = flowWithRules(
+      store,
+      [
+        { id: "log", sentence: "Log hours", effect: "change", rule: "asks_first", covers: [], place },
+        { id: "send", sentence: "Send", effect: "send", rule: "asks_first", covers: [], place },
+      ],
+      { inputs: [{ id: "name", type: "text", label: "Name", required: true }] },
+    );
+    const rule = store.makeRule({
+      flowId: manifest.id,
+      touchId: "log",
+      effect: "change",
+      place,
+      sentence: "Log hours",
+      createdAt: date,
+      createdBy: "confirm",
+    });
+    const row = store.getFlow(manifest.id, hash);
+    if (!row) throw new Error("Missing version");
+    const detail = rootDetail(row, store);
+    expect(detail.summary).toMatchObject({ state: "new", live: null, asksFor: ["Name"] });
+    expect(detail.touches).toMatchObject([
+      { id: "log", list: "on_its_own", byRule: rule.id },
+      { id: "send", list: "asks_first", alwaysAsks: true },
+    ]);
+    expect(detail.confirmLists).toEqual({ onItsOwn: [], asksFirst: ["log", "send"], never: [] });
+    store.createRun({
+      id: "run-live",
+      flowId: manifest.id,
+      flowHash: hash,
+      flowVersion: manifest.version,
+      state: "running",
+      project: ".",
+      inputs: {},
+      params: {},
+      requirements: [],
+      startedAt: date,
+    });
+    expect(rootDetail(row, store).summary.live).toBe("running");
+  } finally {
+    store.close();
+  }
+});
+
+test("TC-STO-36 required defaults and remembered answers do not appear in asksFor", async () => {
+  const { openSqliteStore } = await import("../sqlite-store.ts");
+  const { flowWithRules } = await import("../test-helpers/builders.ts");
+  const { toFlowDetail: rootDetail } = await import("./map-flow.ts");
+  const store = await openSqliteStore(":memory:");
+  try {
+    const { manifest, hash } = flowWithRules(store, [], {
+      inputs: [
+        { id: "saved", type: "text", label: "Saved", required: true, remember: true },
+        { id: "defaulted", type: "text", label: "Defaulted", required: true, default: "hello" },
+        { id: "needed", type: "text", label: "Needed", required: true },
+      ],
+    });
+    store.putRemembered({
+      flowId: manifest.id,
+      inputId: "saved",
+      kind: "remember",
+      value: { type: "text", value: "Example" },
+      outside: false,
+      savedAt: date,
+      runId: "run-1",
+    });
+    const row = store.getFlow(manifest.id, hash);
+    if (!row) throw new Error("Missing version");
+    const detail = rootDetail(row, store);
+    expect(detail.summary.asksFor).toEqual(["Needed"]);
+    expect(detail.inputs).toMatchObject([
+      { id: "saved", line: "remembers", remembered: "Example" },
+      { id: "defaulted", line: "default", default: { kind: "value", value: "hello" } },
+      { id: "needed", line: "asks" },
+    ]);
+  } finally {
+    store.close();
+  }
 });

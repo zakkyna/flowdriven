@@ -4,6 +4,7 @@ import type { HarnessAdapter } from "./harness.ts";
 import { scriptedHarness } from "./scripted-harness.ts";
 import { openSqliteStore } from "./sqlite-store.ts";
 import { setup } from "./test-helpers/engine.ts";
+import { legacyGrant } from "./test-helpers/policy-fixture.ts";
 import { makeFlow } from "./test-helpers/review-flow.ts";
 
 const slowHarness = (ms: number): HarnessAdapter => ({
@@ -81,7 +82,7 @@ test("a crash between saving waiting_approval and creating the sign-off does not
   }
 });
 
-test("a grant from ask.approves no longer answers true once the run has ended", async () => {
+test("TC-j24-08 a grant from ask.approves no longer answers true once the rejected run ends", async () => {
   const manifest = makeFlow([
     {
       id: "alerts",
@@ -119,7 +120,11 @@ test("a grant from ask.approves no longer answers true once the run has ended", 
     const signoff = engine.listApprovals({ state: "pending" }).at(0);
     if (!signoff) throw new Error("no sign-off");
     const ended = await engine.decide(signoff.id, "reject");
-    expect(ended.state).toBe("failed");
+    expect(ended.state).toBe("done");
+    expect(store.getStep(run.id, "publish")).toMatchObject({
+      state: "skipped",
+      skipped: { because: "rejected", approvalId: signoff.id },
+    });
     expect(engine.isApproved(run.id, "host.publish", "j1")).toBe(false);
   } finally {
     store.close();
@@ -332,7 +337,7 @@ test("grants are valid only in running and retrying states", async () => {
   const c = await setup(manifest, { steps: { a: { text: "ok" } } });
   try {
     const run = await c.engine.startRun("local.test", { project: "/tmp" });
-    c.store.addGrant(run.id, "host.publish", "j1");
+    c.store.putCallGrant(legacyGrant(run.id, "*", "j1", "host.publish"));
     for (const state of [
       "running",
       "retrying",

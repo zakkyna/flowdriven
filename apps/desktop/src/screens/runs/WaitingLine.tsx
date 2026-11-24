@@ -1,4 +1,4 @@
-import type { Waiting } from "@flowdriven/contracts";
+import type { Waiting } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { formatTime } from "../../ui/format";
 import { Icon } from "../../ui/icons";

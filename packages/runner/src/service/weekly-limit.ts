@@ -1,4 +1,4 @@
-import { type Approval, RunnerError } from "@flowdriven/contracts";
+import { type Approval, RunnerError } from "@flowdriven/contracts/v1";
 import type { Store } from "../storage.ts";
 
 type State = { resetsAt: number; askedAt: string; percent: number; answer?: "keep" | "hold" };

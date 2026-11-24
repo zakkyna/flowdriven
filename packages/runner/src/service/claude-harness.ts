@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type HarnessCard, RunnerError } from "@flowdriven/contracts";
-import type { FlowManifest, Requirement, Value } from "@flowdriven/sdk";
+import type { HarnessCard } from "@flowdriven/contracts/v1";
+import type { Requirement, Value } from "@flowdriven/sdk";
+import { FlowManifest } from "@flowdriven/sdk";
 import { type ClaudeAdapterOptions, createClaudeAdapter } from "../claude/adapter.ts";
 import type { ConnectorFact } from "../claude/connector-scan.ts";
 import { controlRoot, sweepControlRoot } from "../claude/control.ts";
@@ -23,8 +24,10 @@ import {
   unattendedProviderErrors,
 } from "../router/route.ts";
 import type { HarnessFacts, Routed } from "../router/types.ts";
+import { earlierNo } from "../rules/decisions.ts";
+import { recordRuleUse } from "../rules/standing.ts";
 import { bundledSkill, readSkillFolder, skillSource } from "../skills/skill-folder.ts";
-import type { HarnessStateRow, Store } from "../storage.ts";
+import type { Store, StoredAgentRow } from "../storage.ts";
 import { localDay } from "../triggers/schedule.ts";
 import { readKeeperSettings } from "./keeper-wiring.ts";
 
@@ -86,7 +89,7 @@ export function harnessGate(input: {
   scan: ClaudeScan | undefined;
   finished: boolean;
   fileExists: (path: string) => boolean;
-  consent: "not_given" | "given" | "revoked";
+  permission: "unset" | "on" | "off";
 }): string | undefined {
   const { scan } = input;
   let reason: string | undefined;
@@ -97,7 +100,7 @@ export function harnessGate(input: {
   else if (scan.missingFlags.length) reason = GATE.tooOld;
   else if (scan.login === "logged_out") reason = GATE.signedOut;
   else if (scan.login !== "logged_in") reason = GATE.unknownLogin;
-  else if (input.consent !== "given") reason = GATE.noConsent;
+  else if (input.permission !== "on") reason = GATE.noConsent;
   return reason;
 }
 export function gate(
@@ -160,7 +163,7 @@ export function gate(
 }
 export function toHarnessCard(
   stored: StoredScan | undefined,
-  state: HarnessStateRow | undefined,
+  state: StoredAgentRow | undefined,
 ): HarnessCard {
   const scan = stored?.scan;
   const detected = scan?.detected === true;
@@ -261,7 +264,6 @@ export type HarnessService = {
   start(): { settled: Promise<void> };
   list(): HarnessCard[];
   rescan(): Promise<HarnessCard[]>;
-  setConsent(harnessId: string, consent: "given" | "revoked"): HarnessCard;
   facts(): HarnessFacts;
   readiness(
     manifest: FlowManifest,
@@ -346,6 +348,27 @@ export function createHarnessService(options: {
     return queue;
   };
   const adapter = createClaudeAdapter({
+    confirmation: (runId) => {
+      const run = options.store.getRun(runId);
+      const flow = run && options.store.getFlow(run.flowId, run.flowHash);
+      const confirmation = run && options.store.getConfirmation(run.flowId);
+      if (!run || !flow || !confirmation) return undefined;
+      const manifest = FlowManifest.safeParse(flow.manifest);
+      if (!manifest.success || manifest.data.format !== "flowdriven-flow/1.2") return undefined;
+      return {
+        confirmation: {
+          flowId: run.flowId,
+          hash: run.flowHash,
+          onItsOwn: confirmation.hash === run.flowHash ? confirmation.onItsOwn : [],
+          touches: manifest.data.touches ?? [],
+        },
+        source: run.start?.source,
+        earlierNo: earlierNo(options.store, runId),
+        startedAt: run.startedAt,
+      };
+    },
+    recordRule: (input) => recordRuleUse(options.store, input),
+    rules: (flowId) => options.store.listRules().filter((rule) => rule.flowId === flowId),
     claudePath: () => (cache?.scan.detected ? cache.scan.path : undefined),
     env: () => options.env,
     controlRoot: controlRoot(options.dataDir),
@@ -388,7 +411,13 @@ export function createHarnessService(options: {
       )
         return undefined;
       const run = options.store.getRun(req.runId);
-      const consent = run && options.store.getCapabilityConsent(run.flowId);
+      const flow = run && options.store.getFlow(run.flowId, run.flowHash);
+      const manifest = flow && FlowManifest.safeParse(flow.manifest);
+      const consent =
+        run &&
+        (manifest?.success && manifest.data.format === "flowdriven-flow/1.2"
+          ? options.store.getConfirmation(run.flowId)
+          : options.store.getCapabilityConsent(run.flowId));
       if (!run || consent?.hash !== run.flowHash) return ALLOW_FIRST;
       if (folders.some((folder) => !Object.hasOwn(consent.pins?.folders ?? {}, folder.id)))
         return ALLOW_FIRST;
@@ -402,7 +431,7 @@ export function createHarnessService(options: {
         scan: cache?.scan,
         finished,
         fileExists: existsSync,
-        consent: state()?.consent ?? "not_given",
+        permission: options.store.getSetting("agentPermission") === "on" ? "on" : "off",
       }),
   });
   return {
@@ -417,24 +446,6 @@ export function createHarnessService(options: {
     async rescan() {
       await scan(true);
       return list();
-    },
-    setConsent(id, consent) {
-      if (id !== CLAUDE_ID) throw new RunnerError("not_found", `There is no harness ${id}.`);
-      if (consent === "given" && !cache?.scan.detected)
-        throw new RunnerError("not_allowed", "This harness is not detected.");
-      options.store.putHarnessState({
-        ...state(),
-        id: CLAUDE_ID,
-        consent,
-        consentAt: options.now().toISOString(),
-      });
-      if (consent === "revoked") adapter.interrupt(GATE.noConsent);
-      options.store.appendAudit({
-        at: options.now().toISOString(),
-        kind: "harness_consent",
-        detail: { harnessId: id, consent },
-      });
-      return list()[0] as HarnessCard;
     },
     facts: () =>
       harnessFacts(
@@ -474,7 +485,7 @@ export function createHarnessService(options: {
         scan: cache?.scan,
         finished,
         fileExists: existsSync,
-        consent: state()?.consent ?? "not_given",
+        permission: options.store.getSetting("agentPermission") === "on" ? "on" : "off",
         manifest,
         facts: harnessFacts(
           cache?.scan,

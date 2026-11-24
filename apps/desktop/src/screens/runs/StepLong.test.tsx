@@ -1,4 +1,4 @@
-import type { StepRun } from "@flowdriven/contracts";
+import type { StepRun } from "@flowdriven/contracts/v1";
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { StepBlock } from "./StepBlock";

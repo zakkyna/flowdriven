@@ -1,8 +1,8 @@
-import { firstUnpassedStep, isJudgedOnly, isResumable } from "@flowdriven/contracts";
+import { firstUnpassedStep, isJudgedOnly, isResumable } from "@flowdriven/contracts/v1";
 import { type ReactElement, useRef, useState } from "react";
+import { useRunnerAction, useRunnerQuery } from "../../legacy/runner-context";
 import { AppLink } from "../../nav/AppLink";
 import { NotFoundPage } from "../../nav/NotFoundPage";
-import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
 import { Button } from "../../ui/Button";
 import { formatDateTime, formatUsd } from "../../ui/format";
 import { Icon } from "../../ui/icons";

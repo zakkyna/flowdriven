@@ -1,8 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { expect, test } from "vitest";
 import screens from "../electron/screens.json";
+import { renderApp } from "./legacy/render-legacy";
 import { parseRoute } from "./nav/route";
-import { renderApp } from "./test/render";
 
 test("every captured screen is a real route, once", () => {
   expect(screens).toHaveLength(13);

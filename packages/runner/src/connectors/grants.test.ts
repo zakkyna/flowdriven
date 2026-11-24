@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "vitest";
 import { heldPayload } from "../exec/held.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
+import { legacyGrant } from "../test-helpers/policy-fixture.ts";
 import {
   callGrant,
   canonicalJson,
@@ -48,44 +49,46 @@ test("a pick grant: has follows hasGrant for that run, tool and item key only, a
   const book = createGrantBook(store);
   const grant = pickGrant("gmail", "send");
   expect(book.has("r1", grant, "j1")).toBe(false);
-  store.addGrant("r1", grant, "j1");
+  store.putCallGrant(legacyGrant("r1", "*", "j1", grant));
   expect(book.has("r1", grant, "j1")).toBe(true);
   expect(book.has("r2", grant, "j1")).toBe(false);
   expect(book.has("r1", "gmail.delete", "j1")).toBe(false);
   expect(book.has("r1", grant, "j2")).toBe(false);
   expect(book.use("r1", grant, "j1")).toBe(true);
   expect(book.use("r1", grant, "j1")).toBe(true);
-  expect(store.counter(grantUsedKey("r1", "j1", grant), "run")).toBe(0);
+  expect(store.findPickGrant(legacyGrant("r1", "*", "j1", grant))?.usedAt).toBeUndefined();
 });
-test("a call grant: has is true after addGrant and before use, use is true once and then false, and has is false after use; the counter key is grant-used:<run>:<item>:<grant>", async () => {
+test("a call grant: has is true after addGrant and before use, use is true once and then false, and has is false after use; the call grant cannot be used twice", async () => {
   const store = await memoryStore();
   const book = createGrantBook(store);
   const grant = callGrant("gmail", "send", "abc");
   const key = grantUsedKey("r1", "j1", grant);
   expect(key).toBe("grant-used:r1:j1:gmail.send#abc");
   expect(book.has("r1", grant, "j1")).toBe(false);
-  store.addGrant("r1", grant, "j1");
+  store.putCallGrant(legacyGrant("r1", "*", "j1", grant));
   expect(book.has("r1", grant, "j1")).toBe(true);
   expect(book.use("r1", grant, "j1")).toBe(true);
-  expect(store.counter(key, "run")).toBe(1);
+  expect(store.findGrant(legacyGrant("r1", "*", "j1", grant))).toBeUndefined();
+  expect(() => store.useGrant(legacyGrant("r1", "*", "j1", grant), "2026-11-22")).toThrow();
   expect(book.has("r1", grant, "j1")).toBe(false);
   expect(book.use("r1", grant, "j1")).toBe(false);
 });
 
-test("heldPayload returns the text for 4,000 characters and undefined for 4,001, counting the characters that visible adds", () => {
+test("TC-SR1-23 heldPayload keeps the 4,000 character limit after marking hidden characters", () => {
   const hidden = String.fromCodePoint(0x200b);
-  const value = { x: hidden + "a".repeat(3979) };
-  const text = heldPayload(value);
+  const marker = "[U+200B hidden character]";
+  const padding = 4000 - JSON.stringify({ x: "" }, null, 2).length - marker.length;
+  const text = heldPayload({ x: hidden + "a".repeat(padding) });
   expect(text).toHaveLength(4000);
-  expect(text).toContain("<U+200B>");
-  expect(heldPayload({ x: hidden + "a".repeat(3980) })).toBeUndefined();
+  expect(text).toContain(marker);
+  expect(heldPayload({ x: hidden + "a".repeat(padding + 1) })).toBeUndefined();
 });
 test("a pick grant is not honoured for an item key that starts with #, and not for the empty key", async () => {
   const store = await memoryStore();
   const book = createGrantBook(store);
   const grant = pickGrant("mail", "send");
   for (const key of ["#0", "#named", ""]) {
-    store.addGrant("r", grant, key);
+    store.putCallGrant(legacyGrant("r", "*", key, grant));
     expect(book.has("r", grant, key)).toBe(false);
     expect(book.use("r", grant, key)).toBe(false);
   }
@@ -94,17 +97,17 @@ test("a pick grant is honoured for a declared key as before, and use still does 
   const store = await memoryStore();
   const book = createGrantBook(store);
   const grant = pickGrant("mail", "send");
-  store.addGrant("r", grant, "job");
+  store.putCallGrant(legacyGrant("r", "*", "job", grant));
   expect(book.has("r", grant, "job")).toBe(true);
   expect(book.use("r", grant, "job")).toBe(true);
   expect(book.use("r", grant, "job")).toBe(true);
-  expect(store.counter(grantUsedKey("r", "job", grant), "run")).toBe(0);
+  expect(store.findPickGrant(legacyGrant("r", "*", "job", grant))?.usedAt).toBeUndefined();
 });
 test("a call grant is honoured and used once for a positional item key", async () => {
   const store = await memoryStore();
   const book = createGrantBook(store);
   const grant = callGrant("mail", "send", "digest");
-  store.addGrant("r", grant, "#0");
+  store.putCallGrant(legacyGrant("r", "*", "#0", grant));
   expect(book.has("r", grant, "#0")).toBe(true);
   expect(book.use("r", grant, "#0")).toBe(true);
   expect(book.has("r", grant, "#0")).toBe(false);

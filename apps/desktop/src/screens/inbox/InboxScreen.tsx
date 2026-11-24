@@ -1,8 +1,8 @@
-import type { ApprovalDecision } from "@flowdriven/contracts";
+import type { ApprovalDecision } from "@flowdriven/contracts/v1";
 import { type ReactElement, useLayoutEffect, useRef, useState } from "react";
+import { useRunnerAction, useRunnerQuery } from "../../legacy/runner-context";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";
-import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
 import { Dialog } from "../../ui/Dialog";
 import { ScreenState } from "../../ui/ScreenState";
 import { ApprovalDetail } from "./ApprovalDetail";

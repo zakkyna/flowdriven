@@ -1,7 +1,9 @@
-import { expect, test } from "vitest";
+import { RunDetail } from "@flowdriven/contracts";
+import { expect, test, vi } from "vitest";
 import { demoFlow } from "./demo/demo-flow.ts";
 import type { RunView } from "./engine.ts";
 import { renderRunReport, reportLines } from "./report.ts";
+import { toRunDetail } from "./service/map-run.ts";
 import type { RunState } from "./states.ts";
 import type { CheckOutcome, StepRow, UsageEventRow } from "./storage.ts";
 
@@ -184,4 +186,231 @@ test("usage reports step totals and escapes item keys", () => {
   expect(renderRunReport(view({ usage: [{ ...(rows[0] as UsageEventRow), itemKey: "x|y" }] }))).toContain(
     "a@x\\|y",
   );
+});
+
+test("TC-j24-39 TC-SR1-48 outside decisions and audit records appear in report lines and audit markdown", () => {
+  const base = view({ state: "waiting_approval" });
+  const firstApproval = base.approvals.at(0);
+  if (!firstApproval) throw new Error("missing approval");
+  const outsideView: RunView = {
+    ...base,
+    approvals: [
+      {
+        ...firstApproval,
+        id: "outside-1",
+        kind: "outside_flow",
+        effect: "run_command",
+        summary: "alerts: Bash",
+      },
+    ],
+    audit: [
+      {
+        at: "2026-11-21T00:00:00.000Z",
+        kind: "call_held",
+        runId: "run-1",
+        detail: {
+          approvalId: "outside-1",
+          tool: "Bash",
+          effect: "run_command",
+          digest: "d1",
+          hiddenCharacters: ["[U+200B hidden character]"],
+        },
+      },
+      {
+        at: "2026-11-21T00:00:01.000Z",
+        kind: "decision_made",
+        runId: "run-1",
+        detail: { approvalId: "outside-1", decision: "approve", via: "window" },
+      },
+    ],
+  };
+  expect(reportLines(outsideView)[2]).toBe("Waiting for you: alerts: Bash");
+  const md = renderRunReport(outsideView);
+  expect(md).toContain("call\\_held");
+  expect(md).toContain("\\[U+200B hidden character\\]");
+  expect(md).toContain("decision\\_made");
+  expect(md).not.toContain(String.fromCodePoint(0x200b));
+});
+
+test("TC-ENG-26 another way decision and outside retry appear in runs.report and audit markdown without text in audit", async () => {
+  const { parseManifest } = await import("@flowdriven/sdk");
+  const { digestCall } = await import("./connectors/grants.ts");
+  const { scriptedHarness } = await import("./scripted-harness.ts");
+  const { openSqliteStore } = await import("./sqlite-store.ts");
+  const { createRunnerService } = await import("./service/service.ts");
+  const parsed = parseManifest({
+    format: "flowdriven-flow/1.1",
+    id: "local.report-aw",
+    name: "Report another way",
+    kind: "build",
+    steps: [
+      {
+        id: "work",
+        title: "Work",
+        do: "worker",
+        instructions: "Work",
+        checks: [{ type: "contains", pattern: "ok" }],
+      },
+    ],
+  });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+  const store = await openSqliteStore(":memory:");
+  const tool = "WebFetch";
+  const input = { url: "https://example.test" };
+  const harness = scriptedHarness({
+    steps: {
+      work: (req) =>
+        req.anotherWay
+          ? { text: "ok" }
+          : {
+              hold: {
+                requirementId: tool,
+                tool,
+                input,
+                digest: digestCall(tool, input),
+                effect: "read",
+                outsideFlow: true,
+              },
+            },
+    },
+  });
+  const service = createRunnerService({
+    store,
+    dataDir: ".",
+    mode: "demo",
+    harness,
+    now: () => new Date("2026-11-22T00:00:00Z"),
+  });
+  try {
+    service.engine.registerFlow(parsed.manifest, `sha256:${"a".repeat(64)}`);
+    const run = await service.engine.startRun(parsed.manifest.id, { project: "." });
+    const row = store.listApprovals({ runId: run.id, state: "pending" }).at(0);
+    if (!row) throw new Error("missing approval");
+    const words = "Skip fetching and write the summary.";
+    await service.call("approvals.resolve", {
+      approvalId: row.id,
+      decision: "another_way",
+      anotherWayText: words,
+    });
+    await vi.waitFor(() => expect(store.getRun(run.id)?.state).toBe("done"));
+    const finalView = service.engine.getRun(run.id);
+    expect(reportLines(finalView)).toEqual([
+      "Report another way: done. 1 of 1 steps passed.",
+      "Items: 0 processed, 0 skipped as seen, 0 failed.",
+      "Nothing needs your attention.",
+    ]);
+    expect(await service.call("runs.report", { runId: run.id })).toMatchObject({
+      runId: run.id,
+      decisionLines: [
+        { key: "report.anotherWay", params: { text: words } },
+        { key: "report.didAnotherWay", params: { text: words } },
+      ],
+    });
+    const md = renderRunReport(finalView);
+    expect(md).toContain("decision\\_made");
+    expect(md).toContain("another\\_way");
+    expect(md).not.toContain(words);
+  } finally {
+    service.stop();
+    store.close();
+  }
+});
+
+test("TC-SR9-14 report retains escaped attempt evidence and maps top-level and loop attemptLog", () => {
+  const rlo = String.fromCodePoint(0x202e);
+  const iso = "2026-11-23T00:00:00.000Z";
+  const base = view({ state: "blocked", blockedReason: "The agent kept repeating itself." });
+  const stuckView: RunView = {
+    ...base,
+    run: {
+      ...base.run,
+      flowHash: `sha256:${"a".repeat(64)}`,
+      startedAt: iso,
+      cause: { code: "stuck_repeating" },
+    },
+    steps: [
+      ...base.steps.map((s) => ({
+        ...s,
+        attempts: s.attempts.map((a) => ({ ...a, startedAt: iso })),
+        ...(s.stepId === "alerts"
+          ? {
+              attemptLog: [
+                { attempt: 1, reason: "repeated_call" as const, count: 4, evidence: "Read", outside: false },
+              ],
+            }
+          : {}),
+      })),
+      {
+        runId: "run-1",
+        stepId: "rough",
+        itemKey: "j1",
+        state: "failed",
+        attempts: [{ number: 1, replan: false, worker: "Scripted harness", startedAt: iso, exit: "failed" }],
+        outputs: {},
+        checks: [],
+        attemptLog: [
+          {
+            attempt: 1,
+            reason: "repeated_error",
+            count: 3,
+            evidence: `err|pipe*${rlo}`,
+            outside: true,
+          },
+        ],
+      },
+    ],
+    items: [
+      {
+        runId: "run-1",
+        loopId: "review",
+        key: "j1",
+        position: 0,
+        item: { title: "Job one" },
+        status: "failed",
+      },
+      {
+        runId: "run-1",
+        loopId: "review",
+        key: "j1",
+        position: 1,
+        item: {},
+        status: "skipped",
+        note: "skipped: duplicate key",
+      },
+    ],
+    audit: [
+      {
+        at: "2026-11-23T00:00:00.000Z",
+        kind: "attempt_stuck",
+        runId: "run-1",
+        detail: { runId: "run-1", step: "alerts", attempt: 1, reason: "repeated_call", count: 4 },
+      },
+    ],
+  };
+
+  expect(reportLines(stuckView)[2]).toBe("Blocked: The agent kept repeating itself.");
+  const md = renderRunReport(stuckView);
+  expect(md).toContain("- alerts attempt 1 repeated\\_call (4): Read");
+  expect(md).toContain("- rough@j1 attempt 1 repeated\\_error (3): err\\|pipe\\*<U+202E>");
+  expect(md).not.toContain(rlo);
+  const evidenceAt = md.indexOf("### Evidence");
+  const itemsAt = md.indexOf("## Items: review");
+  expect(evidenceAt).toBeGreaterThan(-1);
+  expect(md.indexOf("- alerts attempt 1")).toBeGreaterThan(evidenceAt);
+  expect(md.indexOf("- alerts attempt 1")).toBeLessThan(itemsAt);
+
+  const detail = RunDetail.parse(toRunDetail(stuckView, () => "scripted"));
+  expect(detail.cause).toEqual({ code: "stuck_repeating" });
+  expect(detail.canTryAgain).toBe(true);
+  expect(detail.attemptLog).toEqual([
+    { step: 1, attempt: 1, reason: "repeated_call", count: 4, evidence: "Read", outside: false },
+    {
+      step: 2,
+      attempt: 1,
+      reason: "repeated_error",
+      count: 3,
+      evidence: `err|pipe*${rlo}`,
+      outside: true,
+    },
+  ]);
 });

@@ -43,6 +43,7 @@ const decideCall = (name: string, input: unknown = {}, grants: string[] = [], ca
 test("a declared read tool is allowed with effect connector and class read", () => {
   expect(decideCall("search_threads")).toEqual({
     allow: true,
+    outcome: "run",
     tool: connector.prefix + "search_threads",
     effect: "connector",
     connector: { requirementId: "gmail", tool: "search_threads", class: "read" },
@@ -59,6 +60,8 @@ test("a declared risky tool with no grant is refused with the hold sentence and 
   const input = { id: "d1" };
   expect(decideCall("delete_draft", input)).toEqual({
     allow: false,
+    outcome: "hold",
+    effect: "delete",
     tool: connector.prefix + "delete_draft",
     reason: CONNECTOR_DENY.held,
     held: {
@@ -155,4 +158,57 @@ test("hideConnectorIds replaces every connector id and leaves other text as it i
   expect(hideConnectorIds("before mcpsrv_Ab123, mcpsrv_X9! mcpsrv_ and mcpsrv_foo-bar after")).toBe(
     "before mcpsrv_[hidden], mcpsrv_[hidden]! mcpsrv_ and mcpsrv_[hidden]-bar after",
   );
+});
+
+test("TC-SR1-05 labels sent to trash or spam are held as delete", () => {
+  const place = { kind: "account" as const, value: "gmail", label: "Gmail" };
+  const p = {
+    ...policy,
+    flowId: "mail",
+    connector: {
+      ...connector,
+      tools: ["label_thread"],
+      write: ["label_thread"],
+      labelTools: ["label_thread"],
+    },
+    touches: [
+      {
+        touchId: "label",
+        effect: "change" as const,
+        matcher: "exact" as const,
+        place,
+        fixedPlace: true,
+        list: "on_its_own" as const,
+        covers: ["gmail.label_thread"],
+      },
+    ],
+  };
+  const rule = {
+    id: "rule",
+    flowId: "mail",
+    touchId: "label",
+    effect: "change" as const,
+    place,
+    state: "active" as const,
+    createdAt: "2026-11-22T00:00:00.000Z",
+    createdBy: "confirm" as const,
+    sentence: "Label",
+    uses: 0,
+  };
+  const invoke = decide as (...args: unknown[]) => unknown;
+  expect(
+    invoke(p, call("label_thread", { threadId: "t1", add: ["Invoices"] }), undefined, state(), {
+      rules: [rule],
+    }),
+  ).toMatchObject({ outcome: "run", effect: "change", by: "rule" });
+  for (const input of [
+    { threadId: "t1", add: ["TRASH"] },
+    { threadId: "t1", add: ["spam"] },
+    { threadId: "t1", labelName: `Tr${String.fromCodePoint(0x200b)}ash` },
+  ])
+    expect(invoke(p, call("label_thread", input), undefined, state(), { rules: [rule] })).toMatchObject({
+      outcome: "hold",
+      effect: "delete",
+      held: { action: "delete" },
+    });
 });

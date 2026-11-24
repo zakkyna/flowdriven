@@ -268,7 +268,7 @@ test("the audit rows page_read and page_withheld stop at 50 for an attempt and t
   expect(t.audits.filter((a) => a.kind === "page_read" || a.kind === "page_withheld")).toHaveLength(50);
   expect(t.audits).toContainEqual({
     kind: "tool_calls",
-    detail: expect.objectContaining({ allowed: 53, denied: 0 }),
+    detail: expect.objectContaining({ allowed: 53, held: 0, refused: 0 }),
   });
 });
 test("an oversized request (a page text of 2.1 million characters) gets no answer, the hook prints the fixed sentence, the worker sees it, the tripwire does not trip and the attempt carries on", {

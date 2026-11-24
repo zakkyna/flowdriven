@@ -1,4 +1,4 @@
-import type { HarnessCard } from "@flowdriven/contracts";
+import type { HarnessCard } from "@flowdriven/contracts/v1";
 import type { ReactElement } from "react";
 import { Dialog } from "../../ui/Dialog";
 import { Icon } from "../../ui/icons";

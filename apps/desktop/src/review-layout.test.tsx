@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { screen, within } from "@testing-library/react";
 import { expect, test } from "vitest";
-import { renderApp } from "./test/render";
+import { renderApp } from "./legacy/render-legacy";
 
 const css = (path: string) => readFileSync(`apps/desktop/src/${path}`, "utf8");
 

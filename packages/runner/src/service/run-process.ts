@@ -1,5 +1,8 @@
 import { join } from "node:path";
 import type { Notice } from "@flowdriven/contracts";
+import { RunnerTopic } from "@flowdriven/contracts/v1";
+import { EngineError } from "../errors.ts";
+import { retentionDue, retentionSweep } from "../retention.ts";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store } from "../storage.ts";
 import { prepareDataDir } from "./data-dir.ts";
@@ -11,6 +14,7 @@ export const EXIT = { ok: 0, crash: 1, usage: 2, locked: 3, protocol: 4 } as con
 export type RunProcessOptions = {
   dataDir: string;
   demo: boolean;
+  languages?: readonly string[];
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream;
   errors: (line: string) => void;
@@ -33,14 +37,20 @@ export function guardProcess(proc: Pick<NodeJS.Process, "on">, errors: (line: st
 }
 export function createNoticeSink(): {
   send(notice: Notice): void;
-  attach(server: Pick<RpcServer, "notice">): void;
+  clear(id: string): void;
+  attach(server: Pick<RpcServer, "notice" | "clearNotice">): void;
 } {
   const pending: Notice[] = [];
-  let server: Pick<RpcServer, "notice"> | undefined;
+  let server: Pick<RpcServer, "notice" | "clearNotice"> | undefined;
   return {
     send(notice) {
       if (server) server.notice(notice);
       else if (pending.length < 20) pending.push(notice);
+    },
+    clear(id) {
+      const index = pending.findIndex((notice) => notice.id === id);
+      if (index >= 0) pending.splice(index, 1);
+      server?.clearNotice(id);
     },
     attach(next) {
       server = next;
@@ -62,25 +72,38 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
   } catch (error) {
     const text = message(error);
     options.errors(text);
-    return text === "Another FlowDriven runner is using this data folder." ? EXIT.locked : EXIT.crash;
+    const reason = error instanceof EngineError ? error.reason : undefined;
+    if (reason === "store_newer") return 5;
+    if (reason === "backup_failed" || reason === "migration_failed") return 6;
+    return reason === "data_folder_locked" || text === "Another FlowDriven runner is using this data folder."
+      ? EXIT.locked
+      : EXIT.crash;
   }
   let timer: ReturnType<typeof setInterval> | undefined;
   let service: RunnerService | undefined;
   try {
     let server: RpcServer | undefined;
     const sink = createNoticeSink();
-    const emitter = createChangeEmitter((event) => server?.notify(event));
+    const emitter = createChangeEmitter((event) => {
+      const topics = event.topics.flatMap((topic) => {
+        const result = RunnerTopic.safeParse(topic);
+        return result.success ? [result.data] : [];
+      });
+      if (topics.length) server?.notify({ type: "changed", topics });
+    });
     service = createRunnerService({
-      ...{ notify: sink.send },
+      ...{ notify: sink.send, clearNotice: sink.clear },
       store: wrapStore(store, emitter.mark),
       markChanged: emitter.mark,
       dataDir: dir,
+      languages: options.languages,
       mode: options.demo ? "demo" : "live",
       now: options.now,
       newId: options.newId,
       env: options.env,
       claudePath: options.claudePath,
     });
+    retentionSweep(store, options.now);
     service.start();
     await new Promise<void>((resolve) => setImmediate(resolve));
     server = serveRpc({
@@ -92,6 +115,11 @@ export async function runProcess(options: RunProcessOptions): Promise<number> {
     sink.attach(server);
     const engine = service.engine;
     timer = setInterval(() => {
+      try {
+        if (retentionDue(store, options.now)) retentionSweep(store, options.now);
+      } catch (error) {
+        options.errors(`The retention sweep failed: ${message(error)}`);
+      }
       void engine
         .sweepExpired()
         .catch((error: unknown) => options.errors(`The sweep failed: ${message(error)}`));

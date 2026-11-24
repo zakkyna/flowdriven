@@ -82,7 +82,7 @@ test("S1 a run resumed by an answer after consent was taken back does not start 
   });
   services.push(service);
   await service.start().settled;
-  await service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "given" });
+  await service.call("settings.update", { patch: { agentPermission: "on" } });
   const m = FlowManifest.parse({
     format: "flowdriven-flow/1.1",
     id: "local.test",
@@ -118,19 +118,17 @@ test("S1 a run resumed by an answer after consent was taken back does not start 
       : undefined,
   );
   expect(s.getRun(run.id)).toMatchObject({ state: "waiting_approval" });
-  // The owner takes the consent back while the run waits.
-  await service.call("harnesses.setConsent", { harnessId: CLAUDE_ID, consent: "revoked" });
   const approval = s.listApprovals({ runId: run.id, state: "pending" }).at(0);
   if (!approval) throw Error("no approval");
-  const payload = approval.payload as { options: { key: string }[] };
-  const key = payload.options.at(0)?.key ?? "";
-  await service.engine.answerAsk(approval.id, { picks: [key] });
-  await until(() =>
-    ["done", "blocked", "failed"].includes(String(s.getRun(run.id)?.state)) ? true : undefined,
-  );
+  await service.call("settings.update", { patch: { agentPermission: "off" } });
+  expect(s.listApprovals({ runId: run.id }).find((item) => item.id === approval.id)).toMatchObject({
+    state: "expired",
+    resolvedVia: "permission_off",
+  });
+  await expect(service.engine.answerAsk(approval.id, { picks: ["yes"] })).rejects.toThrow();
   const steps = readFakeCalls(h).filter(
     (c) => c.kind === "call" && c.args.includes("-p") && (c.prompt ?? "").includes("Write the note"),
   );
   expect(steps).toEqual([]);
-  expect(s.getRun(run.id)?.state).toBe("blocked");
+  expect(s.getRun(run.id)?.state).toBe("stopped");
 });

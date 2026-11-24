@@ -7,6 +7,7 @@ import type {
   ProbeRequest,
   ProbeResult,
   ReplanRequest,
+  StepEvent,
   StepRequest,
 } from "./harness.ts";
 import type { ExitClass } from "./states.ts";
@@ -14,7 +15,9 @@ export type Reply = {
   exit?: ExitClass;
   text?: string;
   outputs?: Record<string, Value>;
+  events?: StepEvent[];
   hang?: boolean;
+  site?: string;
   block?: string;
   noRetry?: string;
   hold?: HeldCall;
@@ -55,6 +58,14 @@ export function scriptedHarness(script: Script): ScriptedHarness {
         reply = entry.at(Math.min(n, entry.length - 1));
       } else reply = typeof entry === "function" ? entry(req) : entry;
       if (!reply) throw new Error(`no script for step ${key}`);
+      const held = reply.hold;
+      if (held && req.rejectedCalls?.some((row) => row.tool === held.tool && row.digest === held.digest))
+        reply = { ...reply, hold: undefined };
+      for (const event of reply.events ?? []) {
+        if (req.signal.aborted) break;
+        req.onEvent?.(event);
+      }
+      if (reply.events?.length && req.signal.aborted) throw new DOMException("Aborted", "AbortError");
       if (reply.hang)
         await new Promise<never>((_resolve, reject) => {
           const abort = () => reject(new DOMException("Aborted", "AbortError"));
@@ -65,6 +76,7 @@ export function scriptedHarness(script: Script): ScriptedHarness {
         exit: reply.exit ?? "ok",
         text: reply.text ?? "",
         outputs: reply.outputs ?? {},
+        ...(reply.site === undefined ? {} : { site: reply.site }),
         ...(reply.block === undefined ? {} : { block: reply.block }),
         ...(reply.noRetry === undefined ? {} : { noRetry: reply.noRetry }),
         ...(reply.hold === undefined ? {} : { hold: reply.hold }),
