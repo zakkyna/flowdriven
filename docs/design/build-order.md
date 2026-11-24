@@ -998,8 +998,12 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 | IPC-28 | B-20 | B-01 | the window schemas live in contracts and are built in B-01.T3, where TC-CON-31 asserts them |
 | ELE-17 | B-20 | B-21 | `startMain` is built with the start route and the version gate in B-21.T1 |
 | ELE-20 | B-21 | B-23 | it uses the lifecycle of ELE-19, which B-23.T2 builds |
+| AST-26 (next-turn model flag clause) | B-07.T7 | B-08.T5 | Chat turns are built in B-08; T7 checks the stored fallback model, single note, and unchanged running run. |
+| SR4-06 (chat-send call-log clause) | B-07.T7 | B-08.T5 | Chat turns are built in B-08; T7 checks setAgent refusal and chats.get fallback. |
+| j31-28 (composer display clause) | B-07.T7 | B-17.T6 | The model picker and chat screen are built in B-17; T7 checks the stored fallback model and chat.modelGone note. |
+| j31-35 (start_requested production and run-page clauses) | B-07.T7 | B-10.T1, B-12, B-19.T5 | Chat/schedule starts and the run page are built later; T7 checks chat_agent_changed and stored run/start agent fields. |
 
-107 cases moved.
+111 cases moved.
 
 ### Tests that change
 
@@ -1007,6 +1011,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 
 | Existing file | What it pins today | The approved change | Task |
 |---|---|---|---|
+| `packages/runner/src/service/handlers.test.ts` (TC-j12-32) | Restart test relied on host Codex detection | Same defaults, update and restart assertions use an injected ready fake Codex (TC-AGT-29) | B-07.T7 |
 | `packages/runner/src/service/handlers.test.ts`, `service/claude-harness.test.ts`, `service/run-process.test.ts`, `service/readiness-connector.test.ts`, `service/usage-summary.test.ts`, `test-helpers/m1-demo-run.ts`, `test-helpers/connector-demo-run.ts`, `test-helpers/r12-check.ts` | Legacy harness list and rescan expose cards and trigger inventory | Retire those operations and use agent detection and rescan for inventory (TC-AGT-11, FS-j01.P2); usage remains in usage summary | B-07.T6 |
 | `packages/runner/src/agents/registry.test.ts` (TC-AGT-01) | Both shipped catalog entries have safe install commands | Preserve those assertions while the catalog type permits a missing command (TC-AGT-09) | B-07.T5 |
 | `packages/runner/src/claude/adapter-commands.test.ts`, `claude/review-05b-r.test.ts`, `service/check-flow.test.ts`, `service/flows-handlers.test.ts`, `service/review-03-a1.test.ts`, `service/review-03-s7.test.ts` | Per-agent consent enables the existing gate and its tests | The one agent permission enables the same gate; turning it off is stored even when the agent is missing (TC-SR8-04, FS-j31.E2) | B-07.T4 |

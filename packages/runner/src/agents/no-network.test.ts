@@ -41,6 +41,7 @@ test("TC-j01-31 no FlowDriven network action before or after Set up", async () =
     await service.call("settings.get", {});
     await service.call("agents.list", {});
     await service.call("agents.rescan", {});
+    await service.call("chats.create", {});
     expect(fetch).not.toHaveBeenCalled();
     for (const guard of guards) expect(guard).not.toHaveBeenCalled();
     expect(calls).toEqual([]);

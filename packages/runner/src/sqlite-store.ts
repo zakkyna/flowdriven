@@ -442,8 +442,40 @@ export async function openSqliteStore(
         id,
       );
     },
-    deleteChat(id) {
-      execute("DELETE FROM chats WHERE id = ?", id);
+    deleteChat(id, at = new Date().toISOString()) {
+      const deleted = store.transaction(() => {
+        if (!get("SELECT 1 FROM chats WHERE id = ?", id)) return false;
+        const messages = Number(get("SELECT count(*) AS n FROM messages WHERE chat_id = ?", id)?.n ?? 0);
+        const openQuestions = store
+          .listQuestions()
+          .filter((question) => question.chatId === id && question.state === "open");
+        execute("DELETE FROM messages WHERE chat_id = ?", id);
+        execute("DELETE FROM drafts WHERE chat_id = ?", id);
+        execute("DELETE FROM waiting_questions WHERE chat_id = ?", id);
+        execute("DELETE FROM chats WHERE id = ?", id);
+        for (const question of openQuestions) {
+          store.appendAudit({
+            at,
+            kind: "question_closed",
+            detail: {
+              questionId: question.id,
+              flowId: question.flowId,
+              chatId: id,
+              kind: question.kind,
+              state: "closed",
+              why: "chat_deleted",
+            },
+          });
+        }
+        store.appendAudit({ at, kind: "chat_deleted", detail: { chatId: id, messages } });
+        return true;
+      });
+      if (deleted && path !== ":memory:" && depth === 0) {
+        try {
+          db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").all();
+        } catch {}
+      }
+      return deleted;
     },
     putChat(row) {
       execute(

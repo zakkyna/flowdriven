@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Notice } from "@flowdriven/contracts";
 import { CONTRACT_VERSION, operations, RunnerError, type RunnerTopic } from "@flowdriven/contracts";
+import { AGENT_CATALOG } from "../agents/catalog.ts";
 import { createAgentRegistry, type RegistryOptions } from "../agents/registry.ts";
 import { createAgentSetup, type SetupOptions } from "../agents/setup.ts";
 import { STOP } from "../claude/browser-post.ts";
@@ -22,6 +23,7 @@ import type { TriggerDeps, TriggerService } from "../triggers/service.ts";
 import { mapAgents } from "./agents.ts";
 import { createAuditHandler } from "./audit.ts";
 import { createCapabilities } from "./capabilities.ts";
+import { createChatHandlers } from "./chats.ts";
 import { createHarnessService } from "./claude-harness.ts";
 import { prepareDataDir } from "./data-dir.ts";
 import { createDemoHarness } from "./demo-harness.ts";
@@ -283,6 +285,15 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     name === "Scripted harness" ? "scripted" : name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-"),
   );
   const flowReads = createFlowReadHandlers(store, engine, now);
+  const chats = createChatHandlers({
+    store,
+    registry,
+    catalog: options.agents?.catalog ?? AGENT_CATALOG,
+    languages: options.languages ?? ["en"],
+    now,
+    newId,
+    markChanged: options.markChanged,
+  });
   const appVersion = (
     JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
   ).version;
@@ -290,6 +301,23 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
     engine,
     call: createDispatcher({
       v2: {
+        "chats.create": (input) => {
+          const result = chats.create(input);
+          options.markChanged?.("chats");
+          return result;
+        },
+        "chats.get": (input) => chats.get(input),
+        "chats.setAgent": async (input) => {
+          const result = await chats.setAgent(input);
+          options.markChanged?.("chats");
+          return result;
+        },
+        "chats.delete": (input) => {
+          const result = chats.delete(input);
+          options.markChanged?.("chats");
+          options.markChanged?.("activity");
+          return result;
+        },
         "agents.list": async () => mapAgents(await registry.list()),
         "agents.setUp": async ({ agentId }) => {
           await registry.list();

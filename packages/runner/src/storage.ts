@@ -485,7 +485,7 @@ export interface Store {
   listFlowHeads(): FlowHead[];
   putFlowHead(row: FlowHead): void;
   hasFlowId(id: string): boolean;
-  deleteChat(id: string): void;
+  deleteChat(id: string, at?: string): boolean;
   putChat(row: ChatRow): void;
   getChat(id: string): ChatRow | undefined;
   listChats(): ChatRow[];

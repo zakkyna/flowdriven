@@ -9,7 +9,7 @@ import { afterEach, expect, test } from "vitest";
 import { retentionSweep } from "./retention.ts";
 import { SCHEMA } from "./schema.ts";
 import { openSqliteStore } from "./sqlite-store.ts";
-import type { RunRow, StepRow, Store } from "./storage.ts";
+import type { AuditEntry, RunRow, StepRow, Store } from "./storage.ts";
 import { cleanup, tempPath } from "./test-helpers/tmp.ts";
 
 const stores: Store[] = [];
@@ -429,3 +429,285 @@ test.each(["Bash", "mcp__example__send"])(
     expect(store.findGrant(key)).toBeUndefined();
   },
 );
+
+test("TC-SR6-04 audit detail holds ids, codes, hashes and short titles, never text, and secure_delete removes deleted chat bytes", async () => {
+  const { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } = await import("node:fs");
+  const { vi } = await import("vitest");
+  const { AGENT_PROFILES } = await import("./test-helpers/agent-profiles.ts");
+  const { pendingDecision } = await import("./test-helpers/builders.ts");
+  const { FAKE_CLAUDE_PATH, makeFakeHome } = await import("./test-helpers/fake-claude-script.ts");
+  const { FAKE_CODEX_PATH, writeFakeCodexScript } = await import("./test-helpers/fake-codex-script.ts");
+  const { createRunnerService } = await import("./service/service.ts");
+
+  const path = tempPath();
+  const home = makeFakeHome();
+  const bin = join(home, "bin");
+  mkdirSync(bin);
+  symlinkSync(FAKE_CLAUDE_PATH, join(bin, "claude"));
+  symlinkSync(FAKE_CODEX_PATH, join(bin, "codex"));
+  writeFakeCodexScript(home, { profile: AGENT_PROFILES.codex, signedIn: true });
+  const prepare = vi.spyOn(DatabaseSync.prototype, "prepare");
+  const store = await open(path);
+  const storeDb = prepare.mock.instances.at(-1) as DatabaseSync | undefined;
+  prepare.mockRestore();
+  expect(storeDb?.prepare("PRAGMA secure_delete").get()?.secure_delete).toBe(1);
+  const db = new DatabaseSync(path);
+  let n = 0;
+  const service = createRunnerService({
+    store,
+    dataDir: home,
+    mode: "demo",
+    env: { HOME: home, PATH: `${bin}:${process.env.PATH}` },
+    now: () => new Date("2026-11-23T00:00:00.000Z"),
+    agents: { extraDirs: [], claudePath: join(bin, "claude"), codexPath: join(bin, "codex") },
+    newId: (prefix) => `${prefix}-${String(++n).padStart(12, "0")}`,
+  });
+  const chatMarker = "UNIQUE-MARKER-TEXT 12345";
+  const payloadMarker = "HELD-PAYLOAD-MARKER 12345";
+  try {
+    await service.start().settled;
+    const { chatId } = (await service.call("chats.create", {})) as { chatId: string };
+    store.putMessage({
+      id: "msg-000000000001",
+      chatId,
+      seq: 1,
+      at: "2026-11-23T00:00:00.000Z",
+      role: "person",
+      kind: "text",
+      outside: false,
+      text: chatMarker,
+    });
+    await service.call("chats.setAgent", { chatId, agent: "codex", model: "gpt-6.1-sol" });
+
+    const approval = pendingDecision(store, {
+      id: "ap-000000000001",
+      createdAt: "2026-11-23T00:00:00.000Z",
+      kind: "risky_action",
+      effect: "send",
+    });
+    store.updateApproval(approval.id, { payload: { kind: "text", text: payloadMarker } });
+    await service.call("approvals.resolve", { approvalId: approval.id, decision: "reject" });
+
+    const at = "2026-11-23T00:00:00.000Z";
+    const hash = `sha256:${"a".repeat(64)}`;
+    const auditEntries: AuditEntry[] = [
+      {
+        at,
+        kind: "store_migrated",
+        detail: {
+          from: 6,
+          to: 7,
+          backup: "backup.sqlite",
+          flows: 1,
+          confirmations: 1,
+          grants: 0,
+          skipped: 0,
+        },
+      },
+      { at, kind: "permission_changed", detail: { from: "unset", to: "on", source: "window" } },
+      { at, kind: "setting_changed", detail: { key: "language", from: "en", to: "id" } },
+      { at, kind: "limit_raised", detail: { from: 10, to: 25, decisions: ["pause-1"] } },
+      { at, kind: "agent_setup", detail: { agentId: "codex", phase: "ready" } },
+      { at, kind: "agent_sign_in", detail: { agentId: "codex", result: "ready" } },
+      {
+        at,
+        kind: "chat_turn_failed",
+        detail: { chatId, messageId: "msg-1", agent: "codex", model: "gpt-6.1-sol", failure: "timeout" },
+      },
+      {
+        at,
+        kind: "flow_saved",
+        detail: {
+          flowId: "local.test",
+          hash,
+          onItsOwn: ["read"],
+          asksFirst: [],
+          never: [],
+          draftId: "draft-1",
+          skillId: "skill-1",
+          skillHash: hash,
+        },
+      },
+      {
+        at,
+        kind: "flow_changed",
+        detail: { flowId: "local.test", oldHash: hash, newHash: hash, kept: [], ended: [] },
+      },
+      {
+        at,
+        kind: "flow_confirmed",
+        detail: { flowId: "local.test", hash, onItsOwn: [], by: "confirm_dialog" },
+      },
+      { at, kind: "flow_imported", detail: { flowId: "local.test", hash } },
+      { at, kind: "flow_deleted", detail: { flowId: "local.test", hash, schedulesTurnedOff: [] } },
+      {
+        at,
+        kind: "schedule_changed",
+        detail: { flowId: "local.test", from: "manual", to: "daily 09:00", by: "window" },
+      },
+      {
+        at,
+        kind: "start_requested",
+        runId: approval.runId,
+        detail: {
+          flowId: "local.test",
+          source: "chat",
+          outcome: "started",
+          startId: "start-1",
+          runId: approval.runId,
+        },
+      },
+      {
+        at,
+        kind: "run_stopped",
+        runId: approval.runId,
+        detail: { runId: approval.runId, by: "person", outcome: "stopped" },
+      },
+      {
+        at,
+        kind: "run_resumed",
+        runId: approval.runId,
+        detail: { runId: approval.runId, by: "window", outcome: "resumed" },
+      },
+      {
+        at,
+        kind: "decision_expired",
+        runId: approval.runId,
+        detail: { approvalId: approval.id, runId: approval.runId, why: "permission_off" },
+      },
+      {
+        at,
+        kind: "decisions_batch",
+        runId: approval.runId,
+        detail: { runId: approval.runId, group: "send", approvalIds: [approval.id] },
+      },
+      {
+        at,
+        kind: "rule_created",
+        detail: {
+          ruleId: "rule-1",
+          flowId: "local.test",
+          touchId: "t1",
+          effect: "change",
+          placeKind: "account",
+          by: "confirm",
+        },
+      },
+      {
+        at,
+        kind: "rule_revoked",
+        detail: {
+          ruleId: "rule-1",
+          flowId: "local.test",
+          touchId: "t1",
+          effect: "change",
+          placeKind: "account",
+          by: "ask_me_again",
+        },
+      },
+      {
+        at,
+        kind: "rule_used",
+        runId: approval.runId,
+        detail: {
+          ruleId: "rule-1",
+          flowId: "local.test",
+          touchId: "t1",
+          effect: "change",
+          placeKind: "account",
+          runId: approval.runId,
+          stepId: "s1",
+        },
+      },
+      {
+        at,
+        kind: "question_asked",
+        detail: {
+          questionId: "wq-1",
+          flowId: "local.test",
+          chatId,
+          kind: "inputs",
+          missing: ["days"],
+          state: "open",
+        },
+      },
+      {
+        at,
+        kind: "question_closed",
+        detail: {
+          questionId: "wq-1",
+          flowId: "local.test",
+          chatId,
+          kind: "inputs",
+          state: "closed",
+          why: "chat_deleted",
+        },
+      },
+      {
+        at,
+        kind: "run_note_added",
+        runId: approval.runId,
+        detail: { runId: approval.runId, noteId: "note-1", outside: false },
+      },
+      {
+        at,
+        kind: "run_note_used",
+        runId: approval.runId,
+        detail: { runId: approval.runId, noteId: "note-1", step: 1 },
+      },
+      {
+        at,
+        kind: "attempt_stuck",
+        runId: approval.runId,
+        detail: { runId: approval.runId, step: 1, attempt: 1, reason: "repeated_call", count: 3 },
+      },
+      {
+        at,
+        kind: "run_blocked",
+        runId: approval.runId,
+        detail: { runId: approval.runId, state: "blocked", cause: "step_failed" },
+      },
+      { at, kind: "caller_refused", detail: { operation: "settings.update", caller: "tool" } },
+    ];
+    for (const entry of auditEntries) {
+      store.appendAudit(entry);
+    }
+
+    await service.call("chats.delete", { chatId });
+    db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").all();
+
+    const records = (await service.call("audit.list", {})) as {
+      kind: string;
+      detail: Record<string, string | number | boolean | null | string[]>;
+    }[];
+    for (const record of records) {
+      for (const value of Object.values(record.detail)) {
+        if (typeof value === "string") {
+          expect(value.length).toBeLessThanOrEqual(200);
+          expect(value).not.toContain(chatMarker);
+          expect(value).not.toContain(payloadMarker);
+        } else if (Array.isArray(value)) {
+          for (const item of value) {
+            expect(typeof item).toBe("string");
+            expect(item.length).toBeLessThanOrEqual(200);
+            expect(item).not.toContain(chatMarker);
+            expect(item).not.toContain(payloadMarker);
+          }
+        } else {
+          expect(value === null || typeof value === "boolean" || typeof value === "number").toBe(true);
+        }
+      }
+    }
+    expect(records).toContainEqual(
+      expect.objectContaining({ kind: "chat_deleted", detail: { chatId, messages: 2 } }),
+    );
+    expect(readFileSync(path).includes(Buffer.from(chatMarker))).toBe(false);
+    if (existsSync(`${path}-wal`)) {
+      expect(readFileSync(`${path}-wal`).includes(Buffer.from(chatMarker))).toBe(false);
+    }
+  } finally {
+    db.close();
+    service.stop();
+    rmSync(home, { recursive: true, force: true });
+  }
+});

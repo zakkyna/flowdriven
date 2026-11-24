@@ -227,3 +227,48 @@ test("TC-AGT-29 main agent requires a ready agent and a listed model", async () 
     f.close();
   }
 });
+
+test("TC-j12-16 a signed-out main agent stays chosen and new chats fall back to first ready", async () => {
+  const f = await fixture(true);
+  try {
+    symlinkSync(FAKE_CODEX_PATH, join(f.home, "bin", "codex"));
+    writeFakeCodexScript(f.home, { profile: AGENT_PROFILES.codex, signedIn: true });
+    await f.service.call("agents.rescan", {});
+    await f.service.call("settings.update", {
+      patch: { mainAgent: { agent: "claude-code", model: "sonnet-5.5" } },
+    });
+
+    writeFakeScript(f.home, { auth: { loggedIn: false } });
+    await f.service.call("agents.rescan", {});
+    const callsBeforeCreate = readFakeCalls(f.home).length;
+
+    const first = (await f.service.call("chats.create", {})) as { chatId: string; reused: boolean };
+    expect(readFakeCalls(f.home)).toHaveLength(callsBeforeCreate);
+    expect(await f.service.call("settings.get", {})).toMatchObject({
+      mainAgent: { agent: "claude-code", model: "sonnet-5.5" },
+    });
+    expect(await f.service.call("chats.get", { chatId: first.chatId })).toMatchObject({
+      chat: { id: first.chatId, agent: "codex", model: "gpt-6.1-sol" },
+      messages: [
+        {
+          role: "flowdriven",
+          kind: "note",
+          line: { key: "chat.mainAgentNotReady", params: { main: "claude-code", agent: "codex" } },
+        },
+      ],
+    });
+    expect(f.store.getChat(first.chatId)).toMatchObject({ agentSource: "main_default" });
+
+    writeFakeCodexScript(f.home, { profile: AGENT_PROFILES.codex, signedIn: false });
+    await f.service.call("agents.rescan", {});
+    await f.service.call("chats.delete", { chatId: first.chatId });
+    const second = (await f.service.call("chats.create", {})) as { chatId: string; reused: boolean };
+    expect(await f.service.call("chats.get", { chatId: second.chatId })).toMatchObject({
+      chat: { id: second.chatId, agent: "claude-code", model: "sonnet-5.5" },
+      messages: [],
+    });
+    expect(f.store.getChat(second.chatId)).toMatchObject({ agentSource: "main_default" });
+  } finally {
+    f.close();
+  }
+});

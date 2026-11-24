@@ -467,11 +467,26 @@ test("TC-AGT-32 runner.info reports live, demo and sample modes", async () => {
 });
 
 test("TC-j12-32 settings defaults and choices survive a restart", async () => {
+  const { mkdirSync, symlinkSync } = await import("node:fs");
+  const { AGENT_PROFILES } = await import("../test-helpers/agent-profiles.ts");
+  const { FAKE_CODEX_PATH, writeFakeCodexScript } = await import("../test-helpers/fake-codex-script.ts");
   const dataDir = dir();
+  const bin = join(dataDir, "bin");
+  mkdirSync(bin);
+  symlinkSync(FAKE_CODEX_PATH, join(bin, "codex"));
+  writeFakeCodexScript(dataDir, { profile: AGENT_PROFILES.codex, signedIn: true });
   const path = join(dataDir, "store.sqlite");
   const store = await openSqliteStore(path);
   const make = (s: Store) =>
-    createRunnerService({ store: s, dataDir, mode: "demo", now: fixed, languages: ["en", "id"] });
+    createRunnerService({
+      store: s,
+      dataDir,
+      mode: "demo",
+      env: { HOME: dataDir, PATH: `${bin}:${process.env.PATH}` },
+      agents: { extraDirs: [], codexPath: join(bin, "codex") },
+      now: fixed,
+      languages: ["en", "id"],
+    });
   const first = make(store);
   await first.start().settled;
   expect(await first.call("settings.get", {})).toMatchObject({
@@ -544,4 +559,80 @@ test("settings updates validate limits, round cents and audit changed keys", asy
       }),
     ]),
   );
+});
+
+test("TC-j12-17 a new chat takes the main agent while an open chat and running run keep theirs", async () => {
+  const { mkdirSync, symlinkSync } = await import("node:fs");
+  const { AGENT_PROFILES } = await import("../test-helpers/agent-profiles.ts");
+  const { seedSampleFlow } = await import("../test-helpers/builders.ts");
+  const { FAKE_CLAUDE_PATH, writeFakeScript } = await import("../test-helpers/fake-claude-script.ts");
+  const { FAKE_CODEX_PATH, writeFakeCodexScript } = await import("../test-helpers/fake-codex-script.ts");
+
+  const dataDir = dir();
+  const bin = join(dataDir, "bin");
+  mkdirSync(bin);
+  symlinkSync(FAKE_CLAUDE_PATH, join(bin, "claude"));
+  symlinkSync(FAKE_CODEX_PATH, join(bin, "codex"));
+  writeFakeScript(dataDir, {});
+  writeFakeCodexScript(dataDir, { profile: AGENT_PROFILES.codex, signedIn: true });
+  const store = await openSqliteStore(":memory:");
+  let n = 0;
+  const service = createRunnerService({
+    store,
+    dataDir,
+    mode: "demo",
+    env: { HOME: dataDir, PATH: `${bin}:${process.env.PATH}` },
+    now: fixed,
+    agents: { extraDirs: [], claudePath: join(bin, "claude"), codexPath: join(bin, "codex") },
+    newId: (prefix) => `${prefix}-${String(++n).padStart(12, "0")}`,
+  });
+  services.push({ service, store });
+  await service.start().settled;
+  await service.call("settings.update", {
+    patch: { mainAgent: { agent: "claude-code", model: "sonnet-5.5" } },
+  });
+
+  const a = (await service.call("chats.create", {})) as { chatId: string };
+  store.putMessage({
+    id: "msg-000000000001",
+    chatId: a.chatId,
+    seq: 1,
+    at: fixed().toISOString(),
+    role: "person",
+    kind: "text",
+    outside: false,
+    text: "Start run",
+  });
+  const { manifest, hash } = seedSampleFlow(store, "example.fill-timesheet");
+  const runId = "run-000000000001";
+  store.createRun({
+    id: runId,
+    flowId: manifest.id,
+    flowHash: hash,
+    flowVersion: manifest.version,
+    state: "running",
+    project: dataDir,
+    inputs: {},
+    params: {},
+    requirements: [],
+    startedAt: fixed().toISOString(),
+    agent: { agent: "claude-code", model: "sonnet-5.5", choice: "chat" },
+    start: { source: "chat", chatId: a.chatId },
+  });
+
+  await service.call("settings.update", {
+    patch: { mainAgent: { agent: "codex", model: "gpt-6.1-sol" } },
+  });
+  const b = (await service.call("chats.create", {})) as { chatId: string };
+
+  expect(await service.call("chats.get", { chatId: a.chatId })).toMatchObject({
+    chat: { id: a.chatId, agent: "claude-code", model: "sonnet-5.5" },
+  });
+  expect(await service.call("chats.get", { chatId: b.chatId })).toMatchObject({
+    chat: { id: b.chatId, agent: "codex", model: "gpt-6.1-sol" },
+  });
+  expect(await service.call("runs.status", { runId })).toMatchObject({
+    agent: "claude-code",
+    model: "sonnet-5.5",
+  });
 });
