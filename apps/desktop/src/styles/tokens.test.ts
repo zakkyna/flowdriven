@@ -6,7 +6,8 @@ const tokens = readFileSync(`${SRC}/styles/tokens.css`, "utf8");
 const hex = (css: string) =>
   Object.fromEntries([...css.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})\b/gi)].map((m) => [m[1], m[2]]));
 const lightBlock = tokens.match(/:root\s*\{([^}]*)\}/)?.[1] ?? "";
-const darkBlock = tokens.match(/:root\[data-theme="dark"\]\s*\{([^}]*)\}/)?.[1] ?? "";
+const darkBlock =
+  tokens.match(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*:root\s*\{([^}]*)\}/)?.[1] ?? "";
 const light = hex(lightBlock);
 const dark = { ...light, ...hex(darkBlock) };
 const cssFiles = () =>
@@ -41,6 +42,9 @@ const ROLES: [string, string, string][] = [
   ["wait-soft", "#faefd9", "#392d16"],
   ["bad", "#bd2f27", "#ff8f86"],
   ["bad-soft", "#fbe8e6", "#3b2220"],
+  ["current-a", "#5056f2", "#7f86ff"],
+  ["current-b", "#0eb39f", "#3fe3cf"],
+  ["current-ring", "#0a9a89", "#3fe3cf"],
 ];
 test("the colour tokens have the approved values in both themes", () => {
   for (const [name, l, d] of ROLES) {
@@ -48,6 +52,14 @@ test("the colour tokens have the approved values in both themes", () => {
     expect(dark[name], `dark ${name}`).toBe(d);
   }
   expect(Object.keys(hex(darkBlock)).sort()).toEqual(Object.keys(light).sort());
+  expect(lightBlock).toMatch(/--overlay:\s*rgba\(0, 0, 0, 0\.4\);/);
+  expect(darkBlock).toMatch(/--overlay:\s*rgba\(0, 0, 0, 0\.6\);/);
+  expect(lightBlock).toMatch(/--glow:\s*rgba\(80, 86, 242, 0\.22\);/);
+  expect(darkBlock).toMatch(/--glow:\s*rgba\(127, 134, 255, 0\.35\);/);
+  expect(lightBlock).toMatch(
+    /--current:\s*linear-gradient\(90deg, var\(--current-a\), var\(--current-b\)\);/,
+  );
+  expect(tokens).not.toMatch(/data-theme/);
 });
 test("the size tokens have the approved values", () => {
   const px: [string, string][] = [
@@ -69,8 +81,20 @@ test("the size tokens have the approved values", () => {
     ["radius-composer", "18px"],
   ];
   for (const [name, value] of px) expect(tokens, name).toMatch(new RegExp(`--${name}:\\s*${value}\\s*;`));
-  expect(tokens).toMatch(/--font-ui:\s*system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;/);
+  expect(tokens).toMatch(
+    /--font-ui:\s*"Plus Jakarta Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;/,
+  );
   expect(tokens).toMatch(/--font-mono:\s*Menlo, Monaco, monospace;/);
+});
+test("the bundled Plus Jakarta Sans font is declared locally with a system fallback", () => {
+  const base = readFileSync(`${SRC}/styles/base.css`, "utf8");
+  expect(base).toMatch(
+    /@font-face\s*\{[^}]*font-family:\s*"Plus Jakarta Sans";[^}]*src:\s*url\("\.\/fonts\/PlusJakartaSans-VariableFont\.ttf"\)\s*format\("truetype"\);[^}]*\}/s,
+  );
+  expect(base).not.toMatch(/https?:/i);
+  expect(tokens).toMatch(
+    /--font-ui:\s*"Plus Jakarta Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;/,
+  );
 });
 const lum = (h: string) => {
   const w = [0.2126, 0.7152, 0.0722];

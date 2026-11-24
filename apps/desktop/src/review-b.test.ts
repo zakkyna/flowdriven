@@ -5,12 +5,19 @@ const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf
 test("theme, controls, links and reduced motion use the design rules", () => {
   const tokens = read("./styles/tokens.css");
   const base = read("./styles/base.css");
-  expect(tokens).toMatch(/:root\[data-theme="light"\]\s*\{\s*color-scheme:\s*light/);
-  const darkMedia = tokens.match(/:root:not\(\[data-theme="light"\]\)\s*\{([^}]*)\}/)?.[1] ?? "";
-  const dark = tokens.match(/:root\[data-theme="dark"\]\s*\{([^}]*)\}/)?.[1] ?? "";
-  expect(darkMedia).toMatch(/color-scheme:\s*dark/);
-  expect(dark).toMatch(/color-scheme:\s*dark/);
-  expect(dark.match(/--[\w-]+:[^;]+;/g)).toEqual(darkMedia.match(/--[\w-]+:[^;]+;/g));
+  expect(tokens).toMatch(/:root\s*\{[^}]*color-scheme:\s*light dark;/);
+  expect(tokens).not.toMatch(/data-theme/);
+  expect(tokens.match(/@media\s*\(prefers-color-scheme:\s*dark\)/g)).toHaveLength(1);
+  const lightBlock = tokens.match(/:root\s*\{([^}]*)\}/)?.[1] ?? "";
+  const darkMedia =
+    tokens.match(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*:root\s*\{([^}]*)\}/)?.[1] ?? "";
+  expect(darkMedia).toMatch(/color-scheme:\s*dark;/);
+  const lightColourTokens = (lightBlock.match(/--([\w-]+):\s*(?:#[0-9a-f]{6}|rgba\([^)]+\))/gi) ?? [])
+    .map((m) => m.slice(2, m.indexOf(":")))
+    .sort();
+  const darkTokens = (darkMedia.match(/--([\w-]+):/g) ?? []).map((m) => m.slice(2, -1)).sort();
+  expect(darkTokens.length).toBe(31);
+  expect(darkTokens).toEqual(lightColourTokens);
   expect(base).toMatch(
     /select,\s*textarea,\s*input\s*\{[^}]*background:\s*var\(--surface-panel\);[^}]*color:\s*var\(--text\);[^}]*border:\s*1px solid var\(--border-strong\);[^}]*border-radius:\s*var\(--radius-s\)/,
   );

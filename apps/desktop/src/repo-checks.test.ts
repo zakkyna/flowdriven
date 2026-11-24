@@ -172,3 +172,50 @@ test("TC-REPO-04 detects hidden characters in words and code", () => {
   expect(clean.status).toBe(0);
   expect(clean.stdout).toContain("hidden-chars: OK");
 });
+
+test("TC-REPO-10 bundles Plus Jakarta Sans locally with OFL license, fallback, and no remote fonts", () => {
+  const tracked = spawnSync("git", ["ls-files"], { cwd: root, encoding: "utf8" });
+  expect(tracked.status).toBe(0);
+  const trackedFiles = tracked.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const fontFiles = trackedFiles.filter((file) => /\.(woff2?|ttf|otf|eot)$/i.test(file));
+  expect(fontFiles).toEqual(["apps/desktop/src/styles/fonts/PlusJakartaSans-VariableFont.ttf"]);
+  const licensePath = "apps/desktop/src/styles/fonts/OFL.txt";
+  expect(trackedFiles).toContain(licensePath);
+  expect(existsSync(join(root, licensePath))).toBe(true);
+  expect(readFileSync(join(root, licensePath), "utf8")).toContain("SIL OPEN FONT LICENSE");
+
+  const cssFiles = filesUnder(join(root, "apps/desktop/src")).filter((file) => file.endsWith(".css"));
+  expect(cssFiles.length).toBeGreaterThan(0);
+  for (const file of cssFiles) {
+    const css = readFileSync(file, "utf8");
+    const rel = relative(root, file);
+    expect(css, rel).not.toMatch(/https?:/i);
+    expect(css, rel).not.toMatch(/url\(\s*["']?\s*\/\//i);
+    expect(css, rel).not.toMatch(/@import\s+/i);
+    if (rel !== "apps/desktop/src/styles/base.css") {
+      expect(css, rel).not.toMatch(/@font-face/i);
+    }
+  }
+
+  const baseCss = readFileSync(join(root, "apps/desktop/src/styles/base.css"), "utf8");
+  expect(baseCss).toMatch(
+    /@font-face\s*\{[^}]*font-family:\s*"Plus Jakarta Sans";[^}]*src:\s*url\("\.\/fonts\/PlusJakartaSans-VariableFont\.ttf"\)\s*format\("truetype"\);[^}]*\}/s,
+  );
+  expect(baseCss).not.toMatch(/url\(\s*["']?\s*(?:https?:|\/\/|data:)/i);
+  expect(existsSync(join(root, "apps/desktop/src/styles/fonts/PlusJakartaSans-VariableFont.ttf"))).toBe(true);
+
+  const tokensCss = readFileSync(join(root, "apps/desktop/src/styles/tokens.css"), "utf8");
+  expect(tokensCss).toMatch(/--font-ui:\s*"Plus Jakarta Sans",\s*[^;]*\bsystem-ui\b[^;]*\bsans-serif\s*;/);
+
+  const csp = JSON.parse(readFileSync(join(root, "apps/desktop/electron/csp.json"), "utf8")) as {
+    policy: string;
+  };
+  const fontSrc = csp.policy
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("font-src"));
+  expect(fontSrc).toBe("font-src 'self'");
+});
