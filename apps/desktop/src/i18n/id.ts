@@ -160,6 +160,7 @@ export default {
       prototypeSummary: "Prototype dengan data contoh. Tidak ada yang benar‑benar terjadi.",
     },
     rail: {
+      mainMenu: "Menu utama",
       showMore: "Tampilkan lainnya",
       showLess: "Tampilkan lebih sedikit",
       skipToContent: "Lewati ke konten",

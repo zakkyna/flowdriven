@@ -1,0 +1,32 @@
+.frame {
+  display: grid;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  height: 100vh;
+}
+
+.narrowFrame {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.skip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateY(-150%);
+  z-index: 40;
+  background: var(--surface-panel);
+  padding: 8px;
+}
+
+.skip:focus {
+  transform: translateY(0);
+}

@@ -160,6 +160,7 @@ const en = {
       prototypeSummary: "Prototype with sample data. Nothing real happens.",
     },
     rail: {
+      mainMenu: "Main menu",
       showMore: "Show more",
       showLess: "Show less",
       skipToContent: "Skip to content",

@@ -4,20 +4,46 @@ import { App } from "../App";
 import { languages } from "../i18n/languages";
 import { RunnerProvider } from "../runner/runner-context";
 import { LanguageProvider } from "../shell/language";
+
+export type SecondaryNavId = "skills" | "memory" | "marketplace" | "phone";
+export type SecondaryNavItem = {
+  id: SecondaryNavId;
+  href: string;
+  current?: boolean;
+  needsYou?: boolean;
+};
+export type MorePreferenceStorage = Pick<Storage, "getItem" | "setItem">;
+
+export type RenderAppOptions = {
+  scenario?: Scenario;
+  language?: string;
+  setup?: (client: FixtureRunnerClient) => void;
+  now?: () => number;
+  zone?: string;
+  secondaryItems?: readonly SecondaryNavItem[];
+  moreStorage?: MorePreferenceStorage;
+};
+
 export function renderApp(
   hash: string,
-  options?: { scenario?: Scenario; language?: string },
+  options?: RenderAppOptions,
 ): RenderResult & { client: FixtureRunnerClient } {
   window.location.hash = hash;
   const client = createFixtureRunnerClient({
     scenario: options?.scenario,
     languages: languages.map((language) => language.code),
   });
+  options?.setup?.(client);
   return {
     ...render(
       <RunnerProvider client={client}>
         <LanguageProvider language={options?.language}>
-          <App />
+          <App
+            now={options?.now}
+            zone={options?.zone}
+            secondaryItems={options?.secondaryItems}
+            moreStorage={options?.moreStorage}
+          />
         </LanguageProvider>
       </RunnerProvider>,
     ),
@@ -105,7 +131,7 @@ export const BOTH_LANGUAGES_SCREENS: { screen: string; hash: string; testFile: s
 
 export async function renderAppBoth(
   hash: string,
-  options: { scenario?: Scenario; language?: string },
+  options: RenderAppOptions,
   body: (result: ReturnType<typeof renderApp> & { language: string }) => void | Promise<void>,
 ): Promise<void> {
   const originalHash = window.location.hash;

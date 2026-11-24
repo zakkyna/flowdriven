@@ -20,6 +20,7 @@ import { buildState, FIXTURE_NOW, type FixtureStateV2, type Scenario } from "./s
 export interface FixtureRunnerClient extends RunnerClient {
   readonly state: FixtureStateV2;
   readonly calls: { operation: OperationName; input: unknown }[];
+  emit(event: RunnerEvent): void;
 }
 type Handlers = { [N in LiveOperationName]?: (input: OperationInput<N>) => OperationOutput<N> };
 export function createFixtureRunnerClient(
@@ -630,9 +631,29 @@ export function createFixtureRunnerClient(
       return { rule, changed: !!active };
     },
     "activity.summary": ({ filter, before, limit }) => {
-      const needsYou = state.decisions
+      const questions = state.chats
+        .filter((c) => c.chat.from === "flowdriven")
+        .flatMap((c) =>
+          c.messages.flatMap((m) =>
+            m.card && (m.card.type === "inputs_ask" || m.card.type === "confirm") && m.card.state === "open"
+              ? [
+                  {
+                    kind: "question" as const,
+                    questionId: m.id,
+                    questionKind: m.card.type === "inputs_ask" ? ("inputs" as const) : ("confirm" as const),
+                    flowId: m.card.flowId,
+                    flowName: m.card.name,
+                    chatId: c.chat.id,
+                    askedAt: m.at,
+                  },
+                ]
+              : [],
+          ),
+        );
+      const decisions = state.decisions
         .filter((d) => d.state === "pending")
         .map((decision) => ({ kind: "decision" as const, decision }));
+      const needsYou = [...questions, ...decisions];
       const rows = state.runs
         .filter((r) => !before || r.startedAt < before)
         .map((r) => RunSummary.strip().parse(r))
@@ -1116,6 +1137,9 @@ export function createFixtureRunnerClient(
       return () => {
         listeners.delete(listener);
       };
+    },
+    emit(event) {
+      for (const listener of listeners) listener(event);
     },
   };
 }

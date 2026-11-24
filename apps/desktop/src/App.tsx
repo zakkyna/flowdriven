@@ -1,13 +1,23 @@
 import { createFixtureRunnerClient, type Scenario } from "@flowdriven/fixtures/v1";
 import { type ReactElement, useLayoutEffect, useMemo, useRef } from "react";
-import styles from "./App.module.css";
+import type { TranslationKey } from "./i18n/t";
 import { LegacyApp } from "./legacy/LegacyApp";
 import {
   RunnerProvider as LegacyRunnerProvider,
   useHasRunnerProvider as useHasLegacyRunnerProvider,
 } from "./legacy/runner-context";
 import { type Route, routeToHash, useRoute } from "./nav/route";
+import { COMPACT_QUERY, Drawer, NARROW_QUERY, useMediaQuery } from "./shell/Drawer";
 import { LanguageProvider, useHasLanguageProvider, useLanguage } from "./shell/language";
+import { type MorePreferenceStorage, Rail, type SecondaryNavItem } from "./shell/Rail";
+import styles from "./shell/Shell.module.css";
+
+export type AppProps = {
+  now?: () => number;
+  zone?: string;
+  secondaryItems?: readonly SecondaryNavItem[];
+  moreStorage?: MorePreferenceStorage;
+};
 
 function legacyScenarioFromSearch(search: string): Scenario {
   const value = new URLSearchParams(search).get("scenario");
@@ -28,36 +38,31 @@ function isLegacyRoute(route: Route): boolean {
   }
 }
 
-function PlaceholderScreen({ route }: { route: Route }): ReactElement {
-  const { t } = useLanguage();
-  let title: string;
-  let description: string | undefined;
+function routeTitle(route: Route, t: (key: TranslationKey) => string): string {
   switch (route.screen) {
     case "chat":
-      title = t("rail.chats");
-      break;
+      return t("rail.chats");
     case "flows":
     case "flow":
-      title = t("rail.flows");
-      break;
+      return t("rail.flows");
     case "activity":
     case "activity_run":
-      title = t("rail.activity");
-      break;
+      return t("rail.activity");
     case "skills":
-      title = t("rail.skills");
-      break;
+      return t("rail.skills");
     case "settings":
-      title = t("rail.settings");
-      break;
+      return t("rail.settings");
     case "welcome":
-      title = t("welcome.welcome");
-      break;
+      return t("welcome.welcome");
     default:
-      title = t("rail.pageNotFound");
-      description = t("rail.notFoundDescription");
-      break;
+      return t("rail.pageNotFound");
   }
+}
+
+function PlaceholderScreen({ route }: { route: Route }): ReactElement {
+  const { t } = useLanguage();
+  const title = routeTitle(route, t);
+  const description = route.screen === "not_found" ? t("rail.notFoundDescription") : undefined;
   return (
     <section data-screen={route.screen} data-screen-ready="true">
       <h1 tabIndex={-1}>{title}</h1>
@@ -66,10 +71,12 @@ function PlaceholderScreen({ route }: { route: Route }): ReactElement {
   );
 }
 
-function AppContent(): ReactElement {
+function AppContent({ now, zone, secondaryItems, moreStorage }: AppProps): ReactElement {
   const [route] = useRoute();
   const { language, t } = useLanguage();
   const legacy = isLegacyRoute(route);
+  const isNarrow = useMediaQuery(NARROW_QUERY);
+  const isCompact = useMediaQuery(COMPACT_QUERY);
   const hasLegacyProvider = useHasLegacyRunnerProvider();
   const legacyClient = useMemo(
     () =>
@@ -85,7 +92,7 @@ function AppContent(): ReactElement {
     if (legacy) return;
     const main = mainRef.current;
     if (!main) return;
-    for (const zone of main.querySelectorAll<HTMLElement>('[data-scroll="top"]')) zone.scrollTop = 0;
+    for (const zoneEl of main.querySelectorAll<HTMLElement>('[data-scroll="top"]')) zoneEl.scrollTop = 0;
     const heading = main.querySelector("h1");
     if (heading) heading.focus({ preventScroll: true });
   }, [legacy, routeKey]);
@@ -108,7 +115,7 @@ function AppContent(): ReactElement {
   }
 
   return (
-    <div className={styles.frame}>
+    <div className={isNarrow ? styles.narrowFrame : styles.frame}>
       {/* biome-ignore lint/a11y/useValidAnchor: keep the hash route intact while focusing main. */}
       <a
         className={styles.skip}
@@ -120,6 +127,19 @@ function AppContent(): ReactElement {
       >
         {t("rail.skipToContent")}
       </a>
+      {isNarrow ? (
+        <Drawer
+          route={route}
+          pageTitle={routeTitle(route, t)}
+          compact={isCompact}
+          now={now}
+          zone={zone}
+          secondaryItems={secondaryItems}
+          moreStorage={moreStorage}
+        />
+      ) : (
+        <Rail route={route} now={now} zone={zone} secondaryItems={secondaryItems} moreStorage={moreStorage} />
+      )}
       <main id="main-content" tabIndex={-1} ref={mainRef} className={styles.main}>
         <PlaceholderScreen route={route} />
       </main>
@@ -127,14 +147,14 @@ function AppContent(): ReactElement {
   );
 }
 
-export function App(): ReactElement {
+export function App(props: AppProps = {}): ReactElement {
   const hasLanguageProvider = useHasLanguageProvider();
   if (!hasLanguageProvider) {
     return (
       <LanguageProvider>
-        <AppContent />
+        <AppContent {...props} />
       </LanguageProvider>
     );
   }
-  return <AppContent />;
+  return <AppContent {...props} />;
 }

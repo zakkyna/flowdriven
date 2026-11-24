@@ -372,6 +372,48 @@ const chats: ChatView[] = [
     turn: { state: "idle", queued: 0 },
     composerText: "",
   },
+  {
+    chat: {
+      id: "c-outside",
+      title: "Invoice follow-up",
+      updatedAt: "2026-11-20T02:30:00.000Z",
+      from: "person",
+      agent: "claude-code",
+      model: "sonnet-5.5",
+      language: "en",
+      waiting: false,
+    },
+    messages: [
+      {
+        id: "message-outside-1",
+        seq: 0,
+        at: "2026-11-20T02:30:00.000Z",
+        role: "agent",
+        kind: "reply",
+        text: "Received invoice update from supplier.",
+        outside: true,
+      },
+    ],
+    more: false,
+    turn: { state: "idle", queued: 0 },
+    composerText: "",
+  },
+  {
+    chat: {
+      id: "c-empty",
+      title: "New chat",
+      updatedAt: "2026-11-20T01:00:00.000Z",
+      from: "person",
+      agent: "claude-code",
+      model: "sonnet-5.5",
+      language: "en",
+      waiting: false,
+    },
+    messages: [],
+    more: false,
+    turn: { state: "idle", queued: 0 },
+    composerText: "",
+  },
 ];
 const activity: ActivitySummary = {
   needsYou: [{ kind: "decision", decision }],
