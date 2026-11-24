@@ -496,3 +496,128 @@ test("TC-STO-26 adding a version moves the head and preserves old versions", asy
     store.close();
   }
 });
+
+test("TC-SRCH-09 search_text is kept in step with messages", async () => {
+  const path = tempPath();
+  const store = await openSqliteStore(path);
+  const db = new DatabaseSync(path);
+  try {
+    const chat = {
+      id: "chat-000000000001",
+      title: "",
+      titleSource: "default" as const,
+      createdAt: "2026-11-19T10:00:00.000Z",
+      updatedAt: "2026-11-19T10:00:00.000Z",
+      from: "person" as const,
+      language: "en",
+      languageSource: "app" as const,
+      agent: "claude-code",
+      model: "sonnet-5.5",
+      agentSource: "main_default" as const,
+    };
+    store.putChat(chat);
+    const longText = "a".repeat(16_500);
+    store.putMessage({
+      id: "msg-1",
+      chatId: chat.id,
+      seq: 1,
+      at: "2026-11-19T10:00:01.000Z",
+      role: "person",
+      kind: "text",
+      outside: false,
+      text: longText,
+    });
+    store.putMessage({
+      id: "msg-2",
+      chatId: chat.id,
+      seq: 2,
+      at: "2026-11-19T10:00:02.000Z",
+      role: "agent",
+      kind: "reply",
+      outside: false,
+      text: "Your invoice was found",
+    });
+    store.putMessage({
+      id: "msg-3",
+      chatId: chat.id,
+      seq: 3,
+      at: "2026-11-19T10:00:03.000Z",
+      role: "flowdriven",
+      kind: "result",
+      outside: false,
+      result: {
+        runId: "run-000000000001",
+        lines: ["Logged {duration} for {customer}."],
+        values: {
+          duration: { type: "duration", value: "2h" },
+          customer: { type: "text", value: "Example Corp" },
+        },
+      },
+    });
+    store.putMessage({
+      id: "msg-4",
+      chatId: chat.id,
+      seq: 4,
+      at: "2026-11-19T10:00:04.000Z",
+      role: "flowdriven",
+      kind: "line",
+      outside: false,
+      line: { key: "chat.starting", params: { flow: "Fill timesheet" } },
+    });
+    store.putMessage({
+      id: "msg-5",
+      chatId: chat.id,
+      seq: 5,
+      at: "2026-11-19T10:00:05.000Z",
+      role: "flowdriven",
+      kind: "note",
+      outside: false,
+      line: { key: "chat.agentChanged", params: { agent: "codex", model: "gpt-6.1-sol" } },
+    });
+    store.putMessage({
+      id: "msg-6",
+      chatId: chat.id,
+      seq: 6,
+      at: "2026-11-19T10:00:06.000Z",
+      role: "flowdriven",
+      kind: "card",
+      outside: false,
+      card: { type: "decision", state: "open" },
+    });
+
+    const beforeMsg2 = db.prepare("SELECT search_text, data FROM messages WHERE id = 'msg-2'").get();
+    store.putChat({
+      ...chat,
+      title: "First person message",
+      titleSource: "first_message",
+      updatedAt: "2026-11-19T10:00:07.000Z",
+    });
+
+    const rows = db.prepare("SELECT id, search_text, data FROM messages ORDER BY seq").all() as {
+      id: string;
+      search_text: string | null;
+      data: string;
+    }[];
+    expect(rows.map((r) => r.id)).toEqual(["msg-1", "msg-2", "msg-3", "msg-4", "msg-5", "msg-6"]);
+    expect(rows[0]?.search_text).toBe("a".repeat(16_000));
+    expect(rows[0]?.search_text?.length).toBe(16_000);
+    expect(rows[1]?.search_text).toBe("Your invoice was found");
+    expect(rows[2]?.search_text).toBe("Logged 2h for Example Corp.");
+    expect(rows[3]?.search_text).toBeNull();
+    expect(rows[4]?.search_text).toBeNull();
+    expect(rows[5]?.search_text).toBeNull();
+
+    const chatRow = db.prepare("SELECT title, data FROM chats WHERE id = ?").get(chat.id) as {
+      title: string;
+      data: string;
+    };
+    expect(chatRow.title).toBe("First person message");
+    expect(chatRow.title).toBe((JSON.parse(chatRow.data) as { title: string }).title);
+
+    const afterMsg2 = db.prepare("SELECT search_text, data FROM messages WHERE id = 'msg-2'").get();
+    expect(afterMsg2).toEqual(beforeMsg2);
+  } finally {
+    db.close();
+    store.close();
+  }
+});

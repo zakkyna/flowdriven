@@ -36,6 +36,7 @@ import {
   createDispatcher,
   createHandlers,
   createRuleHandlers,
+  createSearchHandler,
   createSettingsHandlers,
 } from "./handlers.ts";
 import { createKeepAwake } from "./keep-awake.ts";
@@ -409,6 +410,7 @@ export function createRunnerService(options: ServiceOptions): RunnerService {
           }
           return settings.update(input);
         },
+        "search.query": createSearchHandler(store),
         "runner.info": () => ({
           contractVersion: CONTRACT_VERSION,
           appVersion,

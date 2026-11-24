@@ -25,6 +25,7 @@ import { renderRunReport } from "../report.ts";
 import { needsAllow } from "../router/route.ts";
 import { canAlwaysAllow } from "../rules/always-allow.ts";
 import { restrictedApprovals } from "../rules/decisions.ts";
+import { searchQuery } from "../search/query.ts";
 import type { ApprovalRow, FlowRow, RunRow, Store } from "../storage.ts";
 import type { TriggerService } from "../triggers/service.ts";
 import { createActivityHandler } from "./activity.ts";
@@ -736,4 +737,8 @@ export function createRuleHandlers(store: Store, now: () => Date) {
       return { rule: view(rule), changed };
     },
   };
+}
+
+export function createSearchHandler(store: Store) {
+  return (input: V2Input<"search.query">) => searchQuery(store, input.text);
 }

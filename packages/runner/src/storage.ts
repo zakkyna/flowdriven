@@ -460,7 +460,9 @@ export type RetentionRow = {
   table: "runs" | "starts" | "standing_rules" | "waiting_questions" | "seen" | "fire_keys" | "flows";
   rowid: number;
 };
+export type SearchParam = string | number | null;
 export interface Store {
+  searchRows(sql: string, params?: readonly SearchParam[]): Record<string, unknown>[];
   retentionCandidates(before90: string, before30: string): RetentionRow[];
   deleteRetentionRows(rows: RetentionRow[]): void;
   claimStart(row: StartRow): { created: boolean; row: StartRow };

@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { parseManifest } from "@flowdriven/sdk";
 import { contentHash, parseFlowYaml } from "@flowdriven/sdk/node";
 import { EngineError } from "./errors.ts";
 import { newFlowId } from "./flow-id.ts";
 import { type MigrationOptions, migrate } from "./migrate.ts";
+import { searchTextOf } from "./search/text.ts";
 import type {
   ApprovalRow,
   AuditEntry,
@@ -22,6 +23,7 @@ import type {
   RuleRow,
   RunRow,
   ScheduleRow,
+  SearchParam,
   StartRow,
   StepRow,
   Store,
@@ -33,7 +35,11 @@ import type {
 
 export async function openSqliteStore(
   path: string,
-  options?: MigrationOptions & { exclusive?: boolean; afterWrite?: (table: string) => void },
+  options?: MigrationOptions & {
+    exclusive?: boolean;
+    afterWrite?: (table: string) => void;
+    onStatement?: (sql: string, params: readonly SearchParam[]) => void;
+  },
 ): Promise<Store> {
   const { DatabaseSync } = await import("node:sqlite");
   let db: DatabaseSync;
@@ -71,9 +77,16 @@ export async function openSqliteStore(
     db.close();
     throw error;
   }
-  const get = (sql: string, ...args: SQLInputValue[]) => db.prepare(sql).get(...args);
-  const all = (sql: string, ...args: SQLInputValue[]) => db.prepare(sql).all(...args);
-  const execute = (sql: string, ...args: SQLInputValue[]) => {
+  const get = (sql: string, ...args: SearchParam[]) => {
+    options?.onStatement?.(sql, args);
+    return db.prepare(sql).get(...args);
+  };
+  const all = (sql: string, ...args: SearchParam[]) => {
+    options?.onStatement?.(sql, args);
+    return db.prepare(sql).all(...args);
+  };
+  const execute = (sql: string, ...args: SearchParam[]) => {
+    options?.onStatement?.(sql, args);
     const result = db.prepare(sql).run(...args);
     const table = /^(?:INSERT(?: OR \w+)? INTO|UPDATE|DELETE FROM)\s+(\w+)/i.exec(sql)?.[1];
     if (depth > 0 && result.changes && table) options?.afterWrite?.(table);
@@ -210,6 +223,12 @@ export async function openSqliteStore(
       }
     });
   const store: Store = {
+    searchRows(sql, params = []) {
+      const trimmed = sql.trim();
+      if (!/^SELECT\s/i.test(trimmed) || trimmed.includes(";"))
+        throw new EngineError("invalid_input", "Search queries must be a single SELECT statement.");
+      return all(trimmed, ...params);
+    },
     putRemembered(row) {
       execute(
         "INSERT INTO remembered VALUES (?, ?, ?, ?) ON CONFLICT(flow_id, kind, input_id) DO UPDATE SET data = excluded.data",
@@ -508,7 +527,7 @@ export async function openSqliteStore(
         row.kind,
         row.card?.type ?? null,
         row.card?.state ?? null,
-        row.text ?? null,
+        searchTextOf(row),
         json(row),
       );
     },
