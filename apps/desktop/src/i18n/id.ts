@@ -265,6 +265,7 @@ export default {
         "FlowDriven hanya memberi tahu saat perlu keputusan Anda atau ada masalah. Tidak ada pemberitahuan untuk perkembangan atau keberhasilan.",
     },
     agents: {
+      needsSignIn: "Belum login",
       mostCapable: "Paling mampu",
       fastCapable: "Cepat dan mampu",
       fastest: "Paling cepat",

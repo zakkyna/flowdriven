@@ -265,6 +265,7 @@ const en = {
         "FlowDriven only notifies you when it needs a decision or something went wrong. It never notifies you about progress or success.",
     },
     agents: {
+      needsSignIn: "Needs sign-in",
       mostCapable: "Most capable",
       fastCapable: "Fast and capable",
       fastest: "Fastest",
