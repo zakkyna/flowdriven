@@ -40,7 +40,6 @@ const en = {
       cancel: "Cancel",
       pickLimit: "Pick up to {count}.",
       pickNone: "Pick none",
-      outsideText: "Includes text from an email or web page",
       reject: "Reject",
       stop: "Stop",
       details: "Details",
@@ -68,6 +67,10 @@ const en = {
       back: "Back",
       start: "Start",
       stopRun: "Stop",
+    },
+    text: {
+      outsideTag: "Includes text from an email or web page",
+      linkNotOpened: "The link was not opened.",
     },
     time: {
       durationHours: "{n}h",

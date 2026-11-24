@@ -40,7 +40,6 @@ export default {
       cancel: "Batal",
       pickLimit: "Pilih maksimal {count}.",
       pickNone: "Tidak pilih apa pun",
-      outsideText: "Berisi teks dari email atau halaman web",
       reject: "Tolak",
       stop: "Hentikan",
       details: "Detail",
@@ -68,6 +67,10 @@ export default {
       back: "Kembali",
       start: "Mulai",
       stopRun: "Hentikan",
+    },
+    text: {
+      outsideTag: "Berisi teks dari email atau halaman web",
+      linkNotOpened: "Tautan tidak dibuka.",
     },
     time: {
       durationHours: "{n} jam",

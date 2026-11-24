@@ -14,7 +14,6 @@ export const pendingKeys = [
   "common.setUp",
   "common.pickLimit",
   "common.pickNone",
-  "common.outsideText",
   "common.reject",
   "common.stop",
   "common.details",
