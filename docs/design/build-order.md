@@ -1003,8 +1003,9 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 | SR4-06 (chat-send call-log clause) | B-07.T7 | B-08.T5 | Chat turns are built in B-08; T7 checks setAgent refusal and chats.get fallback. |
 | j31-28 (composer display clause) | B-07.T7 | B-17.T6 | The model picker and chat screen are built in B-17; T7 checks the stored fallback model and chat.modelGone note. |
 | j31-35 (start_requested production and run-page clauses) | B-07.T7 | B-10.T1, B-12, B-19.T5 | Chat/schedule starts and the run page are built later; T7 checks chat_agent_changed and stored run/start agent fields. |
+| UI-30 (rail item clause) | B-16.T2 | B-16.T3 | T2 checks parseRoute, routeToHash and that the new App markup holds no link to an old hash; the rail-item check moves to Rail.test.tsx in T3. |
 
-111 cases moved.
+112 cases moved.
 
 ### Tests that change
 
@@ -1095,7 +1096,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 | `apps/desktop/src/nav/route.test.ts` and `apps/desktop/src/screens.test.ts` | The start route opens `#/builder` | The start route opens `#/welcome` or the chat; the old routes still parse but are not linked (j01-01 is in B-21) | B-21.T1 |
 | `apps/desktop/src/styles/tokens.test.ts` and `apps/desktop/src/review-b.test.ts` | Today's colour values and the `:root[data-theme="dark"]` and `:root:not([data-theme="light"])` blocks | The new tokens with no `data-theme`; the colour mode is `nativeTheme` (`architecture.md` AD-15); equally strict checks on each token | B-16.T1 |
 | `apps/desktop/electron/window-colors.test.ts` | Reads dark `--surface-app` from `:root[data-theme="dark"]` | Reads dark `--surface-app` from `@media (prefers-color-scheme: dark) { :root }` (`architecture.md` AD-15, F-25.R1); same strict equality to `WINDOW_BACKGROUND.dark` | B-16.T1 |
-| `apps/desktop/src/App.test.tsx` | The old rail: New flow, the Inbox count, Builder; a `runner.info` mock with `contractVersion: 1` | The old assertions move unchanged to `legacy/LegacyApp.test.tsx` (B-16.T10); the new App test pins the new rail and the routes (TC-UI-23, TC-UI-30) | B-16.T10, B-16.T2 |
+| `apps/desktop/src/App.test.tsx` | The old rail: New flow, the Inbox count, Builder; a `runner.info` mock with `contractVersion: 1` | The old assertions move unchanged to `legacy/LegacyApp.test.tsx` (B-16.T10); the new App test pins the skip link, main landmark, heading focus, placeholders, no old-route links, and legacy routes on LegacyApp (TC-UI-30, AD-01, F-01); the rail is pinned in `shell/Rail.test.tsx` (B-16.T3, TC-UI-23) | B-16.T10, B-16.T2 |
 | `apps/desktop/src/runner/ipc-client.test.ts` and `apps/desktop/src/runner/create-client.test.ts` | The client validates `runner.info` as `{contractVersion: 1, mode}` | The client validates with the version 2 table (TC-IPC-19, TC-IPC-20) | B-16.T10 |
 | `apps/desktop/src/runner/runner-context.test.tsx` | Uses `@flowdriven/fixtures/v1` approval counts and run ids | Uses `@flowdriven/fixtures` `story-v2` approval counts and run ids with the same refresh, skip, retry and error assertions (TC-IPC-19) | B-16.T10 |
 | `apps/desktop/electron/security.test.ts` | `MIN_WINDOW` is 1100 by 720 | It is 480 by 600 (TC-ELE-02) | B-16.T6 |

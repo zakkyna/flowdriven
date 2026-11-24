@@ -162,6 +162,7 @@ const en = {
     rail: {
       showMore: "Show more",
       showLess: "Show less",
+      skipToContent: "Skip to content",
       somethingNeedsYou: "Something here needs you",
       main: "Main",
       newChat: "New chat",

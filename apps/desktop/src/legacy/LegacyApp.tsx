@@ -27,12 +27,12 @@ function Screen({ route }: { route: Route }): ReactElement {
       return <HarnessesScreen />;
     case "settings":
       return <SettingsScreen />;
-    case "not_found":
+    default:
       return (
         <NotFoundPage
           screen="not_found"
           title="Page not found"
-          text={`There is no page at ${route.hash}.`}
+          text={`There is no page at ${routeToHash(route)}.`}
           linkLabel="Go to Builder"
           to={{ screen: "builder" }}
         />

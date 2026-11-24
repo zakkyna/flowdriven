@@ -162,6 +162,7 @@ export default {
     rail: {
       showMore: "Tampilkan lainnya",
       showLess: "Tampilkan lebih sedikit",
+      skipToContent: "Lewati ke konten",
       somethingNeedsYou: "Ada yang perlu Anda di sini",
       main: "Utama",
       newChat: "Chat baru",

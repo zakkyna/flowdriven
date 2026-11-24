@@ -40,3 +40,59 @@ test("round-trips", () => {
   ];
   for (const r of routes) expect(parseRoute(routeToHash(r))).toEqual(r);
 });
+
+test("TC-UI-30 parses and round-trips the nine new routes while keeping old routes parseable", () => {
+  const newCases: [string, Route][] = [
+    ["#/chat", { screen: "chat" }],
+    ["#/chat/chat-1", { screen: "chat", chatId: "chat-1" }],
+    ["#/flows", { screen: "flows" }],
+    ["#/flows/example.fill-timesheet", { screen: "flow", flowId: "example.fill-timesheet" }],
+    ["#/activity", { screen: "activity" }],
+    ["#/activity/run-1", { screen: "activity_run", runId: "run-1" }],
+    ["#/skills", { screen: "skills" }],
+    ["#/settings", { screen: "settings" }],
+    ["#/welcome", { screen: "welcome" }],
+  ];
+  for (const [hash, expected] of newCases) {
+    expect(parseRoute(hash), hash).toEqual(expected);
+    expect(routeToHash(expected), hash).toBe(hash);
+    expect(parseRoute(routeToHash(expected)), hash).toEqual(expected);
+  }
+
+  const encodedCases: [string, Route][] = [
+    ["#/chat/a%20b", { screen: "chat", chatId: "a b" }],
+    ["#/flows/a%20b", { screen: "flow", flowId: "a b" }],
+    ["#/activity/a%20b", { screen: "activity_run", runId: "a b" }],
+  ];
+  for (const [hash, expected] of encodedCases) {
+    expect(parseRoute(hash), hash).toEqual(expected);
+    expect(routeToHash(expected), hash).toBe(hash);
+  }
+
+  for (const unknown of [
+    "#/nowhere",
+    "#/skills/extra",
+    "#/welcome/extra",
+    "#/chat/chat-1/extra",
+    "#/flows/a/extra",
+    "#/activity/a/extra",
+    "#/chat/",
+    "#/flows/",
+    "#/activity/",
+  ]) {
+    expect(parseRoute(unknown), unknown).toEqual({ screen: "not_found", hash: unknown });
+  }
+
+  const oldCases: [string, Route][] = [
+    ["#/builder", { screen: "builder" }],
+    ["#/inbox", { screen: "inbox" }],
+    ["#/runs", { screen: "runs" }],
+    ["#/runs/run-0006", { screen: "run", runId: "run-0006" }],
+    ["#/harnesses", { screen: "harnesses" }],
+    ["#/readiness/example.fill-timesheet", { screen: "readiness", flowId: "example.fill-timesheet" }],
+  ];
+  for (const [hash, expected] of oldCases) {
+    expect(parseRoute(hash), hash).toEqual(expected);
+    expect(routeToHash(expected), hash).toBe(hash);
+  }
+});
