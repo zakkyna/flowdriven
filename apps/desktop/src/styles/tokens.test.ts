@@ -168,12 +168,24 @@ test("the transitional tokens of Task 1 are gone once Button and Dialog stop usi
   expect(tokens).not.toMatch(/--accent-hover|--shadow-dialog|--text-l\b/);
 });
 
-test("rail, pane and the smallest chat fit the minimum window", () => {
+test("TC-ELE-02 narrow drawer breakpoint, rail width and minimum window match architecture", () => {
   const security = readFileSync("apps/desktop/electron/security.ts", "utf8");
-  const minimum = Number(/MIN_WINDOW = \{ width: (\d+)/.exec(security)?.[1]);
+  const match = /MIN_WINDOW = \{\s*width:\s*(\d+),\s*height:\s*(\d+)\s*\}/.exec(security);
+  const minWidth = Number(match?.[1]);
+  const minHeight = Number(match?.[2]);
+  expect(minWidth).toBe(480);
+  expect(minHeight).toBe(600);
+
+  const drawer = readFileSync(`${SRC}/shell/Drawer.tsx`, "utf8");
+  const narrowMatch = /NARROW_QUERY\s*=\s*"\(max-width:\s*(\d+)px\)"/.exec(drawer);
+  const maxNarrowWidth = Number(narrowMatch?.[1]);
+  expect(maxNarrowWidth).toBe(767);
+  const narrowBreakpoint = maxNarrowWidth + 1;
+  expect(narrowBreakpoint).toBe(768);
+  expect(minWidth).toBeLessThan(narrowBreakpoint);
+
   const px = (name: string) => Number(new RegExp(`--${name}:\\s*(\\d+)px`).exec(tokens)?.[1]);
-  expect(minimum).toBe(1100);
-  expect(px("rail-width") + px("pane-width") + 360).toBeLessThanOrEqual(minimum);
+  expect(px("rail-width") + 360).toBeLessThanOrEqual(narrowBreakpoint);
   expect(tokens).not.toMatch(/--chat-width/);
 });
 

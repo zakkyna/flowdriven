@@ -4,7 +4,7 @@ import type { WebPreferences } from "electron";
 export const APP_SCHEME = "app";
 export const APP_HOST = "flowdriven";
 export const APP_ORIGIN = "app://flowdriven";
-export const MIN_WINDOW = { width: 1100, height: 720 } as const;
+export const MIN_WINDOW = { width: 480, height: 600 } as const;
 
 export function secureWebPreferences(preloadPath: string, options?: { runner?: boolean }): WebPreferences {
   return {
