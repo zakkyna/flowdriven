@@ -2,7 +2,7 @@ import { createFixtureRunnerClient, type FixtureRunnerClient, type Scenario } fr
 import { cleanup, type RenderResult, render } from "@testing-library/react";
 import { App } from "../App";
 import { languages } from "../i18n/languages";
-import { RunnerProvider } from "../runner/runner-context";
+import { RunnerProvider } from "../legacy/runner-context";
 export function renderApp(
   hash: string,
   options?: { scenario?: Scenario; language?: string },

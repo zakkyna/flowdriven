@@ -1,9 +1,9 @@
 import type { ChatMessage, FlowEdit, Step } from "@flowdriven/contracts/v1";
 import { type ReactElement, useLayoutEffect, useRef, useState } from "react";
+import { useRunnerAction, useRunnerQuery } from "../../legacy/runner-context";
 import { AppLink } from "../../nav/AppLink";
 import { NotFoundPage } from "../../nav/NotFoundPage";
 import { useRoute } from "../../nav/route";
-import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { Icon } from "../../ui/icons";

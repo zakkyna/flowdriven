@@ -1,6 +1,6 @@
 import type { Settings } from "@flowdriven/contracts/v1";
 import { type ReactElement, useState } from "react";
-import { useRunnerAction } from "../../runner/runner-context";
+import { useRunnerAction } from "../../legacy/runner-context";
 import { Button } from "../../ui/Button";
 import { RiskBadge } from "../../ui/RiskBadge";
 import styles from "./Settings.module.css";

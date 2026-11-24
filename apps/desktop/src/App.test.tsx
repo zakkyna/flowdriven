@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { renderApp } from "./test/render";
+import { renderApp } from "./legacy/render-legacy";
 
 const flowIds = [
   "documents-and-reports",

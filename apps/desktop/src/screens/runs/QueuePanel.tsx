@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useRunnerAction, useRunnerQuery } from "../../runner/runner-context";
+import { useRunnerAction, useRunnerQuery } from "../../legacy/runner-context";
 import { Button } from "../../ui/Button";
 import { Icon } from "../../ui/icons";
 import styles from "./Runs.module.css";

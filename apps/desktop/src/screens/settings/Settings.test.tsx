@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import { readyState, renderApp } from "../../test/render";
+import { readyState, renderApp } from "../../legacy/render-legacy";
 
 test("Settings is one narrow column of four plain sections", async () => {
   const { container } = renderApp("#/settings");

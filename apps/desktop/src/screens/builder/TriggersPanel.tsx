@@ -1,7 +1,7 @@
 import type { TriggerStatus } from "@flowdriven/contracts/v1";
 import { type ReactElement, useRef, useState } from "react";
+import { useRunnerAction } from "../../legacy/runner-context";
 import { AppLink } from "../../nav/AppLink";
-import { useRunnerAction } from "../../runner/runner-context";
 import { Button } from "../../ui/Button";
 import { formatDateTime } from "../../ui/format";
 import { Icon } from "../../ui/icons";

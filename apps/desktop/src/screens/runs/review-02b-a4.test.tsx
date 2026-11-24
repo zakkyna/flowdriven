@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { expect, test } from "vitest";
-import { renderApp } from "../../test/render";
+import { renderApp } from "../../legacy/render-legacy";
 
 test("review: a full report opened earlier shows the run's present state after it is hidden and shown again", async () => {
   const { client } = renderApp("#/runs/run-0008", { scenario: "looped" });

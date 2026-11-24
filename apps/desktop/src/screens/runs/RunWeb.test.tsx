@@ -1,6 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import { expect, test } from "vitest";
-import { renderApp } from "../../test/render";
+import { renderApp } from "../../legacy/render-legacy";
 
 const OUTSIDE = "Has text from outside";
 

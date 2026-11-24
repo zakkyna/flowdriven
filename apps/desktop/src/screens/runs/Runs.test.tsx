@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { RunnerError } from "@flowdriven/contracts/v1";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import { readyState, renderApp } from "../../test/render";
+import { readyState, renderApp } from "../../legacy/render-legacy";
 import { waitingLabel } from "./WaitingLine";
 
 const bodyRows = () =>

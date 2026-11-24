@@ -1,8 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { RunnerProvider } from "./legacy/runner-context";
 import { createRunnerClient } from "./runner/create-client";
-import { RunnerProvider } from "./runner/runner-context";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import { applyTheme } from "./theme";

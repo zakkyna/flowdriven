@@ -4,8 +4,8 @@ import { createFixtureRunnerClient } from "@flowdriven/fixtures/v1";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { App } from "../../App";
-import { RunnerProvider } from "../../runner/runner-context";
-import { readyState, renderApp } from "../../test/render";
+import { readyState, renderApp } from "../../legacy/render-legacy";
+import { RunnerProvider } from "../../legacy/runner-context";
 import { PayloadView } from "./PayloadView";
 
 const css = readFileSync("apps/desktop/src/screens/inbox/Inbox.module.css", "utf8");
