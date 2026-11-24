@@ -1,7 +1,6 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { UsageSummary } from "@flowdriven/contracts/v1";
 import { afterEach, expect, test } from "vitest";
 import { openSqliteStore } from "../sqlite-store.ts";
 import type { Store, UsageEventRow } from "../storage.ts";
@@ -105,9 +104,25 @@ test("TC-AGT-11 retired harness card and usage summary retain usage and stored w
     limit: { status: "ok", sevenDay: { utilization: 0.78, resetsAt: "2026-11-14T17:59:00.000Z" } },
   });
   store.addUsage(row("2026-11-11T03:00:00.000Z", [{ ...model, input: 1e300, output: 1e300 }]));
-  const usage = ((await call("usage.summary", {})) as UsageSummary).harnesses[0];
-  expect(usage?.today).toMatchObject({ input: Number.MAX_SAFE_INTEGER, output: Number.MAX_SAFE_INTEGER });
-  expect(usage?.week).toMatchObject({ input: Number.MAX_SAFE_INTEGER, output: Number.MAX_SAFE_INTEGER });
+  const capped = summarizeUsage({
+    store,
+    now: now(),
+    quotaOf: () => ({}),
+    lines: { fiveHour: 0.9, sevenDay: 0.9 },
+  }).harnesses[0];
+  expect(capped?.today).toMatchObject({ input: Number.MAX_SAFE_INTEGER, output: Number.MAX_SAFE_INTEGER });
+  expect(capped?.week).toMatchObject({ input: Number.MAX_SAFE_INTEGER, output: Number.MAX_SAFE_INTEGER });
+  const auditBefore = store.listAudit();
+  await expect(call("usage.summary", {})).rejects.toMatchObject({ code: "unavailable", reason: "retired" });
+  await expect(call("usage.summary", { unexpected: 1 })).rejects.toMatchObject({
+    code: "unavailable",
+    reason: "retired",
+  });
+  await expect(service.call("usage.summary", {})).rejects.toMatchObject({
+    code: "unavailable",
+    reason: "retired",
+  });
+  expect(store.listAudit()).toEqual(auditBefore);
 });
 
 test("today and the week start at the owner's local midnight", async () => {

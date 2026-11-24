@@ -20,7 +20,7 @@ import {
 import { FlowManifest, hasHiddenText, type Value } from "@flowdriven/sdk";
 import type { Engine } from "../engine.ts";
 import { EngineError } from "../errors.ts";
-import type { HarnessQuota, Keeper } from "../keeper/types.ts";
+import type { Keeper } from "../keeper/types.ts";
 import { renderRunReport } from "../report.ts";
 import { needsAllow } from "../router/route.ts";
 import { canAlwaysAllow } from "../rules/always-allow.ts";
@@ -40,7 +40,6 @@ import { toQueueView } from "./map-queue.ts";
 import { runTrigger, toRunSummary } from "./map-run-v1.ts";
 import { toTriggerStatus } from "./map-trigger.ts";
 import { readSettings } from "./settings.ts";
-import { summarizeUsage } from "./usage-summary.ts";
 import type { createWeekly } from "./weekly-limit.ts";
 
 export type HandlerContext = {
@@ -90,7 +89,8 @@ export function createDispatcher({
       name === "flows.update" ||
       name === "harnesses.setConsent" ||
       name === "harnesses.list" ||
-      name === "harnesses.rescan"
+      name === "harnesses.rescan" ||
+      name === "usage.summary"
     )
       throw new RunnerError("unavailable", "Operation retired.", { reason: "retired" });
     const v2Handler = (v2[rootKey] ??
@@ -191,6 +191,7 @@ export function createHandlers({
   | "runs.report"
   | "approvals.answer"
   | "approvals.resolve"
+  | "usage.summary"
 > &
   Pick<V2Handlers, "activity.summary"> {
   function flow(id: string): FlowRow {
@@ -222,36 +223,6 @@ export function createHandlers({
   }
   function unavailable(message: string): never {
     throw new RunnerError("unavailable", message);
-  }
-  function quotaOf(id: string): HarnessQuota {
-    if (keeper) return keeper.quotaOf(id);
-    const value = store.getSetting(`quota:${id}`);
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    const result: HarnessQuota = {};
-    for (const key of ["fiveHour", "sevenDay"] as const) {
-      const w = value[key];
-      if (!w || typeof w !== "object" || Array.isArray(w)) continue;
-      if (
-        typeof w.utilization !== "number" ||
-        !Number.isFinite(w.utilization) ||
-        w.utilization < 0 ||
-        w.utilization > 1
-      )
-        continue;
-      if (
-        w.resetsAt !== undefined &&
-        (typeof w.resetsAt !== "number" || !Number.isFinite(w.resetsAt) || w.resetsAt < 0)
-      )
-        continue;
-      result[key] = {
-        utilization: w.utilization,
-        ...(typeof w.resetsAt === "number" ? { resetsAt: w.resetsAt } : {}),
-      };
-    }
-    return result;
-  }
-  function summary() {
-    return summarizeUsage({ store, now: now(), quotaOf, lines: readKeeperSettings(store).quotaLines });
   }
   function queue() {
     return toQueueView({
@@ -346,7 +317,6 @@ export function createHandlers({
       if (!keeper?.move(runId)) throw new RunnerError("not_allowed", "This run is not waiting.");
       return queue();
     },
-    "usage.summary": summary,
     "triggers.list": ({ flowId }) => {
       flow(flowId);
       if (!triggers) return unavailable("Trigger service is unavailable.");
