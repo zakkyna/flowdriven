@@ -3,6 +3,7 @@ import { cleanup, type RenderResult, render } from "@testing-library/react";
 import { App } from "../App";
 import { languages } from "../i18n/languages";
 import { RunnerProvider } from "../runner/runner-context";
+import { LanguageProvider } from "../shell/language";
 export function renderApp(
   hash: string,
   options?: { scenario?: Scenario; language?: string },
@@ -15,7 +16,9 @@ export function renderApp(
   return {
     ...render(
       <RunnerProvider client={client}>
-        <App />
+        <LanguageProvider language={options?.language}>
+          <App />
+        </LanguageProvider>
       </RunnerProvider>,
     ),
     client,

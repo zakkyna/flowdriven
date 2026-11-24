@@ -1004,8 +1004,9 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 | j31-28 (composer display clause) | B-07.T7 | B-17.T6 | The model picker and chat screen are built in B-17; T7 checks the stored fallback model and chat.modelGone note. |
 | j31-35 (start_requested production and run-page clauses) | B-07.T7 | B-10.T1, B-12, B-19.T5 | Chat/schedule starts and the run page are built later; T7 checks chat_agent_changed and stored run/start agent fields. |
 | UI-30 (rail item clause) | B-16.T2 | B-16.T3 | T2 checks parseRoute, routeToHash and that the new App markup holds no link to an old hash; the rail-item check moves to Rail.test.tsx in T3. |
+| j30-02 (six rail words clause) | B-16.T5 | B-16.T3 | T5 checks document.documentElement.lang, LanguageProvider, useLanguage and translated App words; the six rail words move to Rail.test.tsx in T3. |
 
-112 cases moved.
+113 cases moved.
 
 ### Tests that change
 

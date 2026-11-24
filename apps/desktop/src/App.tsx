@@ -1,13 +1,13 @@
 import { createFixtureRunnerClient, type Scenario } from "@flowdriven/fixtures/v1";
 import { type ReactElement, useLayoutEffect, useMemo, useRef } from "react";
 import styles from "./App.module.css";
-import { t } from "./i18n/t";
 import { LegacyApp } from "./legacy/LegacyApp";
 import {
   RunnerProvider as LegacyRunnerProvider,
   useHasRunnerProvider as useHasLegacyRunnerProvider,
 } from "./legacy/runner-context";
 import { type Route, routeToHash, useRoute } from "./nav/route";
+import { LanguageProvider, useHasLanguageProvider, useLanguage } from "./shell/language";
 
 function legacyScenarioFromSearch(search: string): Scenario {
   const value = new URLSearchParams(search).get("scenario");
@@ -29,6 +29,7 @@ function isLegacyRoute(route: Route): boolean {
 }
 
 function PlaceholderScreen({ route }: { route: Route }): ReactElement {
+  const { t } = useLanguage();
   let title: string;
   let description: string | undefined;
   switch (route.screen) {
@@ -65,8 +66,9 @@ function PlaceholderScreen({ route }: { route: Route }): ReactElement {
   );
 }
 
-export function App(): ReactElement {
+function AppContent(): ReactElement {
   const [route] = useRoute();
+  const { language, t } = useLanguage();
   const legacy = isLegacyRoute(route);
   const hasLegacyProvider = useHasLegacyRunnerProvider();
   const legacyClient = useMemo(
@@ -85,11 +87,14 @@ export function App(): ReactElement {
     if (!main) return;
     for (const zone of main.querySelectorAll<HTMLElement>('[data-scroll="top"]')) zone.scrollTop = 0;
     const heading = main.querySelector("h1");
-    if (heading) {
-      document.title = `${heading.textContent} - FlowDriven`;
-      heading.focus({ preventScroll: true });
-    }
+    if (heading) heading.focus({ preventScroll: true });
   }, [legacy, routeKey]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: route and language changes update the document title.
+  useLayoutEffect(() => {
+    if (legacy) return;
+    const heading = mainRef.current?.querySelector("h1");
+    if (heading) document.title = `${heading.textContent} - FlowDriven`;
+  }, [legacy, routeKey, language]);
 
   if (legacy) {
     if (legacyClient) {
@@ -120,4 +125,16 @@ export function App(): ReactElement {
       </main>
     </div>
   );
+}
+
+export function App(): ReactElement {
+  const hasLanguageProvider = useHasLanguageProvider();
+  if (!hasLanguageProvider) {
+    return (
+      <LanguageProvider>
+        <AppContent />
+      </LanguageProvider>
+    );
+  }
+  return <AppContent />;
 }
