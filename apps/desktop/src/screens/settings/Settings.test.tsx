@@ -1,12 +1,16 @@
 import { WINDOW_CALLS, WindowPrefs } from "@flowdriven/contracts";
 import { createFixtureRunnerClient } from "@flowdriven/fixtures";
-import { render, screen, waitFor, within } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, expect, test } from "vitest";
 import { RunnerProvider } from "../../runner/runner-context";
 import { LanguageProvider } from "../../shell/language";
 import { readyState, renderApp, renderAppBoth } from "../../test/render";
 import { ToastProvider } from "../../ui/Toast";
 import { Settings } from "./Settings";
+
+afterEach(() => {
+  cleanup();
+});
 
 test("TC-j12-01 Settings shows Appearance, Notifications, later-release line, and reads settings and agents", async () => {
   await renderAppBoth("#/settings", { scenario: "story-v2" }, async ({ language, container, client }) => {
@@ -119,4 +123,62 @@ test("TC-j12-30 V1 has no Background section and no background setting", async (
   expect(WindowPrefs.safeParse({ colorMode: "system", platform: "darwin", background: true }).success).toBe(
     false,
   );
+});
+
+test('TC-j12-33 A failed save shows "Could not save. Try again." and restores the control', async () => {
+  renderApp("#/settings", {
+    scenario: "story-v2",
+    language: "en",
+    failSettingsUpdate: true,
+    setup(client) {
+      const codex = client.state.agents.find((agent) => agent.id === "codex");
+      if (codex) codex.state = "ready";
+      client.state.settings.busyFallback = false;
+    },
+  });
+
+  const heading = await screen.findByRole("heading", { level: 2, name: "Main AI agent" });
+  const section = heading.closest("section");
+  expect(section).not.toBeNull();
+  if (!section) return;
+
+  const toggle = within(section).getByRole("switch", { name: "If Claude Code is busy, use Codex" });
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+  fireEvent.click(toggle);
+
+  expect(await screen.findByText("Could not save. Try again.")).toBeTruthy();
+  await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("false"));
+});
+
+test("TC-j31-32 Settings line under Main AI agent", async () => {
+  const { client } = renderApp("#/settings", { scenario: "story-v2" });
+
+  const heading = await screen.findByRole("heading", { level: 2, name: "Main AI agent" });
+  const section = heading.closest("section");
+  expect(section).not.toBeNull();
+  if (!section) return;
+
+  expect(within(section).getByText("New chats start with this agent and its default model.")).toBeTruthy();
+
+  const codex = client.state.agents.find((agent) => agent.id === "codex");
+  if (codex) codex.state = "ready";
+  client.emit({ type: "changed", topics: ["agents"] });
+
+  const group = within(section).getByRole("radiogroup", { name: "Main AI agent" });
+  await waitFor(() => {
+    expect(within(group).getByRole("radio", { name: "Codex" })).toHaveProperty("disabled", false);
+  });
+
+  fireEvent.click(within(group).getByRole("radio", { name: "Codex" }));
+
+  await waitFor(() => {
+    expect(client.calls.filter((call) => call.operation === "settings.update")).toEqual([
+      {
+        operation: "settings.update",
+        input: { patch: { mainAgent: { agent: "codex", model: "gpt-6.1-sol" } } },
+      },
+    ]);
+  });
+  expect(client.calls.some((call) => call.operation === "agents.models")).toBe(false);
 });

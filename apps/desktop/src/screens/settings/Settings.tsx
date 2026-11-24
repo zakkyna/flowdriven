@@ -5,6 +5,8 @@ import { Page } from "../../ui/Page";
 import { AgentsSection } from "./AgentsSection";
 import { Appearance } from "./Appearance";
 import { LanguageSection } from "./LanguageSection";
+import { MainAgentSection } from "./MainAgentSection";
+import { PermissionSection } from "./PermissionSection";
 import styles from "./SettingsPage.module.css";
 
 export function Settings(): ReactElement {
@@ -40,9 +42,11 @@ export function Settings(): ReactElement {
           </section>
           <section className={styles.section} aria-labelledby={`${baseId}-permission`}>
             <h2 id={`${baseId}-permission`}>{t("settings.permission")}</h2>
+            <PermissionSection settings={settingsQuery.data} />
           </section>
           <section className={styles.section} aria-labelledby={`${baseId}-main-agent`}>
             <h2 id={`${baseId}-main-agent`}>{t("settings.mainAgent")}</h2>
+            <MainAgentSection settings={settingsQuery.data} agents={agentsQuery.data ?? []} />
           </section>
           <section className={styles.section} aria-labelledby={`${baseId}-spending-limit`}>
             <h2 id={`${baseId}-spending-limit`}>{t("settings.spendingLimit")}</h2>
