@@ -1,13 +1,18 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeEach, expect, test, vi } from "vitest";
 import { CONTENT_SECURITY_POLICY } from "../src/csp.mjs";
+import { createAppearance } from "./appearance";
+import type { FrameLike, IpcLike } from "./runner-ipc";
 import { fakeNativeTheme, fakeSession, fakeShell, fakeWindow } from "./test-helpers/fakes";
+import { registerWindowApi, WINDOW_GET_PREFS_CHANNEL, WINDOW_SET_COLOR_MODE_CHANNEL } from "./window-api";
 import { windowBackground } from "./window-colors";
 
 const state = vi.hoisted(() => ({
   register: vi.fn(),
   handle: vi.fn(),
+  ipcHandle: vi.fn(),
   nativeTheme: {
     themeSource: "system" as "light" | "system" | "dark",
     shouldUseDarkColors: false,
@@ -31,6 +36,7 @@ vi.mock("electron", () => {
   }
   return {
     protocol: { registerSchemesAsPrivileged: state.register, handle: state.handle },
+    ipcMain: { handle: state.ipcHandle },
     session: {
       defaultSession: activeSession,
     },
@@ -359,4 +365,86 @@ test("TC-ELE-07 navigation, new windows and webviews stay denied", () => {
   win.webContents.emit("will-attach-webview", { preventDefault: webviewPrevent });
   expect(webviewPrevent).toHaveBeenCalledOnce();
   expect(shell.opened).toEqual([]);
+});
+
+test("TC-j28-39 the window API and the preferences file hold no background or login setting", async () => {
+  await mkdir(path.resolve(".workflow/scratch"), { recursive: true });
+  const dir = await mkdtemp(path.resolve(".workflow/scratch/flowdriven-j28-39-"));
+  try {
+    const nativeTheme = fakeNativeTheme();
+    const appearance = createAppearance({
+      fs: { readFileSync, mkdir, writeFile, rename: (await import("node:fs/promises")).rename, rm },
+      nativeTheme,
+      userDataDir: dir,
+    });
+    const fakeApp = {
+      setLoginItemSettings: vi.fn(),
+      quit: vi.fn(),
+    };
+    const handlers = new Map<string, (event: { senderFrame: FrameLike }, ...args: unknown[]) => unknown>();
+    const ipc: IpcLike = {
+      handle(channel, listener) {
+        handlers.set(channel, listener);
+      },
+    };
+    registerWindowApi({
+      ipc,
+      appearance,
+      openLink: async () => ({ opened: false }),
+      quit: () => fakeApp.quit(),
+      platform: "darwin",
+    });
+
+    const ownFrame: FrameLike = { url: "app://flowdriven/index.html", parent: null };
+    const setColorMode = handlers.get(WINDOW_SET_COLOR_MODE_CHANNEL);
+    const getPrefs = handlers.get(WINDOW_GET_PREFS_CHANNEL);
+    if (!setColorMode || !getPrefs) throw new Error("Missing window handlers");
+
+    await setColorMode({ senderFrame: ownFrame }, "dark");
+    expect(await getPrefs({ senderFrame: ownFrame })).toEqual({
+      ok: true,
+      result: { colorMode: "dark", platform: "darwin" },
+    });
+
+    const saved = JSON.parse(await readFile(path.join(dir, "window.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(saved).sort()).toEqual(["colorMode", "version"]);
+    expect(saved).toEqual({ version: 1, colorMode: "dark" });
+    expect(fakeApp.setLoginItemSettings).not.toHaveBeenCalled();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("TC-ELE-26 capture windows have the window API and no runner", async () => {
+  createMainWindow({
+    preloadPath: "/preload.js",
+    show: false,
+    theme: "light",
+    scenario: "story-v2",
+    hash: "/chat",
+  });
+  createMainWindow({
+    preloadPath: "/preload.js",
+    show: false,
+    theme: "dark",
+    scenario: "story-v2",
+    hash: "/chat",
+  });
+
+  expect(state.windowCalls).toHaveLength(2);
+  for (const call of state.windowCalls) {
+    const prefs = call.options.webPreferences as Record<string, unknown>;
+    expect("additionalArguments" in prefs).toBe(false);
+    expect(call.instance.loadedUrls[0]).toMatch(/^app:\/\/flowdriven\/index\.html\?.*scenario=story-v2/);
+  }
+  expect(state.ipcHandle).not.toHaveBeenCalled();
+
+  const captureSource = await readFile(new URL("./capture.ts", import.meta.url), "utf8");
+  expect(captureSource).toMatch(/registerWindowApi\(/);
+  expect(captureSource).not.toContain("registerRunnerIpc");
+  expect(captureSource).not.toContain("startRunnerBridge");
+  expect(captureSource).not.toContain("runner:call");
 });

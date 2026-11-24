@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { app } from "electron";
+import { app, ipcMain, nativeTheme } from "electron";
+import { AppearanceError, type ColorMode, isColorMode } from "./appearance";
 import { formatConsoleErrors, formatNotReady, recordConsoleError } from "./capture-diagnostics";
 import { scrollScript } from "./capture-scroll";
 import screens from "./screens.json";
@@ -11,6 +12,7 @@ import {
   registerWebContentsSecurity,
   serveApp,
 } from "./window";
+import { registerWindowApi } from "./window-api";
 
 registerAppScheme();
 registerWebContentsSecurity();
@@ -20,6 +22,23 @@ void app
   .then(async () => {
     lockDownSession();
     serveApp(path.join(__dirname, "../dist"));
+    let captureColorMode: ColorMode = "system";
+    registerWindowApi({
+      ipc: ipcMain,
+      appearance: {
+        load: () => ({ colorMode: captureColorMode }),
+        set: async (mode) => {
+          if (!isColorMode(mode)) {
+            throw new AppearanceError("invalid_input", "Invalid color mode.");
+          }
+          captureColorMode = mode;
+          nativeTheme.themeSource = mode;
+          return mode;
+        },
+      },
+      openLink: async () => ({ opened: false }),
+      quit: () => app.quit(),
+    });
     const output = path.resolve(__dirname, "../../../.workflow/scratch/screens");
     await mkdir(output, { recursive: true });
     const errors: { screen: string; message: string }[] = [];

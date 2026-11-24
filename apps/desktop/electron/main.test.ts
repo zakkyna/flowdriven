@@ -21,11 +21,16 @@ vi.mock("electron", () => ({
     on: vi.fn(),
   },
   Notification: class {},
+  shell: {
+    openExternal: vi.fn(),
+  },
 }));
 
 import { createAppearance } from "./appearance";
 import { type MainAppLike, startMain } from "./main";
+import type { FrameLike } from "./runner-ipc";
 import { fakeFs, fakeNativeTheme, fakeWindow } from "./test-helpers/fakes";
+import { WINDOW_CHANNELS } from "./window-api";
 import { windowBackground } from "./window-colors";
 
 type AppEventMap = {
@@ -74,6 +79,7 @@ test("TC-ELE-11 TC-j12-04 startMain loads saved color mode and sets themeSource 
       callLog.push("appearance.load");
       return realAppearance.load();
     },
+    set: realAppearance.set,
     track: realAppearance.track,
   };
 
@@ -118,7 +124,7 @@ test("startMain keeps single-instance, activate, before-quit and window-all-clos
     app: refused.app,
     BrowserWindow: { getAllWindows: () => [] },
     nativeTheme: fakeNativeTheme(),
-    appearance: { load: () => ({ colorMode: "system" }), track: () => {} },
+    appearance: { load: () => ({ colorMode: "system" }), set: async () => "system", track: () => {} },
     createWindow: () => fakeWindow(),
     startBridge: () => ({ stop: async () => {} }),
   });
@@ -187,11 +193,55 @@ test("startMain keeps single-instance, activate, before-quit and window-all-clos
     app: linux.app,
     BrowserWindow: { getAllWindows: () => [] },
     nativeTheme: fakeNativeTheme(),
-    appearance: { load: () => ({ colorMode: "system" }), track: () => {} },
+    appearance: { load: () => ({ colorMode: "system" }), set: async () => "system", track: () => {} },
     createWindow: () => fakeWindow(),
     startBridge: () => ({ stop: async () => {} }),
     platform: "linux",
   });
   linux.listeners["window-all-closed"][0]?.();
   expect(linux.quit).toHaveBeenCalledOnce();
+});
+
+test("TC-ELE-26 startMain registers the four window API channels once, not per window", async () => {
+  const { app, listeners, quit } = createFakeApp();
+  const windows: ReturnType<typeof fakeWindow>[] = [];
+  const handlers = new Map<string, (event: { senderFrame: FrameLike }, ...args: unknown[]) => unknown>();
+  const ipc = {
+    handle: vi.fn(
+      (channel: string, listener: (event: { senderFrame: FrameLike }, ...args: unknown[]) => unknown) => {
+        handlers.set(channel, listener);
+      },
+    ),
+  };
+
+  await startMain({
+    app,
+    ipc,
+    openLink: async () => ({ opened: true }),
+    BrowserWindow: { getAllWindows: () => windows },
+    nativeTheme: fakeNativeTheme(),
+    appearance: createAppearance({ fs: fakeFs(), nativeTheme: fakeNativeTheme(), userDataDir: "U" }),
+    createWindow: () => {
+      const win = fakeWindow();
+      windows.push(win);
+      return win;
+    },
+    startBridge: () => ({ stop: async () => {} }),
+    platform: "darwin",
+  });
+
+  expect(windows).toHaveLength(1);
+  expect(ipc.handle).toHaveBeenCalledTimes(4);
+  expect(ipc.handle.mock.calls.map((call) => call[0])).toEqual([...WINDOW_CHANNELS]);
+
+  windows.length = 0;
+  listeners.activate[0]?.();
+  expect(windows).toHaveLength(1);
+  expect(ipc.handle).toHaveBeenCalledTimes(4);
+
+  const quitHandler = handlers.get("window:quit");
+  if (!quitHandler) throw new Error("Missing window:quit handler");
+  const ownFrame: FrameLike = { url: "app://flowdriven/index.html", parent: null };
+  expect(await quitHandler({ senderFrame: ownFrame })).toEqual({ ok: true, result: {} });
+  expect(quit).toHaveBeenCalledOnce();
 });

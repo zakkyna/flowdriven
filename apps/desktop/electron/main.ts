@@ -2,11 +2,12 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { app, BrowserWindow, ipcMain, Notification, nativeTheme } from "electron";
+import { app, BrowserWindow, ipcMain, Notification, nativeTheme, shell } from "electron";
 import { type Appearance, createAppearance } from "./appearance";
 import languages from "./languages.json";
 import { electronNoticeHandler, noticeWord } from "./notifier";
 import { startRunnerBridge } from "./runner-bridge";
+import type { IpcLike } from "./runner-ipc";
 import { APP_ORIGIN } from "./security";
 import {
   createMainWindow,
@@ -15,6 +16,7 @@ import {
   registerWebContentsSecurity,
   serveApp,
 } from "./window";
+import { createOpenLink, registerWindowApi } from "./window-api";
 
 export type MainWindowLike = {
   isMinimized(): boolean;
@@ -42,9 +44,11 @@ export type StartMainDeps = {
   nativeTheme: {
     themeSource: "light" | "system" | "dark";
   };
-  appearance: Pick<Appearance, "load" | "track">;
+  appearance: Pick<Appearance, "load" | "set" | "track">;
   createWindow: (options?: { hash?: string }) => MainWindowLike;
   startBridge: () => { stop(): Promise<void> };
+  ipc?: IpcLike;
+  openLink?: (url: string) => Promise<{ opened: boolean }> | { opened: boolean };
   onReady?: () => void;
   platform?: NodeJS.Platform;
 };
@@ -74,6 +78,15 @@ export function startMain(deps: StartMainDeps): Promise<void> {
       deps.nativeTheme.themeSource = colorMode;
     }
     const bridge = deps.startBridge();
+    if (deps.ipc) {
+      registerWindowApi({
+        ipc: deps.ipc,
+        appearance: deps.appearance,
+        openLink: deps.openLink ?? (async () => ({ opened: false })),
+        quit: () => deps.app.quit(),
+        platform: deps.platform,
+      });
+    }
     deps.app.on("before-quit", (event) => {
       if (stopping) return;
       stopping = true;
@@ -106,6 +119,8 @@ if (typeof process.versions.electron === "string") {
     BrowserWindow,
     nativeTheme,
     appearance,
+    ipc: ipcMain,
+    openLink: createOpenLink(shell),
     createWindow: (options) =>
       createMainWindow({ preloadPath, show: true, runner: true, hash: options?.hash }),
     onReady: () => {
