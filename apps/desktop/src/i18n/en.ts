@@ -264,6 +264,8 @@ const en = {
       raiseLimitConfirm: "Raise the limit to ${amount}?",
       monthlyLimit: "Monthly limit ($)",
       invalidLimit: "Enter an amount above ${amount}.",
+      limitTooHigh: "Enter an amount up to ${amount}.",
+      limitReached: "Limit reached",
       raise: "Raise",
       notifications: "Notifications",
       notificationsExplanation:

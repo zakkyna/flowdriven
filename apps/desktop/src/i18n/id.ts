@@ -264,6 +264,8 @@ export default {
       raiseLimitConfirm: "Naikkan batas menjadi ${amount}?",
       monthlyLimit: "Batas bulanan ($)",
       invalidLimit: "Masukkan jumlah di atas ${amount}.",
+      limitTooHigh: "Masukkan jumlah maksimal ${amount}.",
+      limitReached: "Batas tercapai",
       raise: "Naikkan",
       notifications: "Pemberitahuan",
       notificationsExplanation:

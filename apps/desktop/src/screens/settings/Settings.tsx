@@ -8,6 +8,7 @@ import { LanguageSection } from "./LanguageSection";
 import { MainAgentSection } from "./MainAgentSection";
 import { PermissionSection } from "./PermissionSection";
 import styles from "./SettingsPage.module.css";
+import { SpendingSection } from "./SpendingSection";
 
 export function Settings(): ReactElement {
   const { t } = useLanguage();
@@ -50,6 +51,7 @@ export function Settings(): ReactElement {
           </section>
           <section className={styles.section} aria-labelledby={`${baseId}-spending-limit`}>
             <h2 id={`${baseId}-spending-limit`}>{t("settings.spendingLimit")}</h2>
+            <SpendingSection settings={settingsQuery.data} />
           </section>
           <section className={styles.section} aria-labelledby={`${baseId}-notifications`}>
             <h2 id={`${baseId}-notifications`}>{t("settings.notifications")}</h2>

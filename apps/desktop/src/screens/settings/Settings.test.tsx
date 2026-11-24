@@ -12,7 +12,7 @@ afterEach(() => {
   cleanup();
 });
 
-test("TC-j12-01 Settings shows Appearance, Notifications, later-release line, and reads settings and agents", async () => {
+test("TC-j12-01 Settings shows its sections in order and reads settings and agents", async () => {
   await renderAppBoth("#/settings", { scenario: "story-v2" }, async ({ language, container, client }) => {
     const words =
       language === "en"
@@ -22,11 +22,21 @@ test("TC-j12-01 Settings shows Appearance, Notifications, later-release line, an
             auto: "Auto",
             matches: "Matches your computer",
             dark: "Dark",
+            raiseLimit: "Raise limit",
             notifications: "Notifications",
             notificationsBody:
               "FlowDriven only notifies you when it needs a decision or something went wrong. It never notifies you about progress or success.",
             moreLater: "Other items appear when their release ships.",
             background: "Background",
+            expectedHeadings: [
+              "Appearance",
+              "Language",
+              "AI agents",
+              "Permission",
+              "Main AI agent",
+              "Spending limit",
+              "Notifications",
+            ],
           }
         : {
             appearance: "Tampilan",
@@ -34,15 +44,32 @@ test("TC-j12-01 Settings shows Appearance, Notifications, later-release line, an
             auto: "Otomatis",
             matches: "Ikut komputer Anda",
             dark: "Gelap",
+            raiseLimit: "Naikkan batas",
             notifications: "Pemberitahuan",
             notificationsBody:
               "FlowDriven hanya memberi tahu saat perlu keputusan Anda atau ada masalah. Tidak ada pemberitahuan untuk perkembangan atau keberhasilan.",
             moreLater: "Item lain muncul saat rilisnya tersedia.",
             background: "Latar belakang",
+            expectedHeadings: [
+              "Tampilan",
+              "Bahasa",
+              "Agen AI",
+              "Izin",
+              "Agen AI utama",
+              "Batas biaya",
+              "Pemberitahuan",
+            ],
           };
 
     await screen.findByRole("heading", { level: 2, name: words.appearance });
     await waitFor(() => expect(readyState(container, "settings")).toBe("true"));
+
+    expect(
+      within(screen.getByRole("main"))
+        .getAllByRole("heading", { level: 2 })
+        .map((el) => el.textContent),
+    ).toEqual(words.expectedHeadings);
+    expect(screen.getByRole("button", { name: words.raiseLimit })).toBeTruthy();
 
     expect(client.calls).toContainEqual({ operation: "settings.get", input: {} });
     expect(client.calls).toContainEqual({ operation: "agents.list", input: {} });
@@ -69,6 +96,19 @@ test("TC-j12-01 Settings shows Appearance, Notifications, later-release line, an
     },
   });
   await screen.findByRole("heading", { level: 2, name: "Appearance" });
+  expect(
+    within(screen.getByRole("main"))
+      .getAllByRole("heading", { level: 2 })
+      .map((el) => el.textContent),
+  ).toEqual([
+    "Appearance",
+    "Language",
+    "AI agents",
+    "Permission",
+    "Main AI agent",
+    "Spending limit",
+    "Notifications",
+  ]);
   expect(screen.getByRole("heading", { level: 2, name: "Notifications" })).toBeTruthy();
   expect(screen.getByText("Other items appear when their release ships.")).toBeTruthy();
   expect(screen.queryByRole("alert")).toBeNull();
