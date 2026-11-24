@@ -268,6 +268,8 @@ export default {
       notifications: "Pemberitahuan",
       notificationsExplanation:
         "FlowDriven hanya memberi tahu saat perlu keputusan Anda atau ada masalah. Tidak ada pemberitahuan untuk perkembangan atau keberhasilan.",
+      moreLater: "Item lain muncul saat rilisnya tersedia.",
+      saveFailed: "Tidak dapat menyimpan. Coba lagi.",
     },
     agents: {
       needsSignIn: "Belum login",

@@ -525,3 +525,16 @@ test("TC-CON-45 fixture records another way and its text", async () => {
   expect(run.decisionLines).toContainEqual({ key: "report.anotherWay", params: { text: "Try this" } });
   expect(run.decisionLines.some((line) => line.key === "report.youApproved")).toBe(false);
 });
+
+test("fixture client supports initial permission and failSettingsUpdate options", async () => {
+  for (const permission of ["on", "off", "unset"] as const) {
+    const client = createFixtureRunnerClient({ scenario: "story-v2", permission });
+    expect((await client.call("settings.get", {})).agentPermission).toBe(permission);
+  }
+
+  const failing = createFixtureRunnerClient({ scenario: "story-v2", failSettingsUpdate: true });
+  await expect(failing.call("settings.update", { patch: { busyFallback: true } })).rejects.toMatchObject({
+    code: "unavailable",
+  });
+  expect((await failing.call("settings.get", {})).busyFallback).toBe(false);
+});

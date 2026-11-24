@@ -268,6 +268,8 @@ const en = {
       notifications: "Notifications",
       notificationsExplanation:
         "FlowDriven only notifies you when it needs a decision or something went wrong. It never notifies you about progress or success.",
+      moreLater: "Other items appear when their release ships.",
+      saveFailed: "Could not save. Try again.",
     },
     agents: {
       needsSignIn: "Needs sign-in",

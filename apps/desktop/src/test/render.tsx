@@ -17,6 +17,8 @@ export type MorePreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 export type RenderAppOptions = {
   scenario?: Scenario;
   language?: string;
+  permission?: "on" | "off" | "unset";
+  failSettingsUpdate?: boolean;
   setup?: (client: FixtureRunnerClient) => void;
   now?: () => number;
   zone?: string;
@@ -32,6 +34,8 @@ export function renderApp(
   const client = createFixtureRunnerClient({
     scenario: options?.scenario,
     languages: languages.map((language) => language.code),
+    permission: options?.permission,
+    failSettingsUpdate: options?.failSettingsUpdate,
   });
   options?.setup?.(client);
   return {
@@ -113,7 +117,7 @@ export const BOTH_LANGUAGES_SCREENS: { screen: string; hash: string; testFile: s
       screen: "Settings",
       hash: "#/settings",
       testFile: "apps/desktop/src/screens/settings/Settings.test.tsx",
-      builtIn: false,
+      builtIn: true,
     },
     {
       screen: "Skills",

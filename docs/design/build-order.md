@@ -1005,8 +1005,11 @@ A case moves only when its code, its file or the screen it checks belongs to ano
 | j31-35 (start_requested production and run-page clauses) | B-07.T7 | B-10.T1, B-12, B-19.T5 | Chat/schedule starts and the run page are built later; T7 checks chat_agent_changed and stored run/start agent fields. |
 | UI-30 (rail item clause) | B-16.T2 | B-16.T3 | T2 checks parseRoute, routeToHash and that the new App markup holds no link to an old hash; the rail-item check moves to Rail.test.tsx in T3. |
 | j30-02 (six rail words clause) | B-16.T5 | B-16.T3 | T5 checks document.documentElement.lang, LanguageProvider, useLanguage and translated App words; the six rail words move to Rail.test.tsx in T3. |
+| j12-01 (full seven-heading order clause) | B-20.T4 | B-20.T7 | T4 renders all seven headings (later sections empty) and checks calls, Appearance, Notifications, no Background, and the later-release line; the full seven-heading document-order assertion is written in T7 once every section is mounted. |
+| j12-33 | B-20.T4 | B-20.T6 | MainAgentSection and the busy toggle are built in T6; T4 adds `failSettingsUpdate` to the fixture client and `renderApp` and mounts Settings inside ToastProvider. |
+| j31-32 | B-20.T4 | B-20.T6 | MainAgentSection is built in T6. |
 
-113 cases moved.
+116 cases moved.
 
 ### Tests that change
 
@@ -1110,7 +1113,7 @@ The register of decision 15 and `test-plan.md` section 1: an existing test whose
 | `apps/desktop/src/runner/runner-context.test.tsx` | Uses `@flowdriven/fixtures/v1` approval counts and run ids | Uses `@flowdriven/fixtures` `story-v2` approval counts and run ids with the same refresh, skip, retry and error assertions (TC-IPC-19) | B-16.T10 |
 | `apps/desktop/electron/security.test.ts` | `MIN_WINDOW` is 1100 by 720 | It is 480 by 600 (TC-ELE-02) | B-16.T6 |
 | `apps/desktop/src/styles/tokens.test.ts` (minimum window) | `MIN_WINDOW` width is 1100 and rail plus pane plus 360 fits 1100 | `MIN_WINDOW` is 480 by 600, the drawer applies below 768 px, and rail-width plus 360 fits 768 (TC-ELE-02; `architecture.md` section 17) | B-16.T6 |
-| `apps/desktop/src/screens/settings/Settings.test.tsx` | The old Brain, Fallback order and Monthly budget sections | The seven V1 sections and no Background section (j12-01, j12-30 are in B-20) | B-20.T4 |
+| `apps/desktop/src/screens/settings/Settings.test.tsx` | The old Brain, Fallback order and Monthly budget sections | Old assertions moved unchanged to `legacy/LegacySettings.test.tsx`; the new test pins the V2 Settings shell, Appearance, Notifications, no Background section, and later-release line in both languages (TC-j12-01, TC-j12-29, TC-j12-30; FS-j12.S1, P5, P6; full seven-heading order completed in B-20.T7) | B-20.T4 |
 | `apps/desktop/electron/preload.test.ts` | The bridge exposes only `kind` and `runner` (`call` and `subscribe`) | The bridge also exposes the frozen `window` API with exactly `getPrefs`, `setColorMode`, `openLink` and `quit`, and no background setting (j28-39 is in B-20) | B-20.T3 |
 | The `claude-harness*.test.ts` files of `packages/runner/src/service/` that pin the per-agent consent gate, and the calls of `harnesses.setConsent`, `harnesses.list` and `harnesses.rescan` in `service/handlers.test.ts`, `usage-summary.test.ts`, `run-process.test.ts`, `readiness-connector.test.ts`, `review-03-s1.test.ts`, `review-03b-r19.test.ts`, `review-04-r.test.ts` and the `test-helpers/*-demo-run.ts` helpers | A consent per agent, and the three `harnesses.*` operations answer | The one agent permission; the three operations answer `unavailable` with reason `retired` (decision 32) | B-07.T4, B-07.T6 |
 | The calls of `flows.run` in `service/handlers.test.ts`, `run-process.test.ts`, `review-03-s1.test.ts`, `claude-harness.test.ts`, `trigger-wiring.test.ts` and `test-helpers/r12-check.ts` | `flows.run` starts a run | They start through `flows.start`; `flows.run` answers `unavailable` with reason `retired` | B-10.T1 |

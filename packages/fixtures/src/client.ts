@@ -62,9 +62,16 @@ export interface FixtureRunnerClient extends RunnerClient {
 }
 type Handlers = { [N in LiveOperationName]?: (input: OperationInput<N>) => OperationOutput<N> };
 export function createFixtureRunnerClient(
-  options: { scenario?: Scenario; now?: () => Date; languages?: readonly string[] } = {},
+  options: {
+    scenario?: Scenario;
+    now?: () => Date;
+    languages?: readonly string[];
+    permission?: "on" | "off" | "unset";
+    failSettingsUpdate?: boolean;
+  } = {},
 ): FixtureRunnerClient {
   const state = buildState(options.scenario);
+  if (options.permission !== undefined) state.settings.agentPermission = options.permission;
   const allowedLanguages = options.languages ?? ["en", "id"];
   const calls: FixtureRunnerClient["calls"] = [];
   const revokedRules: typeof state.rules = [];
@@ -808,6 +815,7 @@ export function createFixtureRunnerClient(
     }),
     "settings.get": () => state.settings,
     "settings.update": ({ patch }) => {
+      if (options.failSettingsUpdate) throw new RunnerError("unavailable", "Could not save.");
       if (patch.spendingLimit !== undefined && patch.spendingLimit <= state.settings.spendingLimit)
         throw new RunnerError("invalid_input", "Limit must increase.", {
           reason: "limit_not_above",

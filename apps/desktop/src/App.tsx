@@ -7,11 +7,13 @@ import {
   useHasRunnerProvider as useHasLegacyRunnerProvider,
 } from "./legacy/runner-context";
 import { type Route, routeToHash, useRoute } from "./nav/route";
+import { Settings } from "./screens/settings/Settings";
 import { COMPACT_QUERY, Drawer, NARROW_QUERY, useMediaQuery } from "./shell/Drawer";
 import { LanguageProvider, useHasLanguageProvider, useLanguage } from "./shell/language";
 import { type MorePreferenceStorage, Rail, type SecondaryNavItem } from "./shell/Rail";
 import { SearchDialog } from "./shell/SearchDialog";
 import styles from "./shell/Shell.module.css";
+import { ToastProvider } from "./ui/Toast";
 
 export type AppProps = {
   now?: () => number;
@@ -131,44 +133,46 @@ function AppContent({ now, zone, secondaryItems, moreStorage }: AppProps): React
   }
 
   return (
-    <div className={isNarrow ? styles.narrowFrame : styles.frame}>
-      {/* biome-ignore lint/a11y/useValidAnchor: keep the hash route intact while focusing main. */}
-      <a
-        className={styles.skip}
-        href="#main-content"
-        onClick={(event) => {
-          event.preventDefault();
-          mainRef.current?.focus();
-        }}
-      >
-        {t("rail.skipToContent")}
-      </a>
-      {isNarrow ? (
-        <Drawer
-          route={route}
-          pageTitle={routeTitle(route, t)}
-          compact={isCompact}
-          onOpenSearch={openSearch}
-          now={now}
-          zone={zone}
-          secondaryItems={secondaryItems}
-          moreStorage={moreStorage}
-        />
-      ) : (
-        <Rail
-          route={route}
-          onOpenSearch={openSearch}
-          now={now}
-          zone={zone}
-          secondaryItems={secondaryItems}
-          moreStorage={moreStorage}
-        />
-      )}
-      <main id="main-content" tabIndex={-1} ref={mainRef} className={styles.main}>
-        <PlaceholderScreen route={route} />
-      </main>
-      <SearchDialog open={searchOpen} onClose={closeSearch} />
-    </div>
+    <ToastProvider now={now}>
+      <div className={isNarrow ? styles.narrowFrame : styles.frame}>
+        {/* biome-ignore lint/a11y/useValidAnchor: keep the hash route intact while focusing main. */}
+        <a
+          className={styles.skip}
+          href="#main-content"
+          onClick={(event) => {
+            event.preventDefault();
+            mainRef.current?.focus();
+          }}
+        >
+          {t("rail.skipToContent")}
+        </a>
+        {isNarrow ? (
+          <Drawer
+            route={route}
+            pageTitle={routeTitle(route, t)}
+            compact={isCompact}
+            onOpenSearch={openSearch}
+            now={now}
+            zone={zone}
+            secondaryItems={secondaryItems}
+            moreStorage={moreStorage}
+          />
+        ) : (
+          <Rail
+            route={route}
+            onOpenSearch={openSearch}
+            now={now}
+            zone={zone}
+            secondaryItems={secondaryItems}
+            moreStorage={moreStorage}
+          />
+        )}
+        <main id="main-content" tabIndex={-1} ref={mainRef} className={styles.main}>
+          {route.screen === "settings" ? <Settings /> : <PlaceholderScreen route={route} />}
+        </main>
+        <SearchDialog open={searchOpen} onClose={closeSearch} />
+      </div>
+    </ToastProvider>
   );
 }
 
